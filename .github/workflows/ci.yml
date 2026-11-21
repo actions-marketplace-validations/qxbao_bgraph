@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  STATICCHECK_VERSION: 2025.1.1
+  CGO_ENABLED: "0"
+
+jobs:
+  check:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Tắt chuyển đổi CRLF (trước checkout)
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: go vet (native)
+        run: go vet ./...
+      - name: go vet (GOOS=windows)
+        run: GOOS=windows go vet ./...
+      - name: go vet (GOOS=linux)
+        run: GOOS=linux go vet ./...
+
+      - name: Cài staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}
+
+      - name: staticcheck (native)
+        run: staticcheck ./...
+      - name: staticcheck (GOOS=windows)
+        run: GOOS=windows staticcheck ./...
+      - name: staticcheck (GOOS=linux)
+        run: GOOS=linux staticcheck ./...
+
+      - name: Test
+        run: go test -timeout 10m ./...

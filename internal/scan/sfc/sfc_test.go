@@ -1,7 +1,6 @@
 package sfc
 
 import (
-	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -175,7 +174,7 @@ func FuzzScan(f *testing.F) {
 		}
 		for _, im := range r1.Imports {
 			if im.Line < 1 {
-				t.Fatal(fmt.Sprintf("bad line %d for %q", im.Line, src))
+				t.Fatalf("bad line %d for %q", im.Line, src)
 			}
 		}
 	})

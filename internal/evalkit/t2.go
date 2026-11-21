@@ -610,9 +610,7 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 	}
 	cfg.logf("%s: %d đột biến", r.Name, len(muts))
 	var med []int64
-	for _, ms := range bl.RunMs {
-		med = append(med, ms)
-	}
+	med = append(med, bl.RunMs...)
 	timeout := time.Duration(medianInt64(med))*4*time.Millisecond + 2*time.Minute
 	for _, m := range muts {
 		if ctx.Err() != nil {
