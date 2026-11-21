@@ -73,6 +73,9 @@ type Widening struct {
 	Scope   string `json:"scope,omitempty"`
 	Detail  string `json:"detail,omitempty"`
 	Suggest string `json:"suggest,omitempty"` // suggested bgraph.toml rule to narrow it
+	// Eco restricts a module/package widening to the test units of one ecosystem (empty: every ecosystem). Used by ecosystems whose
+	// scope directory may also hold other ecosystems' projects (a Cargo.lock at the repo root must not select Node tests).
+	Eco string `json:"eco,omitempty"`
 }
 
 // Role is the role of a file.
@@ -122,6 +125,43 @@ type ScanResult struct {
 	Imports         []ImportRef `json:"imports"`
 	Uncertain       bool        `json:"uncertain,omitempty"`
 	UncertainReason string      `json:"uncertain_reason,omitempty"`
+	// Rust is set by the Rust scanner only (.rs files); Imports is empty for them.
+	Rust *RustScan `json:"rust,omitempty"`
+}
+
+// RustScan is what the Rust scanner extracts from one .rs file: the module declarations that decide which Cargo target
+// owns a file, and the include macros that read other files.
+type RustScan struct {
+	Mods     []RustMod     `json:"mods,omitempty"`
+	Includes []RustInclude `json:"includes,omitempty"`
+}
+
+// RustMod is a `mod name;` declaration (inline `mod name { ... }` blocks are not listed: only their names appear in Nest).
+type RustMod struct {
+	Name string   `json:"name"`
+	Line int      `json:"line"`
+	Nest []string `json:"nest,omitempty"` // names of the enclosing inline modules, outermost first
+	Path string   `json:"path,omitempty"` // literal #[path = "..."] attribute
+	// Unknown: non-empty when the file this declaration loads cannot be determined lexically (cfg_attr(path), declared inside a
+	// macro, non-literal #[path]...). The value says why.
+	Unknown string `json:"unknown,omitempty"`
+}
+
+// Kinds of RustInclude.
+const (
+	RustIncludeLiteral  = "literal"  // relative to the file containing the macro
+	RustIncludeManifest = "manifest" // concat!(env!("CARGO_MANIFEST_DIR"), "...") : relative to the package directory
+	RustIncludeOutDir   = "outdir"   // concat!(env!("OUT_DIR"), "...") : build script output, not in the tree
+	RustIncludeDir      = "dir"      // automod::dir!("path"): modules generated from the files of a directory (relative to the package directory)
+	RustIncludeDynamic  = "dynamic"  // anything else
+)
+
+// RustInclude is an include!/include_str!/include_bytes! invocation (or automod::dir!, Macro "automod::dir").
+type RustInclude struct {
+	Macro string `json:"macro"` // include, include_str, include_bytes
+	Kind  string `json:"kind"`
+	Path  string `json:"path,omitempty"`
+	Line  int    `json:"line"`
 }
 
 // EdgeKind is the kind of an edge in the file-level graph.
@@ -196,6 +236,8 @@ type TestUnit struct {
 	// Whole: the "whole test suite of the project" unit, used when the set of test files is unknown (test pattern computed by code). Files is empty; the runner runs
 	// the whole project, without a list.
 	Whole bool `json:"whole,omitempty"`
+	// Package is the package name of the unit for runners that address units by package (cargo -p).
+	Package string `json:"package,omitempty"`
 }
 
 // SelectedTest is a selected test unit together with its reason chain.
@@ -205,7 +247,8 @@ type SelectedTest struct {
 	Runner  string   `json:"runner,omitempty"`
 	Files   []string `json:"files"`
 	Reasons []string `json:"reasons"`
-	Whole   bool     `json:"whole,omitempty"` // run the project's whole test suite (see TestUnit.Whole)
+	Whole   bool     `json:"whole,omitempty"`   // run the project's whole test suite (see TestUnit.Whole)
+	Package string   `json:"package,omitempty"` // see TestUnit.Package
 }
 
 // Selection is the selection result (semantically compatible with bint/internal/affected.Selection).

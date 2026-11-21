@@ -12,6 +12,10 @@ import (
 // Layout: [ver=1][flags: bit0 uncertain][uvarint len+bytes UncertainReason][uvarint import count]
 // per import: [kind byte][flags: bit0 dynamic][uvarint line][str spec][str suffix]; str = uvarint len + bytes.
 // Kind is an index into the kinds table; 255 = an unknown string follows (forward compatibility when new kinds are added).
+//
+// Optional trailer for Rust results (absent in results without a Rust section, so older blobs still decode):
+// [1][uvarint mod count] per mod: [str name][uvarint line][str path][str unknown][uvarint nest count][str nest...];
+// [uvarint include count] per include: [str macro][str kind][str path][uvarint line].
 
 const codecVersion = 1
 
@@ -58,6 +62,27 @@ func encode(r model.ScanResult) []byte {
 		b = binary.AppendUvarint(b, uint64(im.Line))
 		b = appendStr(b, im.Spec)
 		b = appendStr(b, im.Suffix)
+	}
+	if rs := r.Rust; rs != nil {
+		b = append(b, 1)
+		b = binary.AppendUvarint(b, uint64(len(rs.Mods)))
+		for _, m := range rs.Mods {
+			b = appendStr(b, m.Name)
+			b = binary.AppendUvarint(b, uint64(m.Line))
+			b = appendStr(b, m.Path)
+			b = appendStr(b, m.Unknown)
+			b = binary.AppendUvarint(b, uint64(len(m.Nest)))
+			for _, n := range m.Nest {
+				b = appendStr(b, n)
+			}
+		}
+		b = binary.AppendUvarint(b, uint64(len(rs.Includes)))
+		for _, inc := range rs.Includes {
+			b = appendStr(b, inc.Macro)
+			b = appendStr(b, inc.Kind)
+			b = appendStr(b, inc.Path)
+			b = binary.AppendUvarint(b, uint64(inc.Line))
+		}
 	}
 	return b
 }
@@ -133,6 +158,49 @@ func decode(b []byte) (model.ScanResult, error) {
 			return model.ScanResult{}, r.err
 		}
 		out.Imports = append(out.Imports, im)
+	}
+	if len(r.b) > 0 {
+		if r.byte() != 1 {
+			return model.ScanResult{}, errCodec
+		}
+		rs := &model.RustScan{}
+		nm := r.uvarint()
+		if r.err != nil || nm > uint64(len(r.b)) {
+			return model.ScanResult{}, errCodec
+		}
+		for i := uint64(0); i < nm; i++ {
+			m := model.RustMod{Name: r.str()}
+			m.Line = int(r.uvarint())
+			m.Path = r.str()
+			m.Unknown = r.str()
+			nn := r.uvarint()
+			if r.err != nil || nn > uint64(len(r.b)) {
+				return model.ScanResult{}, errCodec
+			}
+			for j := uint64(0); j < nn; j++ {
+				m.Nest = append(m.Nest, r.str())
+			}
+			if r.err != nil {
+				return model.ScanResult{}, r.err
+			}
+			rs.Mods = append(rs.Mods, m)
+		}
+		ni := r.uvarint()
+		if r.err != nil || ni > uint64(len(r.b)) {
+			return model.ScanResult{}, errCodec
+		}
+		for i := uint64(0); i < ni; i++ {
+			inc := model.RustInclude{Macro: r.str(), Kind: r.str(), Path: r.str()}
+			inc.Line = int(r.uvarint())
+			if r.err != nil {
+				return model.ScanResult{}, r.err
+			}
+			rs.Includes = append(rs.Includes, inc)
+		}
+		if len(r.b) != 0 {
+			return model.ScanResult{}, errCodec
+		}
+		out.Rust = rs
 	}
 	return out, nil
 }

@@ -20,12 +20,13 @@ import (
 
 	"github.com/qxbao/bgraph/internal/model"
 	jsscan "github.com/qxbao/bgraph/internal/scan/js"
+	rsscan "github.com/qxbao/bgraph/internal/scan/rust"
 	sfcscan "github.com/qxbao/bgraph/internal/scan/sfc"
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1"
+const ScannerVersion = "js-1+sfc-1+rs-2"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
@@ -80,6 +81,8 @@ func lang(p string) string {
 		return "js"
 	case ".vue", ".svelte", ".astro", ".mdx":
 		return "sfc"
+	case ".rs":
+		return "rs"
 	}
 	return ""
 }
@@ -144,9 +147,12 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 		return model.ScanResult{}, err
 	}
 	var r model.ScanResult
-	if l == "sfc" {
+	switch l {
+	case "sfc":
 		r = sfcscan.Scan(p, b)
-	} else {
+	case "rs":
+		r = rsscan.Scan(p, b)
+	default:
 		r = jsscan.Scan(p, b)
 	}
 	c.mu.Lock()
