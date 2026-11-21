@@ -1,0 +1,164 @@
+{
+ "numTotalTests": 0,
+ "numFailedTests": 0,
+ "success": false,
+ "testResults": [
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [],
+     "fullName": "zod-mini-boolean stays under 3062 gzipped bytes",
+     "status": "skipped",
+     "title": "zod-mini-boolean stays under 3062 gzipped bytes",
+     "failureMessages": [],
+     "meta": {},
+     "tags": []
+    },
+    {
+     "ancestorTitles": [],
+     "fullName": "zod-mini-string stays under 3466 gzipped bytes",
+     "status": "skipped",
+     "title": "zod-mini-string stays under 3466 gzipped bytes",
+     "failureMessages": [],
+     "meta": {},
+     "tags": []
+    },
+    {
+     "ancestorTitles": [],
+     "fullName": "zod-mini-object stays under 4682 gzipped bytes",
+     "status": "skipped",
+     "title": "zod-mini-object stays under 4682 gzipped bytes",
+     "failureMessages": [],
+     "meta": {},
+     "tags": []
+    }
+   ],
+   "startTime": 1795288614275,
+   "endTime": 1795288614275,
+   "status": "failed",
+   "message": "/repo\\packages\\treeshake\\node_modules\\zod\\index.js is missing. Run `nub run build` first.",
+   "name": "/repo/packages/treeshake/bundle-size.test.ts"
+  },
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [],
+     "fullName": "a classic bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "status": "failed",
+     "title": "a classic bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "duration": 318.2622000000001,
+     "failureMessages": [
+      "Error: Build failed with 1 error:"
+     ],
+     "meta": {},
+     "tags": []
+    },
+    {
+     "ancestorTitles": [],
+     "fullName": "a mini bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "status": "failed",
+     "title": "a mini bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "duration": 12.214699999999993,
+     "failureMessages": [
+      "Error: Build failed with 1 error:"
+     ],
+     "meta": {},
+     "tags": []
+    },
+    {
+     "ancestorTitles": [],
+     "fullName": "the pre-rename `process` export still resolves to the helper",
+     "status": "passed",
+     "title": "the pre-rename `process` export still resolves to the helper",
+     "duration": 1.4528999999999996,
+     "failureMessages": [],
+     "meta": {},
+     "tags": []
+    }
+   ],
+   "startTime": 1795288620645,
+   "endTime": 1795288620976.453,
+   "status": "failed",
+   "message": "",
+   "name": "/repo/packages/zod/src/v4/core/tests/polyfill-collision.test.ts"
+  },
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [],
+     "fullName": "a classic bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "status": "failed",
+     "title": "a classic bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "duration": 60.317400000000134,
+     "failureMessages": [
+      "Error: Build failed with 1 error:"
+     ],
+     "meta": {},
+     "tags": []
+    },
+    {
+     "ancestorTitles": [],
+     "fullName": "a mini bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "status": "failed",
+     "title": "a mini bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "duration": 17.008199999999988,
+     "failureMessages": [
+      "Error: Build failed with 1 error:"
+     ],
+     "meta": {},
+     "tags": []
+    },
+    {
+     "ancestorTitles": [],
+     "fullName": "the pre-rename `process` export still resolves to the helper",
+     "status": "passed",
+     "title": "the pre-rename `process` export still resolves to the helper",
+     "duration": 1.6981999999998152,
+     "failureMessages": [],
+     "meta": {},
+     "tags": []
+    }
+   ],
+   "startTime": 1795288628512,
+   "endTime": 1795288628590.6982,
+   "status": "failed",
+   "message": "",
+   "name": "/repo/packages/zod/src/v4/core/tests/polyfill-collision.test.ts"
+  },
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [
+      "src/v4/core/tests/polyfill-collision.test.ts"
+     ],
+     "fullName": "src/v4/core/tests/polyfill-collision.test.ts a %s bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "status": "passed",
+     "title": "a %s bundle reaching toJSONSchema parses beside polyfilled node globals",
+     "failureMessages": [],
+     "meta": {
+      "typecheck": true
+     },
+     "tags": []
+    },
+    {
+     "ancestorTitles": [
+      "src/v4/core/tests/polyfill-collision.test.ts"
+     ],
+     "fullName": "src/v4/core/tests/polyfill-collision.test.ts the pre-rename `process` export still resolves to the helper",
+     "status": "passed",
+     "title": "the pre-rename `process` export still resolves to the helper",
+     "failureMessages": [],
+     "meta": {
+      "typecheck": true
+     },
+     "tags": []
+    }
+   ],
+   "startTime": 1795288614275,
+   "endTime": 1795288614275,
+   "status": "passed",
+   "message": "",
+   "name": "/repo/packages/zod/src/v4/core/tests/polyfill-collision.test.ts"
+  }
+ ]
+}

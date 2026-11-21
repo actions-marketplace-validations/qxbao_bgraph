@@ -59,6 +59,37 @@ func TestJestJSON(t *testing.T) {
 	}
 }
 
+// Real Jest output: test.each with array rows leaves a non-string "title" (found auditing dayjs).
+func TestJestJSONEachTitle(t *testing.T) {
+	r := parseFile(t, "jest-each-title.json", "auto")
+	if r.Format != FormatJestJSON || r.Total != 4 || len(r.Failures) != 2 {
+		t.Fatalf("got %+v", r)
+	}
+	if r.Failures[0].Test != "IsLeapYear" || r.Failures[0].Candidates[0] != `D:\repo\test\plugin\isLeapYear.test.js` {
+		t.Errorf("f0: %+v", r.Failures[0])
+	}
+	if r.Failures[1].Test != "parse array local 2010,1,14,15,25,50,125" || r.Failures[1].Message != "Error: boom" {
+		t.Errorf("f1: %+v", r.Failures[1])
+	}
+}
+
+// Real Vitest JSON from a multi-project repo (zod): the same file is listed once per project, and a suite can fail
+// to run while its tests are all skipped.
+func TestVitestJSONMultiProject(t *testing.T) {
+	r := parseFile(t, "vitest-multiproject.json", "auto")
+	if r.Format != FormatJestJSON || len(r.Failures) != 3 {
+		t.Fatalf("got %+v", r)
+	}
+	if r.Failures[0].Test != "(test suite failed to run)" || r.Failures[0].Candidates[0] != "/repo/packages/treeshake/bundle-size.test.ts" {
+		t.Errorf("f0: %+v", r.Failures[0])
+	}
+	for _, f := range r.Failures[1:] {
+		if f.Candidates[0] != "/repo/packages/zod/src/v4/core/tests/polyfill-collision.test.ts" {
+			t.Errorf("candidate: %+v", f)
+		}
+	}
+}
+
 func TestPlaywrightJSON(t *testing.T) {
 	r := parseFile(t, "playwright.json", "auto")
 	if r.Format != FormatPlaywright || r.Total != 4 || len(r.Failures) != 2 {

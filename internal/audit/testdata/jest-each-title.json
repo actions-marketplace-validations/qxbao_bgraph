@@ -1,0 +1,77 @@
+{
+ "numTotalTests": 0,
+ "numFailedTests": 2,
+ "success": false,
+ "testResults": [
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [],
+     "failureMessages": [
+      "Error: expect(received).toBe(expected) // Object.is equality"
+     ],
+     "fullName": "IsLeapYear",
+     "location": null,
+     "status": "failed",
+     "title": "IsLeapYear"
+    }
+   ],
+   "endTime": 0,
+   "message": "",
+   "name": "D:\\repo\\test\\plugin\\isLeapYear.test.js",
+   "startTime": 0,
+   "status": "failed",
+   "summary": ""
+  },
+  {
+   "assertionResults": [
+    {
+     "ancestorTitles": [
+      "parse empty array"
+     ],
+     "failureMessages": [],
+     "fullName": "parse empty array local",
+     "location": null,
+     "status": "passed",
+     "title": "local"
+    },
+    {
+     "ancestorTitles": [
+      "parse empty array"
+     ],
+     "failureMessages": [],
+     "fullName": "parse empty array utc",
+     "location": null,
+     "status": "passed",
+     "title": "utc"
+    },
+    {
+     "ancestorTitles": [
+      "parse array local"
+     ],
+     "failureMessages": [
+      "Error: boom"
+     ],
+     "fullName": "parse array local 2010,1,14,15,25,50,125",
+     "location": null,
+     "status": "failed",
+     "title": [
+      2010,
+      1,
+      14,
+      15,
+      25,
+      50,
+      125
+     ]
+    }
+   ],
+   "endTime": 0,
+   "message": "",
+   "name": "D:\\repo\\test\\plugin\\arraySupport.test.js",
+   "startTime": 0,
+   "status": "failed",
+   "summary": ""
+  }
+ ]
+}

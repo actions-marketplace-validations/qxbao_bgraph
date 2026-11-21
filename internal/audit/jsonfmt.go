@@ -19,16 +19,33 @@ func topKeys(b []byte) (map[string]bool, error) {
 	return out, nil
 }
 
+// looseString decodes a JSON value that is a string in the reporter's contract but not always in practice: Jest copies
+// the raw title of a test.each case, so a title can be an array or a number. Non-strings keep their JSON text.
+type looseString string
+
+func (s *looseString) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		return nil
+	}
+	var str string
+	if json.Unmarshal(b, &str) == nil {
+		*s = looseString(str)
+		return nil
+	}
+	*s = looseString(b)
+	return nil
+}
+
 // Jest and Vitest's json reporters share one shape.
 type jestFile struct {
 	Name       string `json:"name"`
 	Status     string `json:"status"`
 	Message    string `json:"message"`
 	Assertions []struct {
-		FullName string   `json:"fullName"`
-		Title    string   `json:"title"`
-		Status   string   `json:"status"`
-		Messages []string `json:"failureMessages"`
+		FullName looseString   `json:"fullName"`
+		Title    looseString   `json:"title"`
+		Status   string        `json:"status"`
+		Messages []looseString `json:"failureMessages"`
 	} `json:"assertionResults"`
 }
 
@@ -40,6 +57,17 @@ func parseJest(data []byte) (Result, error) {
 		return Result{}, fmt.Errorf("jest-json: %w", err)
 	}
 	var r Result
+	// Vitest with several projects (or typecheck on) lists the same file once per project, so the same failure can
+	// appear several times: report it once.
+	seen := map[[2]string]bool{}
+	add := func(file, test, msg string) {
+		k := [2]string{file, test}
+		if seen[k] {
+			return
+		}
+		seen[k] = true
+		r.Failures = append(r.Failures, Failure{Test: test, Message: clip(msg), Candidates: nonEmpty(file)})
+	}
 	for _, f := range doc.TestResults {
 		failedHere := 0
 		for _, a := range f.Assertions {
@@ -48,19 +76,19 @@ func parseJest(data []byte) (Result, error) {
 				continue
 			}
 			failedHere++
-			name := a.FullName
+			name := string(a.FullName)
 			if name == "" {
-				name = a.Title
+				name = string(a.Title)
 			}
 			msg := ""
 			if len(a.Messages) > 0 {
-				msg = a.Messages[0]
+				msg = string(a.Messages[0])
 			}
-			r.Failures = append(r.Failures, Failure{Test: name, Message: clip(msg), Candidates: nonEmpty(f.Name)})
+			add(f.Name, name, msg)
 		}
 		// A suite that failed without any failed assertion (syntax error, import error, setup crash) is a failure too.
 		if f.Status == "failed" && failedHere == 0 {
-			r.Failures = append(r.Failures, Failure{Test: "(test suite failed to run)", Message: clip(f.Message), Candidates: nonEmpty(f.Name)})
+			add(f.Name, "(test suite failed to run)", f.Message)
 		}
 	}
 	return r, nil
