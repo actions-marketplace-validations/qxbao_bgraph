@@ -319,6 +319,12 @@ func TestTypeChangeAndGitlinkAndSymlink(t *testing.T) {
 	if ct.Has("sub") || !slices.Equal(ct.Submodules(), []string{"sub"}) {
 		t.Error("CommitTree gitlink")
 	}
+	if got := ct.SubmoduleOID("sub"); got != base {
+		t.Errorf("SubmoduleOID(sub)=%q want %q", got, base)
+	}
+	if ct.SubmoduleOID("t.ts") != "" {
+		t.Error("SubmoduleOID of a non-gitlink must be empty")
+	}
 	if ct.Mode("link") != "120000" {
 		t.Errorf("Mode(link)=%s", ct.Mode("link"))
 	}

@@ -198,8 +198,8 @@ func diffTrees(a, b *gitx.CommitTree) []selector.Changed {
 	for _, p := range sa {
 		if !slices.Contains(sb, p) {
 			out = append(out, selector.Changed{Path: p, Status: 'D', OldMode: "160000"})
-		} else {
-			// CommitTree does not expose a gitlink's OID: cannot prove the pointer is unchanged → treat as changed (widening).
+		} else if oa, ob := a.SubmoduleOID(p), b.SubmoduleOID(p); oa == "" || oa != ob {
+			// The gitlink points elsewhere (or its OID is unknown): changed (widening).
 			out = append(out, selector.Changed{Path: p, Status: 'M', OldMode: "160000", NewMode: "160000"})
 		}
 	}

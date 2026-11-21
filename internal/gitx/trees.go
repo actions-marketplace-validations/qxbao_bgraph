@@ -188,9 +188,10 @@ type ctEntry struct{ mode, oid string }
 // CommitTree is the tree of a commit, reading blobs via the Repo's cat-file --batch.
 type CommitTree struct {
 	pathSet
-	r    *Repo
-	ents map[string]ctEntry
-	subs []string
+	r       *Repo
+	ents    map[string]ctEntry
+	subs    []string
+	subOIDs map[string]string // gitlink path → commit OID
 }
 
 // CommitTree builds the tree of rev with `git ls-tree -r -z --full-tree`.
@@ -216,6 +217,10 @@ func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) 
 		p := string(rec[tab+1:])
 		if f[0] == "160000" || f[1] == "commit" {
 			t.subs = append(t.subs, p)
+			if t.subOIDs == nil {
+				t.subOIDs = map[string]string{}
+			}
+			t.subOIDs[p] = f[2]
 			continue
 		}
 		t.ents[p] = ctEntry{mode: f[0], oid: f[2]}
@@ -233,6 +238,9 @@ func (t *CommitTree) Mode(p string) string { return t.ents[p].mode }
 
 // Submodules returns the commit's gitlink paths; sorted.
 func (t *CommitTree) Submodules() []string { return t.subs }
+
+// SubmoduleOID returns the commit a gitlink points to; "" if p is not a gitlink of this tree.
+func (t *CommitTree) SubmoduleOID(p string) string { return t.subOIDs[p] }
 
 // Key is the blob OID.
 func (t *CommitTree) Key(p string) string { return t.ents[p].oid }
