@@ -1,0 +1,39 @@
+A deleted module (no aggregator lists it): its former dependents, known from the base graph, are selected.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/main/java/A.java --
+class A {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- delete/core/pom.xml --
+-- delete/core/src/main/java/A.java --
+-- want --
+notfull
+select maven:app
+noselect maven:other

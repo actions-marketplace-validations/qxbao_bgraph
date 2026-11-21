@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 // xnode is a minimal XML element tree (local names only: namespaces are ignored), enough to read POMs.
@@ -17,6 +18,11 @@ type xnode struct {
 
 // parseXML parses b and returns the root element. Unknown encodings are passed through unchanged (coordinates are ASCII).
 func parseXML(b []byte) (*xnode, error) {
+	// A BOM and bytes of a legacy encoding (ISO-8859-1 comments, names) must not make the whole POM unreadable.
+	b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
+	if !utf8.Valid(b) {
+		b = []byte(strings.ToValidUTF8(string(b), "?"))
+	}
 	d := xml.NewDecoder(bytes.NewReader(b))
 	d.Strict = false
 	d.CharsetReader = func(_ string, in io.Reader) (io.Reader, error) { return in, nil }

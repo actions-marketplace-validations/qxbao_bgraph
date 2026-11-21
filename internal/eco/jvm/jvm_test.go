@@ -318,3 +318,16 @@ func TestRolesAndOwnership(t *testing.T) {
 		t.Error("a file under target/ is owned")
 	}
 }
+
+func TestParseXMLToleratesBOMAndLegacyBytes(t *testing.T) {
+	for name, src := range map[string]string{
+		"bom":    "\xef\xbb\xbf<?xml version=\"1.0\"?><project><artifactId>a</artifactId></project>",
+		"latin1": "<?xml version=\"1.0\" encoding=\"ISO-8859-1\"?><project><!-- caf\xe9 --><artifactId>a</artifactId></project>",
+		"entity": "<project><name>a &amp; b &unknown;</name><artifactId>a</artifactId></project>",
+	} {
+		n, err := parseXML([]byte(src))
+		if err != nil || n.childText("artifactId") != "a" {
+			t.Errorf("%s: %v %+v", name, err, n)
+		}
+	}
+}
