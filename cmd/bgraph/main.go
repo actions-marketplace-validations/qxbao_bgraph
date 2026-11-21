@@ -248,6 +248,14 @@ func printSelection(w io.Writer, sel model.Selection) {
 }
 
 func suggestRule(u model.Unresolved) string {
+	// A runner-config key computed in code: describe it with [[config]] (see docs/bgraph.example.toml).
+	if strings.HasPrefix(u.Detail, model.ReasonConfigIsCode+":") {
+		if file, key, ok := strings.Cut(u.Spec, ": "); ok {
+			key, _, _ = strings.Cut(key, " ")
+			return fmt.Sprintf("[[config]]\nfile = %q\nreplaces = [%q]\n"+
+				"# alias = { ... } / alias_regex = { ... } / tests = [ ... ]: what the code computes\nreason = \"...\"", file, key)
+		}
+	}
 	dir := u.ScopeDir
 	if dir == "" {
 		dir = "."

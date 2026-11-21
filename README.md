@@ -22,8 +22,13 @@ bgraph unresolved                           # unresolved imports, with suggested
 Go library: `bgraph.Open(ctx, root, bgraph.Options{})`, then
 `idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})`.
 
-Optional `bgraph.toml` at the repository root declares dependencies the tool cannot infer (`[[rule]]`) and generated
-outputs (`[[generated]]`). Caches live in the user cache directory, never inside the repository.
+Optional `bgraph.toml` at the repository root declares what the tool cannot infer: dependencies no import expresses
+(`[[rule]]`), ignored build outputs that code imports (`[[generated]]`), and runner-config keys computed in code such as
+an alias table built by a script (`[[config]]`). Some entries narrow the selection and are trusted as written, so they
+need a `reason`. [`docs/bgraph.example.toml`](docs/bgraph.example.toml) documents every key with examples, and
+`bgraph unresolved` prints a ready-to-edit snippet for each thing it could not read.
+
+Caches live in the user cache directory, never inside the repository.
 
 ## Shadow mode
 

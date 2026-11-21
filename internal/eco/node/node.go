@@ -20,11 +20,11 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: bump whenever the analysis/resolution rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "node-18"
+const AnalyzerVersion = "node-21"
 
 // Eco is the Node ecosystem.
 type Eco struct {
-	Rules *rules.File // [[generated]]; may be nil
+	Rules *rules.File // [[generated]], [[config]]; may be nil
 }
 
 // New creates the Node ecosystem.
@@ -110,6 +110,8 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 			a.Roles[f] = model.RoleConfig
 		}
 	}
+	declAliases, declSources := e.applyDeclarations(t, configs)
+	aliases = append(aliases, declAliases...)
 	slices.SortFunc(aliases, func(x, y resolve.Alias) int { return strings.Compare(aliasKey(x), aliasKey(y)) })
 	r := resolve.New(t, resolve.Options{Workspaces: workspaces, Aliases: aliases})
 
@@ -221,7 +223,9 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	}
 
 	// 4. Test units and implicit dependencies.
+	isTest := make(map[string]bool, len(tests))
 	for _, tf := range tests {
+		isTest[tf] = true
 		dir := projectOf(tf)
 		a.Tests = append(a.Tests, model.TestUnit{Eco: Name, ID: tf, Project: dir, Files: []string{tf}, Runner: detectRunner(pkgs, dir)})
 	}
@@ -257,8 +261,10 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		globs = slices.Compact(globs)
 		for _, tf := range projTests {
 			// An exact path (may contain "[id]", "{x}") is a regular edge; a glob (with literal parts escaped) is a pattern edge.
+			// A test file named in the config (include, exclude, shard lists) selects tests: it is not an input of the other
+			// tests (if one imports it, that is a scanned edge of its own).
 			for _, tg := range targets {
-				if tg != tf {
+				if tg != tf && !isTest[tg] {
 					a.Edges = append(a.Edges, model.Edge{From: tf, To: tg, Kind: model.EdgeImplicit, Provenance: model.ProvScan, Spec: "test config"})
 				}
 			}
@@ -270,6 +276,12 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 					ScopeTier: model.TierModule, ScopeDir: dir, Detail: model.ReasonConfigIsCode + ": " + op})
 			}
 		}
+	}
+	if len(declSources) > 0 {
+		// [[config]] sources: their unresolved imports are what the declaration describes (their dynamic, glob and URL
+		// lookups were already skipped in addImport). Their static imports stay, and they stay graph nodes, so editing them
+		// still reaches every test through the config.
+		a.Unresolved = slices.DeleteFunc(a.Unresolved, func(u model.Unresolved) bool { return declSources[u.File] })
 	}
 	return a, nil
 }
@@ -303,6 +315,11 @@ func edgeKind(k model.ImportKind) model.EdgeKind {
 
 // addImport resolves an import and records an edge or an Unresolved.
 func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from, proj string, imp model.ImportRef, mocks map[string][]string) {
+	// A [[config]] source computes the declared keys: its computed lookups (glob, dynamic import, new URL) are described
+	// by the declaration, not dependencies of every test.
+	if (imp.Kind == model.ImportGlob || imp.Kind == model.ImportURL || imp.Dynamic) && e.declaredSource(from) {
+		return
+	}
 	unres := func(class model.UnresolvedClass, scope, detail string) {
 		a.Unresolved = append(a.Unresolved, model.Unresolved{File: from, Spec: imp.Spec, Class: class, Line: imp.Line,
 			ScopeTier: model.TierModule, ScopeDir: scope, Detail: detail})

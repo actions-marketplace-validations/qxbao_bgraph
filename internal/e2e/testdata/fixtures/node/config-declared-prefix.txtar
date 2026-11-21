@@ -1,0 +1,33 @@
+Alias computed in code (vue: entries built by scripts/aliases.js from a directory listing) + a [[config]] declaration: the
+declared alias resolves '@x/shared', the listing in the declared source no longer widens, config_is_code is gone, and only
+the test that imports the changed package is selected.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+import { entries } from './scripts/aliases.js'
+export default { resolve: { alias: entries } }
+-- base/scripts/aliases.js --
+import { readdirSync } from 'node:fs'
+const dirs = readdirSync(new URL('../packages', import.meta.url))
+export const entries = Object.fromEntries(dirs.map(d => ['@x/' + d, `packages/${d}/src/index.ts`]))
+-- base/bgraph.toml --
+[[config]]
+file = "vitest.config.ts"
+replaces = ["alias"]
+alias = { "@x/shared" = "packages/shared/src/index.ts" }
+sources = ["scripts/aliases.js"]
+reason = "scripts/aliases.js maps @x/<pkg> to packages/<pkg>/src/index.ts"
+-- base/packages/shared/src/index.ts --
+export const s = 1
+-- base/src/a.test.ts --
+import { s } from '@x/shared'
+-- base/src/b.test.ts --
+import { b } from './b'
+-- base/src/b.ts --
+export const b = 1
+-- head/packages/shared/src/index.ts --
+export const s = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+nowiden unknown_import

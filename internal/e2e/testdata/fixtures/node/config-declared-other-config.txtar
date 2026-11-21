@@ -1,0 +1,29 @@
+A [[config]] declaration for a different config file is inert: the computed alias of vitest.config.ts still widens
+(config_is_code), so every test of the project is selected.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+import { entries } from './scripts/aliases.js'
+export default { resolve: { alias: entries } }
+-- base/scripts/aliases.js --
+export const entries = {}
+-- base/bgraph.toml --
+[[config]]
+file = "vite.config.ts"
+replaces = ["alias"]
+alias = { "@x/shared" = "packages/shared/src/index.ts" }
+reason = "wrong file on purpose"
+-- base/packages/shared/src/index.ts --
+export const s = 1
+-- base/src/a.test.ts --
+import { s } from '@x/shared'
+-- base/src/b.test.ts --
+import { b } from './b'
+-- base/src/b.ts --
+export const b = 1
+-- head/packages/shared/src/index.ts --
+export const s = 2
+-- want --
+select src/a.test.ts
+select src/b.test.ts
+widen unknown_import

@@ -8,7 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
+	"slices"
+	"strings"
 
 	"github.com/qxbao/bgraph/internal/glob"
 
@@ -39,6 +43,38 @@ type Generated struct {
 	Owner                  string
 }
 
+// Config is a [[config]]: the user's description of runner-config keys whose value is computed in code, which bgraph
+// cannot read and therefore widens on (config_is_code). A declaration replaces that widening for the named keys of one
+// config file. It is a user assertion: a wrong declaration can make bgraph skip a test that depends on the change (the
+// same trust as affects = "none"), so every field is explicit and a reason is required.
+type Config struct {
+	Index    int
+	File     string   // repo-relative runner config file (vitest.config.ts, jest.config.js...)
+	Replaces []string // computed keys this declaration describes (see ConfigKeys)
+	// Alias (vite semantics: spec == key or starts with key + "/" → target + rest) and AliasRegex (jest moduleNameMapper
+	// semantics: full-match regex → target with $1..$9). Both empty with an alias key replaced: the computed alias only
+	// redirects to what normal package resolution (workspace package.json exports/main) finds.
+	Alias      map[string]string
+	AliasRegex map[string]string
+	// Tests: test-file globs (repo-relative) for replaced test-pattern keys; empty → bgraph's default test-file detection
+	// finds every test.
+	Tests       []*glob.Pattern
+	RawTests    []string
+	Sources     []string // helper files that compute the keys: their unresolved imports are described by this declaration
+	IgnorePaths []string // path literals in the config that belong to the computation, not inputs of every test
+	Reason      string
+}
+
+// Config keys a [[config]] may replace, by kind.
+var (
+	AliasKeys       = []string{"alias", "moduleNameMapper"}
+	TestPatternKeys = []string{"include", "testMatch", "testRegex"}
+	ProjectKeys     = []string{"projects", "workspace"}
+)
+
+// ConfigKeys are all the keys a [[config]] may replace.
+var ConfigKeys = slices.Concat(AliasKeys, TestPatternKeys, ProjectKeys)
+
 // Options holds the optional knobs.
 type Options struct {
 	MaxChanged int
@@ -48,6 +84,7 @@ type Options struct {
 type File struct {
 	Rules     []Rule
 	Generated []Generated
+	Configs   []Config
 	Options   Options
 	Path      string // path of the file read; empty if there is no file
 }
@@ -63,6 +100,16 @@ type rawFile struct {
 		Sources []string `toml:"sources"`
 		Owner   string   `toml:"owner"`
 	} `toml:"generated"`
+	Config []struct {
+		File        string            `toml:"file"`
+		Replaces    []string          `toml:"replaces"`
+		Alias       map[string]string `toml:"alias"`
+		AliasRegex  map[string]string `toml:"alias_regex"`
+		Tests       []string          `toml:"tests"`
+		Sources     []string          `toml:"sources"`
+		IgnorePaths []string          `toml:"ignore_paths"`
+		Reason      string            `toml:"reason"`
+	} `toml:"config"`
 	Options struct {
 		MaxChanged *int64 `toml:"max_changed"`
 	} `toml:"options"`
@@ -168,6 +215,73 @@ func Parse(name string, data []byte) (*File, error) {
 		f.Generated = append(f.Generated, out)
 	}
 
+	for i, c := range raw.Config {
+		at := fmt.Sprintf("%s: config[%d]", name, i)
+		file, ok := repoPath(c.File)
+		if !ok {
+			return nil, fmt.Errorf("%s: 'file' is required: the repo-relative path of the runner config whose keys are computed in code", at)
+		}
+		out := Config{Index: i, File: file, Replaces: c.Replaces, Alias: map[string]string{}, AliasRegex: map[string]string{},
+			RawTests: c.Tests, Reason: c.Reason}
+		if len(c.Replaces) == 0 {
+			return nil, fmt.Errorf("%s: 'replaces' is required: the computed keys this declaration describes (%s)", at, strings.Join(ConfigKeys, ", "))
+		}
+		for _, k := range c.Replaces {
+			if !slices.Contains(ConfigKeys, k) {
+				return nil, fmt.Errorf("%s.replaces: %q is not supported (allowed: %s)", at, k, strings.Join(ConfigKeys, ", "))
+			}
+		}
+		if strings.TrimSpace(c.Reason) == "" {
+			return nil, fmt.Errorf("%s: 'reason' is required (a declaration narrows the selection: say why it is right)", at)
+		}
+		hasAny := func(keys []string) bool {
+			return slices.ContainsFunc(c.Replaces, func(k string) bool { return slices.Contains(keys, k) })
+		}
+		if (len(c.Alias) > 0 || len(c.AliasRegex) > 0) && !hasAny(AliasKeys) {
+			return nil, fmt.Errorf("%s: 'alias'/'alias_regex' need an alias key in 'replaces' (%s)", at, strings.Join(AliasKeys, ", "))
+		}
+		if len(c.Tests) > 0 && !hasAny(TestPatternKeys) {
+			return nil, fmt.Errorf("%s: 'tests' needs a test-pattern key in 'replaces' (%s)", at, strings.Join(TestPatternKeys, ", "))
+		}
+		for k, v := range c.Alias {
+			t, ok := repoPath(v)
+			if k == "" || !ok {
+				return nil, fmt.Errorf("%s.alias: %q = %q: the key must be non-empty and the target a repo-relative path inside the repo", at, k, v)
+			}
+			out.Alias[k] = t
+		}
+		for k, v := range c.AliasRegex {
+			if _, err := regexp.Compile(k); err != nil {
+				return nil, fmt.Errorf("%s.alias_regex: %q: %w", at, k, err)
+			}
+			if _, ok := repoPath(v); !ok {
+				return nil, fmt.Errorf("%s.alias_regex: %q = %q: the target must be a repo-relative path inside the repo", at, k, v)
+			}
+			out.AliasRegex[k] = strings.ReplaceAll(v, "\\", "/")
+		}
+		for _, g := range c.Tests {
+			p, err := glob.Compile(g)
+			if err != nil {
+				return nil, fmt.Errorf("%s.tests: %w", at, err)
+			}
+			out.Tests = append(out.Tests, p)
+		}
+		for _, list := range []struct {
+			key string
+			in  []string
+			out *[]string
+		}{{"sources", c.Sources, &out.Sources}, {"ignore_paths", c.IgnorePaths, &out.IgnorePaths}} {
+			for _, v := range list.in {
+				t, ok := repoPath(v)
+				if !ok {
+					return nil, fmt.Errorf("%s.%s: %q: must be a repo-relative path inside the repo", at, list.key, v)
+				}
+				*list.out = append(*list.out, t)
+			}
+		}
+		f.Configs = append(f.Configs, out)
+	}
+
 	if m := raw.Options.MaxChanged; m != nil {
 		if *m < 1 {
 			return nil, fmt.Errorf("%s: options.max_changed: must be ≥ 1 (got %d)", name, *m)
@@ -175,6 +289,18 @@ func Parse(name string, data []byte) (*File, error) {
 		f.Options.MaxChanged = int(*m)
 	}
 	return f, nil
+}
+
+// repoPath cleans a user-written repo-relative path (slash form) and reports whether it stays inside the repo.
+func repoPath(p string) (string, bool) {
+	if p == "" {
+		return "", false
+	}
+	c := path.Clean(strings.ReplaceAll(p, "\\", "/"))
+	if c == "." || c == ".." || strings.HasPrefix(c, "../") || strings.HasPrefix(c, "/") || (len(c) > 1 && c[1] == ':') {
+		return "", false
+	}
+	return c, true
 }
 
 // Match returns the rules whose paths match path, in file order.

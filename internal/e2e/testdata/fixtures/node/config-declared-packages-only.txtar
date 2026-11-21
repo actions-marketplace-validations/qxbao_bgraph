@@ -1,0 +1,31 @@
+svelte-style customResolver alias that only redirects to the workspace package's own exports: a [[config]] replacing
+"alias" with no mapping drops config_is_code (resolution goes through the workspace package as usual), and ignore_paths
+stops the 'packages/lib' literal of the resolver from making every test depend on the whole package.
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"],"devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.js --
+const pkg = JSON.parse(fs.readFileSync('packages/lib/package.json', 'utf8'))
+function lib_alias() { return [{ find: /^lib\/?/, customResolver: (id) => path.resolve('packages/lib', pkg.exports[id]) }] }
+export default { resolve: { alias: lib_alias() } }
+-- base/bgraph.toml --
+[[config]]
+file = "vitest.config.js"
+replaces = ["alias"]
+ignore_paths = ["packages/lib"]
+reason = "lib_alias() resolves lib/* through packages/lib/package.json exports, like normal package resolution"
+-- base/packages/lib/package.json --
+{"name":"lib","exports":{".":"./src/index.js","./util":"./src/util.js"}}
+-- base/packages/lib/src/index.js --
+export const i = 1
+-- base/packages/lib/src/util.js --
+export const u = 1
+-- base/tests/a.test.js --
+import { i } from 'lib'
+-- base/tests/b.test.js --
+import { u } from 'lib/util'
+-- head/packages/lib/src/index.js --
+export const i = 2
+-- want --
+select tests/a.test.js
+noselect tests/b.test.js
+nowiden unknown_import

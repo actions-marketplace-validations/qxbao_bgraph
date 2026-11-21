@@ -1,0 +1,27 @@
+moduleNameMapper computed by code + a [[config]] alias_regex declaration (jest semantics, $1 substitution): only the test
+importing the changed module is selected, without config_is_code widening.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/jest.config.js --
+const buildMapper = () => ({ '^@x/(.*)$': '<rootDir>/lib/$1' })
+module.exports = { moduleNameMapper: buildMapper() }
+-- base/bgraph.toml --
+[[config]]
+file = "jest.config.js"
+replaces = ["moduleNameMapper"]
+alias_regex = { "^@x/(.*)$" = "lib/$1" }
+reason = "buildMapper() maps @x/<name> to lib/<name>"
+-- base/lib/thing.js --
+module.exports = 1
+-- base/lib/other.js --
+module.exports = 1
+-- base/src/a.test.js --
+const t = require('@x/thing')
+-- base/src/b.test.js --
+const o = require('@x/other')
+-- head/lib/thing.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js
+nowiden unknown_import

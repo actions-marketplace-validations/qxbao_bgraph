@@ -1,0 +1,34 @@
+svelte-style config: include and projects are computed in code (sharding). A [[config]] replacing them with declared test
+globs keeps per-file selection: only the suite that imports the changed file is selected, with no config_is_code widening.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.js --
+const shards = { 'tests/big/test.ts': 3 }
+export default {
+  test: {
+    projects: [
+      { test: { include: ['tests/*/test.ts'], exclude: Object.keys(shards) } },
+      ...Object.entries(shards).flatMap(([file, n]) => Array.from({ length: n }, () => ({ test: { include: [file] } })))
+    ]
+  }
+}
+-- base/bgraph.toml --
+[[config]]
+file = "vitest.config.js"
+replaces = ["include", "projects"]
+tests = ["tests/*/test.ts"]
+reason = "projects only shard tests/*/test.ts"
+-- base/src/a.ts --
+export const a = 1
+-- base/src/b.ts --
+export const b = 1
+-- base/tests/big/test.ts --
+import { a } from '../../src/a'
+-- base/tests/small/test.ts --
+import { b } from '../../src/b'
+-- head/src/a.ts --
+export const a = 2
+-- want --
+select tests/big/test.ts
+noselect tests/small/test.ts
+nowiden unknown_import

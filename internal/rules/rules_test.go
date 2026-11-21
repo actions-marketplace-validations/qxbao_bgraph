@@ -54,6 +54,48 @@ func TestParseValid(t *testing.T) {
 	}
 }
 
+func TestParseConfig(t *testing.T) {
+	src := `
+[[config]]
+file = "./vitest.config.ts"
+replaces = ["alias", "include"]
+alias = { "@x/shared" = 'packages\shared/src/index.ts' }
+alias_regex = { '^@vue/([a-z-]+)$' = "packages/$1/src/index.ts" }
+tests = ["tests/*/test.ts"]
+sources = ["scripts/aliases.js"]
+ignore_paths = ["packages/svelte"]
+reason = "computed"
+`
+	f, err := Parse("bgraph.toml", []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Configs) != 1 {
+		t.Fatalf("%+v", f)
+	}
+	c := f.Configs[0]
+	if c.File != "vitest.config.ts" || c.Alias["@x/shared"] != "packages/shared/src/index.ts" ||
+		c.AliasRegex["^@vue/([a-z-]+)$"] != "packages/$1/src/index.ts" || len(c.Tests) != 1 || !c.Tests[0].Match("tests/a/test.ts") ||
+		c.Sources[0] != "scripts/aliases.js" || c.IgnorePaths[0] != "packages/svelte" || len(c.Replaces) != 2 {
+		t.Errorf("%+v", c)
+	}
+}
+
+// The documented example must stay valid.
+func TestExampleFileParses(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "docs", "bgraph.example.toml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	f, err := Parse("bgraph.example.toml", b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Rules) == 0 || len(f.Generated) == 0 || len(f.Configs) != 2 {
+		t.Fatalf("%+v", f)
+	}
+}
+
 func TestDefaults(t *testing.T) {
 	f, err := Parse("x", []byte(""))
 	if err != nil || f.Options.MaxChanged != 5000 || len(f.Rules) != 0 {
