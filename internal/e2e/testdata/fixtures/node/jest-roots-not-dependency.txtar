@@ -1,0 +1,14 @@
+jest roots ['test'] chỉ giới hạn nơi tìm test: sửa một tệp test không chọn mọi test khác.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^29.0.0"},"jest":{"roots":["test"]}}
+-- base/src/a.js --
+module.exports = 1
+-- base/test/a.test.js --
+require('../src/a')
+-- base/test/b.test.js --
+test('b', () => {})
+-- head/test/a.test.js --
+require('../src/a') // changed
+-- want --
+select test/a.test.js
+noselect test/b.test.js

@@ -1,0 +1,17 @@
+Kiểu dayjs: đổi src/index.js phải chọn test locale (locale → 'dayjs' → test/__mocks__/dayjs.js → src).
+-- base/package.json --
+{"name":"dayjs","main":"dayjs.min.js","devDependencies":{"jest":"^22.0.0"},"jest":{"roots":["test"],"testRegex":"test/(.*?/)?.*test.js$"}}
+-- base/src/index.js --
+export default function dayjs() {}
+-- base/src/locale/zh.js --
+import dayjs from 'dayjs'
+export default { name: 'zh', d: dayjs }
+-- base/test/__mocks__/dayjs.js --
+const dayjs = require('../../src')
+module.exports = dayjs
+-- base/test/locale/zh.test.js --
+import zh from '../../src/locale/zh'
+-- head/src/index.js --
+export default function dayjs() { return 1 }
+-- want --
+select test/locale/zh.test.js

@@ -30,6 +30,8 @@ type testConfig struct {
 	// testIgnore: testPathIgnorePatterns đọc được (chỉ các phần tử chuỗi hằng; phần tử spread/biến bị bỏ qua = loại trừ ít
 	// hơn = vẫn là tập cha). Chỉ áp cho khớp theo mẫu cấu hình.
 	testIgnore []*regexp.Regexp
+	// roots: thư mục roots của Jest (tương đối gốc repo) — nơi tìm test và __mocks__ của module ngoài.
+	roots []string
 }
 
 // isTest: p khớp mẫu tệp test của cấu hình.
@@ -170,6 +172,7 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 	// Giá trị của các khoá chỉ LOẠI TRỪ (exclude, coverage) hoặc đã xử lý riêng (importSource) không bao giờ tạo phụ
 	// thuộc: xoá trắng trước khi gom đường dẫn.
 	scan := blankValues(src, "exclude", "coverage", "importSource", "jsxImportSource", "testPathIgnorePatterns", "include", "testMatch", "testRegex",
+		"roots", "collectCoverageFrom", "coverageDirectory", "coverageReporters",
 		"coveragePathIgnorePatterns", "watchPathIgnorePatterns")
 	for _, m := range strLit.FindAllStringSubmatch(scan, -1) {
 		s := m[1] + m[2] + m[3]
@@ -203,8 +206,13 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 				// literal: đã áp vào roots; tính bằng code: mẫu test dùng "**/", alias thử mọi gốc → vẫn là tập cha.
 				continue
 			case "roots":
-				if _, ok := stringArray(src[i:]); ok {
-					continue // thư mục đã thành implicit ở trên; roots chỉ thu hẹp tập test (chọn thừa không hại)
+				if arr, ok := stringArray(src[i:]); ok {
+					for _, r := range arr {
+						for _, root := range roots {
+							tc.roots = append(tc.roots, path.Clean(path.Join(root, strings.TrimPrefix(strings.ReplaceAll(r, "<rootDir>", ""), "/"))))
+						}
+					}
+					continue // roots chỉ giới hạn nơi tìm: không tạo phụ thuộc (đã xoá trắng khỏi phép gom đường dẫn)
 				}
 			case "moduleFileExtensions", "extensions", "mainFields", "conditions", "customExportConditions", "testEnvironmentOptions":
 				// resolver đã thử mọi đuôi và lấy hợp mọi điều kiện: an toàn khi bỏ qua.

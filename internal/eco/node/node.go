@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-16"
+const AnalyzerVersion = "node-17"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {
@@ -127,6 +127,34 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		return v
 	}
 
+	// Mock gốc của Jest: <dự án hoặc thư mục roots>/__mocks__/<tên module>.<đuôi> thay module ngoài cùng tên khi chạy test.
+	jestMocks := map[string]map[string][]string{}
+	for dir := range pkgs {
+		if detectRunner(pkgs, dir) != "jest" {
+			continue
+		}
+		mockDirs := []string{path.Join(dir, "__mocks__")}
+		for _, rt := range configs[dir].roots {
+			mockDirs = append(mockDirs, path.Join(rt, "__mocks__"))
+		}
+		for _, f := range files {
+			if !isJS(f) {
+				continue
+			}
+			for _, md := range mockDirs {
+				if strings.HasPrefix(f, md+"/") {
+					name := strings.TrimPrefix(f, md+"/")
+					name = strings.TrimSuffix(name, path.Ext(name))
+					name = strings.TrimSuffix(name, "/index")
+					if jestMocks[dir] == nil {
+						jestMocks[dir] = map[string][]string{}
+					}
+					jestMocks[dir][name] = append(jestMocks[dir][name], f)
+				}
+			}
+		}
+	}
+
 	// 3. Quét và phân giải mọi tệp JS/TS thuộc một dự án.
 	var tests []string
 	for _, p := range files {
@@ -182,7 +210,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 				ScopeTier: model.TierModule, ScopeDir: "", Detail: res.UncertainReason})
 		}
 		for _, imp := range res.Imports {
-			e.addImport(a, r, t, p, proj, imp)
+			e.addImport(a, r, t, p, proj, imp, jestMocks[proj])
 		}
 	}
 	for _, ce := range r.ConfigErrors() {
@@ -274,7 +302,7 @@ func edgeKind(k model.ImportKind) model.EdgeKind {
 }
 
 // addImport phân giải một import và ghi cạnh hoặc Unresolved.
-func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from, proj string, imp model.ImportRef) {
+func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from, proj string, imp model.ImportRef, mocks map[string][]string) {
 	unres := func(class model.UnresolvedClass, scope, detail string) {
 		a.Unresolved = append(a.Unresolved, model.Unresolved{File: from, Spec: imp.Spec, Class: class, Line: imp.Line,
 			ScopeTier: model.TierModule, ScopeDir: scope, Detail: detail})
@@ -346,6 +374,17 @@ func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from,
 			}
 			res = rel
 		}
+	}
+	// Jest: module ngoài (bare) có mock gốc <root>/__mocks__/<tên> thì khi chạy test Jest dùng mock thay module thật
+	// (kể cả khi module "thật" là đầu ra build không có trong cây). Cạnh tới mock là phụ thuộc chính xác.
+	if files := mocks[imp.Spec]; len(files) > 0 && isBareSpec(imp.Spec) {
+		for _, f := range files {
+			a.Edges = append(a.Edges, model.Edge{From: from, To: f, Kind: model.EdgeMock, Line: imp.Line, Spec: imp.Spec, Provenance: model.ProvScan})
+		}
+		if res.Class != resolve.ClassInternal {
+			return // external/generated/unknown: lúc chạy test, Jest nạp mock chứ không nạp module này
+		}
+		res.AlsoGenerated = false
 	}
 	switch res.Class {
 	case resolve.ClassInternal:
