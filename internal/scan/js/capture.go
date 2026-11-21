@@ -6,7 +6,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Kiểu đối số đặc biệt của lời gọi.
+// Special argument kinds of a call.
 const (
 	fNormal uint8 = iota
 	fGlob         // import.meta.glob / globEager
@@ -14,27 +14,27 @@ const (
 	fURL          // new URL(x, import.meta.url)
 )
 
-// capture theo dõi đối số của một lời gọi giống import: `(` mở ra capture, các token ở đúng mức ngoặc đó được đưa vào
-// feed*, `)` đóng lại và ghi kết quả vào slot đã giữ chỗ trong s.imports (để giữ thứ tự nguồn khi có lời gọi lồng nhau).
+// capture tracks the arguments of an import-like call: `(` opens a capture, tokens at that exact bracket level are fed to
+// feed*, and `)` closes it and writes the result into the slot reserved in s.imports (to preserve source order when calls nest).
 type capture struct {
 	kind   model.ImportKind
 	flavor uint8
 	slot   int
 	line   int
-	argN   int // số dấu phẩy ở mức này
-	argTok int // số token trong đối số hiện tại
+	argN   int // number of commas at this level
+	argTok int // number of tokens in the current argument
 
-	head   string // phần tĩnh đầu
-	litAcc string // nối các hằng chuỗi khi mọi toán hạng đều là hằng
-	suf    string // phần tĩnh đuôi (của toán hạng cuối)
+	head   string // static head part
+	litAcc string // concatenated string constants while all operands are constants
+	suf    string // static tail part (of the last operand)
 	allLit bool
-	bad    bool // đối số đầu không hiểu được => Spec rỗng, dynamic
-	expOp  bool // vừa gặp '+', đang chờ toán hạng
+	bad    bool // first argument not understood => empty Spec, dynamic
+	expOp  bool // just saw '+', waiting for an operand
 	cancel bool
-	method bool // có thể là khai báo method (xem slow/pcMethod)
+	method bool // may be a method declaration (see slow/pcMethod)
 	done   bool
 
-	// glob mảng
+	// array glob
 	arr     bool
 	arrDyn  bool
 	expElem bool
@@ -75,7 +75,7 @@ func (s *scanner) topCap() int32 {
 	return 0
 }
 
-// feed nhận token không phải literal ở mức ngoặc của capture.
+// feed receives a non-literal token at the capture's bracket level.
 func (s *scanner) feed(cp int32, tk, ch, w uint8) {
 	c := &s.caps[cp-1]
 	if c.done {
@@ -151,7 +151,7 @@ func (s *scanner) arg0(cp int32, c *capture, tk, ch, w uint8) {
 			return
 		}
 		if tk == tWord && w == wImport && c.kind == model.ImportMock {
-			c.cancel = true // vi.mock(import('./a')): import() lồng bên trong là tham chiếu thật
+			c.cancel = true // vi.mock(import('./a')): the nested import() is a real reference
 		}
 		c.bad = true
 		return
@@ -181,7 +181,7 @@ func (s *scanner) arg0(cp int32, c *capture, tk, ch, w uint8) {
 	c.expOp = false
 }
 
-// feedLit nhận literal chuỗi / template. tail và hasSub chỉ có nghĩa với template.
+// feedLit receives a string / template literal. tail and hasSub only matter for templates.
 func (s *scanner) feedLit(cp int32, val, tail string, hasSub bool, ln int, ok bool) {
 	c := &s.caps[cp-1]
 	if c.done {
@@ -247,7 +247,7 @@ func (s *scanner) globDyn(c *capture) {
 	s.imports = append(s.imports, model.ImportRef{Kind: model.ImportGlob, Line: s.line, Dynamic: true})
 }
 
-// finish đóng capture khi gặp ')'.
+// finish closes the capture on ')'.
 func (s *scanner) finish(c *capture) {
 	c.done = true
 	ref := &s.imports[c.slot]

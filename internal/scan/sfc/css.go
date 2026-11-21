@@ -7,18 +7,18 @@ import (
 
 type cssImp struct {
 	spec string
-	line int // dòng 1-based trong nội dung khối
+	line int // 1-based line within the block content
 }
 
-// scanCSS tìm @import (mọi dạng), @use/@forward (scss/sass), @plugin (less). ext: "css", "scss", "sass", "less".
-// Trả lý do uncertain (rỗng nếu chắc chắn). Bỏ qua comment, chuỗi, và URL ngoài.
+// scanCSS finds @import (all forms), @use/@forward (scss/sass), @plugin (less). ext: "css", "scss", "sass", "less".
+// Returns the uncertain reason (empty if certain). Skips comments, strings and remote URLs.
 func scanCSS(src []byte, ext string) ([]cssImp, string) {
 	var out []cssImp
 	n := len(src)
 	line := 1
 	lineComments := ext == "scss" || ext == "sass" || ext == "less"
 	isWS := func(c byte) bool { return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' }
-	// skipWS bỏ khoảng trắng và comment /* */ (và // nếu hỗ trợ), cập nhật line.
+	// skipWS skips whitespace and /* */ comments (and // if supported), updating line.
 	skipWS := func(j int) int {
 		for j < n {
 			c := src[j]
@@ -49,7 +49,7 @@ func scanCSS(src []byte, ext string) ([]cssImp, string) {
 		}
 		return j
 	}
-	readStr := func(j int) (string, int, bool) { // src[j] là dấu nháy
+	readStr := func(j int) (string, int, bool) { // src[j] is the quote
 		q := src[j]
 		k := j + 1
 		var sb strings.Builder
@@ -106,7 +106,7 @@ func scanCSS(src []byte, ext string) ([]cssImp, string) {
 			}
 			i = k
 		case (c == 'u' || c == 'U') && i+3 < n && strings.EqualFold(string(src[i:i+4]), "url(") && (i == 0 || !isIdent(src[i-1])):
-			// url( ... ) ngoài @import: bỏ qua cả nội dung (có thể chứa // hoặc /*)
+			// url( ... ) outside @import: skip the whole content (may contain // or /*)
 			j := skipWS(i + 4)
 			if j < n && (src[j] == '"' || src[j] == '\'') {
 				_, k, _ := readStr(j)
@@ -131,7 +131,7 @@ func scanCSS(src []byte, ext string) ([]cssImp, string) {
 			atLine := line
 			for {
 				j = skipWS(j)
-				if j < n && src[j] == '(' && kw != "use" && kw != "forward" { // tuỳ chọn less: (reference, css)
+				if j < n && src[j] == '(' && kw != "use" && kw != "forward" { // less options: (reference, css)
 					for j < n && src[j] != ')' {
 						if src[j] == '\n' {
 							line++

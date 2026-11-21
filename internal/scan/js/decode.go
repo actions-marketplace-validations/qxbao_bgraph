@@ -23,7 +23,7 @@ func isAlnum(c byte) bool {
 	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
-// parseU đọc \u... (raw[i] là ký tự sau 'u'); trả rune, số byte đã dùng.
+// parseU reads \u... (raw[i] is the character after 'u'); returns the rune and the number of bytes consumed.
 func parseU(raw []byte, i int) (rune, int, bool) {
 	if i < len(raw) && raw[i] == '{' {
 		j := i + 1
@@ -55,7 +55,7 @@ func parseU(raw []byte, i int) (rune, int, bool) {
 	return r, 4, true
 }
 
-// decode giải mã nội dung chuỗi/template (không gồm dấu nháy). ok=false nếu có escape lạ (không giải mã chắc chắn được).
+// decode decodes string/template content (without the quotes). ok=false on an unknown escape (cannot be decoded with certainty).
 func decode(raw []byte) (string, bool) {
 	if bytes.IndexByte(raw, '\\') < 0 {
 		return string(raw), true
@@ -107,7 +107,7 @@ func decode(raw []byte) (string, bool) {
 			}
 			i += k
 			if r >= 0xD800 && r <= 0xDBFF {
-				// cặp thay thế: bắt buộc theo sau \uDC00-DFFF
+				// surrogate pair: must be followed by \uDC00-DFFF
 				if i+2 <= len(raw) && raw[i] == '\\' && raw[i+1] == 'u' {
 					r2, k2, ok2 := parseU(raw, i+2)
 					if ok2 && r2 >= 0xDC00 && r2 <= 0xDFFF {
@@ -124,7 +124,7 @@ func decode(raw []byte) (string, bool) {
 			}
 			b = utf8.AppendRune(b, r)
 		case '\n':
-			// nối dòng
+			// line continuation
 		case '\r':
 			if i < len(raw) && raw[i] == '\n' {
 				i++

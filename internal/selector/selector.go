@@ -1,5 +1,5 @@
-// Package selector ghép mọi thứ thành một Selection (mục 4.3): tập thay đổi → phân loại → đồ thị hợp mốc/hiện tại →
-// đi ngược → đơn vị test → nới. Mọi nhánh "không biết" trả nới, không bao giờ trả rỗng.
+// Package selector ties everything into one Selection (docs/plan.md §4.3): change set → classification → union graph of base/current →
+// backward walk → test units → widening. Every "don't know" branch widens and never returns empty.
 package selector
 
 import (
@@ -18,10 +18,10 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// DefaultMaxChanged là ngưỡng diff quá lớn mặc định (mục 4.3 bước 1).
+// DefaultMaxChanged is the default threshold for an oversized diff (docs/plan.md §4.3 step 1).
 const DefaultMaxChanged = 5000
 
-// Changed là một tệp đổi giữa mốc và cây hiện tại. Status: 'A','M','D','T'. Mode theo git ("100644", "120000", "160000").
+// Changed is a file that changed between the base and the current tree. Status: 'A','M','D','T'. Mode follows git ("100644", "120000", "160000").
 type Changed struct {
 	Path    string
 	Status  byte
@@ -29,19 +29,19 @@ type Changed struct {
 	NewMode string
 }
 
-// Input là đầu vào của Select.
+// Input is the input of Select.
 type Input struct {
 	Base, Head string
 	Changed    []Changed
-	BaseTree   tree.Tree // nil: không có mốc → full
+	BaseTree   tree.Tree // nil: no base → full
 	HeadTree   tree.Tree
 	Ecos       []eco.Ecosystem
 	Scanner    eco.Scanner
-	Rules      *rules.File // nil: không có bgraph.toml
-	RulesErr   error       // bgraph.toml hỏng → full
-	// PreviouslyFailed: id đơn vị test hỏng ở lượt trước (bên dùng cung cấp), luôn chạy lại nếu còn tồn tại.
+	Rules      *rules.File // nil: no bgraph.toml
+	RulesErr   error       // broken bgraph.toml → full
+	// PreviouslyFailed: ids of test units that failed on the previous run (supplied by the caller); always re-run if they still exist.
 	PreviouslyFailed []string
-	MaxChanged       int // 0 → Rules.Options.MaxChanged hoặc DefaultMaxChanged
+	MaxChanged       int // 0 → Rules.Options.MaxChanged or DefaultMaxChanged
 }
 
 type state struct {
@@ -57,7 +57,7 @@ func (s *state) widen(w model.Widening) {
 	}
 }
 
-// Select tính phần chọn.
+// Select computes the selection.
 func Select(ctx context.Context, in Input) model.Selection {
 	s := &state{in: in}
 	s.sel = model.Selection{Base: in.Base, Head: in.Head, Scope: model.TierNone, Changed: []string{}}
@@ -72,7 +72,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 		return s.finishFull(model.Widening{Tier: model.TierFull, Reason: model.ReasonUserRule, Path: "bgraph.toml", Detail: in.RulesErr.Error()})
 	}
 	if in.BaseTree == nil {
-		return s.finishFull(model.Widening{Tier: model.TierFull, Reason: model.ReasonNoBase, Detail: "không có cây mốc"})
+		return s.finishFull(model.Widening{Tier: model.TierFull, Reason: model.ReasonNoBase, Detail: "no base tree"})
 	}
 	maxChanged := in.MaxChanged
 	if maxChanged <= 0 && in.Rules != nil && in.Rules.Options.MaxChanged > 0 {
@@ -83,10 +83,10 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 	if len(changed) > maxChanged {
 		return s.finishFull(model.Widening{Tier: model.TierFull, Reason: model.ReasonDiffTooLarge,
-			Detail: fmt.Sprintf("%d tệp đổi > ngưỡng %d", len(changed), maxChanged)})
+			Detail: fmt.Sprintf("%d changed files > threshold %d", len(changed), maxChanged)})
 	}
 
-	// Phân tích hai cây với mọi hệ sinh thái.
+	// Analyze both trees with every ecosystem.
 	var all []*eco.Analysis
 	headA := map[string]*eco.Analysis{}
 	var projects []eco.Project
@@ -97,7 +97,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 		}
 		ba, err := e.Analyze(ctx, in.BaseTree, in.Scanner)
 		if err != nil {
-			return s.finishFull(model.Widening{Tier: model.TierFull, Reason: model.ReasonInternalError, Detail: e.Name() + " (mốc): " + err.Error()})
+			return s.finishFull(model.Widening{Tier: model.TierFull, Reason: model.ReasonInternalError, Detail: e.Name() + " (base): " + err.Error()})
 		}
 		ha, err := e.Analyze(ctx, in.HeadTree, in.Scanner)
 		if err != nil {
@@ -111,7 +111,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 	g := graph.Build(all...)
 	for _, e := range g.BadPatterns() {
-		s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonInternalError, Path: e.From, Detail: "glob không hợp lệ: " + e.To})
+		s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonInternalError, Path: e.From, Detail: "invalid glob: " + e.To})
 	}
 
 	var seeds []graph.Seed
@@ -124,10 +124,10 @@ func Select(ctx context.Context, in Input) model.Selection {
 	for _, c := range changed {
 		p := c.Path
 		if c.OldMode == "160000" || c.NewMode == "160000" {
-			s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonSubmodule, Path: p, Detail: "con trỏ submodule đổi"})
+			s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonSubmodule, Path: p, Detail: "submodule pointer changed"})
 			continue
 		}
-		// 1. Luật người dùng khớp trước.
+		// 1. User rules match first.
 		skip, ruled := false, false
 		if in.Rules != nil {
 			for _, r := range in.Rules.Match(p) {
@@ -137,14 +137,14 @@ func Select(ctx context.Context, in Input) model.Selection {
 				case r.AffectsNone:
 					if g.IsNode(p) {
 						s.sel.Warnings = append(s.sel.Warnings, model.Widening{Tier: model.TierNone, Reason: model.ReasonRuleRejected, Path: p,
-							Detail: ruleDetail(r) + `: affects="none" bị bỏ qua vì tệp là nút đồ thị`})
+							Detail: ruleDetail(r) + `: affects="none" ignored because the file is a graph node`})
 					} else {
 						skip = true
 					}
 				default:
 					ruled = true
 					for _, t := range r.Affects {
-						ruleTargets = append(ruleTargets, ruleTarget{t, ruleDetail(r) + " khớp " + p})
+						ruleTargets = append(ruleTargets, ruleTarget{t, ruleDetail(r) + " matches " + p})
 					}
 				}
 			}
@@ -152,19 +152,19 @@ func Select(ctx context.Context, in Input) model.Selection {
 		if skip {
 			continue
 		}
-		// Luật có đích đã khai ảnh hưởng của tệp (mục 6.7: luật ghi đè bảng nới): không nới thêm; vẫn đi ngược nếu là nút.
+		// A rule with targets already declared the file's impact (docs/plan.md §6.7: rules override the widening table): no further widening; still walk backwards if it is a node.
 		if ruled {
 			if g.IsNode(p) {
 				seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
 			}
 			continue
 		}
-		// 2. Đầu vào toàn cục.
+		// 2. Global inputs.
 		if w, ok := classify.Global(p); ok {
 			s.widen(w)
 			continue
 		}
-		// 3. Manifest / cấu hình / lockfile của hệ sinh thái.
+		// 3. Ecosystem manifests / configs / lockfiles.
 		claimed := false
 		for _, e := range in.Ecos {
 			ws, ok := e.ClassifyChange(p, in.BaseTree, in.HeadTree, headA[e.Name()])
@@ -175,20 +175,20 @@ func Select(ctx context.Context, in Input) model.Selection {
 				}
 			}
 		}
-		// 4. Nút đồ thị: đi ngược (kể cả khi đã nới vì cấu hình: phép hợp không hại).
+		// 4. Graph node: walk backwards (even if already widened because of config: the union does no harm).
 		if g.IsNode(p) {
 			seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
-			// Tệp mã/dữ liệu không ai phụ thuộc: đi ngược không tới test nào, nhưng test vẫn có thể dùng nó ngoài đồ thị
-			// (đọc qua fs, chạy qua child_process). Không biết ai → nới tới dự án (mục 4.3 bước 2, 6.7).
+			// Code/data file that nothing depends on: walking backwards reaches no test, but a test may still use it outside the graph
+			// (read via fs, run via child_process). Nobody known → widen to the project (docs/plan.md §4.3 step 2, §6.7).
 			if r := g.Role(p); !claimed && r != model.RoleTest && r != model.RoleConfig && r != model.RoleManifest && r != model.RoleLock &&
 				!g.HasDependents(p) {
 				if pr, ok := eco.NearestProject(projects, p); ok {
 					s.widen(model.Widening{Tier: model.TierModule, Reason: model.ReasonUnreferenced, Path: p, Scope: pr.Dir,
-						Detail:  "không tệp nào trong đồ thị phụ thuộc vào tệp này; test có thể đọc/chạy nó ngoài đồ thị",
+						Detail:  "no file in the graph depends on this file; a test may read/run it outside the graph",
 						Suggest: suggestRule(p)})
 				} else {
 					s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonUnreferenced, Path: p,
-						Detail: "không tệp nào phụ thuộc và ngoài mọi dự án", Suggest: suggestRule(p)})
+						Detail: "no file depends on it and it is outside every project", Suggest: suggestRule(p)})
 				}
 			}
 			continue
@@ -196,20 +196,20 @@ func Select(ctx context.Context, in Input) model.Selection {
 		if claimed || classify.Harmless(p) || classify.Doc(p) {
 			continue
 		}
-		// 5. Tệp lạ: nới tới dự án chứa nó, ngoài mọi dự án thì full.
+		// 5. Unknown file: widen to the project containing it, full if outside every project.
 		if pr, ok := eco.NearestProject(projects, p); ok {
 			s.widen(model.Widening{Tier: model.TierModule, Reason: model.ReasonUnknownFile, Path: p, Scope: pr.Dir,
-				Detail: "tệp không thuộc hệ sinh thái nào và không ai tham chiếu", Suggest: suggestRule(p)})
+				Detail: "file belongs to no ecosystem and nobody references it", Suggest: suggestRule(p)})
 		} else {
 			s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonUnknownFile, Path: p,
-				Detail: "tệp ngoài mọi dự án và không ai tham chiếu", Suggest: suggestRule(p)})
+				Detail: "file is outside every project and nobody references it", Suggest: suggestRule(p)})
 		}
 	}
 
-	// Import chưa phân giải: tệp đổi nằm trong phạm vi của nó → tệp chứa import coi như bị ảnh hưởng.
+	// Unresolved import: a changed file within its scope → the file containing the import counts as affected.
 	for _, u := range g.Unresolved {
 		if u.ScopeTier == model.TierNone {
-			continue // chỉ để báo cáo: hệ sinh thái đã mã hoá phụ thuộc bằng cạnh (glob)
+			continue // report only: the ecosystem already encoded the dependency as an edge (glob)
 		}
 		hit := ""
 		for _, c := range changed {
@@ -222,12 +222,12 @@ func Select(ctx context.Context, in Input) model.Selection {
 			continue
 		}
 		w := model.Widening{Tier: u.ScopeTier, Reason: unresolvedReason(u.Class), Path: u.File, Scope: u.ScopeDir,
-			Detail: fmt.Sprintf("%s:%d %q chưa phân giải; %s đổi trong phạm vi", u.File, u.Line, u.Spec, hit)}
+			Detail: fmt.Sprintf("%s:%d %q unresolved; %s changed within scope", u.File, u.Line, u.Spec, hit)}
 		if u.Detail != "" {
 			w.Detail += " (" + u.Detail + ")"
 		}
 		s.widen(w)
-		seeds = append(seeds, graph.Seed{Path: u.File, Reason: string(u.Class) + " import, " + hit + " đổi trong " + scopeName(u.ScopeDir)})
+		seeds = append(seeds, graph.Seed{Path: u.File, Reason: string(u.Class) + " import, " + hit + " changed in " + scopeName(u.ScopeDir)})
 	}
 
 	if s.full {
@@ -235,7 +235,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 
 	reach := g.Walk(seeds)
-	// Cảnh báo của cây hiện tại liên quan tới phần chọn (tệp chứa vấn đề nằm trên đường đi ngược).
+	// Warnings of the current tree relevant to the selection (the file with the problem is on the backward path).
 	for _, e := range in.Ecos {
 		if ha := headA[e.Name()]; ha != nil {
 			for _, w := range ha.Warnings {
@@ -269,21 +269,21 @@ func Select(ctx context.Context, in Input) model.Selection {
 			}
 		}
 	}
-	// Nới theo phạm vi (module/package): mọi đơn vị test trong phạm vi.
+	// Scope widening (module/package): every test unit in the scope.
 	for _, w := range s.sel.Widening {
 		if w.Tier != model.TierModule && w.Tier != model.TierPackage {
 			continue
 		}
 		if isUnresolvedReason(w.Reason) {
-			continue // đã xử lý bằng hạt giống: chỉ phụ thuộc của tệp chứa import bị ảnh hưởng
+			continue // already handled via a seed: only the dependents of the file containing the import are affected
 		}
 		for _, u := range units {
 			if unitWithin(u, w.Scope) {
-				choose(u, fmt.Sprintf("nới %s (%s) do %s", scopeName(w.Scope), w.Reason, w.Path))
+				choose(u, fmt.Sprintf("widen %s (%s) due to %s", scopeName(w.Scope), w.Reason, w.Path))
 			}
 		}
 	}
-	// Luật người dùng có đích.
+	// User rules with targets.
 	for _, rt := range ruleTargets {
 		var pat *glob.Pattern
 		if strings.ContainsAny(rt.target, "*?[{") {
@@ -304,15 +304,15 @@ func Select(ctx context.Context, in Input) model.Selection {
 			}
 		}
 	}
-	// Đơn vị "cả dự án" (không biết tập tệp test): mọi thay đổi có nghĩa đều có thể chạm một test chưa biết của dự án.
+	// "Whole project" unit (test file set unknown): any meaningful change may touch an unknown test of the project.
 	if len(seeds) > 0 || len(s.sel.Widening) > 0 {
 		for _, u := range units {
 			if u.Whole {
-				choose(u, model.ReasonConfigIsCode+": không biết tập tệp test của dự án "+scopeName(u.Project)+" (mẫu test do code tính)")
+				choose(u, model.ReasonConfigIsCode+": test file set of project "+scopeName(u.Project)+" is unknown (test pattern computed by code)")
 			}
 		}
 	}
-	// Test từng hỏng.
+	// Previously failed tests.
 	for _, id := range in.PreviouslyFailed {
 		for _, u := range units {
 			if u.ID == id {
@@ -321,7 +321,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 			}
 		}
 	}
-	// Test mới.
+	// New tests.
 	for _, c := range changed {
 		if c.Status == 'A' && g.Role(c.Path) == model.RoleTest {
 			s.sel.AlwaysRun = append(s.sel.AlwaysRun, c.Path)
@@ -342,8 +342,8 @@ func Select(ctx context.Context, in Input) model.Selection {
 	if len(s.sel.Tests) > 0 {
 		s.sel.Scope = model.TierGraph
 		for _, w := range s.sel.Widening {
-			// Import chưa phân giải được xử lý bằng hạt giống (tệp chứa import coi như đổi, rồi đi ngược): phần chọn vẫn tính
-			// bằng đồ thị, nên không nâng scope; lần nới vẫn được liệt kê trong Widening để giải thích.
+			// Unresolved imports are handled via seeds (the file containing the import counts as changed, then walk backwards): the selection is still computed
+			// from the graph, so the scope is not raised; the widening is still listed in Widening for explanation.
 			if isUnresolvedReason(w.Reason) && w.Tier != model.TierFull {
 				continue
 			}
@@ -394,7 +394,7 @@ func ruleDetail(r rules.Rule) string {
 }
 
 func suggestRule(p string) string {
-	return fmt.Sprintf("[[rule]]\npaths = [%q]\naffects = [\"<dự án hoặc glob test>\"]  # hoặc \"none\" nếu chắc chắn vô hại", p)
+	return fmt.Sprintf("[[rule]]\npaths = [%q]\naffects = [\"<project or glob test>\"]  # or \"none\" if certainly harmless", p)
 }
 
 func scopeName(dir string) string {

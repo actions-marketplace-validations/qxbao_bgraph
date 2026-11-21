@@ -62,11 +62,11 @@ func TestNoneFullEmpty(t *testing.T) {
 	if len(p.Commands) != 0 || p.Scope != model.TierFull || !strings.Contains(strings.Join(p.Notes, ";"), "run the full suite") {
 		t.Fatalf("full: %+v", p)
 	}
-	p, _ = Commands(model.Selection{Scope: model.TierGraph}, Options{}) // không test: fail-closed
+	p, _ = Commands(model.Selection{Scope: model.TierGraph}, Options{}) // no test: fail-closed
 	if len(p.Commands) != 0 || p.Scope != model.TierFull {
 		t.Fatalf("empty graph: %+v", p)
 	}
-	p, _ = Commands(sel("cargo", ".", "a"), Options{}) // runner lạ
+	p, _ = Commands(sel("cargo", ".", "a"), Options{}) // unknown runner
 	if len(p.Commands) != 0 || p.Scope != model.TierFull {
 		t.Fatalf("unknown runner: %+v", p)
 	}
@@ -117,9 +117,9 @@ func TestBatching(t *testing.T) {
 
 func TestPlaywrightListFile(t *testing.T) {
 	dir := t.TempDir()
-	// Ngắn: vẫn dùng đối số vị trí dù có ListDir (tệp danh sách chỉ khi quá dài).
+	// Short: still uses positional arguments despite ListDir (list files only when too long).
 	if p, _ := Commands(sel("playwright", "web", "web/e2e/a.spec.ts"), Options{ListDir: dir}); p.Commands[0].ListFile != "" {
-		t.Fatalf("ngắn mà dùng tệp danh sách: %+v", p.Commands[0])
+		t.Fatalf("short list but a list file was used: %+v", p.Commands[0])
 	}
 	p, err := Commands(sel("playwright", "web", "web/e2e/a.spec.ts", "web/e2e/b.spec.ts"), Options{ListDir: dir, MaxArgChars: 10})
 	if err != nil {

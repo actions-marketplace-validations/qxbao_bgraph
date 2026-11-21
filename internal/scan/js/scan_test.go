@@ -38,7 +38,7 @@ type tc struct {
 	path string
 	src  string
 	want []ref
-	// unc != "" : kỳ vọng Uncertain với mã lý do bắt đầu bằng unc.
+	// unc != "" : expect Uncertain with a reason code starting with unc.
 	unc string
 }
 

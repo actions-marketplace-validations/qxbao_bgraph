@@ -1,20 +1,20 @@
-// Package model chứa kiểu dữ liệu dùng chung giữa các gói của bgraph (mục 4.2 của docs/plan.md).
+// Package model holds the data types shared between bgraph's packages (docs/plan.md §4.2).
 //
-// Quy ước đường dẫn: mọi đường dẫn là tương đối gốc repo, gạch xuôi, đã path.Clean, không có "./" đầu; gốc repo là ".".
+// Path convention: every path is relative to the repo root, uses forward slashes, is path.Clean'ed, has no leading "./"; the repo root is ".".
 package model
 
-// Tier là phạm vi của phần chọn, từ hẹp đến rộng.
+// Tier is the scope of a selection, from narrow to wide.
 type Tier string
 
 const (
-	TierNone    Tier = "none"    // không test nào bị ảnh hưởng
-	TierGraph   Tier = "graph"   // phần chọn chứng minh được bằng đồ thị
-	TierPackage Tier = "package" // nới tới thư mục / gói / Cargo target
-	TierModule  Tier = "module"  // nới tới dự án (package.json, crate, module Maven, project .NET)
-	TierFull    Tier = "full"    // chạy toàn bộ
+	TierNone    Tier = "none"    // no test is affected
+	TierGraph   Tier = "graph"   // the selection is provable from the graph
+	TierPackage Tier = "package" // widened to a directory / package / Cargo target
+	TierModule  Tier = "module"  // widened to a project (package.json, crate, Maven module, .NET project)
+	TierFull    Tier = "full"    // run everything
 )
 
-// Rank: thứ tự để lấy mức rộng nhất.
+// Rank: the ordering used to take the widest tier.
 func (t Tier) Rank() int {
 	switch t {
 	case TierNone:
@@ -29,7 +29,7 @@ func (t Tier) Rank() int {
 	return 4
 }
 
-// Max trả mức rộng hơn.
+// Max returns the wider tier.
 func Max(a, b Tier) Tier {
 	if b.Rank() > a.Rank() {
 		return b
@@ -37,7 +37,7 @@ func Max(a, b Tier) Tier {
 	return a
 }
 
-// Lý do nới (mã ổn định, máy đọc được). Giữ tương thích với bint/internal/affected và thêm lý do của mục 7.1.
+// Widening reasons (stable, machine-readable codes). Kept compatible with bint/internal/affected, plus the reasons from docs/plan.md §7.1.
 const (
 	ReasonUnknownImport   = "unknown_import"
 	ReasonDynamicImport   = "dynamic_import"
@@ -52,30 +52,30 @@ const (
 	ReasonDiffTooLarge    = "diff_too_large"
 	ReasonCaseMismatch    = "case_mismatch"
 	ReasonUserRule        = "user_rule"
-	ReasonUnknownFile     = "unknown_file" // tệp không thuộc hệ sinh thái nào và không ai tham chiếu
-	// tệp mã/dữ liệu của một hệ sinh thái mà không ai trong đồ thị phụ thuộc vào (fixture test đọc qua fs, script/bin
-	// test chạy qua child_process, điểm vào): không biết ai dùng → nới tới dự án.
+	ReasonUnknownFile     = "unknown_file" // file belongs to no ecosystem and nobody references it
+	// code/data file of an ecosystem that nothing in the graph depends on (test fixture read via fs, script/bin
+	// run by a test via child_process, entry point): nobody known to use it → widen to the project.
 	ReasonUnreferenced    = "unreferenced_file"
 	ReasonUnsupported     = "unsupported_language"
-	ReasonGeneratedOutput = "generated_output" // import tới đầu ra bị ignore
+	ReasonGeneratedOutput = "generated_output" // import of an ignored build output
 	ReasonFrameworkMagic  = "framework_magic"  // Next file routing, auto-import...
 	ReasonSymlinkOutside  = "symlink_outside"
 	ReasonSubmodule       = "submodule"
-	ReasonInternalError   = "internal_error" // lỗi của chính bgraph: luôn nới, không bao giờ trả rỗng
-	ReasonRuleRejected    = "rule_rejected"  // luật affects="none" khớp tệp là nút đồ thị: bị bỏ qua (chỉ cảnh báo, không nới)
+	ReasonInternalError   = "internal_error" // bgraph's own error: always widen, never return empty
+	ReasonRuleRejected    = "rule_rejected"  // an affects="none" rule matched a file that is a graph node: ignored (warning only, no widening)
 )
 
-// Widening ghi một lần nới. Path là tệp gây nới; Scope là phạm vi bị nới (thư mục gói/dự án; rỗng khi Tier=full).
+// Widening records one widening. Path is the file that caused it; Scope is the widened scope (package/project directory; empty when Tier=full).
 type Widening struct {
 	Tier    Tier   `json:"tier"`
 	Reason  string `json:"reason"`
 	Path    string `json:"path,omitempty"`
 	Scope   string `json:"scope,omitempty"`
 	Detail  string `json:"detail,omitempty"`
-	Suggest string `json:"suggest,omitempty"` // luật bgraph.toml gợi ý để thu hẹp
+	Suggest string `json:"suggest,omitempty"` // suggested bgraph.toml rule to narrow it
 }
 
-// Role là vai trò của tệp.
+// Role is the role of a file.
 type Role string
 
 const (
@@ -89,7 +89,7 @@ const (
 	RoleUnknown   Role = "unknown"
 )
 
-// ImportKind là dạng cú pháp của một tham chiếu import do bộ quét tìm thấy.
+// ImportKind is the syntactic form of an import reference found by a scanner.
 type ImportKind string
 
 const (
@@ -105,10 +105,10 @@ const (
 	ImportTripleSlash ImportKind = "triple_slash"    // /// <reference path="x" />
 )
 
-// ImportRef là một tham chiếu tìm thấy trong văn bản nguồn.
+// ImportRef is a reference found in the source text.
 //
-// Dynamic=true: đối số không phải chuỗi hằng. Khi đó Spec là phần tĩnh đầu (có thể rỗng) của template/chuỗi nối,
-// ví dụ `./locales/${x}.json` → Spec="./locales/", Suffix=".json". Phần tĩnh rỗng → nới.
+// Dynamic=true: the argument is not a constant string. Spec is then the static head (possibly empty) of the template/concatenation,
+// e.g. `./locales/${x}.json` → Spec="./locales/", Suffix=".json". An empty static part → widen.
 type ImportRef struct {
 	Spec    string     `json:"spec"`
 	Suffix  string     `json:"suffix,omitempty"`
@@ -117,14 +117,14 @@ type ImportRef struct {
 	Dynamic bool       `json:"dynamic,omitempty"`
 }
 
-// ScanResult là đầu ra của bộ quét cho một tệp. Uncertain=true: không tin được danh sách import (cả tệp nới theo dự án).
+// ScanResult is a scanner's output for one file. Uncertain=true: the import list cannot be trusted (the whole file widens to the project).
 type ScanResult struct {
 	Imports         []ImportRef `json:"imports"`
 	Uncertain       bool        `json:"uncertain,omitempty"`
 	UncertainReason string      `json:"uncertain_reason,omitempty"`
 }
 
-// EdgeKind là loại cạnh trong đồ thị mức tệp.
+// EdgeKind is the kind of an edge in the file-level graph.
 type EdgeKind string
 
 const (
@@ -144,7 +144,7 @@ const (
 	EdgeMock        EdgeKind = "mock"
 )
 
-// Provenance là nguồn của một cạnh.
+// Provenance is where an edge came from.
 type Provenance string
 
 const (
@@ -154,7 +154,7 @@ const (
 	ProvDyn      Provenance = "dyn"
 )
 
-// Edge: From phụ thuộc vào To (đổi To thì From bị ảnh hưởng). Với Kind=EdgePattern, To là glob đánh giá trên cả hai cây.
+// Edge: From depends on To (changing To affects From). For Kind=EdgePattern, To is a glob evaluated on both trees.
 type Edge struct {
 	From       string     `json:"from"`
 	To         string     `json:"to"`
@@ -164,7 +164,7 @@ type Edge struct {
 	Provenance Provenance `json:"provenance,omitempty"`
 }
 
-// UnresolvedClass phân loại import chưa phân giải.
+// UnresolvedClass classifies an unresolved import.
 type UnresolvedClass string
 
 const (
@@ -174,8 +174,8 @@ const (
 	UnresolvedUncertainScan UnresolvedClass = "uncertain_scan"
 )
 
-// Unresolved: import của File không phân giải được. Khi một tệp trong ScopeDir (cùng dự án/gói) đổi, phần chọn nới tới
-// ScopeTier/ScopeDir. ScopeDir rỗng với ScopeTier=full nghĩa là cả repo.
+// Unresolved: an import of File that could not be resolved. When a file in ScopeDir (same project/package) changes, the selection widens to
+// ScopeTier/ScopeDir. An empty ScopeDir with ScopeTier=full means the whole repo.
 type Unresolved struct {
 	File      string          `json:"file"`
 	Spec      string          `json:"spec"`
@@ -186,29 +186,29 @@ type Unresolved struct {
 	Detail    string          `json:"detail,omitempty"`
 }
 
-// TestUnit là đơn vị test runner chạy riêng được (mục 2.3).
+// TestUnit is a unit a test runner can run on its own (docs/plan.md §2.3).
 type TestUnit struct {
 	Eco     string   `json:"eco"`
-	ID      string   `json:"id"`      // định danh ổn định: tệp test (JS/Python), "crate::target"...
-	Project string   `json:"project"` // thư mục dự án chứa đơn vị
+	ID      string   `json:"id"`      // stable identifier: test file (JS/Python), "crate::target"...
+	Project string   `json:"project"` // directory of the project containing the unit
 	Files   []string `json:"files"`
 	Runner  string   `json:"runner,omitempty"` // jest, vitest, node-test, pytest, cargo...
-	// Whole: đơn vị "cả bộ test của dự án" khi không biết tập tệp test (mẫu test do code tính). Files rỗng; runner chạy
-	// cả dự án, không kèm danh sách.
+	// Whole: the "whole test suite of the project" unit, used when the set of test files is unknown (test pattern computed by code). Files is empty; the runner runs
+	// the whole project, without a list.
 	Whole bool `json:"whole,omitempty"`
 }
 
-// SelectedTest là một đơn vị test được chọn kèm chuỗi lý do.
+// SelectedTest is a selected test unit together with its reason chain.
 type SelectedTest struct {
 	Unit    string   `json:"unit"`
 	Project string   `json:"project,omitempty"`
 	Runner  string   `json:"runner,omitempty"`
 	Files   []string `json:"files"`
 	Reasons []string `json:"reasons"`
-	Whole   bool     `json:"whole,omitempty"` // chạy cả bộ test của dự án (xem TestUnit.Whole)
+	Whole   bool     `json:"whole,omitempty"` // run the project's whole test suite (see TestUnit.Whole)
 }
 
-// Selection là kết quả chọn (tương thích về ý nghĩa với bint/internal/affected.Selection).
+// Selection is the selection result (semantically compatible with bint/internal/affected.Selection).
 type Selection struct {
 	Scope      Tier           `json:"scope"`
 	Base       string         `json:"base,omitempty"`
@@ -216,7 +216,7 @@ type Selection struct {
 	Changed    []string       `json:"changed"`
 	Tests      []SelectedTest `json:"tests,omitempty"`
 	Widening   []Widening     `json:"widening,omitempty"`
-	Warnings   []Widening     `json:"warnings,omitempty"` // không đổi phạm vi (case_mismatch, rule_rejected...)
+	Warnings   []Widening     `json:"warnings,omitempty"` // do not change the scope (case_mismatch, rule_rejected...)
 	AlwaysRun  []string       `json:"always_run,omitempty"`
 	IndexStats map[string]int `json:"index_stats,omitempty"`
 }

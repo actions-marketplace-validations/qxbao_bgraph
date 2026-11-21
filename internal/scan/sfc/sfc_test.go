@@ -25,7 +25,7 @@ func TestScan(t *testing.T) {
 	cases := []struct {
 		name, path, src string
 		imps            []want
-		unc             string // chuỗi con của lý do; rỗng = chắc chắn
+		unc             string // substring of the reason; empty = certain
 	}{
 		// ---- Vue ----
 		{name: "vue basic", path: "a.vue", src: "<template><div/></template>\n<script>\nimport a from './a'\nimport('./b')\n</script>\n",
@@ -111,7 +111,7 @@ func TestScan(t *testing.T) {
 		{name: "mdx no esm", path: "a.mdx", src: "# hello\n\nsome text\n", imps: []want{}},
 		{name: "mdx unclosed fence", path: "a.mdx", src: "```\nimport x from 'x'\n", imps: []want{}},
 
-		// ---- khác ----
+		// ---- other ----
 		{name: "unsupported", path: "a.html", src: "<script>import a from 'a'</script>", unc: "unsupported_sfc"},
 		{name: "invalid utf8", path: "a.vue", src: "<script>\xff</script>", unc: "invalid_utf8"},
 		{name: "nul", path: "a.vue", src: "<script>\x00</script>", unc: "binary_content"},

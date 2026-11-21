@@ -13,7 +13,7 @@ const (
 
 type nameRange struct{ a, b int }
 
-// jsxStart quyết định `<` tại s.i có mở phần tử JSX hay không (chỉ gọi khi ở vị trí biểu thức và bật JSX).
+// jsxStart decides whether `<` at s.i opens a JSX element (only called in expression position with JSX enabled).
 func (s *scanner) jsxStart() bool {
 	src := s.src
 	n := len(src)
@@ -67,7 +67,7 @@ func (s *scanner) jsxFail(detail string) {
 	s.fail("jsx", detail+" at line "+strconv.Itoa(s.line))
 }
 
-// jsxWS bỏ khoảng trắng và comment trong thẻ, bắt đầu từ i; cập nhật s.line.
+// jsxWS skips whitespace and comments inside a tag, starting at i; updates s.line.
 func (s *scanner) jsxWS(i int) int {
 	src := s.src
 	n := len(src)
@@ -109,7 +109,7 @@ func (s *scanner) jsxWS(i int) int {
 	return i
 }
 
-// jsxExpr: s.i ở '{'; chạy lexer JS tới '}' tương ứng.
+// jsxExpr: s.i is at '{'; runs the JS lexer up to the matching '}'.
 func (s *scanner) jsxExpr() bool {
 	s.i++
 	if !s.enterSub() {
@@ -126,7 +126,7 @@ func (s *scanner) jsxExpr() bool {
 	return true
 }
 
-// jsxTag phân tích một thẻ bắt đầu tại s.i ('<').
+// jsxTag parses a tag starting at s.i ('<').
 func (s *scanner) jsxTag() (int, nameRange) {
 	src := s.src
 	n := len(src)
@@ -244,7 +244,7 @@ func (s *scanner) jsxTag() (int, nameRange) {
 	}
 }
 
-// jsxElement phân tích trọn một phần tử JSX (cả con) bắt đầu tại s.i ('<'). Lỗi => fail("jsx").
+// jsxElement parses a whole JSX element (including children) starting at s.i ('<'). Error => fail("jsx").
 func (s *scanner) jsxElement() {
 	src := s.src
 	n := len(src)
@@ -279,7 +279,7 @@ func (s *scanner) jsxElement() {
 				return
 			}
 		}
-		// phần con: văn bản thuần tới '<' hoặc '{'
+		// children: plain text up to '<' or '{'
 		for {
 			if s.i >= n {
 				s.jsxFail("unclosed element <" + string(src[names[len(names)-1].a:names[len(names)-1].b]) + ">")

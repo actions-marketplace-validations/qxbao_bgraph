@@ -1,7 +1,7 @@
-// Package js quét import/require/mock... từ mã nguồn JS/TS bằng một lexer viết tay một lượt (mục 5 của docs/plan.md).
+// Package js scans import/require/mock... references from JS/TS source with a hand-written single-pass lexer (docs/plan.md §5).
 //
-// Nguyên tắc FAIL-CLOSED: khi lexer không chắc đã hiểu tệp, nó trả Uncertain=true kèm UncertainReason ("mã: chi tiết"),
-// không bao giờ lặng lẽ trả danh sách một phần. Thừa import chấp nhận được; sót một import là lỗi.
+// FAIL-CLOSED principle: when the lexer is not sure it understood the file, it returns Uncertain=true with an UncertainReason ("code: detail"),
+// and never silently returns a partial list. An extra import is acceptable; a missed import is a bug.
 package js
 
 import (
@@ -12,12 +12,12 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// MaxFileSize: tệp lớn hơn ngưỡng này (byte) bị coi là uncertain (không quét).
+// MaxFileSize: files larger than this threshold (bytes) are treated as uncertain (not scanned).
 const MaxFileSize = 4 << 20
 
 const maxDepth = 256
 
-// Lớp token.
+// Token classes.
 const (
 	tNone uint8 = iota
 	tWord
@@ -29,7 +29,7 @@ const (
 	tPunct
 )
 
-// Mã dấu câu đặc biệt (ch của tPunct); dấu một ký tự dùng chính ký tự đó.
+// Special punctuation codes (ch of tPunct); single-character punctuation uses the character itself.
 const (
 	pArrow  uint8 = 1 // =>
 	pQDot   uint8 = 2 // ?.
@@ -37,18 +37,18 @@ const (
 	pIncDec uint8 = 4 // ++ --
 )
 
-// Loại phần tử trong ngăn xếp ngoặc.
+// Kinds of elements on the bracket stack.
 const (
 	kParen uint8 = iota + 1
 	kParenCond
 	kBracket
 	kBlock
 	kObj
-	kClass // thân class/interface/enum (ngữ cảnh "member")
-	kSub   // ${ } của template hoặc {expr} của JSX: chốt chặn của lex lồng
+	kClass // body of class/interface/enum ("member" context)
+	kSub   // ${ } of a template or {expr} of JSX: sentinel for the nested lex
 )
 
-// Trạng thái "sau khi đóng ngoặc".
+// State "after a closing bracket".
 const (
 	pcBare uint8 = iota + 1
 	pcMethod
@@ -56,13 +56,13 @@ const (
 
 type rec struct {
 	c, ch, w uint8
-	dot      bool // từ đứng sau '.' hoặc '?.' (hoặc #private): là tên thuộc tính
+	dot      bool // word following '.' or '?.' (or #private): is a property name
 }
 
 type entry struct {
 	kind uint8
-	bare bool  // có `require` trần trong ngoặc này (có thể là tham số hàm)
-	cap  int32 // 1 + chỉ số capture (0 = không)
+	bare bool  // a bare `require` inside this bracket (may be a function parameter)
+	cap  int32 // 1 + capture index (0 = none)
 }
 
 type pcState struct {
@@ -82,19 +82,19 @@ type scanner struct {
 
 	ring [8]rec
 	rn   int
-	rx   bool // `/` tiếp theo mở regex?
+	rx   bool // does the next `/` open a regex?
 
-	watch  bool // có trạng thái cần kiểm ở token kế (đường chậm)
+	watch  bool // there is state to check at the next token (slow path)
 	stop   bool
 	reason string
 	depth  int
 
-	// câu lệnh import/export đang đọc
-	stmt   uint8 // 0 không, 1 import, 2 export
+	// import/export statement being read
+	stmt   uint8 // 0 none, 1 import, 2 export
 	stN    int
 	stType bool
 
-	// `require` đang chờ token kế để biết có phải giá trị trần
+	// `require` waiting for the next token to tell whether it is a bare value
 	reqPend bool
 	reqPrev rec
 	reqLine int
@@ -102,13 +102,13 @@ type scanner struct {
 
 	pc pcState
 
-	clsPending int // 1 + độ sâu ngăn xếp tại `class`/`interface`/`enum`
+	clsPending int // 1 + stack depth at `class`/`interface`/`enum`
 
-	// ứng viên callee tính tại từ (mock/glob/resolve/context/URL)
+	// callee candidate computed at a word (mock/glob/resolve/context/URL)
 	cand    candidate
 	candIdx int
 	candArm bool
-	gen     int // độ sâu <...> sau ứng viên (generic gọi hàm)
+	gen     int // depth of <...> after the candidate (generic call)
 	genEnd  int
 
 	arrCap int32
@@ -146,7 +146,7 @@ func lower(s string) string {
 	return string(b)
 }
 
-// Scan quét một tệp JS/TS. path chỉ dùng để chọn chế độ JSX (theo đuôi tệp).
+// Scan scans one JS/TS file. path is only used to pick the JSX mode (by file extension).
 func Scan(path string, src []byte) model.ScanResult {
 	if len(src) > MaxFileSize {
 		return uncertain("file_too_large", strconv.Itoa(len(src))+" bytes exceeds "+strconv.Itoa(MaxFileSize))
@@ -188,7 +188,7 @@ func Scan(path string, src []byte) model.ScanResult {
 	return model.ScanResult{Imports: out, Uncertain: s.reason != "", UncertainReason: s.reason}
 }
 
-// fail: lỗi nặng, dừng quét.
+// fail: fatal error, stop scanning.
 func (s *scanner) fail(code, detail string) {
 	if s.reason == "" {
 		s.reason = code + ": " + detail
@@ -197,7 +197,7 @@ func (s *scanner) fail(code, detail string) {
 	s.i = len(s.src)
 }
 
-// flag: uncertain nhưng vẫn quét tiếp để lấy thêm import.
+// flag: uncertain but keep scanning to collect more imports.
 func (s *scanner) flag(code, detail string) {
 	if s.reason == "" {
 		s.reason = code + ": " + detail
@@ -219,7 +219,7 @@ func (s *scanner) push(e entry) {
 	s.stack = append(s.stack, e)
 }
 
-// tok ghi nhận một token (không phải literal chuỗi/template).
+// tok records a token (not a string/template literal).
 func (s *scanner) tok(c, ch, w uint8, dot bool) {
 	if s.watch {
 		s.slow(c, ch, w)
@@ -242,7 +242,7 @@ func (s *scanner) tok(c, ch, w uint8, dot bool) {
 	}
 }
 
-// tokLit ghi nhận literal chuỗi/template và đưa giá trị cho capture (nếu có).
+// tokLit records a string/template literal and feeds its value to the capture (if any).
 func (s *scanner) tokLit(c uint8, val, tail string, hasSub bool, ln int, ok bool) {
 	if s.watch {
 		s.slow(c, 0, 0)
@@ -254,7 +254,7 @@ func (s *scanner) tokLit(c uint8, val, tail string, hasSub bool, ln int, ok bool
 	s.rx = false
 }
 
-// slow: đường chậm, chạy trước khi xử lý token khi có trạng thái đang chờ.
+// slow: the slow path, run before handling a token when there is pending state.
 func (s *scanner) slow(c, ch, w uint8) {
 	if s.pc.kind != 0 {
 		pk, slot := s.pc.kind, s.pc.slot
@@ -266,7 +266,7 @@ func (s *scanner) slow(c, ch, w uint8) {
 			}
 		case pcMethod:
 			if c == tPunct && (ch == '{' || ch == ':' || ch == '?') {
-				s.imports[slot].Line = -1 // khai báo method tên import/require
+				s.imports[slot].Line = -1 // method declaration named import/require
 			}
 		}
 	}
@@ -332,12 +332,12 @@ func (s *scanner) resolveReq(c, ch uint8) {
 			return
 		case ':', '?':
 			if p.c == tPunct && (p.ch == '{' || p.ch == ',' || p.ch == '(' || p.ch == ';') {
-				return // khoá object / thuộc tính interface / tham số có kiểu
+				return // object key / interface property / typed parameter
 			}
 		case ',', ')':
 			if p.c == tPunct && (p.ch == '(' || p.ch == ',') {
 				if n := len(s.stack); n > 0 && s.stack[n-1].kind == kParen {
-					s.stack[n-1].bare = true // có thể là tham số hàm: quyết định khi đóng ngoặc
+					s.stack[n-1].bare = true // may be a function parameter: decided when the bracket closes
 					return
 				}
 			}
@@ -365,7 +365,7 @@ func (s *scanner) checkRequire() {
 
 func isDot(r rec) bool { return r.c == tPunct && (r.ch == '.' || r.ch == pQDot) }
 
-// candAt tính ứng viên callee tại từ w vừa đẩy vào ring (r(0) là từ).
+// candAt computes the callee candidate at word w just pushed into the ring (r(0) is the word).
 func (s *scanner) candAt(w uint8) candidate {
 	r0 := s.r(0)
 	switch w {
@@ -390,7 +390,7 @@ func (s *scanner) candAt(w uint8) candidate {
 		if r1 := s.r(1); !r0.dot && r1.c == tWord && r1.w == wNew && !r1.dot {
 			return candidate{model.ImportURL, fURL, true}
 		}
-	default: // tên mock
+	default: // mock name
 		if r0.dot && isDot(s.r(1)) {
 			if r2 := s.r(2); r2.c == tWord {
 				if (r2.w == wJest && jestName(w)) || (r2.w == wVi && viName(w)) {
@@ -415,7 +415,7 @@ func memberStart(r rec) bool {
 	return false
 }
 
-// callee xác định `(` sắp mở có phải lời gọi giống import không (gọi trước khi đẩy `(` vào ring).
+// callee determines whether the upcoming `(` is an import-like call (called before pushing `(` into the ring).
 func (s *scanner) callee() (kind model.ImportKind, flavor uint8, method, ok bool) {
 	r0 := s.r(0)
 	if r0.c == tWord {
@@ -430,9 +430,9 @@ func (s *scanner) callee() (kind model.ImportKind, flavor uint8, method, ok bool
 			ms := memberStart(r1)
 			if n := len(s.stack); n > 0 && s.stack[n-1].kind == kClass {
 				if ms {
-					return // method named import/require trong class/interface
+					return // method named import/require inside a class/interface
 				}
-				ms = true // vị trí khác (vd: kiểu `: import("x")`): giữ, nhưng huỷ nếu hoá ra là khai báo method
+				ms = true // other position (e.g. type `: import("x")`): keep, but cancel if it turns out to be a method declaration
 			}
 			kind = model.ImportDynamic
 			if r0.w == wRequire {
@@ -488,8 +488,8 @@ func (s *scanner) leaveSub() {
 	}
 }
 
-// lex chạy vòng lexer chính. base là độ sâu ngăn xếp của lần gọi này. sub=true: kết thúc (thành công) khi gặp '}'
-// khớp chốt kSub; trả false nếu hết tệp / lỗi trước đó.
+// lex runs the main lexer loop. base is the stack depth of this call. sub=true: finishes (successfully) on a '}'
+// matching the kSub sentinel; returns false on end of file / an earlier error.
 func (s *scanner) lex(base int, sub bool) bool {
 	src := s.src
 	n := len(src)
@@ -660,7 +660,7 @@ func (s *scanner) punct(c uint8) {
 			s.i++
 		}
 	case '<':
-		if next == '<' { // toán tử dịch bit `<<`, không phải JSX
+		if next == '<' { // bit-shift operator `<<`, not JSX
 			s.tok(tPunct, '<', 0, false)
 			s.i += 2
 			return
@@ -676,7 +676,7 @@ func (s *scanner) punct(c uint8) {
 		s.tok(tPunct, '<', 0, false)
 		s.i++
 	case '!':
-		// TS non-null assertion `x! / y`: `!` ngay sau một giá trị (không theo sau là '=') vẫn để `/` là phép chia.
+		// TS non-null assertion `x! / y`: a `!` right after a value (not followed by '=') still leaves `/` as a division.
 		prevValue := !s.rx
 		s.tok(tPunct, '!', 0, false)
 		s.i++
@@ -851,7 +851,7 @@ func (s *scanner) blockComment() {
 	s.i += k + 4
 }
 
-// tripleSlash: `/// <reference path="x" />`; rest là phần sau "///".
+// tripleSlash: `/// <reference path="x" />`; rest is the part after "///".
 func (s *scanner) tripleSlash(rest []byte) {
 	i := 0
 	skip := func() {
@@ -979,7 +979,7 @@ func (s *scanner) str(q byte) {
 			s.fail("unterminated_string", "string starting at line "+strconv.Itoa(ln))
 			return
 		}
-		j++ // dấu nháy kiểu khác
+		j++ // other quote kind
 	}
 	raw := src[s.i+1 : j]
 	s.i = j + 1

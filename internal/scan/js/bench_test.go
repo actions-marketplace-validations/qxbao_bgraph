@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// synthTS dựng tệp TS ~1 MB gồm import, lớp, generic, template, regex, chia, comment, require/mock.
+// synthTS builds a ~1 MB TS file containing imports, classes, generics, templates, regexes, divisions, comments, require/mock.
 func synthTS(size int) []byte {
 	var b strings.Builder
 	i := 0

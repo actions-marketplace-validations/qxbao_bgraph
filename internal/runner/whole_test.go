@@ -7,7 +7,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Đơn vị Whole (không biết tập tệp test) → lệnh cả dự án, không kèm danh sách; không bao giờ là danh sách rỗng.
+// A Whole unit (test file set unknown) → a whole-project command, without a list; never an empty list.
 func TestWholeUnit(t *testing.T) {
 	s := model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{
 		{Unit: "<all-tests:.>", Project: ".", Runner: "jest", Whole: true},

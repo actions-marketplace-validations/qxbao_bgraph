@@ -66,7 +66,7 @@ func FuzzScan(f *testing.F) {
 	})
 }
 
-// Mọi seed phải chạy qua không panic ở cả ba chế độ đuôi tệp (chạy cả khi không bật -fuzz).
+// Every seed must run without panicking in all three file-extension modes (this also runs when -fuzz is not enabled).
 func TestFuzzSeeds(t *testing.T) {
 	for _, s := range fuzzSeeds {
 		for _, p := range []string{"a.ts", "a.tsx", "a.js"} {

@@ -1,9 +1,9 @@
-// Package sfc trích mã nhúng từ tệp Single-File-Component (.vue, .svelte, .astro) và .mdx rồi đưa cho bộ quét JS/TS
-// (bgraph/internal/scan/js) và bộ quét @import của CSS (mục 5 của docs/plan.md).
+// Package sfc extracts embedded code from Single-File-Component files (.vue, .svelte, .astro) and .mdx and hands it to the JS/TS scanner
+// (bgraph/internal/scan/js) and the CSS @import scanner (docs/plan.md §5).
 //
-// Nguyên tắc FAIL-CLOSED (giống bộ quét JS): nếu không chắc đã tách đúng các khối (khối không đóng, comment không đóng,
-// thẻ đóng lạc, script/setup trùng, lang lạ...) thì trả Uncertain=true kèm lý do "loại-khối: mã: chi tiết", không bao giờ
-// lặng lẽ trả danh sách một phần. Dòng (Line) của mọi ImportRef là dòng trong TỆP GỐC (đã cộng độ lệch của khối).
+// FAIL-CLOSED principle (same as the JS scanner): if it is not sure the blocks were split correctly (unclosed block, unclosed comment,
+// stray closing tag, duplicate script/setup, unknown lang...) it returns Uncertain=true with a reason "block-kind: code: detail", and never
+// silently returns a partial list. The Line of every ImportRef is the line in the ORIGINAL FILE (block offset already added).
 package sfc
 
 import (
@@ -16,10 +16,10 @@ import (
 	"github.com/qxbao/bgraph/internal/scan/js"
 )
 
-// ReasonUnsupported là mã lý do cho đuôi tệp không thuộc gói này.
+// ReasonUnsupported is the reason code for a file extension not handled by this package.
 const ReasonUnsupported = "unsupported_sfc"
 
-// Scan quét một tệp .vue/.svelte/.astro/.mdx (chọn theo đuôi, không phân biệt hoa thường). Đuôi khác → Uncertain.
+// Scan scans a .vue/.svelte/.astro/.mdx file (chosen by extension, case-insensitive). Any other extension → Uncertain.
 func Scan(path string, src []byte) model.ScanResult {
 	ext := extOf(path)
 	switch ext {
@@ -74,7 +74,7 @@ func extOf(p string) string {
 	return string(asciiLower([]byte(p[k:])))
 }
 
-// asciiLower hạ chữ hoa ASCII, giữ nguyên độ dài (bytes.ToLower có thể đổi độ dài với Unicode).
+// asciiLower lowercases ASCII letters, preserving length (bytes.ToLower can change the length for Unicode).
 func asciiLower(b []byte) []byte {
 	o := make([]byte, len(b))
 	for i, c := range b {
@@ -86,19 +86,19 @@ func asciiLower(b []byte) []byte {
 	return o
 }
 
-// acc gom kết quả của một tệp.
+// acc accumulates the results for one file.
 type acc struct {
 	src []byte
-	nl  []int // vị trí các '\n'
+	nl  []int // positions of the '\n' characters
 	res model.ScanResult
 }
 
-// line trả số dòng (1-based) của vị trí pos trong tệp gốc.
+// line returns the (1-based) line number of position pos in the original file.
 func (a *acc) line(pos int) int {
 	return 1 + sort.SearchInts(a.nl, pos)
 }
 
-// stopped: đã có lý do uncertain, các vòng lặp nên dừng.
+// stopped: an uncertain reason is already set, loops should stop.
 func (a *acc) stopped() bool { return a.res.Uncertain }
 
 func (a *acc) fail(kind, reason string) {
@@ -113,7 +113,7 @@ func (a *acc) ref(spec string, line int) {
 	a.res.Imports = append(a.res.Imports, model.ImportRef{Spec: spec, Kind: model.ImportStatic, Line: line})
 }
 
-// scanJS đưa nội dung một khối cho bộ quét JS với đuôi ảo ext; pos là vị trí đầu nội dung trong tệp gốc.
+// scanJS hands the content of one block to the JS scanner with virtual extension ext; pos is the start position of the content in the original file.
 func (a *acc) scanJS(kind string, content []byte, ext string, pos int) {
 	if len(bytes.TrimSpace(content)) == 0 {
 		return
@@ -129,7 +129,7 @@ func (a *acc) scanJS(kind string, content []byte, ext string, pos int) {
 	}
 }
 
-// scanStyle quét @import/@use/@forward/@plugin trong nội dung một khối style.
+// scanStyle scans @import/@use/@forward/@plugin in the content of one style block.
 func (a *acc) scanStyle(kind string, ext string, content []byte, pos int) {
 	off := a.line(pos) - 1
 	imps, reason := scanCSS(content, ext)
@@ -141,7 +141,7 @@ func (a *acc) scanStyle(kind string, ext string, content []byte, pos int) {
 	}
 }
 
-// remote: URL ngoài, không phải phụ thuộc tệp.
+// remote: external URL, not a file dependency.
 func remote(s string) bool {
 	return hasPrefixFold(s, "http://") || hasPrefixFold(s, "https://") || hasPrefixFold(s, "//") || hasPrefixFold(s, "data:")
 }

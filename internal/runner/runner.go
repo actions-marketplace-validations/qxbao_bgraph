@@ -1,13 +1,13 @@
-// Package runner biến một Selection thành lệnh chạy test theo từng test runner (mục 7.4 của docs/plan.md).
+// Package runner turns a Selection into test-run commands for each test runner (docs/plan.md §7.4).
 //
-// Nguyên tắc 11: KHÔNG BAO GIỜ phát lệnh với danh sách rỗng. scope none → không có lệnh; scope full → không có lệnh chọn lọc.
+// Principle 11: NEVER emit a command with an empty list. scope none → no command; scope full → no selective command.
 //
-// Đối số vị trí có nghĩa khác nhau giữa các runner:
-//   - vitest: chuỗi con (substring) của đường dẫn → chọn thừa (aa.test.ts khớp a.test.ts) là chấp nhận được.
-//   - jest: dùng --runTestsByPath nên là đường dẫn chính xác, không phải regex.
-//   - playwright: regex → escape bằng regexp.QuoteMeta; ưu tiên --test-list khi có ListDir.
-//   - mocha, ava: đường dẫn/glob; tên tệp có ký tự glob → lùi về lệnh cả dự án.
-//   - node --test: glob (Node >= 21); tên có ký tự glob → lùi về `node --test` cả dự án.
+// Positional arguments mean different things between runners:
+//   - vitest: a substring of the path → over-selection (aa.test.ts matches a.test.ts) is acceptable.
+//   - jest: uses --runTestsByPath, so it is an exact path, not a regex.
+//   - playwright: a regex → escaped with regexp.QuoteMeta; prefers --test-list when ListDir is set.
+//   - mocha, ava: paths/globs; a file name with glob characters → fall back to a whole-project command.
+//   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
 import (
@@ -22,25 +22,25 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Options cấu hình adapter.
+// Options configures the adapter.
 type Options struct {
-	ListDir       string  // nơi ghi tệp danh sách; "" → không dùng tệp danh sách, truyền đối số trực tiếp
-	MaxArgChars   int     // mặc định 8000 (dưới giới hạn 8191 của cmd.exe)
-	FullThreshold float64 // 0 = tắt; số đơn vị chọn / tổng đơn vị > ngưỡng → full
+	ListDir       string  // where list files are written; "" → no list file, pass arguments directly
+	MaxArgChars   int     // default 8000 (below cmd.exe's 8191 limit)
+	FullThreshold float64 // 0 = off; selected units / total units > threshold → full
 }
 
-// Command là một lệnh chạy test.
+// Command is one test-run command.
 type Command struct {
 	Runner   string   `json:"runner"`
-	Project  string   `json:"project"` // thư mục làm việc, tương đối gốc repo
+	Project  string   `json:"project"` // working directory, relative to the repo root
 	Argv     []string `json:"argv"`
 	ListFile string   `json:"list_file,omitempty"`
-	Batch    int      `json:"batch,omitempty"` // 1..Batches khi chia lô
+	Batch    int      `json:"batch,omitempty"` // 1..Batches when split into batches
 	Batches  int      `json:"batches,omitempty"`
 	Note     string   `json:"note,omitempty"`
 }
 
-// Plan là kế hoạch chạy.
+// Plan is the run plan.
 type Plan struct {
 	Scope    model.Tier `json:"scope"`
 	Commands []Command  `json:"commands"`
@@ -53,7 +53,7 @@ const outsideMark = "\x00outside"
 
 var globMeta = regexp.MustCompile(`[*?\[\]{}!()]`)
 
-// Commands tạo kế hoạch lệnh từ phần chọn.
+// Commands builds the command plan from the selection.
 func Commands(sel model.Selection, opt Options) (Plan, error) {
 	if opt.MaxArgChars <= 0 {
 		opt.MaxArgChars = defaultMaxArgChars
@@ -67,18 +67,18 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	}
 	switch sel.Scope {
 	case model.TierNone:
-		plan.Notes = append(plan.Notes, "không có test nào bị ảnh hưởng: không chạy gì")
+		plan.Notes = append(plan.Notes, "no test is affected: nothing to run")
 		return plan, nil
 	case model.TierFull:
 		return full("run the full suite")
 	}
 	if len(sel.Tests) == 0 {
-		// Phạm vi khác none mà không có test: không thể phát lệnh rỗng, cũng không được im lặng bỏ qua → full.
-		return full("phạm vi " + string(sel.Scope) + " nhưng không có test được chọn: run the full suite")
+		// A scope other than none with no tests: an empty command cannot be emitted, nor silently skipped → full.
+		return full("scope " + string(sel.Scope) + " but no test was selected: run the full suite")
 	}
 	if total := sel.IndexStats["units"]; opt.FullThreshold > 0 && total > 0 &&
 		float64(len(sel.Tests))/float64(total) > opt.FullThreshold {
-		return full(fmt.Sprintf("đã chọn %d/%d đơn vị, vượt ngưỡng %.2f: run the full suite", len(sel.Tests), total, opt.FullThreshold))
+		return full(fmt.Sprintf("selected %d/%d units, exceeding threshold %.2f: run the full suite", len(sel.Tests), total, opt.FullThreshold))
 	}
 
 	type key struct{ project, runner string }
@@ -92,14 +92,14 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		files := t.Files
 		if t.Whole {
-			files = []string{outsideMark} // không biết tệp test: chạy cả dự án
+			files = []string{outsideMark} // test files unknown: run the whole project
 		} else if len(files) == 0 {
 			files = []string{t.Unit}
 		}
 		for _, f := range files {
 			rel, ok := relTo(proj, f)
 			if !ok {
-				// Không biểu diễn được tệp tương đối dự án: lùi về cả dự án (rộng hơn, an toàn).
+				// Cannot express the file relative to the project: fall back to the whole project (wider, safe).
 				groups[k] = append(groups[k], outsideMark)
 				continue
 			}
@@ -117,7 +117,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		paths := dedupe(groups[k])
 		sp, ok := specs[k.runner]
 		if !ok {
-			return full(fmt.Sprintf("runner %q (dự án %s) chưa được hỗ trợ: run the full suite", k.runner, k.project))
+			return full(fmt.Sprintf("runner %q (project %s) is not supported: run the full suite", k.runner, k.project))
 		}
 		whole := false
 		for _, p := range paths {
@@ -127,8 +127,8 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if whole {
 			plan.Commands = append(plan.Commands, Command{Runner: k.runner, Project: k.project, Argv: append([]string(nil), sp.whole...),
-				Note: "tên tệp có ký tự glob hoặc nằm ngoài dự án: chạy cả dự án thay vì danh sách"})
-			plan.Notes = append(plan.Notes, fmt.Sprintf("%s/%s: lùi về lệnh cả dự án", k.project, k.runner))
+				Note: "file name has glob characters or is outside the project: running the whole project instead of a list"})
+			plan.Notes = append(plan.Notes, fmt.Sprintf("%s/%s: falling back to a whole-project command", k.project, k.runner))
 			continue
 		}
 		cmds, notes, err := sp.build(k.project, k.runner, paths, opt)
@@ -142,8 +142,8 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 }
 
 type spec struct {
-	whole  []string // lệnh chạy cả dự án
-	globby bool     // đối số vị trí là glob: tên có ký tự glob không đưa vào được an toàn
+	whole  []string // whole-project command
+	globby bool     // positional arguments are globs: names with glob characters cannot be passed safely
 	build  func(project, runner string, paths []string, opt Options) ([]Command, []string, error)
 }
 
@@ -160,7 +160,7 @@ func positional(prefix []string, note string) func(string, string, []string, Opt
 var specs = map[string]spec{
 	"vitest": {whole: []string{"npx", "vitest", "run"},
 		build: positional([]string{"npx", "vitest", "run"},
-			"vitest: đối số là chuỗi con của đường dẫn, nên a.test.ts cũng khớp aa.test.ts (chọn thừa, an toàn)")},
+			"vitest: the argument is a substring of the path, so a.test.ts also matches aa.test.ts (over-selection, safe)")},
 	"jest": {whole: []string{"npx", "jest"},
 		build: positional([]string{"npx", "jest", "--runTestsByPath"}, "")},
 	"mocha": {whole: []string{"npx", "mocha"}, globby: true,
@@ -168,14 +168,14 @@ var specs = map[string]spec{
 	"ava": {whole: []string{"npx", "ava"}, globby: true,
 		build: positional([]string{"npx", "ava"}, "")},
 	"node-test": {whole: []string{"node", "--test"}, globby: true,
-		build: positional([]string{"node", "--test"}, "node --test: đối số vị trí là glob (Node >= 21); các đường dẫn đã chọn không có ký tự glob")},
+		build: positional([]string{"node", "--test"}, "node --test: positional arguments are globs (Node >= 21); the selected paths contain no glob characters")},
 	"playwright": {whole: []string{"npx", "playwright", "test"}, build: buildPlaywright},
 }
 
-// buildPlaywright: ưu tiên đối số vị trí. Đối số là regex so với đường dẫn tuyệt đối của tệp test (Windows dùng "\"),
-// nên mỗi "/" thành [\\/]. --test-list (Playwright ≥ 1.56) không nói rõ đường dẫn tương đối với gì: dòng không khớp làm
-// Playwright chạy 0 test (sót im lặng), vì vậy chỉ dùng khi danh sách quá dài, có ghi chú, và dòng là đường dẫn tương đối
-// dự án đúng như --list in ra.
+// buildPlaywright: prefers positional arguments. The argument is a regex matched against the absolute path of the test file (Windows uses "\"),
+// so each "/" becomes [\\/]. --test-list (Playwright ≥ 1.56) does not say what its paths are relative to: a line that does not match makes
+// Playwright run 0 tests (a silent miss), so it is only used when the list is too long, with a note, and each line is a path relative to
+// the project exactly as --list prints it.
 func buildPlaywright(project, runner string, paths []string, opt Options) ([]Command, []string, error) {
 	args := make([]string, len(paths))
 	total := 0
@@ -192,10 +192,10 @@ func buildPlaywright(project, runner string, paths []string, opt Options) ([]Com
 			return nil, nil, err
 		}
 		return []Command{{Runner: runner, Project: project, Argv: []string{"npx", "playwright", "test", "--test-list", file}, ListFile: file}},
-			[]string{"playwright: --test-list cần Playwright ≥ 1.56; đường dẫn trong tệp tương đối thư mục dự án — kiểm bằng --list rằng số test > 0"}, nil
+			[]string{"playwright: --test-list needs Playwright ≥ 1.56; paths in the file are relative to the project directory — check with --list that the test count is > 0"}, nil
 	}
 	cmds, notes := batch(runner, project, []string{"npx", "playwright", "test"}, args, opt.MaxArgChars)
-	return cmds, append(notes, "playwright: đối số là regex (đã QuoteMeta, không neo): có thể chọn thừa"), nil
+	return cmds, append(notes, "playwright: the argument is a regex (QuoteMeta'd, unanchored): may over-select"), nil
 }
 
 func maxArgs(opt Options) int {
@@ -205,7 +205,7 @@ func maxArgs(opt Options) int {
 	return 8000
 }
 
-// batch chia args thành các lô sao cho độ dài dòng lệnh <= max (một đối số quá dài vẫn chiếm một lô riêng, không bị bỏ).
+// batch splits args into batches so that the command-line length is <= max (an over-long argument still gets its own batch and is not dropped).
 func batch(runner, project string, prefix, args []string, max int) ([]Command, []string) {
 	base := 0
 	for _, a := range prefix {
@@ -231,13 +231,13 @@ func batch(runner, project string, prefix, args []string, max int) ([]Command, [
 		c := Command{Runner: runner, Project: project, Argv: append(append([]string(nil), prefix...), g...)}
 		if len(groups) > 1 {
 			c.Batch, c.Batches = i+1, len(groups)
-			c.Note = "chia lô: fixture phạm vi session chạy lại mỗi lô; mã thoát phải gộp (lấy mã lỗi lớn nhất)"
+			c.Note = "batched: session-scoped fixtures re-run in every batch; exit codes must be merged (take the largest error code)"
 		}
 		cmds = append(cmds, c)
 	}
 	var notes []string
 	if len(groups) > 1 {
-		notes = append(notes, fmt.Sprintf("%s/%s: chia %d lô vì dòng lệnh vượt %d ký tự; chia lô đổi fixture phạm vi session và cách gộp mã thoát", project, runner, len(groups), max))
+		notes = append(notes, fmt.Sprintf("%s/%s: split into %d batches because the command line exceeds %d characters; batching changes session-scoped fixtures and how exit codes are merged", project, runner, len(groups), max))
 	}
 	return cmds, notes
 }
@@ -251,7 +251,7 @@ func cleanProject(p string) string {
 	return strings.TrimPrefix(p, "./")
 }
 
-// relTo trả f (tương đối gốc repo, gạch xuôi hoặc ngược) tương đối thư mục dự án.
+// relTo returns f (relative to the repo root, forward or back slashes) relative to the project directory.
 func relTo(project, f string) (string, bool) {
 	f = path.Clean(strings.ReplaceAll(f, "\\", "/"))
 	if project == "." {

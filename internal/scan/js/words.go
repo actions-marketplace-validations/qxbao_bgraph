@@ -1,10 +1,10 @@
 package js
 
-// Mã số của từ (word id): chỉ những từ mà lexer cần nhận dạng. Mọi từ khác là wOther.
+// Word ids: only the words the lexer needs to recognize. Every other word is wOther.
 const (
 	wOther uint8 = iota
 
-	// Từ khoá mà sau đó `/` mở regex (wReturn..wLastRx).
+	// Keywords after which `/` opens a regex (wReturn..wLastRx).
 	wReturn
 	wTypeof
 	wInstanceof
@@ -21,7 +21,7 @@ const (
 	wDefault
 	wVoid
 
-	// Các từ gọi mock/glob... (wFirstCallee..wLastCallee liền nhau: dùng để tính "ứng viên callee").
+	// Words that call mock/glob... (wFirstCallee..wLastCallee are contiguous: used to compute the "callee candidate").
 	wMock
 	wUnmock
 	wDoMock
@@ -71,7 +71,7 @@ const (
 	wLastCallee  = wURL
 )
 
-// wordID nhận dạng từ theo nội dung (không cấp phát).
+// wordID recognizes a word by its content (no allocation).
 func wordID(b []byte) uint8 {
 	if len(b) < 2 || len(b) > 20 {
 		return wOther
@@ -207,7 +207,7 @@ func viName(w uint8) bool {
 	return false
 }
 
-// reqProp: thuộc tính hợp lệ sau `require.` (không tính là dùng require như giá trị).
+// reqProp: valid properties after `require.` (not counted as using require as a value).
 func reqProp(w uint8) bool {
 	switch w {
 	case wResolve, wContext, wCache, wMain, wExtensions:
@@ -216,13 +216,13 @@ func reqProp(w uint8) bool {
 	return false
 }
 
-// Bảng lớp ký tự.
+// Character class tables.
 var (
 	identStart [256]bool
 	identPart  [256]bool
-	strSpecial [256]bool // trong chuỗi '...' / "...": dấu nháy, \, xuống dòng
-	tplSpecial [256]bool // trong template: ` \ $ \n
-	rxSpecial  [256]bool // trong regex: \ / [ ] xuống dòng
+	strSpecial [256]bool // inside '...' / "..." strings: quote, \, newline
+	tplSpecial [256]bool // inside a template:` \ $ \n
+	rxSpecial  [256]bool // inside a regex: \ / [ ] newline
 )
 
 func init() {
@@ -244,7 +244,7 @@ func init() {
 	}
 }
 
-// uniSpaceLen trả độ dài (byte) của khoảng trắng Unicode ở đầu b, 0 nếu không phải.
+// uniSpaceLen returns the length (bytes) of the Unicode whitespace at the start of b, 0 if there is none.
 func uniSpaceLen(b []byte) int {
 	if len(b) < 2 {
 		return 0

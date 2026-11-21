@@ -1,5 +1,5 @@
-// Package graph giữ đồ thị mức tệp là HỢP của các Analysis (cây mốc và cây hiện tại, mọi hệ sinh thái) và đi ngược
-// không giới hạn độ sâu từ tập tệp đổi (mục 3.4, 3.5, 4.3 bước 3–4).
+// Package graph holds the file-level graph as the UNION of the Analyses (base tree and current tree, every ecosystem) and walks backwards
+// with no depth limit from the set of changed files (docs/plan.md §3.4, §3.5, §4.3 steps 3–4).
 package graph
 
 import (
@@ -16,18 +16,18 @@ type patternEdge struct {
 	pat  *glob.Pattern
 }
 
-// Graph là đồ thị ngược: với mỗi tệp To, các cạnh From→To.
+// Graph is the reverse graph: for each file To, the edges From→To.
 type Graph struct {
 	rev      map[string][]model.Edge
 	patterns []patternEdge
-	// byPrefix: chỉ số pattern theo tiền tố tĩnh (thư mục) của glob; "" là pattern không có tiền tố (khớp mọi nơi).
+	// byPrefix: pattern index keyed by the glob's static prefix (directory); "" is a pattern with no prefix (matches anywhere).
 	byPrefix   map[string][]int
-	badPattern []model.Edge // glob không biên dịch được: bộ chọn nới
+	badPattern []model.Edge // globs that fail to compile: the selector widens
 	roles      map[string]model.Role
 	Unresolved []model.Unresolved
 }
 
-// Build hợp các Analysis. Cạnh trùng (From, To, Kind) chỉ giữ một.
+// Build unions the Analyses. Duplicate edges (From, To, Kind) are kept once.
 func Build(as ...*eco.Analysis) *Graph {
 	g := &Graph{rev: map[string][]model.Edge{}, roles: map[string]model.Role{}}
 	type key struct {
@@ -41,7 +41,7 @@ func Build(as ...*eco.Analysis) *Graph {
 			continue
 		}
 		for p, r := range a.Roles {
-			// Vai trò test thắng (tệp là test ở một trong hai cây thì vẫn là test).
+			// The test role wins (a file that is a test in either tree is still a test).
 			if old, ok := g.roles[p]; !ok || r == model.RoleTest || (old != model.RoleTest && rolePrio(r) > rolePrio(old)) {
 				g.roles[p] = r
 			}
@@ -108,13 +108,13 @@ func rolePrio(r model.Role) int {
 	return 1
 }
 
-// Role trả vai trò của tệp (rỗng nếu không hệ sinh thái nào nhận).
+// Role returns the role of a file (empty if no ecosystem claims it).
 func (g *Graph) Role(p string) model.Role { return g.roles[p] }
 
-// BadPatterns trả cạnh glob không biên dịch được.
+// BadPatterns returns the glob edges that fail to compile.
 func (g *Graph) BadPatterns() []model.Edge { return g.badPattern }
 
-// IsNode: có ai phụ thuộc p (cạnh vào trực tiếp hoặc qua glob), hoặc p có vai trò trong một hệ sinh thái.
+// IsNode: something depends on p (a direct incoming edge or via a glob), or p has a role in an ecosystem.
 func (g *Graph) IsNode(p string) bool {
 	if _, ok := g.roles[p]; ok {
 		return true
@@ -122,7 +122,7 @@ func (g *Graph) IsNode(p string) bool {
 	return g.HasDependents(p)
 }
 
-// HasDependents: có cạnh vào p (trực tiếp hoặc glob).
+// HasDependents: p has an incoming edge (direct or glob).
 func (g *Graph) HasDependents(p string) bool {
 	if len(g.rev[p]) > 0 {
 		return true
@@ -138,8 +138,8 @@ func (g *Graph) HasDependents(p string) bool {
 	return found
 }
 
-// candidates gọi f với mọi pattern có thể khớp p: những pattern có tiền tố tĩnh là "" hoặc một thư mục tổ tiên của p
-// (glob chỉ khớp đường dẫn nằm dưới tiền tố tĩnh của nó). f trả false để dừng.
+// candidates calls f with every pattern that could match p: those whose static prefix is "" or an ancestor directory of p
+// (a glob only matches paths under its static prefix). f returns false to stop.
 func (g *Graph) candidates(p string, f func(patternEdge) bool) {
 	if len(g.byPrefix) == 0 {
 		return
@@ -162,25 +162,25 @@ func (g *Graph) candidates(p string, f func(patternEdge) bool) {
 	}
 }
 
-// Step là một bước trên đường đi ngược: tệp đạt được qua cạnh Edge từ tệp Via (Via rỗng: hạt giống).
+// Step is one step on the backward path: a file reached through Edge from file Via (empty Via: a seed).
 type Step struct {
 	Via    string
 	Edge   model.Edge
 	Seed   bool
-	Reason string // lý do của hạt giống (changed, unresolved...)
+	Reason string // the seed's reason (changed, unresolved...)
 }
 
-// Reach là tập tệp đạt được khi đi ngược.
+// Reach is the set of files reached when walking backwards.
 type Reach map[string]Step
 
-// Seed là hạt giống của phép đi ngược.
+// Seed is the starting point of the backward walk.
 type Seed struct {
 	Path   string
 	Reason string
 }
 
-// Walk đi ngược từ seeds qua mọi loại cạnh, không giới hạn độ sâu. Thứ tự duyệt tất định (BFS theo thứ tự hạt giống,
-// cạnh đã sắp).
+// Walk walks backwards from seeds over every edge kind with no depth limit. The traversal order is deterministic (BFS in seed order,
+// edges sorted).
 func (g *Graph) Walk(seeds []Seed) Reach {
 	r := Reach{}
 	queue := make([]string, 0, len(seeds))
@@ -219,7 +219,7 @@ func (g *Graph) Walk(seeds []Seed) Reach {
 	return r
 }
 
-// Chain trả chuỗi lý do từ p về hạt giống: "p ← a (import) ← b (changed)".
+// Chain returns the reason chain from p back to the seed: "p ← a (import) ← b (changed)".
 func (r Reach) Chain(p string) []string {
 	var out []string
 	for i := 0; i < 1000; i++ {

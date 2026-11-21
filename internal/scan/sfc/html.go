@@ -6,16 +6,16 @@ import (
 )
 
 type attr struct {
-	name string // đã hạ chữ thường
+	name string // lowercased
 	val  string
-	has  bool // có "=giá trị"
+	has  bool // has "=value"
 }
 
 type tag struct {
-	name  string // chữ thường
+	name  string // lowercase
 	attrs []attr
-	pos   int // vị trí '<'
-	end   int // vị trí sau '>'
+	pos   int // position of '<'
+	end   int // position after '>'
 	self  bool
 }
 
@@ -30,12 +30,12 @@ func (t *tag) get(name string) (string, bool) {
 
 func isSpace(c byte) bool { return c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' }
 
-// delim: ký tự sau tên thẻ phải là khoảng trắng, '>' hoặc '/' (hoặc hết tệp).
+// delim: the character after the tag name must be whitespace, '>' or '/' (or end of file).
 func delim(src []byte, j int) bool {
 	return j >= len(src) || isSpace(src[j]) || src[j] == '>' || src[j] == '/'
 }
 
-// skipBraces bỏ qua {...} cân bằng (thuộc tính Svelte/Astro), bỏ qua chuỗi bên trong. Trả vị trí sau '}' hoặc -1.
+// skipBraces skips balanced {...} (Svelte/Astro attributes), skipping strings inside. Returns the position after '}' or -1.
 func skipBraces(src []byte, j int) int {
 	depth := 0
 	for j < len(src) {
@@ -62,7 +62,7 @@ func skipBraces(src []byte, j int) int {
 	return -1
 }
 
-// parseTag đọc thẻ mở tại src[i]=='<'. ok=false: thẻ không đóng được.
+// parseTag reads the opening tag at src[i]=='<'. ok=false: the tag cannot be closed.
 func parseTag(src []byte, i int) (t tag, ok bool) {
 	n := len(src)
 	j := i + 1
@@ -148,7 +148,7 @@ func parseTag(src []byte, i int) (t tag, ok bool) {
 	}
 }
 
-// findClose tìm thẻ đóng "</name" + delim từ vị trí from (lsrc là bản hạ chữ thường). Trả (vị trí '<', vị trí sau '>').
+// findClose finds the closing tag "</name" + delim from position from (lsrc is the lowercased copy). Returns (position of '<', position after '>').
 func findClose(lsrc []byte, from int, name string) (int, int, bool) {
 	pat := []byte("</" + name)
 	k := from
@@ -169,7 +169,7 @@ func findClose(lsrc []byte, from int, name string) (int, int, bool) {
 	}
 }
 
-// skipComment: tại "<!--" trả vị trí sau "-->"; ok=false nếu không đóng.
+// skipComment: at "<!--" returns the position after "-->"; ok=false if unclosed.
 func skipComment(src []byte, i int) (int, bool) {
 	x := bytes.Index(src[i+4:], []byte("-->"))
 	if x < 0 {
@@ -182,7 +182,7 @@ func startsAt(src []byte, i int, p string) bool {
 	return i+len(p) <= len(src) && string(src[i:i+len(p)]) == p
 }
 
-// langExt đổi thuộc tính lang của script thành đuôi ảo cho bộ quét JS. ok=false: lang không hỗ trợ.
+// langExt maps a script's lang attribute to a virtual extension for the JS scanner. ok=false: unsupported lang.
 func langExt(lang string) (string, bool) {
 	switch strings.ToLower(lang) {
 	case "", "js", "javascript", "mjs", "cjs":
@@ -197,7 +197,7 @@ func langExt(lang string) (string, bool) {
 	return "", false
 }
 
-// styleExt: lang của style → dạng cú pháp cho scanCSS. ok=false: không hỗ trợ (stylus...).
+// styleExt: style lang → syntax flavor for scanCSS. ok=false: unsupported (stylus...).
 func styleExt(lang string) (string, bool) {
 	switch strings.ToLower(lang) {
 	case "", "css", "postcss", "pcss":
@@ -212,7 +212,7 @@ func styleExt(lang string) (string, bool) {
 	return "", false
 }
 
-// jsType: giá trị thuộc tính type của script có phải mã JS/TS không (rỗng = có).
+// jsType: whether the script's type attribute value denotes JS/TS code (empty = yes).
 func jsType(t string) bool {
 	switch strings.ToLower(strings.TrimSpace(t)) {
 	case "", "module", "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript",
@@ -246,7 +246,7 @@ func scanVue(a *acc) {
 			continue
 		}
 		if startsAt(src, i, "</") {
-			// thẻ đóng lạc ở mức cao nhất của script/style/template: không chắc ranh giới khối
+			// stray closing tag at the top level of script/style/template: block boundaries are uncertain
 			for _, nm := range []string{"script", "style", "template"} {
 				if startsAt(lsrc, i, "</"+nm) && delim(lsrc, i+2+len(nm)) {
 					a.fail("vue", "stray_close_tag: </"+nm+"> at line "+itoa(a.line(i)))
@@ -294,7 +294,7 @@ func scanVue(a *acc) {
 		}
 		var cs, ce, end int
 		if t.name == "template" {
-			// template chứa HTML lồng nhau: đếm độ sâu <template>/</template>, bỏ qua comment
+			// template containing nested HTML: count <template>/</template> depth, skipping comments
 			depth, j := 1, t.end
 			found := false
 			for j < n {
@@ -372,11 +372,11 @@ func scanVue(a *acc) {
 	}
 }
 
-// ---- quét "mọi nơi" dùng cho Svelte và Astro ----
+// ---- "anywhere" scan used for Svelte and Astro ----
 
-// scanLoose duyệt phần thân từ vị trí from, tìm mọi <script>/<style> (ở bất kỳ độ sâu nào, bỏ qua comment HTML).
-// Thừa còn hơn sót: script lồng trong phần tử cũng được quét.
-// style: tách riêng vì Svelte/Astro đều xử lý @import trong <style>.
+// scanLoose walks the body from position from, finding every <script>/<style> (at any depth, skipping HTML comments).
+// Over-reporting beats missing: scripts nested inside elements are scanned too.
+// style: handled separately because Svelte/Astro both process @import in <style>.
 func scanLoose(a *acc, from int, label string, astro bool) {
 	src := a.src
 	lsrc := asciiLower(src)
@@ -436,17 +436,17 @@ func scanLoose(a *acc, from int, label string, astro bool) {
 		case "script":
 			typ, _ := t.get("type")
 			if !jsType(typ) {
-				continue // JSON-LD, importmap, template...: không phải mã module
+				continue // JSON-LD, importmap, template...: not module code
 			}
 			if astro {
 				if _, inline := t.get("is:inline"); inline || hasSrc {
-					continue // không được bundle: chỉ lấy src (đã xử lý ở trên)
+					continue // not bundled: only take src (handled above)
 				}
 				a.scanJS(kind, content, ".ts", t.end)
 				continue
 			}
 			if hasSrc {
-				continue // Svelte không xử lý script có src
+				continue // Svelte does not process scripts with src
 			}
 			lang, _ := t.get("lang")
 			ext, ok := langExt(lang)
@@ -469,7 +469,7 @@ func scanLoose(a *acc, from int, label string, astro bool) {
 
 func scanSvelte(a *acc) { scanLoose(a, 0, "svelte", false) }
 
-// scanAstro: frontmatter (TS) giữa hai dòng "---" ở đầu tệp, rồi thân.
+// scanAstro: frontmatter (TS) between two "---" lines at the start of the file, then the body.
 func scanAstro(a *acc) {
 	src := a.src
 	n := len(src)
@@ -483,7 +483,7 @@ func scanAstro(a *acc) {
 		if le < 0 {
 			le = n - p
 		}
-		if len(bytes.TrimSpace(src[p:p+le])) == 3 { // dòng mở đúng là "---"
+		if len(bytes.TrimSpace(src[p:p+le])) == 3 { // the opening line is exactly "---"
 			cs := p + le + 1
 			if cs > n {
 				cs = n
