@@ -30,7 +30,7 @@ func ParseF2P(raw json.RawMessage) ([]string, error) {
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil {
-		return nil, fmt.Errorf("FAIL_TO_PASS không phải list/chuỗi: %w", err)
+		return nil, fmt.Errorf("FAIL_TO_PASS is not a list/string: %w", err)
 	}
 	s = strings.TrimSpace(s)
 	if err := json.Unmarshal([]byte(s), &arr); err == nil {
@@ -49,14 +49,14 @@ func parsePyList(s string) ([]string, error) {
 	}
 	skip()
 	if i >= len(r) || r[i] != '[' {
-		return nil, fmt.Errorf("không phải literal list: %.40q", s)
+		return nil, fmt.Errorf("not a list literal: %.40q", s)
 	}
 	i++
 	out := []string{}
 	for {
 		skip()
 		if i >= len(r) {
-			return nil, fmt.Errorf("list không đóng")
+			return nil, fmt.Errorf("unterminated list")
 		}
 		if r[i] == ']' {
 			return out, nil
@@ -67,7 +67,7 @@ func parsePyList(s string) ([]string, error) {
 		}
 		q := r[i]
 		if q != '\'' && q != '"' {
-			return nil, fmt.Errorf("phần tử không phải chuỗi tại %d", i)
+			return nil, fmt.Errorf("element at %d is not a string", i)
 		}
 		i++
 		var b strings.Builder
@@ -105,7 +105,7 @@ func parsePyList(s string) ([]string, error) {
 			i++
 		}
 		if i >= len(r) {
-			return nil, fmt.Errorf("chuỗi không đóng")
+			return nil, fmt.Errorf("unterminated string")
 		}
 		i++
 		out = append(out, b.String())
@@ -167,7 +167,7 @@ type ManifestRepo struct {
 }
 
 // SplitRule mô tả luật chia dev/holdout.
-const SplitRule = "sắp repo (chữ thường) theo sha256(tên) tăng dần; chỉ số i%3==2 (mỗi repo thứ 3) là holdout, còn lại dev"
+const SplitRule = "sort repos (lowercased) by ascending sha256(name); index i%3==2 (every 3rd repo) is holdout, the rest dev"
 
 // BuildManifest dựng manifest tất định từ tập repo (hợp của repo T1 và repo replay).
 func BuildManifest(t1 map[string]*ManifestRepo, replay []string, ds []DatasetInfo, capPer int) Manifest {

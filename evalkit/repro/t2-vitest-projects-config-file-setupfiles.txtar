@@ -1,9 +1,9 @@
-Tìm thấy bởi T2 (zod@2a343ed, đột biến packages/zod/src/compile.ts: zod-05, zod-15). Cấu hình vitest gốc liệt kê một project là TỆP cấu hình riêng
-(`projects: ["./vitest.compile.config.ts"]`); tệp đó đặt setupFiles = scripts/enable-compile.ts, setup này import src/compile.ts (hiệu ứng toàn cục).
-Setup chạy trước MỌI tệp test của project nên đổi compile.ts phải chọn tệp test của project (ít nhất các test đọc hiệu ứng, ở đây stats.test.ts).
-Thực tế: phạm vi none, không chọn gì. Cùng cây mà đặt setupFiles trực tiếp ở vitest.config.ts gốc thì ĐÚNG (đã thử): lỗi nằm ở chỗ không đọc
-cấu hình của project khai báo bằng đường dẫn tệp trong `projects` (ở zod: vitest.compile.config.ts).
-Chạy thử: chép vào internal/e2e/testdata/fixtures/node/ rồi `go test ./internal/e2e -run Fixtures`.
+Found by T2 (zod@2a343ed, mutant in packages/zod/src/compile.ts: zod-05, zod-15). The root vitest config lists one project as its own config FILE
+(`projects: ["./vitest.compile.config.ts"]`); that file sets setupFiles = scripts/enable-compile.ts, and this setup imports src/compile.ts (a global side effect).
+The setup runs before EVERY test file of the project, so changing compile.ts must select the project's test files (at least the tests that observe the effect, here stats.test.ts).
+Actual: scope none, nothing selected. On the same tree, with setupFiles set directly in the root vitest.config.ts, it is CORRECT (verified): the bug is that the config of a
+project declared by a file path in `projects` is not read (in zod: vitest.compile.config.ts).
+To try: copy into internal/e2e/testdata/fixtures/node/ then `go test ./internal/e2e -run Fixtures`.
 -- base/package.json --
 {"name":"root","private":true,"devDependencies":{"vitest":"^4.0.0"}}
 -- base/vitest.config.ts --

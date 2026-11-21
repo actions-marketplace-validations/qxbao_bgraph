@@ -202,7 +202,7 @@ func ParseRunJSON(root string, b []byte) (map[string]string, int, error) {
 		return nil, 0, err
 	}
 	if len(r.TestResults) == 0 {
-		return nil, 0, fmt.Errorf("báo cáo không có testResults")
+		return nil, 0, fmt.Errorf("report has no testResults")
 	}
 	out := map[string]string{}
 	for _, t := range r.TestResults {
@@ -252,11 +252,11 @@ func (r T2Repo) runSuite(ctx context.Context, root, tmp string, timeout time.Dur
 		return nil, 0, d, false, "", ctx.Err()
 	}
 	if to {
-		return nil, 0, d, true, "quá thời hạn " + timeout.String(), nil
+		return nil, 0, d, true, "timed out after " + timeout.String(), nil
 	}
 	b, rerr := os.ReadFile(of)
 	if rerr != nil {
-		return nil, 0, d, false, "không có báo cáo JSON: " + fmt.Sprint(err) + " " + tail, nil
+		return nil, 0, d, false, "no JSON report: " + fmt.Sprint(err) + " " + tail, nil
 	}
 	m, n, perr := ParseRunJSON(root, b)
 	if perr != nil {
@@ -280,7 +280,7 @@ func (r T2Repo) runNative(ctx context.Context, root, tmp, file string) ([]string
 	}
 	out, tail, to, err := runProc(ctx, root, append([]string{"CI=1"}, r.Env...), 10*time.Minute, "node", args...)
 	if to {
-		return nil, fmt.Errorf("native quá thời hạn")
+		return nil, fmt.Errorf("native timed out")
 	}
 	var files []string
 	if r.Runner == "jest" {
@@ -379,7 +379,7 @@ func (s *OracleStore) Append(r T2Record) error {
 // ApplyEdit áp đột biến lên nội dung blob.
 func ApplyEdit(blob []byte, m T2Mutant) ([]byte, error) {
 	if m.Start < 0 || m.End < m.Start || m.End > len(blob) {
-		return nil, fmt.Errorf("đột biến %s ngoài phạm vi blob", m.ID)
+		return nil, fmt.Errorf("mutant %s is outside the blob range", m.ID)
 	}
 	out := make([]byte, 0, len(blob)+len(m.Repl))
 	out = append(out, blob[:m.Start]...)
@@ -405,7 +405,7 @@ func (r T2Repo) MutantCommit(ctx context.Context, root, idxDir string, m T2Mutan
 		return "", nil, err
 	}
 	if oid != m.Blob {
-		return "", nil, fmt.Errorf("%s: blob tại R là %s, đột biến sinh cho %s (cache cũ)", m.File, oid, m.Blob)
+		return "", nil, fmt.Errorf("%s: blob at R is %s, mutant was generated for %s (stale cache)", m.File, oid, m.Blob)
 	}
 	mutated, err = ApplyEdit(blob, m)
 	if err != nil {
@@ -434,7 +434,7 @@ func (r T2Repo) GenMutants(ctx context.Context, t2Dir string, ts string, root st
 	}
 	out, tail, _, err := runProc(ctx, t2Dir, nil, 10*time.Minute, "node", sp, "@"+cp)
 	if err != nil {
-		return nil, fmt.Errorf("sinh đột biến: %v %s", err, tail)
+		return nil, fmt.Errorf("mutant generation: %v %s", err, tail)
 	}
 	var ms []T2Mutant
 	if err := json.Unmarshal([]byte(out), &ms); err != nil {
@@ -500,7 +500,7 @@ func (r T2Repo) ensureClean(ctx context.Context, root string) error {
 		return err
 	}
 	if strings.TrimSpace(h) != r.R {
-		return fmt.Errorf("%s: HEAD %s khác R %s", r.Name, strings.TrimSpace(h), r.R)
+		return fmt.Errorf("%s: HEAD %s differs from R %s", r.Name, strings.TrimSpace(h), r.R)
 	}
 	// Phục hồi cây (lần chạy trước có thể bị ngắt giữa chừng).
 	if _, err := git(ctx, root, "checkout", "-q", "--", "."); err != nil {
@@ -511,7 +511,7 @@ func (r T2Repo) ensureClean(ctx context.Context, root string) error {
 		return err
 	}
 	if strings.TrimSpace(st) != "" {
-		return fmt.Errorf("%s: cây làm việc không sạch: %.200s", r.Name, st)
+		return fmt.Errorf("%s: working tree is not clean: %.200s", r.Name, st)
 	}
 	return nil
 }
@@ -535,9 +535,9 @@ func (r T2Repo) Baseline(ctx context.Context, cfg *T2Config, root string) (T2Bas
 			return bl, err
 		}
 		if to || m == nil {
-			return bl, fmt.Errorf("%s: baseline lượt %d lỗi: %s", r.Name, i+1, msg)
+			return bl, fmt.Errorf("%s: baseline run %d failed: %s", r.Name, i+1, msg)
 		}
-		cfg.logf("%s: baseline %d/3 %d tệp, %s", r.Name, i+1, len(m), d.Round(time.Second))
+		cfg.logf("%s: baseline %d/3 %d files, %s", r.Name, i+1, len(m), d.Round(time.Second))
 		runs = append(runs, m)
 		bl.RunMs = append(bl.RunMs, d.Milliseconds())
 		bl.Tests = n
@@ -585,7 +585,7 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 	if err != nil {
 		return err
 	}
-	cfg.logf("%s: baseline %d tệp test, %d hỏng sẵn, %d flaky", r.Name, bl.Files, len(bl.Failing), len(bl.Flaky))
+	cfg.logf("%s: baseline %d test files, %d pre-broken, %d flaky", r.Name, bl.Files, len(bl.Failing), len(bl.Flaky))
 	excl := bl.excluded()
 	mp := filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")
 	var muts []T2Mutant
@@ -608,7 +608,7 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		b, _ := json.MarshalIndent(map[string]any{"r": r.R, "seed": r.Seed, "count": r.Mutants, "mutants": muts}, "", " ")
 		os.WriteFile(mp, b, 0o644)
 	}
-	cfg.logf("%s: %d đột biến", r.Name, len(muts))
+	cfg.logf("%s: %d mutants", r.Name, len(muts))
 	var med []int64
 	med = append(med, bl.RunMs...)
 	timeout := time.Duration(medianInt64(med))*4*time.Millisecond + 2*time.Minute
@@ -686,7 +686,7 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		if err := store.Append(rec); err != nil {
 			return err
 		}
-		cfg.logf("%s: %s %s %s:%d -> %s (đỏ %d, native %d) %s", r.Name, m.ID, m.Op, m.File, m.Line, rec.Status, len(rec.Red), len(rec.Native), time.Duration(rec.Ms)*time.Millisecond)
+		cfg.logf("%s: %s %s %s:%d -> %s (red %d, native %d) %s", r.Name, m.ID, m.Op, m.File, m.Line, rec.Status, len(rec.Red), len(rec.Native), time.Duration(rec.Ms)*time.Millisecond)
 	}
 	return r.ensureClean(ctx, root)
 }
@@ -848,7 +848,7 @@ func RunT2(ctx context.Context, cfg T2Config) (T2Result, error) {
 				t0 := time.Now()
 				if err := r.BuildOracle(ctx, &cfg, store, have); err != nil {
 					rr.Error = err.Error()
-					cfg.logf("%s: lỗi oracle: %v", r.Name, err)
+					cfg.logf("%s: oracle error: %v", r.Name, err)
 					return
 				}
 				rr.OracleMs = time.Since(t0).Milliseconds()
@@ -858,7 +858,7 @@ func RunT2(ctx context.Context, cfg T2Config) (T2Result, error) {
 			}
 			recs, err := store.Load()
 			if err != nil {
-				rr.Error = "chưa có oracle: " + err.Error() + " (chạy `bgraph-eval t2 --run-tests`)"
+				rr.Error = "no oracle yet: " + err.Error() + " (run `bgraph-eval t2 --run-tests`)"
 				return
 			}
 			var mine []T2Record
@@ -868,7 +868,7 @@ func RunT2(ctx context.Context, cfg T2Config) (T2Result, error) {
 				}
 			}
 			if len(mine) == 0 {
-				rr.Error = "oracle không có đột biến cho " + r.Name + "@" + r.R
+				rr.Error = "oracle has no mutants for " + r.Name + "@" + r.R
 				return
 			}
 			t0 := time.Now()
@@ -950,7 +950,7 @@ func (r T2Repo) confirmRed(ctx context.Context, root, tmp string, timeout time.D
 			return err
 		}
 		if to || res == nil {
-			return fmt.Errorf("xác nhận lượt %d lỗi: %s", round+1, msg)
+			return fmt.Errorf("confirmation run %d failed: %s", round+1, msg)
 		}
 		for f := range still {
 			if res[f] != "failed" {
@@ -1008,7 +1008,7 @@ func (r T2Repo) Reconfirm(ctx context.Context, cfg *T2Config, store *OracleStore
 			return r.confirmRed(ctx, root, filepath.Join(cfg.Dir, "tmp", r.Dir), timeout, &rec)
 		}()
 		if err != nil {
-			cfg.logf("%s: %s xác nhận lỗi: %v", r.Name, rec.Mutant.ID, err)
+			cfg.logf("%s: %s confirmation failed: %v", r.Name, rec.Mutant.ID, err)
 			continue
 		}
 		rec.Status = "survived"
@@ -1018,7 +1018,7 @@ func (r T2Repo) Reconfirm(ctx context.Context, cfg *T2Config, store *OracleStore
 		if err := store.Append(rec); err != nil {
 			return err
 		}
-		cfg.logf("%s: %s xác nhận: đỏ %d -> %d (không tái hiện: %d) %s", r.Name, rec.Mutant.ID, before, len(rec.Red), len(rec.RedUnconfirmed), rec.Status)
+		cfg.logf("%s: %s confirmation: red %d -> %d (not reproduced: %d) %s", r.Name, rec.Mutant.ID, before, len(rec.Red), len(rec.RedUnconfirmed), rec.Status)
 	}
 	return r.ensureClean(ctx, root)
 }

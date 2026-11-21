@@ -69,7 +69,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "dùng: bgraph-eval t1|t2|quick|replay|manifest [cờ]  (xem -h của từng lệnh)")
+	fmt.Fprintln(os.Stderr, "usage: bgraph-eval t1|t2|quick|replay|manifest [flags]  (see -h for each command)")
 	os.Exit(2)
 }
 
@@ -90,20 +90,20 @@ func logger(out string) func(string, ...any) {
 
 func cmdT1(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("t1", flag.ExitOnError)
-	tasksPath := fs.String("tasks", "", "JSONL nhiệm vụ (đã chuẩn hoá)")
+	tasksPath := fs.String("tasks", "", "normalized task JSONL")
 	manPath := fs.String("manifest", "evalkit/manifest/node.json", "manifest repo dev/holdout")
-	work := fs.String("work", "", "thư mục làm việc (clone, worktree, state)")
-	out := fs.String("out", "", "thư mục kết quả")
-	jobs := fs.Int("jobs", 4, "số repo chạy song song")
-	maxPer := fs.Int("max-per-repo", 40, "tối đa task mỗi repo (0 = không giới hạn)")
-	only := fs.String("repos", "", "chỉ các repo này (phân tách bằng dấu phẩy)")
-	ids := fs.String("ids", "", "chỉ các instance_id này")
-	limit := fs.Int("limit", 0, "tối đa tổng số task (0 = không)")
-	resume := fs.Bool("resume", false, "bỏ qua task đã có trong t1.jsonl")
-	checkout := fs.Bool("checkout", false, "dựng P/C bằng git worktree (lối cũ) thay vì index tạm; lỗi git apply --cached cũng tự rơi về lối này")
+	work := fs.String("work", "", "working directory (clones, worktrees, state)")
+	out := fs.String("out", "", "results directory")
+	jobs := fs.Int("jobs", 4, "number of repos to run in parallel")
+	maxPer := fs.Int("max-per-repo", 40, "max tasks per repo (0 = unlimited)")
+	only := fs.String("repos", "", "only these repos (comma-separated)")
+	ids := fs.String("ids", "", "only these instance_ids")
+	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
+	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
+	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
 	fs.Parse(args)
 	if *tasksPath == "" || *work == "" || *out == "" {
-		return fmt.Errorf("cần --tasks, --work, --out")
+		return fmt.Errorf("--tasks, --work, --out are required")
 	}
 	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
 		return err
@@ -120,7 +120,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	var keep []evalkit.Task
 	for _, t := range tasks {
 		if _, ok := man.Role(t.Repo); !ok {
-			return fmt.Errorf("repo %s không có trong manifest", t.Repo)
+			return fmt.Errorf("repo %s is not in the manifest", t.Repo)
 		}
 		if *only != "" && !contains(*only, t.Repo) {
 			continue
@@ -146,22 +146,22 @@ func cmdT1(ctx context.Context, args []string) error {
 func cmdQuick(ctx context.Context, args []string) (int, error) {
 	start := time.Now()
 	fs := flag.NewFlagSet("quick", flag.ExitOnError)
-	tasksPath := fs.String("tasks", "", "JSONL nhiệm vụ (đã chuẩn hoá)")
+	tasksPath := fs.String("tasks", "", "normalized task JSONL")
 	manPath := fs.String("manifest", "evalkit/manifest/node.json", "manifest repo dev/holdout")
-	regPath := fs.String("regressions", "evalkit/manifest/node-regressions.txt", "danh sách instance_id từng vi phạm (luôn chạy)")
-	work := fs.String("work", "", "thư mục làm việc (clone, state)")
-	out := fs.String("out", "", "thư mục kết quả")
-	jobs := fs.Int("jobs", 4, "số repo chạy song song")
-	perRepo := fs.Int("per-repo", 4, "số task khác mỗi repo, chọn theo sha256(instance_id)")
-	maxPer := fs.Int("max-per-repo", 40, "giới hạn mỗi repo của tập T1 đầy đủ (tập mà mẫu rút ra)")
-	commits := fs.Int("commits", 20, "số commit replay mỗi repo")
-	checkout := fs.Bool("checkout", false, "dựng P/C bằng git worktree (lối cũ)")
-	serial := fs.Bool("serial", false, "chạy T1 rồi replay tuần tự (mặc định song song)")
-	t2Dir := fs.String("t2-dir", "", "thư mục gốc T2 (mặc định: <work>/../t2); chỉ kiểm lại T2 khi có oracle.jsonl trong đó")
+	regPath := fs.String("regressions", "evalkit/manifest/node-regressions.txt", "instance_ids that once violated (always run)")
+	work := fs.String("work", "", "working directory (clones, state)")
+	out := fs.String("out", "", "results directory")
+	jobs := fs.Int("jobs", 4, "number of repos to run in parallel")
+	perRepo := fs.Int("per-repo", 4, "additional tasks per repo, chosen by sha256(instance_id)")
+	maxPer := fs.Int("max-per-repo", 40, "per-repo cap of the full T1 set (the set the sample is drawn from)")
+	commits := fs.Int("commits", 20, "commits to replay per repo")
+	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path)")
+	serial := fs.Bool("serial", false, "run T1 then replay sequentially (default: parallel)")
+	t2Dir := fs.String("t2-dir", "", "T2 root directory (default: <work>/../t2); T2 is re-checked only if oracle.jsonl exists there")
 	t2Man := fs.String("t2-manifest", "evalkit/manifest/t2.json", "manifest repo T2")
 	fs.Parse(args)
 	if *tasksPath == "" || *work == "" || *out == "" {
-		return 2, fmt.Errorf("cần --tasks, --work, --out")
+		return 2, fmt.Errorf("--tasks, --work, --out are required")
 	}
 	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
 		return 2, err
@@ -182,7 +182,7 @@ func cmdQuick(ctx context.Context, args []string) (int, error) {
 	var keep []evalkit.Task
 	for _, t := range sample {
 		if _, ok := man.Role(t.Repo); !ok {
-			return 2, fmt.Errorf("repo %s không có trong manifest", t.Repo)
+			return 2, fmt.Errorf("repo %s is not in the manifest", t.Repo)
 		}
 		keep = append(keep, t)
 	}
@@ -197,14 +197,14 @@ func cmdQuick(ctx context.Context, args []string) (int, error) {
 	}
 	t2m, _ := evalkit.LoadT2Manifest(*t2Man) // thiếu manifest → bỏ qua T2
 	lg := logger(*out)
-	lg("quick: %d task T1 (%d regression, %d id regression không có trong dữ liệu: %v), replay %d repo x %d commit", len(keep), len(reg)-len(missing), len(missing), missing, len(rep), *commits)
+	lg("quick: %d T1 tasks (%d regressions, %d regression ids missing from the data: %v), replay %d repos x %d commits", len(keep), len(reg)-len(missing), len(missing), missing, len(rep), *commits)
 	qr, err := evalkit.RunQuick(ctx, evalkit.QuickConfig{Work: *work, Out: *out, Tasks: keep, Manifest: man, Replay: rep, Commits: *commits, Jobs: *jobs, Checkout: *checkout, Serial: *serial, T2Dir: *t2Dir, T2: t2m, Log: lg})
 	if err != nil {
 		return 2, err
 	}
 	b, _ := os.ReadFile(filepath.Join(*out, "quick.md"))
 	fmt.Println(string(b))
-	fmt.Printf("Tổng thời gian: %s\n", time.Since(start).Round(time.Second))
+	fmt.Printf("Total time: %s\n", time.Since(start).Round(time.Second))
 	if qr.Violations > 0 {
 		return 1, nil
 	}
@@ -223,14 +223,14 @@ func contains(list, v string) bool {
 func cmdReplay(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("replay", flag.ExitOnError)
 	var repos multi
-	fs.Var(&repos, "repo", "URL hoặc owner/name (lặp được)")
-	n := fs.Int("commits", 100, "số commit gần nhất (first-parent, bỏ merge)")
+	fs.Var(&repos, "repo", "URL or owner/name (repeatable)")
+	n := fs.Int("commits", 100, "most recent commits (first-parent, merges skipped)")
 	manPath := fs.String("manifest", "evalkit/manifest/node.json", "manifest repo dev/holdout")
-	work := fs.String("work", "", "thư mục làm việc")
-	out := fs.String("out", "", "thư mục kết quả")
-	jobs := fs.Int("jobs", 4, "số repo song song")
-	depth := fs.Int("depth", 0, "độ sâu clone nông (0 = 3*commits+20)")
-	resum := fs.Bool("resummarize", false, "chỉ đọc lại replay.json trong --out, gán vai trò từ manifest và ghi lại báo cáo")
+	work := fs.String("work", "", "working directory")
+	out := fs.String("out", "", "results directory")
+	jobs := fs.Int("jobs", 4, "number of repos in parallel")
+	depth := fs.Int("depth", 0, "shallow clone depth (0 = 3*commits+20)")
+	resum := fs.Bool("resummarize", false, "only re-read replay.json in --out, assign roles from the manifest and rewrite the report")
 	fs.Parse(args)
 	if *resum {
 		man, err := evalkit.LoadManifest(*manPath)
@@ -240,7 +240,7 @@ func cmdReplay(ctx context.Context, args []string) error {
 		return evalkit.Resummarize(*out, man)
 	}
 	if len(repos) == 0 || *work == "" || *out == "" {
-		return fmt.Errorf("cần --repo, --work, --out")
+		return fmt.Errorf("--repo, --work, --out are required")
 	}
 	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
 		return err
@@ -256,10 +256,10 @@ func cmdReplay(ctx context.Context, args []string) error {
 
 func cmdManifest(args []string) error {
 	fs := flag.NewFlagSet("manifest", flag.ExitOnError)
-	tasksPath := fs.String("tasks", "", "JSONL nhiệm vụ")
-	metaPath := fs.String("meta", "", "meta.json do fetch_datasets.py ghi (revision các bộ dữ liệu)")
+	tasksPath := fs.String("tasks", "", "task JSONL")
+	metaPath := fs.String("meta", "", "meta.json written by fetch_datasets.py (dataset revisions)")
 	var replay multi
-	fs.Var(&replay, "replay", "repo replay (phân tách bằng dấu phẩy)")
+	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
 	fs.Parse(args)
@@ -290,8 +290,8 @@ func cmdManifest(args []string) error {
 	}
 	sort.Strings(rep)
 	ds := []evalkit.DatasetInfo{
-		{Name: "SWE-bench/SWE-bench_Multilingual", URL: "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual", Notes: "split test; giữ repo JS/TS"},
-		{Name: "ByteDance-Seed/Multi-SWE-bench", URL: "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench", Notes: "thư mục js/ và ts/ (JSONL); FAIL_TO_PASS = khoá f2p_tests"},
+		{Name: "SWE-bench/SWE-bench_Multilingual", URL: "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual", Notes: "test split; keeps JS/TS repos"},
+		{Name: "ByteDance-Seed/Multi-SWE-bench", URL: "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench", Notes: "js/ and ts/ directories (JSONL); FAIL_TO_PASS = f2p_tests key"},
 	}
 	if *metaPath != "" {
 		if b, err := os.ReadFile(*metaPath); err == nil {
@@ -321,27 +321,27 @@ func cmdManifest(args []string) error {
 //	score: đọc <out>/runs/<tool>/<id>.json (script research/baseline-*/run_tools.py ghi), chấm bằng CheckRequired → scores.json + baseline.md
 func cmdBaseline(ctx context.Context, args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("dùng: baseline prep|score")
+		return fmt.Errorf("usage: baseline prep|score")
 	}
 	sub := args[0]
 	fs := flag.NewFlagSet("baseline", flag.ExitOnError)
-	tasksPath := fs.String("tasks", "", "JSONL nhiệm vụ (đã chuẩn hoá)")
+	tasksPath := fs.String("tasks", "", "normalized task JSONL")
 	manPath := fs.String("manifest", "evalkit/manifest/node.json", "manifest")
-	regPath := fs.String("regressions", "evalkit/manifest/node-regressions.txt", "danh sách id regression")
-	work := fs.String("work", "", "thư mục làm việc (mirror các repo)")
-	out := fs.String("out", "", "thư mục kết quả")
+	regPath := fs.String("regressions", "evalkit/manifest/node-regressions.txt", "regression id list")
+	work := fs.String("work", "", "working directory (repo mirrors)")
+	out := fs.String("out", "", "results directory")
 	jobs := fs.Int("jobs", 3, "repo song song")
 	perRepo := fs.Int("per-repo", 4, "")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	tools := fs.String("tools", "codegraph,graphify,gitnexus", "")
 	fs.Parse(args[1:])
 	if *out == "" {
-		return fmt.Errorf("cần --out")
+		return fmt.Errorf("--out is required")
 	}
 	switch sub {
 	case "prep":
 		if *tasksPath == "" || *work == "" {
-			return fmt.Errorf("cần --tasks, --work")
+			return fmt.Errorf("--tasks, --work are required")
 		}
 		if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
 			return err
@@ -360,7 +360,7 @@ func cmdBaseline(ctx context.Context, args []string) error {
 		}
 		sample, missing := evalkit.SampleQuick(all, evalkit.SelectTasks(all, *maxPer), reg, *perRepo)
 		lg := logger(*out)
-		lg("baseline prep: %d task (id regression thiếu: %v)", len(sample), missing)
+		lg("baseline prep: %d tasks (missing regression ids: %v)", len(sample), missing)
 		_, err = evalkit.BaselinePrep(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: sample, Manifest: man, Jobs: *jobs, Log: lg})
 		return err
 	case "score":
@@ -379,20 +379,20 @@ func cmdBaseline(ctx context.Context, args []string) error {
 		}
 		return nil
 	}
-	return fmt.Errorf("lệnh con không rõ: %s", sub)
+	return fmt.Errorf("unknown subcommand: %s", sub)
 }
 
 // cmdT2 chạy oracle đột biến (mục 10.2): --run-tests xây/làm mới oracle.jsonl; mặc định chỉ kiểm lại bgraph trên oracle đã cache.
 func cmdT2(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("t2", flag.ExitOnError)
-	dir := fs.String("dir", "D:/bench/bgraph-eval/t2", "thư mục gốc T2 (checkout, tools, state, oracle.jsonl)")
+	dir := fs.String("dir", "D:/bench/bgraph-eval/t2", "T2 root directory (checkout, tools, state, oracle.jsonl)")
 	manPath := fs.String("manifest", "evalkit/manifest/t2.json", "manifest repo T2")
-	out := fs.String("out", "", "thư mục báo cáo (mặc định <dir>/out)")
-	repos := fs.String("repos", "", "chỉ các repo này (tên hoặc thư mục, phân tách bằng dấu phẩy)")
-	run := fs.Bool("run-tests", false, "chạy test để xây/làm mới oracle (chậm); mặc định kiểm lại bgraph trên oracle cache")
-	rebase := fs.Bool("rebaseline", false, "chạy lại baseline 3 lượt")
-	rebuild := fs.Bool("rebuild", false, "chạy lại mọi đột biến kể cả đã có trong oracle")
-	reconf := fs.Bool("reconfirm", false, "xác nhận lại các đột biến killed chưa xác nhận bằng chạy riêng tệp đỏ (2 lượt)")
+	out := fs.String("out", "", "report directory (default <dir>/out)")
+	repos := fs.String("repos", "", "only these repos (name or directory, comma-separated)")
+	run := fs.Bool("run-tests", false, "run tests to build/refresh the oracle (slow); default re-checks bgraph on the cached oracle")
+	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
+	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
+	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
 	fs.Parse(args)
 	if *out == "" {
 		*out = filepath.Join(*dir, "out")

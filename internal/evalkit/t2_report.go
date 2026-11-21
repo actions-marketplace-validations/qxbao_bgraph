@@ -12,31 +12,31 @@ import (
 // T2Markdown dựng báo cáo T2: vi phạm trước, rồi bảng theo repo, rồi chi tiết "native ⊄ bgraph".
 func T2Markdown(q T2Result) string {
 	var b strings.Builder
-	verdict := "ĐẠT (0 vi phạm T2)"
+	verdict := "PASS (0 T2 violations)"
 	if q.Violations > 0 {
-		verdict = fmt.Sprintf("KHÔNG ĐẠT: %d vi phạm T2", q.Violations)
+		verdict = fmt.Sprintf("FAIL: %d T2 violations", q.Violations)
 	}
-	mode := "kiểm lại trên oracle cache"
+	mode := "re-check on cached oracle"
 	if q.RunTests {
-		mode = "xây/làm mới oracle (--run-tests)"
+		mode = "build/refresh oracle (--run-tests)"
 	}
-	fmt.Fprintf(&b, "# bgraph-eval t2 — %s\n\nChế độ: %s. Thời gian: %s\n\n", verdict, mode, q.Wall.Round(time.Millisecond))
-	b.WriteString("## Vi phạm\n\n")
+	fmt.Fprintf(&b, "# bgraph-eval t2 — %s\n\nMode: %s. Time: %s\n\n", verdict, mode, q.Wall.Round(time.Millisecond))
+	b.WriteString("## Violations\n\n")
 	n := 0
 	for _, r := range q.Repos {
 		for _, c := range r.Violations {
 			n++
-			fmt.Fprintf(&b, "- `%s` %s %s:%d (%s) `%s -> %s`: tệp đỏ ngoài phần chọn %v; scope=%s; nới %v\n", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, c.Rec.Mutant.Op, short(c.Rec.Mutant.Before), short(c.Rec.Mutant.After), c.Missed, c.Scope, c.Widenings)
+			fmt.Fprintf(&b, "- `%s` %s %s:%d (%s) `%s -> %s`: red files outside the selection %v; scope=%s; widenings %v\n", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, c.Rec.Mutant.Op, short(c.Rec.Mutant.Before), short(c.Rec.Mutant.After), c.Missed, c.Scope, c.Widenings)
 			for _, d := range c.Diag {
-				fmt.Fprintf(&b, "  - chẩn đoán %s: role=%s in_unit=%v units=%v imports=%d unresolved=%v reach=%d reached_changed=%v\n", d.File, d.Role, d.InUnit, d.Units, len(d.Imports), d.Unresolved, d.ReachSize, d.ReachedChanged)
+				fmt.Fprintf(&b, "  - diagnosis %s: role=%s in_unit=%v units=%v imports=%d unresolved=%v reach=%d reached_changed=%v\n", d.File, d.Role, d.InUnit, d.Units, len(d.Imports), d.Unresolved, d.ReachSize, d.ReachedChanged)
 			}
 			for _, x := range c.Near {
-				fmt.Fprintf(&b, "  - gần: %s\n", x)
+				fmt.Fprintf(&b, "  - near: %s\n", x)
 			}
 		}
 	}
 	if n == 0 {
-		b.WriteString("(không có)\n")
+		b.WriteString("(none)\n")
 	}
 	var errs []string
 	for _, r := range q.Repos {
@@ -50,12 +50,12 @@ func T2Markdown(q T2Result) string {
 		}
 	}
 	if len(errs) > 0 {
-		b.WriteString("\n## Lỗi / cảnh báo\n\n")
+		b.WriteString("\n## Errors / warnings\n\n")
 		for _, e := range errs {
 			fmt.Fprintf(&b, "- %s\n", e)
 		}
 	}
-	b.WriteString("\n## Theo repo\n\n| repo | R | baseline tệp | hỏng sẵn | flaky | đột biến | bị giết | sống sót | timeout/lỗi | nới full | vi phạm | native ⊄ bgraph | median sel/units bgraph | native | all | check ms |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## By repo\n\n| repo | R | baseline files | pre-broken | flaky | mutants | killed | survived | timeout/error | full widening | violations | native ⊄ bgraph | median sel/units bgraph | native | all | check ms |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range q.Repos {
 		fmt.Fprintf(&b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d/%d | %d | %d | %d | %.3f | %.3f | 1 | %d |\n", r.Repo.Name, r.Repo.R, r.Baseline.Files, len(r.Baseline.Failing), len(r.Baseline.Flaky),
 			r.Killed+r.Survived+r.Timeout+r.Errors, r.Killed, r.Survived, r.Timeout, r.Errors, r.Full, len(r.Violations), len(r.NativeNotSubset), r.MedBgraph, r.MedNative, r.CheckMs)
@@ -69,23 +69,23 @@ func T2Markdown(q T2Result) string {
 			for _, f := range c.Rec.Red {
 				red[f] = true
 			}
-			fmt.Fprintf(&b, "- `%s` %s %s:%d: native %d tệp, bgraph %d/%d; chỉ native: %v", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, len(c.Rec.Native), c.Selected, c.Units, c.NativeOnly)
+			fmt.Fprintf(&b, "- `%s` %s %s:%d: native %d files, bgraph %d/%d; native only: %v", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, len(c.Rec.Native), c.Selected, c.Units, c.NativeOnly)
 			var redOnly []string
 			for _, f := range c.NativeOnly {
 				if red[f] {
 					redOnly = append(redOnly, f)
 				}
 			}
-			fmt.Fprintf(&b, " (trong đó đỏ thật: %v)\n", redOnly)
+			fmt.Fprintf(&b, " (of which really red: %v)\n", redOnly)
 			for _, d := range c.Diag {
 				fmt.Fprintf(&b, "  - %s: in_unit=%v reach=%d reached_changed=%v unresolved=%v\n", d.File, d.InUnit, d.ReachSize, d.ReachedChanged, d.Unresolved)
 			}
 		}
 	}
 	if n == 0 {
-		b.WriteString("(không có: native ⊆ bgraph trên mọi đột biến không nới full)\n")
+		b.WriteString("(none: native ⊆ bgraph on every mutant without full widening)\n")
 	}
-	b.WriteString("\n## Đột biến\n\n| repo | id | toán tử | vị trí | trước → sau | trạng thái | đỏ | scope | sel/units | native | native-only |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## Mutants\n\n| repo | id | operator | location | before → after | status | red | scope | sel/units | native | native-only |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, r := range q.Repos {
 		for _, c := range r.Checks {
 			fmt.Fprintf(&b, "| %s | %s | %s | %s:%d | `%s` → `%s` | %s | %d | %s | %d/%d | %d | %d |\n", r.Repo.Dir, c.Rec.Mutant.ID, c.Rec.Mutant.Op, c.Rec.Mutant.File, c.Rec.Mutant.Line, short(c.Rec.Mutant.Before), short(c.Rec.Mutant.After), c.Rec.Status, len(c.Rec.Red), c.Scope, c.Selected, c.Units, len(c.Rec.Native), len(c.NativeOnly))

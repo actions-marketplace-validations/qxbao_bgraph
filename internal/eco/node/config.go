@@ -191,6 +191,10 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 	for _, key := range resolutionKeys {
 		idxs := keyIndexes(src, key)
 		for _, i := range idxs {
+			// A literal null/undefined/false value means "not set" (babel: moduleNameMapper: null), not config-as-code.
+			if v := strings.TrimLeft(src[i:], " \t\r\n"); strings.HasPrefix(v, "null") || strings.HasPrefix(v, "undefined") || strings.HasPrefix(v, "false") {
+				continue
+			}
 			switch key {
 			case "moduleNameMapper":
 				if al, ok := parseMapper(src[i:], roots); ok {

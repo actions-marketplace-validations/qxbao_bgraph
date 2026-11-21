@@ -1,4 +1,4 @@
-# instance_id từng là vi phạm T1: luôn nằm trong bộ đánh giá nhanh (bgraph-eval quick).
+# instance_ids that were once T1 violations: always included in the quick evaluation set (bgraph-eval quick).
 axios__axios-5661
 babel__babel-13928
 babel__babel-14532

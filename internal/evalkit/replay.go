@@ -231,14 +231,14 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 		s1, err := ix.Select(ctx, bgraph.Change{Base: c, Head: c})
 		switch {
 		case err != nil:
-			vio("I1", c, "lỗi: "+err.Error())
+			vio("I1", c, "error: "+err.Error())
 		case s1.Scope != model.TierNone || len(s1.Tests) > 0 || len(s1.Widening) > 0 || len(s1.Changed) > 0:
 			vio("I1", c, fmt.Sprintf("Select(C,C): scope=%s tests=%d widenings=%d changed=%d %v", s1.Scope, len(s1.Tests), len(s1.Widening), len(s1.Changed), s1.Widening))
 		}
 		// I3: tất định (cùng Index, cache ấm).
 		s2, err := ix.Select(ctx, bgraph.Change{Base: p, Head: c})
 		if err != nil || !reflect.DeepEqual(canon(sel), canon(s2)) {
-			vio("I3", c, fmt.Sprintf("hai lần Select khác nhau (err=%v)", err))
+			vio("I3", c, fmt.Sprintf("two Select calls differ (err=%v)", err))
 		}
 		// I3 mạnh: Index mới chỉ trong bộ nhớ (không cache bền) phải cho cùng kết quả.
 		if k%coldEvery == 0 {
@@ -247,7 +247,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 				s3, err := cix.Select(ctx, bgraph.Change{Base: p, Head: c})
 				cix.Close()
 				if err != nil || !reflect.DeepEqual(canon(sel), canon(s3)) {
-					vio("I3", c, fmt.Sprintf("Index lạnh (MemoryOnly) khác Index ấm (err=%v) scope %s vs %s, tests %d vs %d", err, sel.Scope, s3.Scope, len(sel.Tests), len(s3.Tests)))
+					vio("I3", c, fmt.Sprintf("cold Index (MemoryOnly) differs from warm Index (err=%v) scope %s vs %s, tests %d vs %d", err, sel.Scope, s3.Scope, len(sel.Tests), len(s3.Tests)))
 				}
 			}
 		}
@@ -262,7 +262,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 			}
 			for _, f := range changed {
 				if (f.st == "A" || f.st == "M") && IsTestPath(f.path) && !have[f.path] {
-					vio("I2", c, fmt.Sprintf("tệp test %s (%s) không được chọn; scope=%s widenings=%v", f.path, f.st, sel.Scope, cr.Widenings))
+					vio("I2", c, fmt.Sprintf("test file %s (%s) not selected; scope=%s widenings=%v", f.path, f.st, sel.Scope, cr.Widenings))
 				}
 			}
 		}
@@ -452,8 +452,8 @@ func WriteReplay(dir string, rrs []RepoReplay) error {
 		return err
 	}
 	var md strings.Builder
-	md.WriteString("# Replay lịch sử commit\n\n")
-	md.WriteString("| repo | vai trò | commit | docs | config | ordinary | full% (ordinary) | lý do full | median sel/units | p90 | ms median | ms p95 | lỗi | vi phạm |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	md.WriteString("# Commit history replay\n\n")
+	md.WriteString("| repo | role | commits | docs | config | ordinary | full% (ordinary) | full reasons | median sel/units | p90 | ms median | ms p95 | errors | violations |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	row := func(s ReplaySummary) {
 		fmt.Fprintf(&md, "| %s | %s | %d | %d | %d | %d | %.0f%% (%d/%d) | %s | %.3f | %.3f | %.0f | %.0f | %d | %s |\n", s.Repo, s.Role, s.Commits, s.Docs, s.Config,
 			s.Ordinary, s.FullRate*100, s.OrdFull, s.Ordinary, mapStr(s.FullReasons), s.MedRatio, s.P90Ratio, s.MedMs, s.P95Ms, s.Errors, mapStr(s.Viol))
@@ -464,11 +464,11 @@ func WriteReplay(dir string, rrs []RepoReplay) error {
 	for _, s := range groups {
 		row(s)
 	}
-	md.WriteString("\n## Vi phạm bất biến\n\n")
+	md.WriteString("\n## Invariant violations\n\n")
 	n := 0
 	for _, r := range rrs {
 		if r.Error != "" {
-			fmt.Fprintf(&md, "- LỖI repo %s: %s\n", r.Repo, r.Error)
+			fmt.Fprintf(&md, "- ERROR repo %s: %s\n", r.Repo, r.Error)
 		}
 		for _, v := range r.Violations {
 			n++
@@ -476,7 +476,7 @@ func WriteReplay(dir string, rrs []RepoReplay) error {
 		}
 	}
 	if n == 0 {
-		md.WriteString("(không có)\n")
+		md.WriteString("(none)\n")
 	}
 	sort.Strings(nil)
 	return os.WriteFile(filepath.Join(dir, "replay.md"), []byte(md.String()), 0o644)

@@ -129,7 +129,7 @@ func TestQuickMarkdownT2(t *testing.T) {
 	c := T2Check{Rec: T2Record{Mutant: T2Mutant{ID: "zod-05", File: "src/a.ts", Line: 3, Op: "swap-op"}}, Scope: "graph", Missed: []string{"t/x.test.ts"}}
 	q := QuickResult{Violations: 1, T2: &T2Result{Violations: 1, Repos: []T2RepoResult{{Repo: T2Repo{Name: "colinhacks/zod"}, Violations: []T2Check{c}, Checks: []T2Check{c}}}}}
 	md := QuickMarkdown(q)
-	for _, want := range []string{"KHÔNG ĐẠT: 1 vi phạm", "T2 colinhacks/zod zod-05", "## T2 (kiểm lại trên oracle cache"} {
+	for _, want := range []string{"FAIL: 1 violations", "T2 colinhacks/zod zod-05", "## T2 (re-check on cached oracle"} {
 		if !strings.Contains(md, want) {
 			t.Errorf("thiếu %q trong:\n%s", want, md)
 		}

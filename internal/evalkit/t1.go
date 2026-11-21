@@ -636,30 +636,30 @@ func WriteT1(dir string, rs []T1Result) error {
 		return err
 	}
 	var md bytes.Buffer
-	fmt.Fprintf(&md, "# T1 (FAIL_TO_PASS) — oracle cứng\n\n")
-	fmt.Fprintf(&md, "| nhóm | thử | bỏ qua | lỗi | đánh giá | ok | full | vi phạm | không tất định | tỷ lệ full | median sel/units (không full) | p90 |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(&md, "# T1 (FAIL_TO_PASS) — hard oracle\n\n")
+	fmt.Fprintf(&md, "| group | tried | skipped | errors | evaluated | ok | full | violations | non-deterministic | full rate | median sel/units (non-full) | p90 |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	for _, s := range sums {
 		fmt.Fprintf(&md, "| %s | %d | %s | %d | %d | %d | %d | %d | %d | %.0f%% | %.3f | %.3f |\n", s.Role, s.Attempted, skipStr(s.Skipped), s.Errors,
 			s.Evaluated, s.OK, s.Full, s.Violations, s.NonDeterm, s.FullRate*100, s.MedianRatio, s.P90Ratio)
 	}
 	for _, s := range sums {
-		fmt.Fprintf(&md, "\n## %s\n\nLý do full (số task): %s\n\nNới (số task): %s\n\nYêu cầu fixture: %d task, %d yêu cầu, %d thoả\n", s.Role, mapStr(s.FullReasons), mapStr(s.Widenings), s.FixtureTasks, s.FixtureReqs, s.FixtureSat)
+		fmt.Fprintf(&md, "\n## %s\n\nFull reasons (tasks): %s\n\nWidenings (tasks): %s\n\nFixture requirements: %d tasks, %d requirements, %d satisfied\n", s.Role, mapStr(s.FullReasons), mapStr(s.Widenings), s.FixtureTasks, s.FixtureReqs, s.FixtureSat)
 		if s.UpperBound != "" {
-			fmt.Fprintf(&md, "\nCận trên 95%% của tỷ lệ vi phạm: %s\n", s.UpperBound)
+			fmt.Fprintf(&md, "\n95%% upper bound of the violation rate: %s\n", s.UpperBound)
 		}
 	}
-	fmt.Fprintf(&md, "\n## Vi phạm\n\n")
+	fmt.Fprintf(&md, "\n## Violations\n\n")
 	n := 0
 	for _, r := range rs {
 		if r.Status == "violation" {
 			n++
-			fmt.Fprintf(&md, "- `%s` (%s) scope=%s thiếu %v; nới %v\n", r.ID, r.Role, r.Scope, r.Missing, r.Widenings)
+			fmt.Fprintf(&md, "- `%s` (%s) scope=%s missing %v; widenings %v\n", r.ID, r.Role, r.Scope, r.Missing, r.Widenings)
 		}
 	}
 	if n == 0 {
-		fmt.Fprintf(&md, "(không có)\n")
+		fmt.Fprintf(&md, "(none)\n")
 	}
-	fmt.Fprintf(&md, "\n## Task theo repo\n\n| repo | vai trò | thử | ok | full | vi phạm | bỏ qua |\n|---|---|---|---|---|---|---|\n")
+	fmt.Fprintf(&md, "\n## Tasks by repo\n\n| repo | role | tried | ok | full | violations | skipped |\n|---|---|---|---|---|---|---|\n")
 	repos := map[string][]T1Result{}
 	var names []string
 	for _, r := range rs {
@@ -697,7 +697,7 @@ func skipStr(m map[string]int) string {
 
 func mapStr(m map[string]int) string {
 	if len(m) == 0 {
-		return "(không)"
+		return "(none)"
 	}
 	var ks []string
 	for k := range m {

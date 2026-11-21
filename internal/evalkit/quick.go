@@ -182,18 +182,18 @@ func RunQuick(ctx context.Context, cfg QuickConfig) (QuickResult, error) {
 // QuickMarkdown dựng báo cáo gộp: vi phạm trước, rồi trung vị chọn lọc theo repo và thời gian.
 func QuickMarkdown(q QuickResult) string {
 	var b strings.Builder
-	verdict := "ĐẠT (không vi phạm)"
+	verdict := "PASS (no violations)"
 	if q.Violations > 0 {
-		verdict = fmt.Sprintf("KHÔNG ĐẠT: %d vi phạm", q.Violations)
+		verdict = fmt.Sprintf("FAIL: %d violations", q.Violations)
 	}
-	fmt.Fprintf(&b, "# bgraph-eval quick — %s\n\nThời gian: tổng %s (T1 %s, replay %s)\n\n", verdict, q.Wall.Round(time.Second), q.T1Wall.Round(time.Second), q.ReplayWall.Round(time.Second))
+	fmt.Fprintf(&b, "# bgraph-eval quick — %s\n\nTime: total %s (T1 %s, replay %s)\n\n", verdict, q.Wall.Round(time.Second), q.T1Wall.Round(time.Second), q.ReplayWall.Round(time.Second))
 
-	b.WriteString("## Vi phạm\n\n")
+	b.WriteString("## Violations\n\n")
 	n := 0
 	for _, r := range q.T1 {
 		if r.Status == "violation" {
 			n++
-			fmt.Fprintf(&b, "- T1 `%s` (%s) scope=%s thiếu %v; nới %v\n", r.ID, r.Role, r.Scope, r.Missing, r.Widenings)
+			fmt.Fprintf(&b, "- T1 `%s` (%s) scope=%s missing %v; widenings %v\n", r.ID, r.Role, r.Scope, r.Missing, r.Widenings)
 		}
 	}
 	for _, r := range q.Replay {
@@ -210,12 +210,12 @@ func QuickMarkdown(q QuickResult) string {
 		for _, r := range q.T2.Repos {
 			for _, c := range r.Violations {
 				n++
-				fmt.Fprintf(&b, "- T2 %s %s %s:%d (%s) thiếu %v scope=%s nới %v\n", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, c.Rec.Mutant.Op, c.Missed, c.Scope, c.Widenings)
+				fmt.Fprintf(&b, "- T2 %s %s %s:%d (%s) missing %v scope=%s widenings %v\n", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, c.Rec.Mutant.Op, c.Missed, c.Scope, c.Widenings)
 			}
 		}
 	}
 	if n == 0 {
-		b.WriteString("(không có)\n")
+		b.WriteString("(none)\n")
 	}
 	var errs []string
 	for _, r := range q.T1 {
@@ -223,7 +223,7 @@ func QuickMarkdown(q QuickResult) string {
 			errs = append(errs, fmt.Sprintf("T1 `%s`: %s %s", r.ID, r.Status, r.Detail))
 		}
 		if r.NonDeterm {
-			errs = append(errs, fmt.Sprintf("T1 `%s`: KHÔNG TẤT ĐỊNH", r.ID))
+			errs = append(errs, fmt.Sprintf("T1 `%s`: NON-DETERMINISTIC", r.ID))
 		}
 	}
 	for _, r := range q.Replay {
@@ -232,13 +232,13 @@ func QuickMarkdown(q QuickResult) string {
 		}
 	}
 	if len(errs) > 0 {
-		b.WriteString("\n## Lỗi / cảnh báo\n\n")
+		b.WriteString("\n## Errors / warnings\n\n")
 		for _, e := range errs {
 			fmt.Fprintf(&b, "- %s\n", e)
 		}
 	}
 
-	b.WriteString("\n## T1 theo nhóm\n\n| nhóm | thử | bỏ qua | lỗi | ok | full | vi phạm | median sel/units | p90 |\n|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## T1 by group\n\n| group | tried | skipped | errors | ok | full | violations | median sel/units | p90 |\n|---|---|---|---|---|---|---|---|---|\n")
 	for _, role := range []string{"dev", "holdout", ""} {
 		s := Summarize(q.T1, role)
 		name := s.Role
@@ -248,7 +248,7 @@ func QuickMarkdown(q QuickResult) string {
 		fmt.Fprintf(&b, "| %s | %d | %s | %d | %d | %d | %d | %.3f | %.3f |\n", name, s.Attempted, skipStr(s.Skipped), s.Errors, s.OK, s.Full, s.Violations, s.MedianRatio, s.P90Ratio)
 	}
 
-	b.WriteString("\n## T1 theo repo\n\n| repo | vai trò | task | ok | full | vi phạm | bỏ qua | median sel/units | task ms median | p95 |\n|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("\n## T1 by repo\n\n| repo | role | tasks | ok | full | violations | skipped | median sel/units | task ms median | p95 |\n|---|---|---|---|---|---|---|---|---|---|\n")
 	byRepo := map[string][]T1Result{}
 	var names []string
 	for _, r := range q.T1 {
@@ -287,7 +287,7 @@ func QuickMarkdown(q QuickResult) string {
 		}
 		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %.3f | %.0f | %.0f |\n", nm, byRepo[nm][0].Role, len(byRepo[nm]), ok, full, vio, sk, Percentile(ratios, 50), Percentile(ms, 50), Percentile(ms, 95))
 	}
-	fmt.Fprintf(&b, "\nThời gian mỗi task T1 (dựng P/C + oracle + 2 Select): median %.0f ms, p95 %.0f ms. Cách dựng: %s\n", Percentile(allMs, 50), Percentile(allMs, 95), mapStr(paths))
+	fmt.Fprintf(&b, "\nTime per T1 task (build P/C + oracle + 2 Select): median %.0f ms, p95 %.0f ms. Build path: %s\n", Percentile(allMs, 50), Percentile(allMs, 95), mapStr(paths))
 	var fbs []string
 	for _, r := range q.T1 {
 		if r.Fallback != "" {
@@ -295,21 +295,21 @@ func QuickMarkdown(q QuickResult) string {
 		}
 	}
 	if len(fbs) > 0 {
-		fmt.Fprintf(&b, "\nTask rơi về worktree: %s\n", strings.Join(fbs, "; "))
+		fmt.Fprintf(&b, "\nTasks that fell back to worktree: %s\n", strings.Join(fbs, "; "))
 	}
 
 	if q.T2 != nil {
-		fmt.Fprintf(&b, "\n## T2 (kiểm lại trên oracle cache, %s)\n\n| repo | đột biến | giết | sống sót | nới full | vi phạm | native ⊄ bgraph | median sel/units bgraph | native |\n|---|---|---|---|---|---|---|---|---|\n", q.T2Wall.Round(time.Millisecond))
+		fmt.Fprintf(&b, "\n## T2 (re-check on cached oracle, %s)\n\n| repo | mutants | killed | survived | full widening | violations | native ⊄ bgraph | median sel/units bgraph | native |\n|---|---|---|---|---|---|---|---|---|\n", q.T2Wall.Round(time.Millisecond))
 		for _, r := range q.T2.Repos {
 			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %d | %.3f | %.3f |\n", r.Repo.Name, len(r.Checks), r.Killed, r.Survived, r.Full, len(r.Violations), len(r.NativeNotSubset), r.MedBgraph, r.MedNative)
 			if r.Error != "" {
-				fmt.Fprintf(&b, "| %s | lỗi: %s |||||||\n", r.Repo.Name, r.Error)
+				fmt.Fprintf(&b, "| %s | error: %s |||||||\n", r.Repo.Name, r.Error)
 			}
 		}
 	}
 
 	if len(q.Replay) > 0 {
-		b.WriteString("\n## Replay theo repo\n\n| repo | vai trò | commit | ordinary | full% (ordinary) | median sel/units | p90 | ms median | ms p95 | lỗi | vi phạm |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
+		b.WriteString("\n## Replay by repo\n\n| repo | role | commits | ordinary | full% (ordinary) | median sel/units | p90 | ms median | ms p95 | errors | violations |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 		for _, r := range q.Replay {
 			s := foldReplay(ReplaySummary{Repo: r.Repo, Role: r.Role, FullReasons: map[string]int{}, Viol: map[string]int{}}, []RepoReplay{r})
 			fmt.Fprintf(&b, "| %s | %s | %d | %d | %.0f%% | %.3f | %.3f | %.0f | %.0f | %d | %s |\n", s.Repo, s.Role, s.Commits, s.Ordinary, s.FullRate*100, s.MedRatio, s.P90Ratio, s.MedMs, s.P95Ms, s.Errors, mapStr(s.Viol))

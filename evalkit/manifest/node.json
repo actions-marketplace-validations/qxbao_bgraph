@@ -1,20 +1,20 @@
 {
  "ecosystem": "node",
  "version": 1,
- "split_rule": "sắp repo (chữ thường) theo sha256(tên) tăng dần; chỉ số i%3==2 (mỗi repo thứ 3) là holdout, còn lại dev",
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); index i%3==2 (every 3rd repo) is holdout, the rest dev",
  "t1_cap_per_repo": 40,
  "datasets": [
   {
    "name": "SWE-bench/SWE-bench_Multilingual",
    "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual",
    "revision": "846e647b9f33c0b51b739d005d13d85493c9af09",
-   "notes": "split test; giữ repo JS/TS"
+   "notes": "test split; keeps JS/TS repos"
   },
   {
    "name": "ByteDance-Seed/Multi-SWE-bench",
    "url": "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench",
    "revision": "56ff018c04a38e27ada1e9d0a6d5839a51f88f0d",
-   "notes": "thư mục js/ và ts/ (JSONL); FAIL_TO_PASS = khoá f2p_tests"
+   "notes": "js/ and ts/ directories (JSONL); FAIL_TO_PASS = f2p_tests key"
   }
  ],
  "repos": [

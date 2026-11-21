@@ -52,7 +52,7 @@ func (b *indexBuilder) SetFile(ctx context.Context, path string, content []byte,
 	}
 	f := strings.Fields(st)
 	if len(f) < 4 {
-		return "", fmt.Errorf("tệp %s không có trong index", path)
+		return "", fmt.Errorf("file %s is not in the index", path)
 	}
 	if _, err := gitIn(ctx, b.repo, b.env, "", "update-index", "--cacheinfo", f[0]+","+strings.TrimSpace(oid)+","+path); err != nil {
 		return "", err
@@ -81,7 +81,7 @@ func (b *indexBuilder) Apply(ctx context.Context, patch, msg string) (string, er
 		return "", err
 	}
 	if strings.TrimSpace(patch) == "" {
-		return "", fmt.Errorf("patch rỗng")
+		return "", fmt.Errorf("empty patch")
 	}
 	if !strings.HasSuffix(patch, "\n") {
 		patch += "\n"
