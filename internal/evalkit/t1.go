@@ -351,7 +351,7 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 
 	su := make([]SelUnit, 0, len(sel.Tests))
 	for _, st := range sel.Tests {
-		su = append(su, SelUnit{Unit: st.Unit, Files: st.Files})
+		su = append(su, SelUnit{Unit: st.Unit, Files: st.Files, Whole: st.Whole, WholeProject: st.Project})
 	}
 	res.Missing, res.FixtureReqs = CheckRequired(req, su)
 	switch {

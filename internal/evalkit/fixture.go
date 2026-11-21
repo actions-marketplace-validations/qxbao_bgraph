@@ -16,6 +16,10 @@ type FixtureReq struct {
 type SelUnit struct {
 	Unit  string
 	Files []string
+	// WholeProject: đơn vị "chạy cả bộ test của dự án" (runner không nhận danh sách tệp) → thoả mọi yêu cầu nằm trong
+	// thư mục dự án. "." là cả repo.
+	WholeProject string
+	Whole        bool
 }
 
 var (
@@ -60,7 +64,21 @@ func CheckRequired(req []string, sel []SelUnit) (missing []string, fixtures []Fi
 			have[f] = true
 		}
 	}
+	coveredWhole := func(f string) string {
+		for _, u := range sel {
+			if u.Whole && (u.WholeProject == "." || u.WholeProject == "" || under(f, u.WholeProject)) {
+				return u.Unit
+			}
+		}
+		return ""
+	}
 	for _, f := range req {
+		if w := coveredWhole(strings.ReplaceAll(f, "\\", "/")); w != "" {
+			if _, root, ok := fixtureRoot(f); ok {
+				fixtures = append(fixtures, FixtureReq{File: f, Root: root, SatisfiedBy: w})
+			}
+			continue
+		}
 		fixDir, root, ok := fixtureRoot(f)
 		if !ok {
 			if !have[f] {
