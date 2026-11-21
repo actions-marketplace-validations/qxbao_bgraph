@@ -30,7 +30,7 @@ type T1Config struct {
 	Jobs       int
 	MaxPerRepo int
 	Resume     bool
-	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go); "python": test-file oracle (pyt1.go)
+	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go); "python": test-file oracle (pyt1.go); "dotnet": project oracle (dotnett1.go)
 	// RulesDir: when DIR/<owner>__<name>.toml exists it is injected as bgraph.toml at the repo root of both P and C (identical content, so
 	// the bgraph.toml change itself is not part of the diff). Empty: no overlay.
 	RulesDir string
@@ -56,11 +56,12 @@ type T1Result struct {
 	// FixtureReqs: requirements handled by the fixture rule (see CheckRequired), with the satisfying unit.
 	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
 
-	Rust    *RustT1Info `json:"rust,omitempty"`          // Rust oracle details (ecosystem rust only)
-	Py      *PyT1Info   `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
-	PyW     *PyWide     `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
-	Overlay string      `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
-	Kind    string      `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
+	Rust    *RustT1Info   `json:"rust,omitempty"`          // Rust oracle details (ecosystem rust only)
+	Py      *PyT1Info     `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
+	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"`        // .NET oracle details (ecosystem dotnet only)
+	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
+	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
+	Kind    string        `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
 
 	Scope     string           `json:"scope,omitempty"`
 	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → count
@@ -405,6 +406,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("unmapped", nil)
 		}
+	} else if rr.cfg.Ecosystem == "dotnet" {
+		dreq, info, err := dotnetRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch))
+		res.Dotnet = info
+		if err != nil {
+			return skip("dotnet_oracle", err)
+		}
+		req = dreq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("unmapped", nil)
+		}
 	} else if rr.cfg.Ecosystem == "python" {
 		preq, info, err := pyRequired(ctx, dir, res.P, ids, t.Repo)
 		res.Py = info
@@ -468,6 +480,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	}
 	if rr.cfg.Ecosystem == "rust" {
 		res.Missing = rustMissing(req, su, res.Rust, sel.Changed)
+	} else if rr.cfg.Ecosystem == "dotnet" {
+		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
 	} else if rr.cfg.Ecosystem == "python" {
 		res.Missing = pyMissing(req, su, res.Py, sel.Changed)
 		res.PyW = pySelStats(sel)
@@ -482,7 +496,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	default:
 		res.Status = "violation"
 		res.WideList = sel.Widening
-		if rr.cfg.Ecosystem == "python" {
+		if rr.cfg.Ecosystem == "dotnet" {
+			dotnetDiagnose(res.Dotnet)
+		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
 		} else if rr.cfg.Ecosystem != "rust" {
 			res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
