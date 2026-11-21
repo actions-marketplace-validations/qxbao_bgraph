@@ -30,7 +30,7 @@ type T1Config struct {
 	Jobs       int
 	MaxPerRepo int
 	Resume     bool
-	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go)
+	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go); "python": test-file oracle (pyt1.go)
 	Checkout   bool   // true: build P/C with a worktree as before (default: temporary index, no checkout)
 	Timeout    time.Duration
 	Log        func(format string, a ...any)
@@ -54,6 +54,9 @@ type T1Result struct {
 	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
 
 	Rust *RustT1Info `json:"rust,omitempty"` // Rust oracle details (ecosystem rust only)
+	Py   *PyT1Info   `json:"python,omitempty"`  // Python oracle details (ecosystem python only)
+	PyW  *PyWide     `json:"py_wide,omitempty"` // why the Python selection is as big as it is (ecosystem python only)
+	Kind string      `json:"kind,omitempty"`    // manifest repo kind (library | framework | application), when the manifest has one
 
 	Scope     string           `json:"scope,omitempty"`
 	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → count
@@ -261,7 +264,7 @@ func (rr *repoRunner) run(ctx context.Context, t Task) T1Result {
 // res.Detail is the reason; the caller re-runs with a worktree.
 func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Result, fallback bool) {
 	role, _ := rr.cfg.Manifest.Role(t.Repo)
-	res = T1Result{ID: t.InstanceID, Repo: t.Repo, Role: role, Source: t.Source, Base: t.BaseCommit}
+	res = T1Result{ID: t.InstanceID, Repo: t.Repo, Role: role, Source: t.Source, Base: t.BaseCommit, Kind: rr.cfg.Manifest.Kind(t.Repo)}
 	defer func() {
 		if p := recover(); p != nil {
 			res.Status, res.Detail = "error:panic", fmt.Sprint(p)
@@ -381,6 +384,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("unmapped", nil)
 		}
+	} else if rr.cfg.Ecosystem == "python" {
+		preq, info, err := pyRequired(ctx, dir, res.P, ids, t.Repo)
+		res.Py = info
+		if err != nil {
+			return skip("python_oracle", err)
+		}
+		req = preq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("unmapped", nil)
+		}
 	} else {
 		var mapping []MapEntry
 		var unmapped []string
@@ -433,6 +447,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	}
 	if rr.cfg.Ecosystem == "rust" {
 		res.Missing = rustMissing(req, su, res.Rust, sel.Changed)
+	} else if rr.cfg.Ecosystem == "python" {
+		res.Missing = pyMissing(req, su, res.Py, sel.Changed)
+		res.PyW = pySelStats(sel)
 	} else {
 		res.Missing, res.FixtureReqs = CheckRequired(req, su)
 	}
@@ -444,7 +461,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	default:
 		res.Status = "violation"
 		res.WideList = sel.Widening
-		if rr.cfg.Ecosystem != "rust" {
+		if rr.cfg.Ecosystem == "python" {
+			pyDiagnose(ctx, dir, res.P, res.Py)
+		} else if rr.cfg.Ecosystem != "rust" {
 			res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
 		}
 	}

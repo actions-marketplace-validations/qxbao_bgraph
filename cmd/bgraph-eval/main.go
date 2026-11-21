@@ -110,10 +110,13 @@ func cmdT1(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
-	eco := fs.String("ecosystem", "", "node (default) | rust; rust uses the Cargo-unit oracle and defaults --manifest to evalkit/manifest/rust.json")
+	eco := fs.String("ecosystem", "", "node (default) | rust | python; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/rust.json"
+	}
+	if *eco == "python" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/python.json"
 	}
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return fmt.Errorf("--tasks, --work, --out are required")
@@ -151,6 +154,11 @@ func cmdT1(ctx context.Context, args []string) error {
 	rs, err := evalkit.RunT1(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: keep, Manifest: man, Jobs: *jobs, MaxPerRepo: *maxPer, Resume: *resume, Checkout: *checkout, Ecosystem: *eco, Log: lg})
 	if werr := evalkit.WriteT1(*out, rs); werr != nil {
 		return werr
+	}
+	if *eco == "python" {
+		if werr := evalkit.WritePyReport(*out, rs); werr != nil {
+			return werr
+		}
 	}
 	return err
 }

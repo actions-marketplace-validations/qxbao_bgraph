@@ -215,6 +215,16 @@ func (m Manifest) Role(repo string) (string, bool) {
 	return "", false
 }
 
+// Kind returns the repo's kind (library | framework | application); "" when the manifest has none.
+func (m Manifest) Kind(repo string) string {
+	for _, r := range m.Repos {
+		if strings.EqualFold(r.Name, repo) {
+			return r.Kind
+		}
+	}
+	return ""
+}
+
 // LoadManifest reads the manifest.
 func LoadManifest(path string) (Manifest, error) {
 	var m Manifest
