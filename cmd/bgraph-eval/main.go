@@ -5,6 +5,7 @@
 //	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
 //	bgraph-eval t2       [--run-tests] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
+//	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
 
@@ -57,6 +58,8 @@ func main() {
 		}
 	case "replay":
 		err = cmdReplay(ctx, os.Args[2:])
+	case "rust-locate":
+		err = cmdRustLocate(ctx, os.Args[2:])
 	case "manifest":
 		err = cmdManifest(os.Args[2:])
 	default:
@@ -262,6 +265,7 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
+	eco := fs.String("ecosystem", "node", "node | rust")
 	fs.Parse(args)
 	tasks, err := evalkit.LoadTasks(*tasksPath)
 	if err != nil {
@@ -295,15 +299,26 @@ func cmdManifest(args []string) error {
 	}
 	if *metaPath != "" {
 		if b, err := os.ReadFile(*metaPath); err == nil {
-			var m map[string]string
+			// meta.json also carries non-string keys (rust_*), so read values leniently.
+			var m map[string]json.RawMessage
 			if json.Unmarshal(b, &m) == nil {
 				for i := range ds {
-					ds[i].Revision = m[ds[i].Name]
+					var rev string
+					if json.Unmarshal(m[ds[i].Name], &rev) == nil {
+						ds[i].Revision = rev
+					}
 				}
 			}
 		}
 	}
-	man := evalkit.BuildManifest(t1, rep, ds, *maxPer)
+	var man evalkit.Manifest
+	if *eco == "rust" {
+		ds[0].Notes = "test split; keeps Rust repos (burntsushi/ripgrep respelled BurntSushi/ripgrep)"
+		ds[1].Notes = "rust/ directory (JSONL); FAIL_TO_PASS = f2p_tests keys, else n2p_tests keys (task field f2p_kind)"
+		man = evalkit.BuildRustManifest(t1, ds, *maxPer)
+	} else {
+		man = evalkit.BuildManifest(t1, rep, ds, *maxPer)
+	}
 	b, _ := json.MarshalIndent(man, "", " ")
 	os.MkdirAll(filepath.Dir(*out), 0o755)
 	if err := os.WriteFile(*out, append(b, '\n'), 0o644); err != nil {
@@ -422,4 +437,129 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 		return 1, nil
 	}
 	return 0, nil
+}
+
+// cmdRustLocate runs the Rust test-name locator over every task's P tree and prints unique / ambiguous / not-found statistics.
+func cmdRustLocate(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("rust-locate", flag.ExitOnError)
+	tasksPath := fs.String("tasks", "", "Rust task JSONL (tasks-rust.jsonl)")
+	work := fs.String("work", "", "work directory (clones in <work>/repos)")
+	out := fs.String("out", "", "write per-name locations as JSON here")
+	examples := fs.Int("examples", 3, "examples printed per category")
+	fs.Parse(args)
+	if *tasksPath == "" || *work == "" {
+		return fmt.Errorf("--tasks and --work are required")
+	}
+	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
+		return err
+	}
+	tasks, err := evalkit.LoadTasks(*tasksPath)
+	if err != nil {
+		return err
+	}
+	byRepo := map[string][]evalkit.Task{}
+	for _, t := range tasks {
+		k := strings.ToLower(t.Repo)
+		byRepo[k] = append(byRepo[k], t)
+	}
+	var mu sync.Mutex
+	var rows []evalkit.RustLocateRow
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for _, ts := range byRepo {
+		wg.Add(1)
+		go func(ts []evalkit.Task) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			for i, t := range ts {
+				if ctx.Err() != nil {
+					return
+				}
+				idx := filepath.Join(*work, "idx", fmt.Sprintf("rustloc_%s_%d.index", strings.ReplaceAll(t.Repo, "/", "__"), i))
+				os.MkdirAll(filepath.Dir(idx), 0o755)
+				r := evalkit.RustLocateTask(ctx, evalkit.RustRepoDir(*work, t.Repo), idx, t)
+				r.Kind = t.F2PKind
+				mu.Lock()
+				rows = append(rows, r)
+				fmt.Fprintf(os.Stderr, "%-44s f2p=%-4d unique=%-4d ambiguous=%-3d notfound=%-4d doc=%-3d %s\n", r.ID, r.F2P, r.Unique, r.Ambig, r.NotFnd, r.Doc, r.Err)
+				mu.Unlock()
+			}
+		}(ts)
+	}
+	wg.Wait()
+	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+	type agg struct{ tasks, names, uniq, amb, nf, doc, errs, macro int }
+	by := map[string]*agg{}
+	add := func(k string, r evalkit.RustLocateRow) {
+		a := by[k]
+		if a == nil {
+			a = &agg{}
+			by[k] = a
+		}
+		a.tasks++
+		a.names += r.F2P
+		a.uniq += r.Unique
+		a.amb += r.Ambig
+		a.nf += r.NotFnd
+		a.doc += r.Doc
+		a.macro += r.MacroHit
+		if r.Err != "" {
+			a.errs++
+		}
+	}
+	for _, r := range rows {
+		add("ALL", r)
+		add("kind="+r.Kind, r)
+		add("repo="+strings.ToLower(r.Repo), r)
+	}
+	keys := make([]string, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	fmt.Printf("%-28s %6s %7s %7s %7s %9s %5s %5s %6s\n", "group", "tasks", "names", "unique", "ambig", "notfound", "doc", "errs", "nf+mac")
+	for _, k := range keys {
+		a := by[k]
+		fmt.Printf("%-28s %6d %7d %7d %7d %9d %5d %5d %6d\n", k, a.tasks, a.names, a.uniq, a.amb, a.nf, a.doc, a.errs, a.macro)
+	}
+	cat := map[string][]string{}
+	for _, r := range rows {
+		for _, l := range r.Locs {
+			c := "unique"
+			switch {
+			case l.Doc:
+				c = "doc"
+			case l.NotFound:
+				c = "notfound"
+			case l.Ambiguous:
+				c = "ambiguous"
+			}
+			if len(cat[c]) < *examples*4 && (len(cat[c]) == 0 || len(cat[c])%4 == 0 || r.Kind != "n2p") {
+				cat[c] = append(cat[c], fmt.Sprintf("%s  %s -> %v", r.ID, l.Name, l.Files))
+			}
+		}
+	}
+	for _, c := range []string{"unique", "ambiguous", "notfound", "doc"} {
+		fmt.Printf("\nexamples (%s):\n", c)
+		for i, e := range cat[c] {
+			if i >= *examples {
+				break
+			}
+			fmt.Println("  " + e)
+		}
+	}
+	if *out != "" {
+		type rec struct {
+			evalkit.RustLocateRow
+			Locs []evalkit.RustTestLoc `json:"locs"`
+		}
+		var rs []rec
+		for _, r := range rows {
+			rs = append(rs, rec{r, r.Locs})
+		}
+		b, _ := json.MarshalIndent(rs, "", " ")
+		return os.WriteFile(*out, b, 0o644)
+	}
+	return nil
 }

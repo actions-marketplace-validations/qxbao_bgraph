@@ -20,6 +20,8 @@ type Task struct {
 	TestPatch  string          `json:"test_patch"`
 	F2P        json.RawMessage `json:"FAIL_TO_PASS"`
 	Source     string          `json:"source,omitempty"`
+	// F2PKind is set by the Rust fetcher: "f2p", or "n2p" when FAIL_TO_PASS was taken from Multi-SWE-bench n2p_tests (tests added by the test patch).
+	F2PKind string `json:"f2p_kind,omitempty"`
 }
 
 // ParseF2P reads FAIL_TO_PASS: a JSON array, a string containing a JSON array, or a Python list-literal-style string ('a', "b").
