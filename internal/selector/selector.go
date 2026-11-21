@@ -250,7 +250,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	choose := func(u model.TestUnit, reason string) {
 		st, ok := chosen[u.ID]
 		if !ok {
-			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package}
+			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package, Config: u.Config}
 			chosen[u.ID] = st
 		}
 		if !slices.Contains(st.Reasons, reason) {

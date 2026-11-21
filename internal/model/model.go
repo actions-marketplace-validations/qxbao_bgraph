@@ -106,6 +106,10 @@ const (
 	ImportURL         ImportKind = "url"             // new URL("x", import.meta.url)
 	ImportReExport    ImportKind = "reexport"        // export * from / export {a} from
 	ImportTripleSlash ImportKind = "triple_slash"    // /// <reference path="x" />
+	// Python. A Python import is an ImportRef whose Spec is the module path as written ("a.b", ".x", "..a.b"; leading dots = relative)
+	// and whose Suffix holds the comma-separated names of a `from <Spec> import <names>` statement ("*" for a star import).
+	ImportSysPath ImportKind = "sys_path" // sys.path.insert/append(...): Spec is a path relative to the file's directory, or "cwd:<path>"; Dynamic: not evaluable
+	ImportPlugin  ImportKind = "plugin"   // pytest_plugins = ["a.b"]
 )
 
 // ImportRef is a reference found in the source text.
@@ -238,6 +242,9 @@ type TestUnit struct {
 	Whole bool `json:"whole,omitempty"`
 	// Package is the package name of the unit for runners that address units by package (cargo -p).
 	Package string `json:"package,omitempty"`
+	// Config is a runner-specific launch file: the pytest config file (repo-relative; empty when pytest has none), or for the Python
+	// "django" runner the driver script (tests/runtests.py or manage.py).
+	Config string `json:"config,omitempty"`
 }
 
 // SelectedTest is a selected test unit together with its reason chain.
@@ -249,6 +256,7 @@ type SelectedTest struct {
 	Reasons []string `json:"reasons"`
 	Whole   bool     `json:"whole,omitempty"`   // run the project's whole test suite (see TestUnit.Whole)
 	Package string   `json:"package,omitempty"` // see TestUnit.Package
+	Config  string   `json:"config,omitempty"`  // see TestUnit.Config
 }
 
 // Selection is the selection result (semantically compatible with bint/internal/affected.Selection).

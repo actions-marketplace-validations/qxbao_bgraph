@@ -22,6 +22,7 @@ const codecVersion = 1
 var kinds = []model.ImportKind{
 	model.ImportStatic, model.ImportTypeOnly, model.ImportDynamic, model.ImportRequire, model.ImportResolve,
 	model.ImportMock, model.ImportGlob, model.ImportURL, model.ImportReExport, model.ImportTripleSlash,
+	model.ImportSysPath, model.ImportPlugin,
 }
 
 var kindIdx = func() map[model.ImportKind]byte {
