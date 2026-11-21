@@ -35,7 +35,11 @@ type Result struct {
 	Package      string   // tên package trần cho external/generated
 	PackageDir   string   // generated: thư mục package có đầu ra bị thiếu
 	CaseMismatch bool     // đích chỉ khớp khi bỏ qua hoa thường (Files là tệp khớp đó)
-	Detail       string   // lý do cho unknown/generated
+	// AlsoGenerated: Class internal nhưng một số đích (exports/main/imports) là đầu ra build không có trong cây và không
+	// ánh xạ ngược được về nguồn; PackageDir là package sinh ra chúng. Lúc chạy, runner có thể nạp đúng đầu ra đó
+	// (ví dụ exports → dist/, types → src/index.d.ts): phụ thuộc thật vào nguồn của package bị mất nếu chỉ giữ Files.
+	AlsoGenerated bool
+	Detail        string // lý do cho unknown/generated
 }
 
 // Alias từ jest moduleNameMapper / vite resolve.alias / bgraph.toml; người gọi đã thay <rootDir>.
@@ -700,6 +704,9 @@ func (a *acc) finish(spec string, fold bool) Result {
 		res.Class, res.Detail = ClassUnknown, a.cfgErr
 	case len(res.Files) > 0:
 		res.Class = ClassInternal
+		if a.gen != nil {
+			res.AlsoGenerated, res.Package, res.PackageDir = true, a.gen.pkg, a.gen.dir
+		}
 	case fold && a.foldMatch(&res):
 	case a.gen != nil:
 		res.Class, res.Package, res.PackageDir = ClassGenerated, a.gen.pkg, a.gen.dir

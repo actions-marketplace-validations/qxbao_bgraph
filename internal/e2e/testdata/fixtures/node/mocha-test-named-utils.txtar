@@ -1,0 +1,12 @@
+Mocha: tệp test tên utils.js trong test/ là test thật (axios-5661), không được loại trừ như helper.
+-- base/package.json --
+{"name":"app","devDependencies":{"mocha":"^10.0.0"}}
+-- base/lib/utils.js --
+module.exports = { a: 1 }
+-- base/test/unit/utils/utils.js --
+const u = require('../../../lib/utils.js')
+describe('utils', () => { it('x', () => { u.a }) })
+-- head/lib/utils.js --
+module.exports = { a: 2 }
+-- want --
+select test/unit/utils/utils.js

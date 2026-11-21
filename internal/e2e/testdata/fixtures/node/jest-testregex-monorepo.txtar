@@ -1,0 +1,14 @@
+Jest testRegex './packages/[^/]+/test/.+\.m?js$' (babel): packages/a/test/scope.js là test.
+-- base/package.json --
+{"name":"mono","devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+module.exports = { testRegex: './packages/[^/]+/test/.+\.m?js$' }
+-- base/packages/a/src/index.js --
+export const a = 1
+-- base/packages/a/test/scope.js --
+import { a } from '../src/index.js'
+test('s', () => { a })
+-- head/packages/a/src/index.js --
+export const a = 2
+-- want --
+select packages/a/test/scope.js

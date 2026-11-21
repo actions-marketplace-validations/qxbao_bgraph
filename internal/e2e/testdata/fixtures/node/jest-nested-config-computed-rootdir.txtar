@@ -1,0 +1,29 @@
+Kiểu darkreader: cấu hình Jest lồng (tests/unit/jest.config.mjs), rootDir tính bằng code, testMatch '<rootDir>/tests/unit/**/*.tests.ts', moduleNameMapper '<rootDir>/src/stubs/$1'.
+-- base/package.json --
+{"name":"darkreader","devDependencies":{"jest":"^29.0.0"}}
+-- base/tests/unit/jest.config.mjs --
+import {dirname} from 'node:path';
+import {createRequire} from 'node:module';
+const rootDir = dirname(createRequire(import.meta.url).resolve('../../package.json'));
+const config = {
+    rootDir,
+    testMatch: ['<rootDir>/tests/unit/**/*.tests.ts'],
+    moduleNameMapper: {
+        '@plus/(.*)': ['<rootDir>/src/stubs/$1'],
+    },
+};
+export default config;
+-- base/src/generators/parse.ts --
+export const parse = () => 1
+-- base/src/stubs/thing.ts --
+export const thing = 1
+-- base/tests/unit/generators/parse.tests.ts --
+import { parse } from '../../../src/generators/parse'
+import { thing } from '@plus/thing'
+test('p', () => { parse(); thing })
+-- base/tests/unit/other.tests.ts --
+test('o', () => {})
+-- head/src/stubs/thing.ts --
+export const thing = 2
+-- want --
+select tests/unit/generators/parse.tests.ts

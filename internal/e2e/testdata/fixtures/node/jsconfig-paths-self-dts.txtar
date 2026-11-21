@@ -1,0 +1,19 @@
+Kiểu preact: jsconfig paths preact → "." ; package.json types → src/index.d.ts, main → dist/ (không có). Đổi src/index.js phải chọn test (không chỉ cạnh tới .d.ts).
+-- base/package.json --
+{"name":"preact","main":"dist/preact.js","source":"src/index.js","types":"src/index.d.ts","devDependencies":{"mocha":"^10.0.0"}}
+-- base/jsconfig.json --
+{"compilerOptions":{"baseUrl":".","paths":{"preact":["."],"preact/*":["./*"]}}}
+-- base/src/index.js --
+export function h() {}
+-- base/src/index.d.ts --
+export function h(): void
+-- base/src/util.js --
+import { h } from './index.js'
+export const u = () => h()
+-- base/test/browser/render.test.js --
+import { h } from 'preact'
+describe('render', () => { it('x', () => { h() }) })
+-- head/src/index.js --
+export function h() { return 1 }
+-- want --
+select test/browser/render.test.js

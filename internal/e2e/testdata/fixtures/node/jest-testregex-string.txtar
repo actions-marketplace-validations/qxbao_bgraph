@@ -1,0 +1,14 @@
+Jest testRegex chuỗi ('tests/.*\.tests\.ts$'): parse.tests.ts là test (darkreader).
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+module.exports = { testRegex: 'tests/.*\.tests\.ts$' }
+-- base/src/parse.ts --
+export const parse = () => 1
+-- base/tests/parse.tests.ts --
+import { parse } from '../src/parse'
+test('p', () => { parse() })
+-- head/src/parse.ts --
+export const parse = () => 2
+-- want --
+select tests/parse.tests.ts

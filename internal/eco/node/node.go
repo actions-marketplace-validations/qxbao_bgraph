@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-5"
+const AnalyzerVersion = "node-6"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {
@@ -91,10 +91,19 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	copy(projDirs, a.Projects)
 
 	// 2. Cấu hình runner theo dự án: alias, phụ thuộc ngầm, phần không đọc được.
+	// Tệp cấu hình runner ở MỌI thư mục, gán cho dự án gần nhất (cấu hình lồng như tests/unit/jest.config.mjs).
+	cfgByProj := map[string][]string{}
+	for _, p := range files {
+		if isRunnerConfig(p) && !inNodeModules(p) {
+			if pr, ok := eco.NearestProject(projDirs, p); ok {
+				cfgByProj[pr.Dir] = append(cfgByProj[pr.Dir], p)
+			}
+		}
+	}
 	configs := map[string]testConfig{}
 	var aliases []resolve.Alias
 	for dir, pi := range pkgs {
-		tc := readTestConfig(t, dir, pi.Jest)
+		tc := readTestConfig(t, dir, pi.Jest, cfgByProj[dir])
 		configs[dir] = tc
 		aliases = append(aliases, tc.aliases...)
 		for _, f := range tc.files {
@@ -147,7 +156,8 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		if proj == "" {
 			continue // JS ngoài mọi package.json: không thuộc hệ sinh thái này (bộ chọn coi là tệp lạ)
 		}
-		if isTestFile(p, detectRunner(pkgs, proj)) {
+		tc := configs[proj]
+		if isTestFile(p, detectRunner(pkgs, proj)) || tc.isTest(p) {
 			a.Roles[p] = model.RoleTest
 			tests = append(tests, p)
 		} else if _, ok := a.Roles[p]; !ok {
@@ -324,6 +334,9 @@ func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from,
 		for _, f := range res.Files {
 			a.Edges = append(a.Edges, model.Edge{From: from, To: f, Kind: k, Line: imp.Line, Spec: imp.Spec, Provenance: model.ProvScan})
 		}
+		if res.AlsoGenerated {
+			e.addGenerated(a, from, imp, res)
+		}
 		if res.CaseMismatch {
 			a.Warnings = append(a.Warnings, model.Widening{Tier: model.TierNone, Reason: model.ReasonCaseMismatch, Path: from,
 				Detail: fmt.Sprintf("%s:%d %q chỉ khớp %s khi bỏ qua hoa thường (chạy được trên Windows/macOS, hỏng trên Linux)",
@@ -333,29 +346,7 @@ func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from,
 		// import tới tệp mới (tệp đổi). res.Probes dành cho chỉ mục tăng dần sau này.
 	case resolve.ClassExternal, resolve.ClassBuiltin:
 	case resolve.ClassGenerated:
-		if e.Rules != nil {
-			// Đích bị thiếu nằm đâu đó trong package: khớp [[generated]] theo owner, hoặc theo tiền tố tĩnh của glob output
-			// nằm trong thư mục package (outputs = ["packages/a/build/**"]).
-			var srcs []string
-			for _, g := range e.Rules.Generated {
-				hit := path.Clean(g.Owner) == res.PackageDir
-				for _, o := range g.Outputs {
-					if pre := o.StaticPrefix(); pre != "" && (eco.Within(pre, res.PackageDir) || eco.Within(res.PackageDir, pre)) {
-						hit = true
-					}
-				}
-				if hit {
-					srcs = append(srcs, g.RawSources...)
-				}
-			}
-			if len(srcs) > 0 {
-				for _, s := range srcs {
-					a.Edges = append(a.Edges, model.Edge{From: from, To: s, Kind: model.EdgePattern, Line: imp.Line, Spec: imp.Spec, Provenance: model.ProvRule})
-				}
-				return
-			}
-		}
-		unres(model.UnresolvedUnknown, res.PackageDir, model.ReasonGeneratedOutput+": "+res.Detail)
+		e.addGenerated(a, from, imp, res)
 	default: // unknown
 		if strings.HasPrefix(res.Detail, "undeclared package") && isBareSpec(imp.Spec) {
 			// Bare specifier không phân giải được chỉ có thể trỏ vào repo qua một cơ chế thư mục gốc chưa mô hình
@@ -453,3 +444,34 @@ func isBareSpec(s string) bool {
 
 // bareNode là nút ảo của một bare specifier chưa khai báo (không trùng đường dẫn tệp nào của repo).
 func bareNode(spec string) string { return "<bare:" + spec + ">" }
+
+// addGenerated ghi phụ thuộc vào đầu ra build của package res.PackageDir: theo [[generated]] (cạnh glob tới nguồn) nếu
+// có luật, ngược lại Unresolved phạm vi package đó (mọi thay đổi trong package làm importer bị ảnh hưởng).
+func (e *Eco) addGenerated(a *eco.Analysis, from string, imp model.ImportRef, res resolve.Result) {
+	if e.Rules != nil {
+		var srcs []string
+		for _, g := range e.Rules.Generated {
+			hit := path.Clean(g.Owner) == res.PackageDir
+			for _, o := range g.Outputs {
+				if pre := o.StaticPrefix(); pre != "" && (eco.Within(pre, res.PackageDir) || eco.Within(res.PackageDir, pre)) {
+					hit = true
+				}
+			}
+			if hit {
+				srcs = append(srcs, g.RawSources...)
+			}
+		}
+		if len(srcs) > 0 {
+			for _, s := range srcs {
+				a.Edges = append(a.Edges, model.Edge{From: from, To: s, Kind: model.EdgePattern, Line: imp.Line, Spec: imp.Spec, Provenance: model.ProvRule})
+			}
+			return
+		}
+	}
+	detail := fmt.Sprintf("build output of package %q is not in the tree", res.Package)
+	if res.Detail != "" {
+		detail = res.Detail
+	}
+	a.Unresolved = append(a.Unresolved, model.Unresolved{File: from, Spec: imp.Spec, Class: model.UnresolvedUnknown, Line: imp.Line,
+		ScopeTier: model.TierModule, ScopeDir: res.PackageDir, Detail: model.ReasonGeneratedOutput + ": " + detail})
+}

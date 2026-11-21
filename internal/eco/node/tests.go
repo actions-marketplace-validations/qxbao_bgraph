@@ -54,18 +54,9 @@ func isTestFile(p, runner string) bool {
 	// node:test / Mocha: mọi tệp .js/.cjs/.mjs dưới thư mục test/ (Mocha mặc định ./test/*.spec.js, node --test test/**).
 	dirRule := runner == "node-test" || runner == "mocha" || runner == "ava"
 	if dirRule && (strings.Contains("/"+path.Dir(p)+"/", "/test/") || strings.Contains("/"+path.Dir(p)+"/", "/tests/")) {
-		return !isHelperName(stem)
-	}
-	return false
-}
-
-// isHelperName: tệp trong thư mục test/ có tên rõ là helper/fixture thì không phải tệp test (vẫn là nút đồ thị).
-func isHelperName(stem string) bool {
-	for _, h := range []string{"helper", "helpers", "util", "utils", "setup", "fixture", "fixtures", "mock", "mocks", "index", "common", "config",
-		"global", "globalsetup", "globalteardown", "teardown", "support", "env", "environment"} {
-		if stem == h || strings.HasPrefix(stem, h+"-") || strings.HasPrefix(stem, h+"_") || strings.HasPrefix(stem, h+".") {
-			return true
-		}
+		// Không loại trừ theo tên (utils.js, index.js trong test/ có thể là test thật: axios, babel). Chạy thừa một helper
+		// là vô hại; bỏ một test thật là sót im lặng.
+		return true
 	}
 	return false
 }

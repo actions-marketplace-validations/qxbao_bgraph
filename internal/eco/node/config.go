@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"bgraph/internal/eco/node/resolve"
+	"bgraph/internal/glob"
 	"bgraph/internal/tree"
 )
 
@@ -18,6 +19,44 @@ type testConfig struct {
 	implicit []string
 	// opaque: cấu hình có khoá ảnh hưởng phân giải/chọn test mà không đọc được dưới dạng literal → config_is_code.
 	opaque []string
+	// testGlobs/testRegex: mẫu tệp test do cấu hình khai (Jest testMatch/testRegex, Vitest include). Tệp là test nếu khớp
+	// mẫu cấu hình HOẶC mẫu mặc định (hợp: không bao giờ thu hẹp tập test).
+	testGlobs []*glob.Pattern
+	testRegex []*regexp.Regexp
+}
+
+// isTest: p khớp mẫu tệp test của cấu hình.
+func (tc *testConfig) isTest(p string) bool {
+	for _, g := range tc.testGlobs {
+		if g.Match(p) {
+			return true
+		}
+	}
+	for _, re := range tc.testRegex {
+		// Jest so testRegex với đường dẫn TUYỆT ĐỐI: tiền tố giả để mẫu như "./packages/" có ký tự đứng trước.
+		if re.MatchString("/__repo__/" + p) {
+			return true
+		}
+	}
+	return false
+}
+
+// configBases là tên (không đuôi) của tệp cấu hình runner, tìm ở MỌI thư mục của dự án (cấu hình lồng như
+// tests/unit/jest.config.mjs chạy bằng --config).
+var configBases = []string{"jest.config", "vitest.config", "vite.config", "playwright.config", "vitest.workspace", "jest.preset", "jest-preset"}
+
+// isRunnerConfig: p là tệp cấu hình runner (jest.config.ts, vitest.config.e2e.mts, ...).
+func isRunnerConfig(p string) bool {
+	base := path.Base(p)
+	for _, b := range configBases {
+		if strings.HasPrefix(base, b+".") {
+			switch path.Ext(base) {
+			case ".js", ".ts", ".mjs", ".cjs", ".mts", ".cts", ".json":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // resolutionKeys là khoá cấu hình làm đổi cách phân giải import hoặc tập test; gặp mà không đọc được thì nới.
@@ -29,19 +68,10 @@ var resolutionKeys = []string{"moduleNameMapper", "alias", "modulePaths", "modul
 
 var strLit = regexp.MustCompile(`'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|` + "`([^`$\\\\]*)`")
 
-// readTestConfig đọc cấu hình runner trong thư mục dự án dir.
-func readTestConfig(t tree.Tree, dir string, pkgJest []byte) testConfig {
+// readTestConfig đọc các tệp cấu hình runner cfgFiles của dự án dir (và khoá "jest" trong package.json).
+func readTestConfig(t tree.Tree, dir string, pkgJest []byte, cfgFiles []string) testConfig {
 	var tc testConfig
-	var cands []string
-	for _, base := range []string{"jest.config", "vitest.config", "vite.config", "playwright.config", "vitest.workspace", "jest.preset", "jest-preset"} {
-		for _, ext := range []string{".js", ".ts", ".mjs", ".cjs", ".mts", ".cts", ".json"} {
-			p := path.Join(dir, base+ext)
-			if t.Has(p) {
-				cands = append(cands, p)
-			}
-		}
-	}
-	for _, p := range cands {
+	for _, p := range cfgFiles {
 		b, err := t.Read(p)
 		if err != nil {
 			tc.opaque = append(tc.opaque, p+": "+err.Error())
@@ -62,6 +92,21 @@ func readTestConfig(t tree.Tree, dir string, pkgJest []byte) testConfig {
 //   - khoá phân giải khác không đọc được → opaque.
 func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 	src = stripJSComments(src)
+	// <rootDir>: mặc định Jest là thư mục của tệp cấu hình (package.json → thư mục dự án). rootDir literal → theo đó;
+	// tính bằng code → không biết: mẫu test dùng "**/" (tập cha), đích alias thử cả thư mục cấu hình lẫn thư mục dự án.
+	roots := []string{path.Dir(file)}
+	if path.Dir(file) != dir {
+		roots = append(roots, dir)
+	}
+	rootKnown := true
+	for _, i := range keyIndexes(src, "rootDir") {
+		if v, ok := literalValue(src[i:]); ok && quoteLen(src[i:]) != "" && !strings.Contains(v, "<rootDir>") {
+			roots = []string{path.Clean(path.Join(path.Dir(file), v))}
+		} else {
+			rootKnown = false
+		}
+	}
+	tc.readTestPatterns(src, file, roots, rootKnown)
 	for _, m := range strLit.FindAllStringSubmatch(src, -1) {
 		s := m[1] + m[2] + m[3]
 		if s == "" {
@@ -81,7 +126,7 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 		for _, i := range idxs {
 			switch key {
 			case "moduleNameMapper":
-				if al, ok := parseMapper(src[i:], dir); ok {
+				if al, ok := parseMapper(src[i:], roots); ok {
 					tc.aliases = append(tc.aliases, al...)
 					continue
 				}
@@ -91,9 +136,8 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 					continue
 				}
 			case "rootDir":
-				if v, ok := literalValue(src[i:]); ok && (v == "." || v == "./" || v == "<rootDir>") {
-					continue
-				}
+				// literal: đã áp vào roots; tính bằng code: mẫu test dùng "**/", alias thử mọi gốc → vẫn là tập cha.
+				continue
 			case "roots":
 				if _, ok := stringArray(src[i:]); ok {
 					continue // thư mục đã thành implicit ở trên; roots chỉ thu hẹp tập test (chọn thừa không hại)
@@ -179,7 +223,34 @@ func literalValue(s string) (string, bool) {
 		return "", false
 	}
 	sm := strLit.FindStringSubmatch(s)
-	return sm[1] + sm[2] + sm[3], true
+	return unescapeJS(sm[1] + sm[2] + sm[3]), true
+}
+
+// unescapeJS bỏ một lớp thoát của chuỗi JS: \n \t \r → ký tự điều khiển, \X khác → X.
+func unescapeJS(s string) string {
+	if !strings.Contains(s, "\\") {
+		return s
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\\' && i+1 < len(s) {
+			i++
+			switch s[i] {
+			case 'n':
+				b.WriteByte('\n')
+			case 't':
+				b.WriteByte('\t')
+			case 'r':
+				b.WriteByte('\r')
+			default:
+				b.WriteByte(s[i])
+			}
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String()
 }
 
 // balanced trả nội dung giữa cặp ngoặc open/close bắt đầu ở s (bỏ khoảng trắng đầu); bỏ qua ngoặc trong chuỗi.
@@ -310,7 +381,7 @@ func splitKV(part string) (string, string, bool) {
 }
 
 // parseMapper đọc moduleNameMapper: { 'regex': 'target' | ['t1','t2'] }.
-func parseMapper(s, dir string) ([]resolve.Alias, bool) {
+func parseMapper(s string, roots []string) ([]resolve.Alias, bool) {
 	body, ok := balanced(s, '{', '}')
 	if !ok {
 		return nil, false
@@ -346,11 +417,15 @@ func parseMapper(s, dir string) ([]resolve.Alias, bool) {
 		}
 		var ts []string
 		for _, t := range targets {
-			t = strings.ReplaceAll(t, "<rootDir>", dir)
-			if !strings.HasPrefix(t, dir) && (strings.HasPrefix(t, "./") || strings.HasPrefix(t, "../")) {
-				t = path.Join(dir, t)
+			for _, root := range roots {
+				u := t
+				if strings.Contains(u, "<rootDir>") {
+					u = strings.ReplaceAll(u, "<rootDir>", root)
+				} else if strings.HasPrefix(u, "./") || strings.HasPrefix(u, "../") {
+					u = path.Join(root, u)
+				}
+				ts = append(ts, path.Clean(u))
 			}
-			ts = append(ts, path.Clean(t))
 		}
 		out = append(out, resolve.Alias{Regex: re, Targets: ts})
 	}
@@ -495,4 +570,128 @@ func stripJSComments(s string) string {
 		b.WriteByte(c)
 	}
 	return b.String()
+}
+
+// readTestPatterns đọc testMatch (glob), testRegex (regex) của Jest và include của Vitest. Mẫu không chuyển được →
+// opaque (không biết tập test → nới dự án), vì bỏ qua sẽ làm test thật không bao giờ được chọn.
+func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKnown bool) {
+	addGlob := func(g string) bool {
+		g = strings.TrimPrefix(g, "./")
+		if strings.HasPrefix(g, "!") {
+			return true // phủ định chỉ bớt test: bỏ qua là tập cha
+		}
+		conv, ok := convertExtglob(g)
+		if !ok {
+			return false
+		}
+		var full []string
+		switch {
+		case strings.Contains(conv, "<rootDir>"):
+			rest := strings.TrimLeft(strings.ReplaceAll(conv, "<rootDir>", ""), "/")
+			if !rootKnown {
+				full = append(full, "**/"+rest)
+			} else {
+				for _, r := range roots {
+					full = append(full, path.Join(r, rest))
+				}
+			}
+		case strings.HasPrefix(conv, "**/") || strings.HasPrefix(conv, "/"):
+			full = append(full, "**/"+strings.TrimLeft(strings.TrimPrefix(conv, "**/"), "/"))
+		default:
+			for _, r := range roots {
+				full = append(full, path.Join(r, conv))
+			}
+		}
+		for _, f := range full {
+			gp, err := glob.Compile(f)
+			if err != nil {
+				return false
+			}
+			tc.testGlobs = append(tc.testGlobs, gp)
+		}
+		return true
+	}
+	for _, key := range []string{"testMatch", "include"} {
+		for _, i := range keyIndexes(src, key) {
+			if arr, ok := stringArray(src[i:]); ok {
+				for _, g := range arr {
+					if !addGlob(g) {
+						tc.opaque = append(tc.opaque, file+": "+key+" "+g)
+					}
+				}
+			} else if v, ok := literalValue(src[i:]); ok && quoteLen(src[i:]) != "" {
+				if !addGlob(v) {
+					tc.opaque = append(tc.opaque, file+": "+key+" "+v)
+				}
+			} else {
+				tc.opaque = append(tc.opaque, file+": "+key)
+			}
+		}
+	}
+	for _, i := range keyIndexes(src, "testRegex") {
+		var pats []string
+		if arr, ok := stringArray(src[i:]); ok {
+			pats = arr
+		} else if v, ok := literalValue(src[i:]); ok && quoteLen(src[i:]) != "" {
+			pats = []string{v}
+		} else if re, ok := regexLiteral(src[i:]); ok {
+			pats = []string{re}
+		} else {
+			tc.opaque = append(tc.opaque, file+": testRegex")
+			continue
+		}
+		for _, p := range pats {
+			re, err := regexp.Compile(p)
+			if err != nil {
+				tc.opaque = append(tc.opaque, file+": testRegex "+p)
+				continue
+			}
+			tc.testRegex = append(tc.testRegex, re)
+		}
+	}
+}
+
+// regexLiteral đọc /.../flags ngay sau vị trí s (nội dung trả nguyên văn, đã là cú pháp regex).
+func regexLiteral(s string) (string, bool) {
+	s = strings.TrimLeft(s, " \t\r\n")
+	if !strings.HasPrefix(s, "/") {
+		return "", false
+	}
+	for i := 1; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case '\n':
+			return "", false
+		case '/':
+			return s[1:i], true
+		}
+	}
+	return "", false
+}
+
+// convertExtglob đổi extglob của micromatch sang cú pháp của gói glob: ?(a|b) và *(a|b) → {,a,b}; @(a|b) và +(a|b) →
+// {a,b}. "+(…)" chỉ một lần là xấp xỉ hẹp hơn "một hoặc nhiều"; tên tệp test thực tế lặp không quá một lần và vẫn khớp
+// mẫu mặc định. !(…) không hỗ trợ → false (người gọi nới).
+func convertExtglob(g string) (string, bool) {
+	var b strings.Builder
+	for i := 0; i < len(g); i++ {
+		c := g[i]
+		if (c == '?' || c == '@' || c == '+' || c == '*' || c == '!') && i+1 < len(g) && g[i+1] == '(' {
+			j := strings.IndexByte(g[i+2:], ')')
+			if j < 0 || c == '!' {
+				return "", false
+			}
+			alts := strings.ReplaceAll(g[i+2:i+2+j], "|", ",")
+			if c == '?' || c == '*' {
+				b.WriteString("{," + alts + "}")
+			} else {
+				b.WriteString("{" + alts + "}")
+			}
+			i += 2 + j
+			continue
+		}
+		b.WriteByte(c)
+	}
+	return b.String(), true
 }
