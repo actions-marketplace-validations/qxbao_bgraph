@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Tải và chuẩn hoá dữ liệu T1 cho hệ sinh thái Node (chỉ thư viện chuẩn).
+"""Download and normalize T1 data for the Node ecosystem (standard library only).
 
-Nguồn:
-  - SWE-bench/SWE-bench_Multilingual (datasets-server rows API), giữ repo JS/TS.
-  - ByteDance-Seed/Multi-SWE-bench thư mục js/ và ts/ (JSONL tải thẳng, đọc dòng-từng-dòng, không lưu tệp thô).
-Đầu ra: meta.json (revision HF) và JSONL chuẩn hoá {instance_id, repo, base_commit, patch, test_patch, FAIL_TO_PASS, source}.
+Sources:
+    - SWE-bench/SWE-bench_Multilingual (datasets-server rows API), keeping JS/TS repos.
+    - ByteDance-Seed/Multi-SWE-bench js/ and ts/ directories (JSONL downloaded directly, read line by line, raw files not stored).
+Output: meta.json (HF revision) and normalized JSONL {instance_id, repo, base_commit, patch, test_patch, FAIL_TO_PASS, source}.
 
   python fetch_datasets.py OUTDIR
 """

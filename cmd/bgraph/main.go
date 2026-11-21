@@ -1,6 +1,6 @@
-// Lệnh bgraph: CLI chọn test bị ảnh hưởng (mục 7.2 của docs/plan.md).
+// Command bgraph is the CLI that selects affected tests (docs/plan.md §7.2).
 //
-// Mã thoát: 0 thành công, 1 lỗi công cụ, 2 dùng sai.
+// Exit codes: 0 success, 1 tool error, 2 usage error.
 package main
 
 import (
@@ -25,19 +25,19 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-const usage = `bgraph - chọn test bị ảnh hưởng từ đồ thị import mức tệp (đóng khi lỗi)
+const usage = `bgraph - select affected tests from the file-level import graph (fail-closed)
 
-Dùng:
+Usage:
   bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...]
-  bgraph explain   [--root DIR] [--base REF] <test|tệp>
+  bgraph explain   [--root DIR] [--base REF] <test|file>
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
   bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json]
   bgraph index     [--root DIR]
-  bgraph audit | doctor        (chưa cài đặt)
+  bgraph audit | doctor        (not implemented)
   bgraph version | help
 `
 
-// run là điểm vào có thể test: trả mã thoát.
+// run is the testable entry point: it returns the exit code.
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
 		fmt.Fprint(stderr, usage)
@@ -52,32 +52,32 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintln(stdout, "bgraph", version)
 		return 0
 	case "audit", "doctor":
-		fmt.Fprintf(stderr, "bgraph %s: chưa cài đặt (giai đoạn sau)\n", cmd)
+		fmt.Fprintf(stderr, "bgraph %s: not implemented (later phase)\n", cmd)
 		return 2
 	case "affected", "explain", "unresolved", "command", "index":
 	default:
-		fmt.Fprintf(stderr, "lệnh không hợp lệ: %q\n\n%s", cmd, usage)
+		fmt.Fprintf(stderr, "invalid command: %q\n\n%s", cmd, usage)
 		return 2
 	}
 
 	fs := flag.NewFlagSet("bgraph "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	root := fs.String("root", ".", "thư mục trong repo")
+	root := fs.String("root", ".", "directory inside the repo")
 	var base, head, failed, class, listDir string
 	var asJSON bool
 	switch cmd {
 	case "affected":
-		fs.StringVar(&base, "base", "", "ref mốc (mặc định: merge-base với origin/HEAD, origin/main, main, master)")
-		fs.StringVar(&head, "head", "", "commit đích (mặc định: cây làm việc)")
-		fs.StringVar(&failed, "failed", "", "id đơn vị test hỏng ở lượt trước, cách nhau bởi dấu phẩy")
+		fs.StringVar(&base, "base", "", "base ref (default: merge-base with origin/HEAD, origin/main, main, master)")
+		fs.StringVar(&head, "head", "", "target commit (default: working tree)")
+		fs.StringVar(&failed, "failed", "", "ids of test units that failed in the previous run, comma-separated")
 		fs.BoolVar(&asJSON, "json", false, "in JSON")
 	case "explain":
-		fs.StringVar(&base, "base", "", "ref mốc")
+		fs.StringVar(&base, "base", "", "base ref")
 	case "unresolved":
-		fs.StringVar(&class, "class", "", "lọc theo lớp: unknown|dynamic|ambiguous|uncertain_scan")
+		fs.StringVar(&class, "class", "", "filter by class: unknown|dynamic|ambiguous|uncertain_scan")
 	case "command":
-		fs.StringVar(&base, "base", "", "ref mốc")
-		fs.StringVar(&listDir, "list-dir", "", "thư mục ghi tệp danh sách")
+		fs.StringVar(&base, "base", "", "base ref")
+		fs.StringVar(&listDir, "list-dir", "", "directory to write the list file to")
 		fs.BoolVar(&asJSON, "json", false, "in JSON")
 	}
 	if err := fs.Parse(rest); err != nil {
@@ -87,27 +87,27 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if cmd == "explain" && fs.NArg() != 1 {
-		fmt.Fprintln(stderr, "explain cần đúng một đối số: <test|tệp>")
+		fmt.Fprintln(stderr, "explain needs exactly one argument: <test|file>")
 		return 2
 	}
 	if cmd != "explain" && fs.NArg() != 0 {
-		fmt.Fprintf(stderr, "%s: đối số thừa: %v\n", cmd, fs.Args())
+		fmt.Fprintf(stderr, "%s: extra arguments: %v\n", cmd, fs.Args())
 		return 2
 	}
 	if cmd == "unresolved" && class != "" && !slices.Contains([]string{"unknown", "dynamic", "ambiguous", "uncertain_scan"}, class) {
-		fmt.Fprintf(stderr, "--class không hợp lệ: %q\n", class)
+		fmt.Fprintf(stderr, "invalid --class: %q\n", class)
 		return 2
 	}
 
 	ctx := context.Background()
 	ix, err := bgraph.Open(ctx, *root, bgraph.Options{})
 	if err != nil {
-		fmt.Fprintln(stderr, "lỗi:", err)
+		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 	defer ix.Close()
 
-	fail := func(err error) int { fmt.Fprintln(stderr, "lỗi:", err); return 1 }
+	fail := func(err error) int { fmt.Fprintln(stderr, "error:", err); return 1 }
 
 	switch cmd {
 	case "index":
@@ -115,7 +115,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		if err != nil {
 			return fail(err)
 		}
-		fmt.Fprintf(stdout, "tệp: %d\ncạnh: %d\nđơn vị test: %d\nchưa phân giải: %d\nthời gian: %s\n",
+		fmt.Fprintf(stdout, "files: %d\nedges: %d\ntest units: %d\nunresolved: %d\nelapsed: %s\n",
 			st.Files, st.Edges, st.Units, len(st.Unresolved), st.Elapsed.Round(1e6))
 		return 0
 	case "unresolved":
@@ -129,23 +129,23 @@ func run(args []string, stdout, stderr io.Writer) int {
 				continue
 			}
 			n++
-			fmt.Fprintf(stdout, "%s:%d  %q  [%s]  nới tới %s %s\n", u.File, u.Line, u.Spec, u.Class, u.ScopeTier, scopeDir(u.ScopeDir))
+			fmt.Fprintf(stdout, "%s:%d  %q  [%s]  widens to %s %s\n", u.File, u.Line, u.Spec, u.Class, u.ScopeTier, scopeDir(u.ScopeDir))
 			if u.Detail != "" {
 				fmt.Fprintf(stdout, "    %s\n", u.Detail)
 			}
-			fmt.Fprintf(stdout, "    gợi ý bgraph.toml:\n%s\n", indent(suggestRule(u), "      "))
+			fmt.Fprintf(stdout, "    bgraph.toml suggestion:\n%s\n", indent(suggestRule(u), "      "))
 		}
-		fmt.Fprintf(stdout, "tổng: %d\n", n)
+		fmt.Fprintf(stdout, "total: %d\n", n)
 		return 0
 	}
 
-	// affected / explain / command: cần Selection.
+	// affected / explain / command: need the Selection.
 	if base == "" {
 		b, err := ix.DefaultBase(ctx)
 		if err != nil {
-			fmt.Fprintln(stderr, "cảnh báo:", err, "→ coi như không có base (chạy full)")
+			fmt.Fprintln(stderr, "warning:", err, "→ treating as no base (running full)")
 		}
-		base = b // rỗng → Select trả full (no_base)
+		base = b // empty → Select returns full (no_base)
 	}
 	ch := bgraph.Change{Base: base, Head: head, Worktree: head == ""}
 	if failed != "" {
@@ -190,7 +190,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 func printJSON(stdout, stderr io.Writer, v any) int {
 	b, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		fmt.Fprintln(stderr, "lỗi:", err)
+		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 	fmt.Fprintln(stdout, string(b))
@@ -209,26 +209,26 @@ func printSelection(w io.Writer, sel model.Selection) {
 	if sel.Base != "" {
 		fmt.Fprintf(w, "base: %s\n", sel.Base)
 	}
-	fmt.Fprintf(w, "tệp đổi: %d\n", len(sel.Changed))
+	fmt.Fprintf(w, "changed files: %d\n", len(sel.Changed))
 	if len(sel.Widening) > 0 {
-		fmt.Fprintln(w, "\nnới:")
+		fmt.Fprintln(w, "\nwidenings:")
 		for _, x := range sel.Widening {
 			fmt.Fprintf(w, "  - %s  %s  scope=%s %s\n", x.Reason, x.Path, x.Tier, x.Scope)
 			if x.Detail != "" {
 				fmt.Fprintf(w, "      %s\n", x.Detail)
 			}
 			if x.Suggest != "" {
-				fmt.Fprintf(w, "      gợi ý:\n%s\n", indent(x.Suggest, "        "))
+				fmt.Fprintf(w, "      suggestion:\n%s\n", indent(x.Suggest, "        "))
 			}
 		}
 	}
 	if len(sel.Warnings) > 0 {
-		fmt.Fprintln(w, "\ncảnh báo:")
+		fmt.Fprintln(w, "\nwarnings:")
 		for _, x := range sel.Warnings {
 			fmt.Fprintf(w, "  - %s  %s  %s\n", x.Reason, x.Path, x.Detail)
 		}
 	}
-	fmt.Fprintf(w, "\ntest được chọn: %d\n", len(sel.Tests))
+	fmt.Fprintf(w, "\nselected tests: %d\n", len(sel.Tests))
 	for _, t := range sel.Tests {
 		first := ""
 		if len(t.Reasons) > 0 {
@@ -244,7 +244,7 @@ func explain(w io.Writer, sel model.Selection, target string) {
 	for _, t := range sel.Tests {
 		if t.Unit == target || slices.Contains(t.Files, target) {
 			found = true
-			fmt.Fprintf(w, "test %s được chọn vì:\n", t.Unit)
+			fmt.Fprintf(w, "test %s is selected because:\n", t.Unit)
 			for _, r := range t.Reasons {
 				fmt.Fprintf(w, "  - %s\n", r)
 			}
@@ -258,7 +258,7 @@ func explain(w io.Writer, sel model.Selection, target string) {
 		for _, r := range t.Reasons {
 			if strings.Contains(r, target) {
 				if n == 0 {
-					fmt.Fprintf(w, "tệp %s xuất hiện trong lý do của:\n", target)
+					fmt.Fprintf(w, "file %s appears in the reasons of:\n", target)
 				}
 				n++
 				fmt.Fprintf(w, "  %s: %s\n", t.Unit, r)
@@ -267,13 +267,13 @@ func explain(w io.Writer, sel model.Selection, target string) {
 		}
 	}
 	if slices.Contains(sel.Changed, target) {
-		fmt.Fprintf(w, "%s là tệp đã đổi", target)
+		fmt.Fprintf(w, "%s is a changed file", target)
 		if n == 0 {
-			fmt.Fprint(w, " nhưng không test nào được chọn do nó")
+			fmt.Fprint(w, " but no test was selected because of it")
 		}
 		fmt.Fprintln(w)
 	} else if n == 0 {
-		fmt.Fprintf(w, "không có test nào được chọn liên quan tới %s\n", target)
+		fmt.Fprintf(w, "no selected test is related to %s\n", target)
 	}
 }
 
@@ -282,14 +282,14 @@ func suggestRule(u model.Unresolved) string {
 	if dir == "" {
 		dir = "."
 	}
-	return fmt.Sprintf("[[rule]]\npaths = [%q]\naffects = [%q]  # hoặc glob test; \"none\" nếu chắc chắn vô hại", u.File, dir)
+	return fmt.Sprintf("[[rule]]\npaths = [%q]\naffects = [%q]  # or a test glob; \"none\" if surely harmless", u.File, dir)
 }
 
 func indent(s, pre string) string {
 	return pre + strings.ReplaceAll(s, "\n", "\n"+pre)
 }
 
-// shellLine ghép argv thành một dòng shell (chỉ để hiển thị; dùng nháy đơn kiểu POSIX).
+// shellLine joins argv into one shell line (display only; uses POSIX-style single quotes).
 func shellLine(argv []string) string {
 	q := make([]string, len(argv))
 	for i, a := range argv {

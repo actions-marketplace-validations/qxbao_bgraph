@@ -26,7 +26,7 @@ jobs:
       run:
         shell: bash
     steps:
-      - name: Tắt chuyển đổi CRLF (trước checkout)
+      - name: Disable CRLF conversion (before checkout)
         run: git config --global core.autocrlf false
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -46,7 +46,7 @@ jobs:
       - name: go vet (GOOS=linux)
         run: GOOS=linux go vet ./...
 
-      - name: Cài staticcheck
+      - name: Install staticcheck
         run: go install honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}
 
       - name: staticcheck (native)

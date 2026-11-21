@@ -19,20 +19,20 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// memo giữ cây commit và kết quả phân tích của chúng giữa các lần Select (cây commit bất biến theo OID). Cây làm việc
-// không được ghi nhớ: nó đổi giữa các lần gọi; chi phí của nó giảm nhờ cache quét theo nội dung.
+// memo keeps commit trees and their analysis results between Select calls (commit trees are immutable by OID). The working tree
+// is not memoized: it changes between calls; its cost is reduced by the content-keyed scan cache.
 type memo struct {
 	mu       sync.Mutex
-	trees    map[string]*gitx.CommitTree // OID commit → cây
-	oids     map[tree.Tree]string        // cây → OID commit
+	trees    map[string]*gitx.CommitTree // commit OID → tree
+	oids     map[tree.Tree]string        // tree → commit OID
 	analyses map[memoKey]*eco.Analysis
-	dir      string // thư mục snapshot phân tích bền; rỗng → chỉ bộ nhớ
+	dir      string // durable analysis snapshot directory; empty → memory only
 }
 
 type memoKey struct {
 	t     tree.Tree
 	eco   string
-	rules string // nội dung bgraph.toml dùng khi phân tích (luật [[generated]] đổi kết quả)
+	rules string // contents of bgraph.toml used for analysis (the [[generated]] rules change the result)
 }
 
 const memoMaxTrees = 8
@@ -54,7 +54,7 @@ func (m *memo) commitTree(ctx context.Context, r *gitx.Repo, oid string) (*gitx.
 		m.trees = map[string]*gitx.CommitTree{}
 	}
 	if len(m.trees) >= memoMaxTrees {
-		// Bỏ hết khi đầy (đơn giản, tất định); kèm phân tích của các cây đó.
+		// Drop everything when full (simple, deterministic); along with the analyses of those trees.
 		m.trees = map[string]*gitx.CommitTree{}
 		m.oids = nil
 		m.analyses = nil
@@ -67,7 +67,7 @@ func (m *memo) commitTree(ctx context.Context, r *gitx.Repo, oid string) (*gitx.
 	return t, nil
 }
 
-// memoEco bọc một hệ sinh thái: Analyze của cây commit đã ghi nhớ được dùng lại.
+// memoEco wraps an ecosystem: the memoized Analyze of a commit tree is reused.
 type memoEco struct {
 	eco.Ecosystem
 	m     *memo
@@ -109,7 +109,7 @@ func (e memoEco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis)
 	return e.Ecosystem.ClassifyChange(p, base, head, a)
 }
 
-// snapshotPath: tệp snapshot phân tích cho (hệ sinh thái, phiên bản, phiên bản bộ quét, commit, bgraph.toml).
+// snapshotPath: the analysis snapshot file for (ecosystem, version, scanner version, commit, bgraph.toml).
 func (m *memo) snapshotPath(ecoName, ver, oid, rules string) string {
 	if m.dir == "" || oid == "" {
 		return ""
@@ -118,7 +118,7 @@ func (m *memo) snapshotPath(ecoName, ver, oid, rules string) string {
 	return filepath.Join(m.dir, "analysis", ecoName+"-"+hex.EncodeToString(h[:16])+".gob")
 }
 
-// snapshotVersion đổi khi định dạng eco.Analysis đổi.
+// snapshotVersion changes when the eco.Analysis format changes.
 const snapshotVersion = 1
 
 type snapshot struct {
@@ -126,8 +126,8 @@ type snapshot struct {
 	Analysis eco.Analysis
 }
 
-// loadAnalysis nạp snapshot; mọi lỗi → nil (phân tích lại). Snapshot chỉ là tăng tốc, không bao giờ là nguồn sự thật
-// duy nhất: khoá gồm mọi đầu vào của phép phân tích (commit bất biến, luật, phiên bản bộ phân tích và bộ quét).
+// loadAnalysis loads a snapshot; any error → nil (re-analyze). A snapshot is only a speedup, never the sole source of truth:
+// the key covers every input of the analysis (immutable commit, rules, analyzer and scanner versions).
 func loadAnalysis(file string) *eco.Analysis {
 	if file == "" {
 		return nil
@@ -148,7 +148,7 @@ func loadAnalysis(file string) *eco.Analysis {
 
 const maxSnapshots = 32
 
-// saveAnalysis ghi tạm rồi rename (thử lại trên Windows khi antivirus giữ handle); lỗi bị bỏ qua.
+// saveAnalysis writes to a temp file then renames (retrying on Windows when antivirus holds the handle); errors are ignored.
 func saveAnalysis(file string, a *eco.Analysis) {
 	if file == "" {
 		return
@@ -184,7 +184,7 @@ func saveAnalysis(file string, a *eco.Analysis) {
 	pruneSnapshots(dir)
 }
 
-// pruneSnapshots giữ maxSnapshots tệp mới nhất.
+// pruneSnapshots keeps the newest maxSnapshots files.
 func pruneSnapshots(dir string) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {

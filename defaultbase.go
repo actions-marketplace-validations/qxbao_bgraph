@@ -8,8 +8,8 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// DefaultBase chọn base mặc định cho CLI: merge-base của HEAD với origin/HEAD, rồi origin/main, main, master.
-// Trả lỗi nếu không ref nào dùng được (người gọi nên truyền Base rỗng → Select trả full/no_base, hoặc báo lỗi).
+// DefaultBase picks the default base for the CLI: the merge-base of HEAD with origin/HEAD, then origin/main, main, master.
+// Returns an error if no ref is usable (the caller should pass an empty Base → Select returns full/no_base, or report the error).
 func (ix *Index) DefaultBase(ctx context.Context) (string, error) {
 	for _, ref := range []string{"origin/HEAD", "origin/main", "main", "master"} {
 		if _, err := ix.repo.RevParse(ctx, ref); err != nil {
@@ -19,16 +19,16 @@ func (ix *Index) DefaultBase(ctx context.Context) (string, error) {
 			return mb, nil
 		}
 	}
-	return "", errors.New("không tìm được base mặc định (origin/HEAD, origin/main, main, master); dùng --base")
+	return "", errors.New("no default base found (origin/HEAD, origin/main, main, master); use --base")
 }
 
-// Unresolved phân tích cây làm việc và trả mọi import chưa phân giải (kèm phạm vi nới), thứ tự ổn định theo hệ sinh thái.
+// Unresolved analyzes the working tree and returns every unresolved import (with its widening scope), in a stable order by ecosystem.
 func (ix *Index) Unresolved(ctx context.Context) ([]model.Unresolved, error) {
 	st, err := ix.Analyze(ctx)
 	return st.Unresolved, err
 }
 
-// AnalysisStats là thống kê phân tích cây làm việc.
+// AnalysisStats are statistics of the working-tree analysis.
 type AnalysisStats struct {
 	Files      int
 	Edges      int
@@ -37,7 +37,7 @@ type AnalysisStats struct {
 	Elapsed    time.Duration
 }
 
-// Analyze chạy phân tích của mọi hệ sinh thái trên cây làm việc (Snapshot so với HEAD).
+// Analyze runs every ecosystem's analysis on the working tree (Snapshot versus HEAD).
 func (ix *Index) Analyze(ctx context.Context) (AnalysisStats, error) {
 	start := time.Now()
 	var st AnalysisStats

@@ -1,4 +1,4 @@
-// Package bgraph là API thư viện ổn định (mục 7.1): chọn test bị ảnh hưởng đa ngôn ngữ, đóng khi lỗi.
+// Package bgraph is the stable library API (docs/plan.md §7.1): multi-language affected-test selection, fail-closed.
 //
 //	idx, err := bgraph.Open(root, bgraph.Options{})
 //	sel, err := idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})
@@ -19,7 +19,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// Kiểu công khai (bí danh của kiểu nội bộ để giữ một định nghĩa).
+// Public types (aliases of the internal types, to keep a single definition).
 type (
 	Selection    = model.Selection
 	SelectedTest = model.SelectedTest
@@ -27,16 +27,16 @@ type (
 	Tier         = model.Tier
 )
 
-// Options cấu hình Index.
+// Options configures Index.
 type Options struct {
-	// StateDir: thư mục chỉ mục bền (Bint truyền thư mục state của nó). Rỗng → thư mục cache của người dùng
-	// (scancache.DefaultDir), không bao giờ nằm trong repo.
+	// StateDir: durable index directory (Bint passes its state directory). Empty → the user's cache directory
+	// (scancache.DefaultDir), never inside the repo.
 	StateDir string
-	// MemoryOnly: không ghi cache bền (test, chạy một lần).
+	// MemoryOnly: do not write the durable cache (tests, one-shot runs).
 	MemoryOnly bool
 }
 
-// Index là chỉ mục của một repo. Giữ cache quét giữa các lần Select (server MCP sống suốt phiên).
+// Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
 type Index struct {
 	repo  *gitx.Repo
 	cache *scancache.Cache
@@ -44,7 +44,7 @@ type Index struct {
 	memo  memo
 }
 
-// Open mở repo chứa root.
+// Open opens the repo containing root.
 func Open(ctx context.Context, root string, opt Options) (*Index, error) {
 	r, err := gitx.Open(ctx, root)
 	if err != nil {
@@ -66,38 +66,38 @@ func Open(ctx context.Context, root string, opt Options) (*Index, error) {
 	return ix, nil
 }
 
-// Warnings trả cảnh báo về kho cache bền (đã hạ về bộ nhớ, tệp hỏng được thay...). Không ảnh hưởng tính đúng.
+// Warnings returns warnings about the durable cache store (downgraded to memory, corrupt files replaced...). They do not affect correctness.
 func (ix *Index) Warnings() []string { return ix.cache.Warnings() }
 
-// Root là gốc repo.
+// Root is the repo root.
 func (ix *Index) Root() string { return ix.repo.Root }
 
-// Close ghi cache bền và giải phóng tiến trình git sống lâu.
+// Close writes the durable cache and releases the long-lived git process.
 func (ix *Index) Close() error {
 	ix.cache.Close()
 	return ix.repo.Close()
 }
 
-// Change mô tả thay đổi cần chọn test.
+// Change describes the change to select tests for.
 type Change struct {
-	Base string // ref hoặc OID mốc; rỗng → full (no_base)
-	// Head: commit đích; rỗng hoặc Worktree=true → cây làm việc (gồm phần staged, unstaged, untracked).
+	Base string // base ref or OID; empty → full (no_base)
+	// Head: target commit; empty or Worktree=true → the working tree (including staged, unstaged and untracked parts).
 	Head             string
 	Worktree         bool
 	PreviouslyFailed []string
 }
 
-// Select tính phần chọn. Lỗi hạ tầng (git không chạy được) trả error; mọi điều không chắc khác thành nới trong Selection.
+// Select computes the selection. Infrastructure errors (git cannot run) return an error; everything else uncertain becomes a widening in the Selection.
 func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 	in := selector.Input{Head: ch.Head, PreviouslyFailed: ch.PreviouslyFailed, Scanner: ix.cache}
 	if ch.Base == "" {
-		return noBase(in, "không có base"), nil
+		return noBase(in, "no base"), nil
 	}
 	base, err := ix.repo.RevParse(ctx, ch.Base)
 	if err != nil {
 		msg := err.Error()
 		if sh, e2 := ix.repo.IsShallow(ctx); e2 == nil && sh {
-			msg = "clone nông không có base: " + msg
+			msg = "shallow clone has no base: " + msg
 		}
 		return noBase(in, msg), nil
 	}
@@ -140,7 +140,7 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 	for _, e := range Ecosystems(rf) {
 		in.Ecos = append(in.Ecos, memoEco{Ecosystem: e, m: &ix.memo, rules: rulesKey})
 	}
-	// Quét song song phần trượt cache của cả hai cây (tệp chưa đổi trúng cache theo blob OID, không bị đọc).
+	// Scan the cache-missing parts of both trees in parallel (unchanged files hit the cache by blob OID and are not read).
 	if err := ix.cache.Prefetch(ctx, in.HeadTree, in.HeadTree.Files(), 0); err != nil {
 		return Selection{}, err
 	}
@@ -152,7 +152,7 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 	return sel, nil
 }
 
-// Ecosystems là các hệ sinh thái được hỗ trợ.
+// Ecosystems are the supported ecosystems.
 func Ecosystems(rf *rules.File) []eco.Ecosystem {
 	return []eco.Ecosystem{node.New(rf)}
 }
@@ -173,7 +173,7 @@ func noBase(in selector.Input, detail string) Selection {
 		Widening: []model.Widening{{Tier: model.TierFull, Reason: model.ReasonNoBase, Detail: detail}}}
 }
 
-// diffTrees so hai cây commit theo blob OID và mode (không tốn spawn git).
+// diffTrees compares two commit trees by blob OID and mode (no git spawn cost).
 func diffTrees(a, b *gitx.CommitTree) []selector.Changed {
 	var out []selector.Changed
 	for _, p := range b.Files() {
@@ -198,7 +198,7 @@ func diffTrees(a, b *gitx.CommitTree) []selector.Changed {
 		if !slices.Contains(sb, p) {
 			out = append(out, selector.Changed{Path: p, Status: 'D', OldMode: "160000"})
 		} else {
-			// CommitTree không lộ OID của gitlink: không chứng minh được con trỏ giữ nguyên → coi là đổi (nới).
+			// CommitTree does not expose a gitlink's OID: cannot prove the pointer is unchanged → treat as changed (widening).
 			out = append(out, selector.Changed{Path: p, Status: 'M', OldMode: "160000", NewMode: "160000"})
 		}
 	}

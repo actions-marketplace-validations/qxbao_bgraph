@@ -1,9 +1,9 @@
-// Lệnh bgraph-eval: bộ đánh giá ngoài (docs/plan.md mục 10.2).
+// Command bgraph-eval is the external evaluation suite (docs/plan.md §10.2).
 //
 //	bgraph-eval manifest --tasks tasks.jsonl [--meta meta.json] --replay zod,hono --out evalkit/manifest/node.json
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
-//	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (kiểm T2 trên oracle cache nếu có)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
-//	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (đối chứng 0b)
+//	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
+//	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
 //	bgraph-eval t2       [--run-tests] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
@@ -142,7 +142,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	return err
 }
 
-// cmdQuick chạy bộ đánh giá nhanh: T1 trên mẫu phân tầng + replay; trả mã thoát 1 nếu có vi phạm T1 hoặc bất biến.
+// cmdQuick runs the quick evaluation: T1 on a stratified sample + replay; returns exit code 1 on any T1 violation or invariant violation.
 func cmdQuick(ctx context.Context, args []string) (int, error) {
 	start := time.Now()
 	fs := flag.NewFlagSet("quick", flag.ExitOnError)
@@ -195,7 +195,7 @@ func cmdQuick(ctx context.Context, args []string) (int, error) {
 	if *t2Dir == "" {
 		*t2Dir = filepath.Join(filepath.Dir(filepath.Clean(*work)), "t2")
 	}
-	t2m, _ := evalkit.LoadT2Manifest(*t2Man) // thiếu manifest → bỏ qua T2
+	t2m, _ := evalkit.LoadT2Manifest(*t2Man) // missing manifest → skip T2
 	lg := logger(*out)
 	lg("quick: %d T1 tasks (%d regressions, %d regression ids missing from the data: %v), replay %d repos x %d commits", len(keep), len(reg)-len(missing), len(missing), missing, len(rep), *commits)
 	qr, err := evalkit.RunQuick(ctx, evalkit.QuickConfig{Work: *work, Out: *out, Tasks: keep, Manifest: man, Replay: rep, Commits: *commits, Jobs: *jobs, Checkout: *checkout, Serial: *serial, T2Dir: *t2Dir, T2: t2m, Log: lg})
@@ -280,7 +280,7 @@ func cmdManifest(args []string) error {
 			r.Sources = append(r.Sources, t.Source)
 		}
 	}
-	// Repo trùng tên nhưng khác hoa/thường giữa replay và T1: giữ tên của T1.
+	// Repos with the same name but different case between replay and T1: keep T1's name.
 	var rep []string
 	for _, r := range replay {
 		if x, ok := t1[strings.ToLower(r)]; ok {
@@ -315,10 +315,10 @@ func cmdManifest(args []string) error {
 	return nil
 }
 
-// cmdBaseline: đối chứng các công cụ đồ thị ngoài trên mẫu T1 của `quick`.
+// cmdBaseline: control comparison of external graph tools on the T1 sample of `quick`.
 //
-//	prep:  dựng P/C, oracle, đơn vị test và phần chọn của bgraph cho từng task → <out>/tasks.json
-//	score: đọc <out>/runs/<tool>/<id>.json (script research/baseline-*/run_tools.py ghi), chấm bằng CheckRequired → scores.json + baseline.md
+//	prep:  build P/C, oracle, test units and bgraph's selection for each task → <out>/tasks.json
+//	score: read <out>/runs/<tool>/<id>.json (written by the script research/baseline-*/run_tools.py), score with CheckRequired → scores.json + baseline.md
 func cmdBaseline(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: baseline prep|score")
@@ -382,7 +382,7 @@ func cmdBaseline(ctx context.Context, args []string) error {
 	return fmt.Errorf("unknown subcommand: %s", sub)
 }
 
-// cmdT2 chạy oracle đột biến (mục 10.2): --run-tests xây/làm mới oracle.jsonl; mặc định chỉ kiểm lại bgraph trên oracle đã cache.
+// cmdT2 runs the mutation oracle (§10.2): --run-tests builds/refreshes oracle.jsonl; by default it only re-checks bgraph on the cached oracle.
 func cmdT2(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("t2", flag.ExitOnError)
 	dir := fs.String("dir", "D:/bench/bgraph-eval/t2", "T2 root directory (checkout, tools, state, oracle.jsonl)")

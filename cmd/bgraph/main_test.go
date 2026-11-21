@@ -43,7 +43,7 @@ func write(t *testing.T, root, rel, content string) {
 
 func TestCLIAffectedAndCommand(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("không có git")
+		t.Skip("no git")
 	}
 	gitEnvFor(t)
 	root := t.TempDir()
@@ -78,7 +78,7 @@ func TestCLIAffectedAndCommand(t *testing.T) {
 		return false
 	}
 	if !has("src/a.test.ts") || has("src/b.test.ts") {
-		t.Fatalf("selection sai: scope=%s units=%v widening=%v", sel.Scope, units, sel.Widening)
+		t.Fatalf("wrong selection: scope=%s units=%v widening=%v", sel.Scope, units, sel.Widening)
 	}
 
 	out.Reset()
@@ -107,6 +107,6 @@ func TestCLIUsage(t *testing.T) {
 	var o, e bytes.Buffer
 	if run(nil, &o, &e) != 2 || run([]string{"bogus"}, &o, &e) != 2 || run([]string{"audit"}, &o, &e) != 2 ||
 		run([]string{"unresolved", "--class", "x"}, &o, &e) != 2 || run([]string{"version"}, &o, &e) != 0 {
-		t.Fatal("mã thoát sai")
+		t.Fatal("wrong exit code")
 	}
 }
