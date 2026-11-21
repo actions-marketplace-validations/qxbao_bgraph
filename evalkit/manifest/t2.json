@@ -1,0 +1,56 @@
+{
+ "version": 1,
+ "ts": "tools/node_modules/typescript",
+ "notes": "Thư mục gốc (t2 dir) mặc định D:\\bench\\bgraph-eval\\t2. Checkout = `git clone --depth 1` rồi `git fetch --depth 1 origin <R>` + checkout R (xem repos[].install). typescript@5.5.4 cài trong <t2>/tools chỉ để sinh đột biến.",
+ "repos": [
+  {
+   "name": "colinhacks/zod",
+   "dir": "zod",
+   "remote": "https://github.com/colinhacks/zod.git",
+   "r": "2a343ed2a4ffbea73fb83862ee1e317662292481",
+   "runner": "vitest",
+   "bin": "node_modules/vitest/vitest.mjs",
+   "args": ["run", "--typecheck.enabled=false"],
+   "native_args": ["list", "--changed", "--filesOnly"],
+   "install": "pnpm@12.6.0 (cài vào <t2>/tools; corepack không chạy được): pnpm install --frozen-lockfile --ignore-scripts --config.pm-on-fail=ignore  (packageManager của repo là nub@0.8.3, không có trên npm)",
+   "covers": "vitest run (projects packages/* + compile-mode) của repo, KHÔNG gồm typecheck tsc (bỏ mục meta.typecheck trong báo cáo JSON). Chủ yếu packages/zod/src/**.test.ts, vài tệp packages/{mini,treeshake,resolution,docs}.",
+   "include": ["^packages/zod/src/.*\\.ts$"],
+   "exclude": ["/tests?/", "\\.test\\.ts$", "\\.d\\.ts$", "/locales/", "/benchmarks/"],
+   "mutants": 24,
+   "seed": "t2-v1"
+  },
+  {
+   "name": "honojs/hono",
+   "dir": "hono",
+   "remote": "https://github.com/honojs/hono.git",
+   "r": "75ff8e3ea18485589816881c6278bc9783e56602",
+   "runner": "vitest",
+   "bin": "node_modules/vitest/vitest.mjs",
+   "args": ["run", "--project", "main", "--project", "jsx-runtime-default", "--project", "jsx-runtime-dom", "--project", "node", "--coverage.enabled=false"],
+   "native_args": ["list", "--changed", "--filesOnly", "--project", "main", "--project", "jsx-runtime-default", "--project", "jsx-runtime-dom", "--project", "node", "--coverage.enabled=false"],
+   "install": "pnpm@12.6.0 (cài vào <t2>/tools): pnpm install --frozen-lockfile --ignore-scripts",
+   "covers": "vitest projects main + jsx-runtime-default + jsx-runtime-dom + node (runtime-tests/node); bỏ deno/bun/fastly/workerd và `tsc -p tsconfig.spec.json`. Gồm src/**.test.ts(x), build/*.test.ts, runtime-tests/node.",
+   "include": ["^src/.*\\.tsx?$"],
+   "exclude": ["\\.test\\.tsx?$", "\\.d\\.ts$", "/test-utils/", "/sandbox/", "/types\\.ts$"],
+   "mutants": 24,
+   "seed": "t2-v1"
+  },
+  {
+   "name": "iamkun/dayjs",
+   "dir": "dayjs",
+   "remote": "https://github.com/iamkun/dayjs.git",
+   "r": "d3e43be0489ff1d010aca42b3115b6059215ed60",
+   "runner": "jest",
+   "bin": "node_modules/jest/bin/jest.js",
+   "args": ["--coverage=false"],
+   "native_args": ["--listTests", "--roots", "test", "src", "--findRelatedTests"],
+   "install": "npm ci --ignore-scripts",
+   "native_note": "jest.roots=[test] của repo làm `--findRelatedTests` luôn rỗng (src nằm ngoài haste map); native ở đây thêm `--roots test src`.",
+   "covers": "jest 22.4.4 (testRegex test/(.*?/)?.*test.js$) 93 tệp trong test/, TZ của máy (không lặp theo TZ như `npm test`), không coverage.",
+   "include": ["^src/.*\\.js$"],
+   "exclude": ["^src/locale/"],
+   "mutants": 24,
+   "seed": "t2-v1"
+  }
+ ]
+}

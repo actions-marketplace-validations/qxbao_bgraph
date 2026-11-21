@@ -392,6 +392,7 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	run := fs.Bool("run-tests", false, "chạy test để xây/làm mới oracle (chậm); mặc định kiểm lại bgraph trên oracle cache")
 	rebase := fs.Bool("rebaseline", false, "chạy lại baseline 3 lượt")
 	rebuild := fs.Bool("rebuild", false, "chạy lại mọi đột biến kể cả đã có trong oracle")
+	reconf := fs.Bool("reconfirm", false, "xác nhận lại các đột biến killed chưa xác nhận bằng chạy riêng tệp đỏ (2 lượt)")
 	fs.Parse(args)
 	if *out == "" {
 		*out = filepath.Join(*dir, "out")
@@ -408,7 +409,7 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 		sel = strings.Split(*repos, ",")
 	}
 	lg := logger(*out)
-	qr, err := evalkit.RunT2(ctx, evalkit.T2Config{Dir: *dir, Out: *out, Manifest: man, Repos: sel, RunTests: *run, Rebaseline: *rebase, Rebuild: *rebuild, Log: lg})
+	qr, err := evalkit.RunT2(ctx, evalkit.T2Config{Dir: *dir, Out: *out, Manifest: man, Repos: sel, RunTests: *run, Rebaseline: *rebase, Rebuild: *rebuild, Reconfirm: *reconf, Log: lg})
 	if err != nil {
 		return 2, err
 	}

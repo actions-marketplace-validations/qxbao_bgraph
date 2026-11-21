@@ -83,7 +83,9 @@ type QuickConfig struct {
 	Commits   int
 	Jobs      int
 	Checkout  bool
-	Serial    bool // chạy T1 rồi replay thay vì song song
+	Serial    bool   // chạy T1 rồi replay thay vì song song
+	T2Dir     string // thư mục gốc T2; có oracle.jsonl thì kiểm lại T2 trên oracle cache (rỗng = bỏ qua)
+	T2        T2Manifest
 	Log       func(format string, a ...any)
 }
 
@@ -94,7 +96,9 @@ type QuickResult struct {
 	T1Wall     time.Duration
 	ReplayWall time.Duration
 	Wall       time.Duration
-	Violations int // vi phạm T1 + bất biến replay
+	Violations int // vi phạm T1 + T2 + bất biến replay
+	T2         *T2Result
+	T2Wall     time.Duration
 }
 
 // RunQuick chạy T1 (mẫu) và replay, ghi quick.md cùng t1/ và replay/ trong Out.
@@ -122,14 +126,32 @@ func RunQuick(ctx context.Context, cfg QuickConfig) (QuickResult, error) {
 			rpErr = err
 		}
 	}
+	var t2Err error
+	runT2 := func() {
+		if cfg.T2Dir == "" || len(cfg.T2.Repos) == 0 {
+			return
+		}
+		if _, err := os.Stat(filepath.Join(cfg.T2Dir, "oracle.jsonl")); err != nil {
+			return
+		}
+		t := time.Now()
+		var r T2Result
+		r, t2Err = RunT2(ctx, T2Config{Dir: cfg.T2Dir, Out: filepath.Join(cfg.Out, "t2"), Manifest: cfg.T2, Log: cfg.Log})
+		qr.T2, qr.T2Wall = &r, time.Since(t)
+		if err := WriteT2(filepath.Join(cfg.Out, "t2"), r); err != nil && t2Err == nil {
+			t2Err = err
+		}
+	}
 	if cfg.Serial {
 		runT1()
 		runRp()
+		runT2()
 	} else {
 		var wg sync.WaitGroup
-		wg.Add(2)
+		wg.Add(3)
 		go func() { defer wg.Done(); runT1() }()
 		go func() { defer wg.Done(); runRp() }()
+		go func() { defer wg.Done(); runT2() }()
 		wg.Wait()
 	}
 	qr.Wall = time.Since(start)
@@ -141,9 +163,15 @@ func RunQuick(ctx context.Context, cfg QuickConfig) (QuickResult, error) {
 	for _, r := range qr.Replay {
 		qr.Violations += len(r.Violations)
 	}
+	if qr.T2 != nil {
+		qr.Violations += qr.T2.Violations
+	}
 	err := t1Err
 	if err == nil {
 		err = rpErr
+	}
+	if err == nil {
+		err = t2Err
 	}
 	if werr := os.WriteFile(filepath.Join(cfg.Out, "quick.md"), []byte(QuickMarkdown(qr)), 0o644); werr != nil && err == nil {
 		err = werr
@@ -176,6 +204,14 @@ func QuickMarkdown(q QuickResult) string {
 				c = c[:10]
 			}
 			fmt.Fprintf(&b, "- replay %s %s `%s`: %s\n", r.Repo, v.Inv, c, v.Detail)
+		}
+	}
+	if q.T2 != nil {
+		for _, r := range q.T2.Repos {
+			for _, c := range r.Violations {
+				n++
+				fmt.Fprintf(&b, "- T2 %s %s %s:%d (%s) thiếu %v scope=%s nới %v\n", r.Repo.Name, c.Rec.Mutant.ID, c.Rec.Mutant.File, c.Rec.Mutant.Line, c.Rec.Mutant.Op, c.Missed, c.Scope, c.Widenings)
+			}
 		}
 	}
 	if n == 0 {
@@ -260,6 +296,16 @@ func QuickMarkdown(q QuickResult) string {
 	}
 	if len(fbs) > 0 {
 		fmt.Fprintf(&b, "\nTask rơi về worktree: %s\n", strings.Join(fbs, "; "))
+	}
+
+	if q.T2 != nil {
+		fmt.Fprintf(&b, "\n## T2 (kiểm lại trên oracle cache, %s)\n\n| repo | đột biến | giết | sống sót | nới full | vi phạm | native ⊄ bgraph | median sel/units bgraph | native |\n|---|---|---|---|---|---|---|---|---|\n", q.T2Wall.Round(time.Millisecond))
+		for _, r := range q.T2.Repos {
+			fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %d | %.3f | %.3f |\n", r.Repo.Name, len(r.Checks), r.Killed, r.Survived, r.Full, len(r.Violations), len(r.NativeNotSubset), r.MedBgraph, r.MedNative)
+			if r.Error != "" {
+				fmt.Fprintf(&b, "| %s | lỗi: %s |||||||\n", r.Repo.Name, r.Error)
+			}
+		}
 	}
 
 	if len(q.Replay) > 0 {

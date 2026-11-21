@@ -1,0 +1,36 @@
+Tìm thấy bởi T2 (zod@2a343ed, đột biến packages/zod/src/compile.ts: zod-05, zod-15). Cấu hình vitest gốc liệt kê một project là TỆP cấu hình riêng
+(`projects: ["./vitest.compile.config.ts"]`); tệp đó đặt setupFiles = scripts/enable-compile.ts, setup này import src/compile.ts (hiệu ứng toàn cục).
+Setup chạy trước MỌI tệp test của project nên đổi compile.ts phải chọn tệp test của project (ít nhất các test đọc hiệu ứng, ở đây stats.test.ts).
+Thực tế: phạm vi none, không chọn gì. Cùng cây mà đặt setupFiles trực tiếp ở vitest.config.ts gốc thì ĐÚNG (đã thử): lỗi nằm ở chỗ không đọc
+cấu hình của project khai báo bằng đường dẫn tệp trong `projects` (ở zod: vitest.compile.config.ts).
+Chạy thử: chép vào internal/e2e/testdata/fixtures/node/ rồi `go test ./internal/e2e -run Fixtures`.
+-- base/package.json --
+{"name":"root","private":true,"devDependencies":{"vitest":"^4.0.0"}}
+-- base/vitest.config.ts --
+import { defineConfig } from "vitest/config";
+export default defineConfig({ test: { projects: ["packages/*", "./vitest.compile.config.ts"] } });
+-- base/vitest.compile.config.ts --
+import { resolve } from "node:path";
+import { defineConfig } from "vitest/config";
+export default defineConfig({
+  test: {
+    include: ["packages/zod/src/**/*.test.ts"],
+    setupFiles: [resolve(__dirname, "scripts/enable-compile.ts")],
+  },
+});
+-- base/scripts/enable-compile.ts --
+import "../packages/zod/src/compile";
+-- base/packages/zod/package.json --
+{"name":"zod","exports":{"./compile":{"@zod/source":"./src/compile.ts","types":"./compile.d.cts","import":"./compile.js"}}}
+-- base/packages/zod/src/compile.ts --
+(globalThis as any).__compiled = true;
+-- base/packages/zod/src/stats.test.ts --
+import { test, expect } from "vitest";
+test("compile mode wired", () => { expect((globalThis as any).__compiled).toBeDefined(); });
+-- base/packages/zod/src/other.test.ts --
+import { test } from "vitest";
+test("x", () => {});
+-- head/packages/zod/src/compile.ts --
+(globalThis as any).__compiled = false;
+-- want --
+select packages/zod/src/stats.test.ts
