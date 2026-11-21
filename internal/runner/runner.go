@@ -10,6 +10,7 @@
 //   - pytest, django: see python.go (rootdir/config pinned, @argfile for long lists, dotted labels).
 //   - cargo: units are Cargo targets addressed by package (-p) and target flags (--lib, --test, ...); see cargo.go.
 //   - dotnet: units are MSBuild projects, one `dotnet test <project>` each; see dotnet.go.
+//   - maven, gradle: units are modules/projects built by the build tool; see maven.go and gradle.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -87,7 +88,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -95,6 +96,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == "dotnet" {
 			dotnetTests = append(dotnetTests, t) // units are MSBuild projects: dedicated adapter
+			continue
+		}
+		if t.Runner == "maven" || t.Runner == "gradle" {
+			jvmTests = append(jvmTests, t) // units are modules/projects: dedicated adapter (maven.go, gradle.go)
 			continue
 		}
 		if t.Runner == "pytest" || t.Runner == "django" {
@@ -169,6 +174,11 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	}
 	if len(dotnetTests) > 0 {
 		cmds, notes := dotnetCommands(dotnetTests)
+		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(jvmTests) > 0 {
+		cmds, notes := jvmCommands(jvmTests, opt)
 		plan.Commands = append(plan.Commands, cmds...)
 		plan.Notes = append(plan.Notes, notes...)
 	}
