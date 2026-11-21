@@ -20,7 +20,14 @@ type msFile struct {
 	props   []propDef
 	items   []itemDef
 	imports []importDef
+	strs    []strVal // every other attribute value and element text (task parameters, property values...)
 	err     error
+}
+
+// strVal is a string of the file that may name a file or directory the build reads (Copy SourceFiles, Exec Command...).
+type strVal struct {
+	value    string
+	inTarget bool
 }
 
 type propDef struct{ name, value string }
@@ -92,6 +99,15 @@ func parseMSBuild(t tree.Tree, p string) *msFile {
 					hasCond = true
 				}
 			}
+			for _, a := range el.Attr {
+				switch strings.ToLower(a.Name.Local) {
+				case "condition", "include", "update", "remove", "name", "sdk", "label", "version", "project", "xmlns":
+					continue
+				}
+				if v := strings.TrimSpace(a.Value); v != "" && len(stack) > 0 {
+					f.strs = append(f.strs, strVal{v, inAnc("Target")})
+				}
+			}
 			parent := ""
 			if n := len(stack); n > 0 {
 				parent = stack[n-1].name
@@ -110,6 +126,9 @@ func parseMSBuild(t tree.Tree, p string) *msFile {
 					return f
 				}
 				f.props = append(f.props, propDef{name: name, value: strings.TrimSpace(val)})
+				if v := strings.TrimSpace(val); v != "" {
+					f.strs = append(f.strs, strVal{v, inAnc("Target")})
+				}
 			case parent == "ItemGroup":
 				it := itemDef{typ: name, cond: hasCond || condAnc(), inTarget: inAnc("Target")}
 				if inc, ok := attr["include"]; ok {
@@ -126,6 +145,10 @@ func parseMSBuild(t tree.Tree, p string) *msFile {
 				f.items = append(f.items, itemDef{typ: "HintPath", include: strings.TrimSpace(val), cond: condAnc(), inTarget: inAnc("Target")})
 			default:
 				stack = append(stack, frame{name, hasCond})
+			}
+		case xml.CharData:
+			if v := strings.TrimSpace(string(el)); v != "" && len(stack) > 0 {
+				f.strs = append(f.strs, strVal{v, inAnc("Target")})
 			}
 		case xml.EndElement:
 			if n := len(stack); n > 0 {

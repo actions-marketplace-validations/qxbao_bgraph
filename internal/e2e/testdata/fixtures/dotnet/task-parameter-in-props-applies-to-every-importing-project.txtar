@@ -1,0 +1,19 @@
+A path in a task parameter of a Directory.Build.targets is an input of every project below it.
+-- base/tools/t.txt --
+1
+-- base/src/Directory.Build.targets --
+<Project><Target Name="T"><ReadLinesFromFile File="$(MSBuildThisFileDirectory)../tools/t.txt" /></Target></Project>
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/other/C/C.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/tools/t.txt --
+2
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+noselect dotnet:other/C/C.csproj

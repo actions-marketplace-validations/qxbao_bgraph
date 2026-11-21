@@ -52,9 +52,17 @@
 //   - packages.lock.json widens its directory (lock_changed);
 //   - .sln/.slnx/.slnf and .shproj are claimed without widening: the projects they list bring their own files.
 //
-// Known gaps (a build can read files that no declaration names): MSBuild tasks and targets that read files at build time (Exec,
-// Copy, ReadLinesFromFile, inline tasks), test data read through absolute or environment-derived paths, and files only reachable
-// through a property function other than the ones above (those are Unresolved, not silently skipped).
+// # Strings read by tasks
+//
+// A task can read a file that no item declares (Copy SourceFiles, Exec Command, ReadLinesFromFile File...). Like the string literals
+// of a Rust build script, every attribute value and element text of the project and of the props/targets that apply to it (inside
+// <Target> too) is split into words, evaluated with the property substitution above, and, when a word resolves to an existing file, it
+// is a dependency of the project; an existing directory (named with a path separator) becomes a `dir/**` pattern edge and a path with
+// wildcards a pattern edge. Words that are not path-like are ignored.
+//
+// Known gaps: such a string that cannot be evaluated (undefined property, item list or metadata reference, unsupported property
+// function) is ignored; a path assembled at build time by an inline task or a script; and test data reached through absolute or
+// environment-derived paths.
 package dotnet
 
 import (
@@ -63,6 +71,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode"
 
 	"github.com/qxbao/bgraph/internal/classify"
 	"github.com/qxbao/bgraph/internal/eco"
@@ -79,7 +88,7 @@ const Name = "dotnet"
 const Runner = "dotnet"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "dotnet-1"
+const AnalyzerVersion = "dotnet-2"
 
 // Eco is the .NET ecosystem.
 type Eco struct{}
@@ -396,8 +405,79 @@ func (b *builder) analyzeProject(p string, slnDirs []string) {
 		}
 	}
 	for _, fp := range c.files {
-		c.items(b.parse(fp))
+		f := b.parse(fp)
+		c.items(f)
+		c.literals(f)
 	}
+}
+
+// literals turns every string of f that, after property substitution, names an existing file or directory (or a wildcard path) into a
+// dependency of the project, the way a Rust build script's string literals are: a task (Copy, Exec, ReadLinesFromFile...) can read
+// it at build time even though no item declares it. Strings that cannot be evaluated are ignored (documented gap).
+func (c *closure) literals(f *msFile) {
+	bases := []string{path.Dir(c.proj)}
+	if f.dir != bases[0] {
+		bases = append(bases, f.dir)
+	}
+	seen := map[string]bool{}
+	for _, sv := range f.strs {
+		if seen[sv.value] || strings.Contains(sv.value, "@(") || strings.Contains(sv.value, "%(") {
+			continue
+		}
+		seen[sv.value] = true
+		c.env.lenient = false
+		vals, err := c.env.eval(sv.value, f.path, 0)
+		if err != nil {
+			continue
+		}
+		for _, v := range vals {
+			for _, tok := range pathTokens(v) {
+				for _, tg := range toTarget(tok, bases) {
+					c.literal(tg, tok)
+				}
+			}
+		}
+	}
+}
+
+func (c *closure) literal(tg target, tok string) {
+	b := c.b
+	rel := tg.rel
+	if tg.outside || rel == "." || rel == ".." {
+		return
+	}
+	spec := "path literal " + tok
+	switch {
+	case hasWildcard(rel):
+		if strings.Contains(rel, "/") && strings.Trim(rel, "*?/.") != "" {
+			b.edge(c.node, globOf(rel), model.EdgePattern, spec)
+		}
+	case b.t.Has(rel):
+		b.edge(c.node, rel, model.EdgeInclude, spec)
+		b.role(rel, roleOf(rel))
+	case b.t.IsDir(rel) && strings.ContainsAny(tok, "/\\"):
+		b.edge(c.node, globOf(rel)+"/**", model.EdgePattern, spec)
+	}
+}
+
+// pathTokens splits an evaluated string into the candidate paths in it: separated by ';' and whitespace, with quotes (and a leading
+// option value such as -File=x) stripped, so that `powershell -File "scripts/x.ps1" a` yields scripts/x.ps1.
+func pathTokens(v string) []string {
+	var out []string
+	isSep := func(r rune) bool { return unicode.IsSpace(r) }
+	for _, part := range strings.Split(v, ";") {
+		for _, w := range strings.FieldsFunc(part, isSep) {
+			w = strings.Trim(w, "\"'`")
+			if w == "" {
+				continue
+			}
+			out = append(out, w)
+			if k := strings.LastIndex(w, "="); k >= 0 && k+1 < len(w) {
+				out = append(out, strings.Trim(w[k+1:], "\"'`"))
+			}
+		}
+	}
+	return out
 }
 
 // resolveImport tries to resolve one import; an error means "not yet" (an undefined property may be defined by a file added later).

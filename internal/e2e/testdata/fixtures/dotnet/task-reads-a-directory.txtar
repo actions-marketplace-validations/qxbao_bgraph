@@ -1,0 +1,24 @@
+A directory named in a task parameter depends on everything below it.
+-- base/fixtures/a.txt --
+1
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Target Name="Pre" BeforeTargets="Build">
+    <Exec Command="tool ../../fixtures" />
+  </Target>
+</Project>
+-- base/src/A/a.cs --
+class A {}
+-- base/src/C/C.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/C/c.cs --
+class C {}
+-- head/fixtures/deep/new.txt --
+2
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+noselect dotnet:src/C/C.csproj

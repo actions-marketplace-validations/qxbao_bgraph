@@ -1,0 +1,29 @@
+A Copy task reads a file under another project's directory: the file is an input of the reading project even though no item or reference declares it.
+-- base/src/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/B/data/x.json --
+{}
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Target Name="Pre" BeforeTargets="Build">
+    <Copy SourceFiles="../B/data/x.json" DestinationFolder="$(OutDir)" />
+  </Target>
+</Project>
+-- base/src/A/a.cs --
+class A {}
+-- base/src/C/C.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/C/c.cs --
+class C {}
+-- head/src/B/data/x.json --
+{"a":1}
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+select dotnet:src/B/B.csproj
+noselect dotnet:src/C/C.csproj

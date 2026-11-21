@@ -1,0 +1,25 @@
+A script named in an Exec Command (after property substitution) is an input of the project, even outside every project.
+-- base/scripts/gen.ps1 --
+echo a
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Target Name="Pre" BeforeTargets="Build">
+    <Exec Command="powershell -File &quot;$(MSBuildProjectDirectory)/../../scripts/gen.ps1&quot; -x 1" />
+  </Target>
+</Project>
+-- base/src/A/a.cs --
+class A {}
+-- base/src/C/C.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/C/c.cs --
+class C {}
+-- head/scripts/gen.ps1 --
+echo b
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+noselect dotnet:src/C/C.csproj
+nowiden unknown_file
