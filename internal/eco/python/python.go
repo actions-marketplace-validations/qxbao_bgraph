@@ -50,7 +50,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "python-2"
+const AnalyzerVersion = "python-3"
 
 // Eco is the Python ecosystem.
 type Eco struct {
@@ -173,6 +173,25 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 			}
 		}
 	}
+	// A setup.py / setup.cfg / pyproject.toml inside a package (a directory with __init__.py) of an enclosing project is a
+	// nested build configuration (numpy.distutils `configuration()` per subpackage in old scikit-learn, scipy...), not a
+	// separate project: the package belongs to the enclosing project. Treating it as a project would shrink every
+	// project-scoped widening and the pytest rootdir to the subpackage.
+	for d := range b.markers {
+		if d == "." || !b.fileSet[d+"/__init__.py"] || t.Has(d+"/pytest.ini") || t.Has(d+"/.pytest.ini") ||
+			t.Has(d+"/pytest.toml") || t.Has(d+"/.pytest.toml") || loadPytestAt(t, d) != nil {
+			continue // a pytest config file there is a real rootdir for the tests below it
+		}
+		for anc := path.Dir(d); ; anc = path.Dir(anc) {
+			if b.markers[anc] {
+				delete(b.markers, d)
+				break
+			}
+			if anc == "." {
+				break
+			}
+		}
+	}
 	b.declared = loadDeclared(t, meta)
 
 	// Projects.
@@ -280,7 +299,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		b.setRole(p, role)
 		if fi.scan.Uncertain {
 			a.Unresolved = append(a.Unresolved, model.Unresolved{File: p, Spec: "*", Class: model.UnresolvedUncertainScan,
-				ScopeTier: model.TierModule, ScopeDir: proj, Detail: fi.scan.UncertainReason, TriggerGlobs: moduleTriggers})
+				ScopeTier: model.TierModule, ScopeDir: ".", Detail: fi.scan.UncertainReason, TriggerGlobs: moduleTriggers})
 		}
 		for _, im := range fi.scan.Imports {
 			b.addImport(p, proj, im)
@@ -828,6 +847,9 @@ func (b *builder) dynSite(from, spec, proj string, line int, sysPath bool, detai
 		}
 		return
 	}
+	// Repo scope, not the project: a name-based import can load any module on sys.path, and in-repo modules of other
+	// projects (or of a parent project, when the "project" is a nested build config) are on it in a dev environment.
+	_ = proj
 	b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: from, Spec: spec, Class: model.UnresolvedDynamic, Line: line,
-		ScopeTier: model.TierModule, ScopeDir: proj, Detail: detail, TriggerGlobs: moduleTriggers})
+		ScopeTier: model.TierModule, ScopeDir: ".", Detail: detail, TriggerGlobs: moduleTriggers})
 }

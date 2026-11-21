@@ -1,0 +1,32 @@
+Old scikit-learn style: every subpackage has a numpy.distutils setup.py. Those are build configs inside a package of the
+enclosing project, not projects: a name-based import in pkg/utils/discovery.py (walk_packages over the whole package) must
+still fire when a module of another subpackage changes.
+-- base/setup.py --
+from setuptools import setup
+setup(name="pkg")
+-- base/pkg/__init__.py --
+-- base/pkg/utils/__init__.py --
+-- base/pkg/utils/setup.py --
+def configuration(parent_package="", top_path=None):
+    pass
+-- base/pkg/utils/discovery.py --
+import importlib
+def all_estimators(names):
+    return [importlib.import_module(n) for n in names]
+-- base/pkg/mixture/__init__.py --
+from .base import X
+-- base/pkg/mixture/base.py --
+X = 1
+-- base/pkg/tests/__init__.py --
+-- base/pkg/tests/test_common.py --
+from pkg.utils.discovery import all_estimators
+-- base/pkg/tests/test_other.py --
+X = 2
+-- base/pkg/tests/test_mixture.py --
+import pkg.mixture
+-- head/pkg/mixture/base.py --
+X = 2
+-- want --
+select pkg/tests/test_common.py
+select pkg/tests/test_mixture.py
+noselect pkg/tests/test_other.py
