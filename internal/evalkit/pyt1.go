@@ -289,11 +289,12 @@ type PyWide struct {
 	SelNoUnres         int               `json:"sel_no_unresolved"`     // ... when every Unresolved-import seed is ignored
 	SelNoWiden         int               `json:"sel_no_scope_widening"` // ... when scope widenings and whole units are ignored too (graph + unresolved only)
 	Whole              int               `json:"whole_units"`
-	OnlyBy             map[string]int    `json:"only_by,omitempty"`   // units selected only because of one source class
-	DynFiles           map[string]string `json:"dyn_files,omitempty"` // files seeded by a dynamic_import widening -> causes ("sys_path,nonconstant")
-	SelNoSysPath       int               `json:"sel_no_sys_path"`     // units that remain when seeds whose only cause is a sys.path change are ignored
-	SelNoNonconst      int               `json:"sel_no_nonconst"`     // ... when seeds whose only cause is a non-constant module name are ignored
-	ProjectDynamic     bool              `json:"project_dynamic"`     // some dynamic_import widening fired (a project-scope Unresolved seeded a file)
+	OnlyBy             map[string]int    `json:"only_by,omitempty"`    // units selected only because of one source class
+	DynFiles           map[string]string `json:"dyn_files,omitempty"`  // files seeded by a dynamic_import widening -> causes ("sys_path,nonconstant")
+	SeedUnits          map[string]int    `json:"seed_units,omitempty"` // Unresolved-import seed file -> selected units with a reason chain from it
+	SelNoSysPath       int               `json:"sel_no_sys_path"`      // units that remain when seeds whose only cause is a sys.path change are ignored
+	SelNoNonconst      int               `json:"sel_no_nonconst"`      // ... when seeds whose only cause is a non-constant module name are ignored
+	ProjectDynamic     bool              `json:"project_dynamic"`      // some dynamic_import widening fired (a project-scope Unresolved seeded a file)
 	ProjectUnresolved  bool              `json:"project_unresolved"`
 }
 
@@ -330,7 +331,7 @@ func pyIsUnres(s string) bool {
 }
 
 func pySelStats(sel model.Selection) *PyWide {
-	w := &PyWide{WideCount: map[string]int{}, DynKinds: map[string]int{}, OnlyBy: map[string]int{}, DynFiles: map[string]string{}}
+	w := &PyWide{WideCount: map[string]int{}, DynKinds: map[string]int{}, OnlyBy: map[string]int{}, DynFiles: map[string]string{}, SeedUnits: map[string]int{}}
 	causes := map[string]map[string]bool{} // seeded file -> causes
 	for _, x := range sel.Widening {
 		w.WideCount[x.Reason+"@"+string(x.Tier)]++
@@ -377,6 +378,13 @@ func pySelStats(sel model.Selection) *PyWide {
 			src[pySource(r)] = true
 		}
 		var noDyn, noUnres, noWiden, noSys, noNon bool
+		seedSeen := map[string]bool{}
+		for _, r := range t.Reasons {
+			if f := pySeedFile(r); f != "" && !seedSeen[f] {
+				seedSeen[f] = true
+				w.SeedUnits[f]++
+			}
+		}
 		for _, r := range t.Reasons {
 			s := pySource(r)
 			if s != "dynamic" {

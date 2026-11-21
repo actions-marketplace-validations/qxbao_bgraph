@@ -251,7 +251,7 @@ func breakdown(md *bytes.Buffer, title string, rs []T1Result) {
 func topDynFiles(md *bytes.Buffer, rs []T1Result) {
 	type fc struct {
 		f, cause string
-		n        int
+		n, units int
 	}
 	cnt := map[string]*fc{}
 	var seeds []float64
@@ -262,6 +262,7 @@ func topDynFiles(md *bytes.Buffer, rs []T1Result) {
 				cnt[f] = &fc{f: f, cause: c}
 			}
 			cnt[f].n++
+			cnt[f].units += r.PyW.SeedUnits[f]
 		}
 	}
 	var l []*fc
@@ -269,17 +270,17 @@ func topDynFiles(md *bytes.Buffer, rs []T1Result) {
 		l = append(l, v)
 	}
 	sort.Slice(l, func(i, j int) bool {
-		if l[i].n != l[j].n {
-			return l[i].n > l[j].n
+		if l[i].units != l[j].units {
+			return l[i].units > l[j].units
 		}
 		return l[i].f < l[j].f
 	})
-	fmt.Fprintf(md, "Files seeded by dynamic_import per task: median %.0f, p90 %.0f, max %.0f; distinct files %d. Top seeded files (tasks, cause):\n\n", Percentile(seeds, 50), Percentile(seeds, 90), Percentile(seeds, 100), len(l))
+	fmt.Fprintf(md, "Files seeded by dynamic_import per task: median %.0f, p90 %.0f, max %.0f; distinct files %d. Top seeded files by selected units reached through them (units summed over tasks; tasks; cause):\n\n", Percentile(seeds, 50), Percentile(seeds, 90), Percentile(seeds, 100), len(l))
 	for i, v := range l {
 		if i >= 15 {
 			break
 		}
-		fmt.Fprintf(md, "- %s: %d tasks (%s)\n", v.f, v.n, v.cause)
+		fmt.Fprintf(md, "- %s: %d units over %d tasks (%s)\n", v.f, v.units, v.n, v.cause)
 	}
 	fmt.Fprintln(md)
 }
