@@ -1,0 +1,14 @@
+Kiểu prettier: tests/format/foo/*.js là dữ liệu mà jsfmt.spec.js đọc cả thư mục qua import.meta (không import). Đổi tệp dữ liệu phải chọn spec (qua nới unreferenced_file), không được im lặng chọn rỗng.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/tests/format/foo/jsfmt.spec.js --
+runFormatTest(import.meta, ["babel"])
+-- base/tests/format/foo/arrow.js --
+const a = (x) => x
+-- base/src/index.js --
+module.exports = 1
+-- head/tests/format/foo/arrow.js --
+const a = x => x
+-- want --
+select tests/format/foo/jsfmt.spec.js
+widen unreferenced_file

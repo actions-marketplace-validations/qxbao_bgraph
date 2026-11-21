@@ -1,0 +1,18 @@
+Import bare chưa khai báo (phantom dep "tslib"): đổi tệp không liên quan không được chọn test của importer.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.ts --
+import 'tslib'
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- base/src/b.ts --
+export const b = 1
+-- base/src/b.test.ts --
+import { b } from './b'
+-- head/src/b.ts --
+export const b = 2
+-- want --
+select src/b.test.ts
+noselect src/a.test.ts
+scope graph

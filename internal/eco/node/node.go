@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-2"
+const AnalyzerVersion = "node-5"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {
@@ -147,7 +147,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		if proj == "" {
 			continue // JS ngoài mọi package.json: không thuộc hệ sinh thái này (bộ chọn coi là tệp lạ)
 		}
-		if isTestFile(p) {
+		if isTestFile(p, detectRunner(pkgs, proj)) {
 			a.Roles[p] = model.RoleTest
 			tests = append(tests, p)
 		} else if _, ok := a.Roles[p]; !ok {
@@ -357,6 +357,22 @@ func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from,
 		}
 		unres(model.UnresolvedUnknown, res.PackageDir, model.ReasonGeneratedOutput+": "+res.Detail)
 	default: // unknown
+		if strings.HasPrefix(res.Detail, "undeclared package") && isBareSpec(imp.Spec) {
+			// Bare specifier không phân giải được chỉ có thể trỏ vào repo qua một cơ chế thư mục gốc chưa mô hình
+			// (NODE_PATH, moduleDirectories, babel module-resolver...): tệp đích khi đó có đường dẫn kết thúc bằng spec,
+			// spec.<đuôi> hoặc nằm dưới spec/. Cạnh glob tới các đường dẫn đó giữ fail-closed mà không nới cả dự án.
+			// Nút ảo theo spec để nhiều importer dùng chung một bộ pattern.
+			v := bareNode(imp.Spec)
+			a.Edges = append(a.Edges, model.Edge{From: from, To: v, Kind: model.EdgeImport, Line: imp.Line, Spec: imp.Spec, Provenance: model.ProvScan})
+			esc := escapeGlob(imp.Spec)
+			for _, g := range []string{"**/" + esc, "**/" + esc + ".*", "**/" + esc + "/**"} {
+				a.Edges = append(a.Edges, model.Edge{From: v, To: g, Kind: model.EdgePattern, Spec: imp.Spec, Provenance: model.ProvScan})
+			}
+			// Chỉ để báo cáo (bgraph unresolved): ScopeTier none → bộ chọn không gieo hạt.
+			a.Unresolved = append(a.Unresolved, model.Unresolved{File: from, Spec: imp.Spec, Class: model.UnresolvedUnknown, Line: imp.Line,
+				ScopeTier: model.TierNone, ScopeDir: "", Detail: res.Detail + " (theo dõi qua glob **/" + imp.Spec + ")"})
+			return
+		}
 		scope := proj
 		if strings.HasPrefix(imp.Spec, "./") || strings.HasPrefix(imp.Spec, "../") {
 			d := path.Join(path.Dir(from), path.Dir(imp.Spec))
@@ -421,3 +437,19 @@ func detectRunner(pkgs map[string]*pkgInfo, dir string) string {
 	}
 	return "node-test"
 }
+
+// isBareSpec: tên package (có thể kèm subpath), không tương đối/tuyệt đối/#/URL.
+func isBareSpec(s string) bool {
+	if s == "" || strings.HasPrefix(s, ".") || strings.HasPrefix(s, "/") || strings.HasPrefix(s, "#") || strings.Contains(s, ":") {
+		return false
+	}
+	for _, seg := range strings.Split(s, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+	}
+	return true
+}
+
+// bareNode là nút ảo của một bare specifier chưa khai báo (không trùng đường dẫn tệp nào của repo).
+func bareNode(spec string) string { return "<bare:" + spec + ">" }

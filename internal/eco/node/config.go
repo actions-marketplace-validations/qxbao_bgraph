@@ -21,8 +21,10 @@ type testConfig struct {
 }
 
 // resolutionKeys là khoá cấu hình làm đổi cách phân giải import hoặc tập test; gặp mà không đọc được thì nới.
+// Không có ở đây (bỏ qua vẫn là tập cha vì resolver lấy hợp mọi ứng viên): modulePathIgnorePatterns (chỉ ẩn bớt đường
+// dẫn khỏi bộ nạp), dedupe (chỉ gộp bản sao gói ngoài).
 var resolutionKeys = []string{"moduleNameMapper", "alias", "modulePaths", "moduleDirectories", "resolver", "roots", "rootDir",
-	"modulePathIgnorePatterns", "haste", "projects", "workspace", "dedupe", "conditions", "mainFields", "extensions",
+	"haste", "projects", "workspace", "conditions", "mainFields", "extensions",
 	"moduleFileExtensions", "customExportConditions", "testEnvironmentOptions"}
 
 var strLit = regexp.MustCompile(`'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|` + "`([^`$\\\\]*)`")

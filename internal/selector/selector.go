@@ -178,6 +178,19 @@ func Select(ctx context.Context, in Input) model.Selection {
 		// 4. Nút đồ thị: đi ngược (kể cả khi đã nới vì cấu hình: phép hợp không hại).
 		if g.IsNode(p) {
 			seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
+			// Tệp mã/dữ liệu không ai phụ thuộc: đi ngược không tới test nào, nhưng test vẫn có thể dùng nó ngoài đồ thị
+			// (đọc qua fs, chạy qua child_process). Không biết ai → nới tới dự án (mục 4.3 bước 2, 6.7).
+			if r := g.Role(p); !claimed && r != model.RoleTest && r != model.RoleConfig && r != model.RoleManifest && r != model.RoleLock &&
+				!g.HasDependents(p) {
+				if pr, ok := eco.NearestProject(projects, p); ok {
+					s.widen(model.Widening{Tier: model.TierModule, Reason: model.ReasonUnreferenced, Path: p, Scope: pr.Dir,
+						Detail:  "không tệp nào trong đồ thị phụ thuộc vào tệp này; test có thể đọc/chạy nó ngoài đồ thị",
+						Suggest: suggestRule(p)})
+				} else {
+					s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonUnreferenced, Path: p,
+						Detail: "không tệp nào phụ thuộc và ngoài mọi dự án", Suggest: suggestRule(p)})
+				}
+			}
 			continue
 		}
 		if claimed || classify.Harmless(p) || classify.Doc(p) {
@@ -195,6 +208,9 @@ func Select(ctx context.Context, in Input) model.Selection {
 
 	// Import chưa phân giải: tệp đổi nằm trong phạm vi của nó → tệp chứa import coi như bị ảnh hưởng.
 	for _, u := range g.Unresolved {
+		if u.ScopeTier == model.TierNone {
+			continue // chỉ để báo cáo: hệ sinh thái đã mã hoá phụ thuộc bằng cạnh (glob)
+		}
 		hit := ""
 		for _, c := range changed {
 			if eco.Within(c.Path, u.ScopeDir) {

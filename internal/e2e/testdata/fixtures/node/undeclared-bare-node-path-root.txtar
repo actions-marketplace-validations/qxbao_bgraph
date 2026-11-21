@@ -1,0 +1,18 @@
+Import bare chưa khai báo ("shared/util") có thể trỏ vào repo qua NODE_PATH/moduleDirectories: đổi lib/shared/util.js phải chọn test; đổi tệp khác không được chọn nó.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/src/a.js --
+module.exports = require('shared/util')
+-- base/src/a.test.js --
+require('./a')
+-- base/src/b.test.js --
+require('./b')
+-- base/src/b.js --
+module.exports = 1
+-- base/lib/shared/util.js --
+module.exports = 1
+-- head/lib/shared/util.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js

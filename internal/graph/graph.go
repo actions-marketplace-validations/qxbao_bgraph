@@ -4,6 +4,7 @@ package graph
 
 import (
 	"slices"
+	"strings"
 
 	"bgraph/internal/eco"
 	"bgraph/internal/glob"
@@ -17,8 +18,10 @@ type patternEdge struct {
 
 // Graph là đồ thị ngược: với mỗi tệp To, các cạnh From→To.
 type Graph struct {
-	rev        map[string][]model.Edge
-	patterns   []patternEdge
+	rev      map[string][]model.Edge
+	patterns []patternEdge
+	// byPrefix: chỉ số pattern theo tiền tố tĩnh (thư mục) của glob; "" là pattern không có tiền tố (khớp mọi nơi).
+	byPrefix   map[string][]int
 	badPattern []model.Edge // glob không biên dịch được: bộ chọn nới
 	roles      map[string]model.Role
 	Unresolved []model.Unresolved
@@ -55,6 +58,11 @@ func Build(as ...*eco.Analysis) *Graph {
 					g.badPattern = append(g.badPattern, e)
 					continue
 				}
+				if g.byPrefix == nil {
+					g.byPrefix = map[string][]int{}
+				}
+				pre := pat.StaticPrefix()
+				g.byPrefix[pre] = append(g.byPrefix[pre], len(g.patterns))
 				g.patterns = append(g.patterns, patternEdge{e, pat})
 				continue
 			}
@@ -119,12 +127,39 @@ func (g *Graph) HasDependents(p string) bool {
 	if len(g.rev[p]) > 0 {
 		return true
 	}
-	for _, pe := range g.patterns {
+	found := false
+	g.candidates(p, func(pe patternEdge) bool {
 		if pe.edge.From != p && pe.pat.Match(p) {
-			return true
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
+// candidates gọi f với mọi pattern có thể khớp p: những pattern có tiền tố tĩnh là "" hoặc một thư mục tổ tiên của p
+// (glob chỉ khớp đường dẫn nằm dưới tiền tố tĩnh của nó). f trả false để dừng.
+func (g *Graph) candidates(p string, f func(patternEdge) bool) {
+	if len(g.byPrefix) == 0 {
+		return
+	}
+	for d := p; ; {
+		i := strings.LastIndexByte(d, '/')
+		if i < 0 {
+			d = ""
+		} else {
+			d = d[:i]
+		}
+		for _, idx := range g.byPrefix[d] {
+			if !f(g.patterns[idx]) {
+				return
+			}
+		}
+		if d == "" {
+			return
 		}
 	}
-	return false
 }
 
 // Step là một bước trên đường đi ngược: tệp đạt được qua cạnh Edge từ tệp Via (Via rỗng: hạt giống).
@@ -166,16 +201,20 @@ func (g *Graph) Walk(seeds []Seed) Reach {
 			r[e.From] = Step{Via: cur, Edge: e}
 			queue = append(queue, e.From)
 		}
-		for _, pe := range g.patterns {
-			if pe.edge.From == cur || !pe.pat.Match(cur) {
-				continue
+		g.candidates(cur, func(pe patternEdge) bool {
+			if pe.edge.From == cur {
+				return true
 			}
 			if _, ok := r[pe.edge.From]; ok {
-				continue
+				return true
+			}
+			if !pe.pat.Match(cur) {
+				return true
 			}
 			r[pe.edge.From] = Step{Via: cur, Edge: pe.edge}
 			queue = append(queue, pe.edge.From)
-		}
+			return true
+		})
 	}
 	return r
 }

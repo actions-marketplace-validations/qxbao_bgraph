@@ -1,14 +1,16 @@
-Import gói trần không khai báo: nới unknown_import và chọn test của tệp import khi có đổi trong dự án.
+Import gói trần không khai báo ('ghost-package'): theo dõi qua glob **/ghost-package{,.*,/**}. Tệp vendor/ghost-package/index.js đổi → chọn test import nó; tệp khác đổi → không chọn.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --
 import x from 'ghost-package'
 -- base/src/b.test.ts --
-export {}
+import { o } from './other'
 -- base/src/other.ts --
 export const o = 1
--- head/src/other.ts --
-export const o = 2
+-- base/vendor/ghost-package/index.js --
+module.exports = 1
+-- head/vendor/ghost-package/index.js --
+module.exports = 2
 -- want --
-widen unknown_import
 select src/a.test.ts
+noselect src/b.test.ts

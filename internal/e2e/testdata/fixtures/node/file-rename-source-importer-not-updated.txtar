@@ -12,4 +12,5 @@ export {}
 export const v = 1
 -- want --
 select src/a.test.ts
-noselect src/b.test.ts
+# new.ts không ai import: nới tới dự án (test có thể đọc nó ngoài đồ thị)
+widen unreferenced_file

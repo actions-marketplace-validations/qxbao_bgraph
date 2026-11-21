@@ -1,0 +1,14 @@
+bin/cli.js không ai import; test chạy nó qua child_process bằng đường dẫn ghép. Đổi bin/cli.js phải chọn test đó.
+-- base/package.json --
+{"name":"app","bin":{"app":"bin/cli.js"},"devDependencies":{"vitest":"^5.0.0"}}
+-- base/bin/cli.js --
+console.log('hi')
+-- base/test/cli.test.js --
+import { execFileSync } from 'node:child_process'
+import { join } from 'node:path'
+execFileSync('node', [join(__dirname, '..', 'bin', 'cli' + '.js')])
+-- head/bin/cli.js --
+console.log('hello')
+-- want --
+select test/cli.test.js
+widen unreferenced_file

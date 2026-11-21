@@ -28,9 +28,11 @@ func inNodeModules(p string) bool {
 	return p == "node_modules" || strings.HasPrefix(p, "node_modules/") || strings.Contains(p, "/node_modules/")
 }
 
-// isTestFile: hợp các mẫu mặc định của Jest, Vitest, Playwright, node:test, Mocha (tập cha: chọn thừa một helper là
-// chạy thừa, không sót). Runner cụ thể lọc lại ở adapter.
-func isTestFile(p string) bool {
+// isTestFile: mẫu tệp test mặc định theo runner. Tên *.test.* / *.spec.* / __tests__ là test với mọi runner. Luật
+// "mọi .js dưới test/ hoặc tests/" chỉ đúng với node:test, Mocha, AVA: với Jest/Vitest/Playwright, tệp trong test/
+// không theo mẫu tên là helper hoặc DỮ LIỆU (fixture mà spec đọc qua fs) — nhận nhầm là test thì runner chạy dữ liệu
+// như test, còn spec thật không được chọn khi dữ liệu đổi.
+func isTestFile(p, runner string) bool {
 	if !isJS(p) || strings.HasSuffix(p, ".d.ts") || strings.HasSuffix(p, ".d.mts") || strings.HasSuffix(p, ".d.cts") {
 		return false
 	}
@@ -50,7 +52,8 @@ func isTestFile(p string) bool {
 		return true // node:test: test.js, test-*.js
 	}
 	// node:test / Mocha: mọi tệp .js/.cjs/.mjs dưới thư mục test/ (Mocha mặc định ./test/*.spec.js, node --test test/**).
-	if strings.Contains("/"+path.Dir(p)+"/", "/test/") || strings.Contains("/"+path.Dir(p)+"/", "/tests/") {
+	dirRule := runner == "node-test" || runner == "mocha" || runner == "ava"
+	if dirRule && (strings.Contains("/"+path.Dir(p)+"/", "/test/") || strings.Contains("/"+path.Dir(p)+"/", "/tests/")) {
 		return !isHelperName(stem)
 	}
 	return false

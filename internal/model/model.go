@@ -53,6 +53,9 @@ const (
 	ReasonCaseMismatch    = "case_mismatch"
 	ReasonUserRule        = "user_rule"
 	ReasonUnknownFile     = "unknown_file" // tệp không thuộc hệ sinh thái nào và không ai tham chiếu
+	// tệp mã/dữ liệu của một hệ sinh thái mà không ai trong đồ thị phụ thuộc vào (fixture test đọc qua fs, script/bin
+	// test chạy qua child_process, điểm vào): không biết ai dùng → nới tới dự án.
+	ReasonUnreferenced    = "unreferenced_file"
 	ReasonUnsupported     = "unsupported_language"
 	ReasonGeneratedOutput = "generated_output" // import tới đầu ra bị ignore
 	ReasonFrameworkMagic  = "framework_magic"  // Next file routing, auto-import...

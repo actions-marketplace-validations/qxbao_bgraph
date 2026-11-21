@@ -9,6 +9,8 @@ const l = require('./loader')
 module.exports = 0
 -- base/src/unrelated.js --
 module.exports = 1
+-- base/src/c.js --
+module.exports = require('./unrelated')
 -- head/src/unrelated.js --
 module.exports = 2
 -- want --
