@@ -280,18 +280,21 @@ func pyDiagnose(ctx context.Context, dir, p string, info *PyT1Info) {
 // Unresolved imports whose scope (the project) contained a changed file; "widen X (reason)" is a module/package widening;
 // "config_is_code" is a whole-project unit.
 type PyWide struct {
-	Dyn, Unk, Amb, Unc int            `json:"-"`
-	WideCount          map[string]int `json:"widenings,omitempty"` // "reason@tier" -> widening count (not capped)
-	DynKinds           map[string]int `json:"dyn_kinds,omitempty"` // dynamic_import widenings by cause (sys_path, nonconstant, static_prefix)
-	Sel                int            `json:"selected"`
-	SelGraph           int            `json:"sel_graph"`             // units with at least one graph-proven ("changed" seed) reason
-	SelNoDyn           int            `json:"sel_no_dynamic"`        // units that remain when dynamic_import seeds are ignored
-	SelNoUnres         int            `json:"sel_no_unresolved"`     // ... when every Unresolved-import seed is ignored
-	SelNoWiden         int            `json:"sel_no_scope_widening"` // ... when scope widenings and whole units are ignored too (graph + unresolved only)
-	Whole              int            `json:"whole_units"`
-	OnlyBy             map[string]int `json:"only_by,omitempty"` // units selected only because of one source class
-	ProjectDynamic     bool           `json:"project_dynamic"`   // some dynamic_import widening fired (a project-scope Unresolved seeded a file)
-	ProjectUnresolved  bool           `json:"project_unresolved"`
+	Dyn, Unk, Amb, Unc int               `json:"-"`
+	WideCount          map[string]int    `json:"widenings,omitempty"` // "reason@tier" -> widening count (not capped)
+	DynKinds           map[string]int    `json:"dyn_kinds,omitempty"` // dynamic_import widenings by cause (sys_path, nonconstant, static_prefix)
+	Sel                int               `json:"selected"`
+	SelGraph           int               `json:"sel_graph"`             // units with at least one graph-proven ("changed" seed) reason
+	SelNoDyn           int               `json:"sel_no_dynamic"`        // units that remain when dynamic_import seeds are ignored
+	SelNoUnres         int               `json:"sel_no_unresolved"`     // ... when every Unresolved-import seed is ignored
+	SelNoWiden         int               `json:"sel_no_scope_widening"` // ... when scope widenings and whole units are ignored too (graph + unresolved only)
+	Whole              int               `json:"whole_units"`
+	OnlyBy             map[string]int    `json:"only_by,omitempty"`   // units selected only because of one source class
+	DynFiles           map[string]string `json:"dyn_files,omitempty"` // files seeded by a dynamic_import widening -> causes ("sys_path,nonconstant")
+	SelNoSysPath       int               `json:"sel_no_sys_path"`     // units that remain when seeds whose only cause is a sys.path change are ignored
+	SelNoNonconst      int               `json:"sel_no_nonconst"`     // ... when seeds whose only cause is a non-constant module name are ignored
+	ProjectDynamic     bool              `json:"project_dynamic"`     // some dynamic_import widening fired (a project-scope Unresolved seeded a file)
+	ProjectUnresolved  bool              `json:"project_unresolved"`
 }
 
 var pyWidenReason = regexp.MustCompile(`^widen .* \((\w+)\) due to `)
@@ -327,7 +330,8 @@ func pyIsUnres(s string) bool {
 }
 
 func pySelStats(sel model.Selection) *PyWide {
-	w := &PyWide{WideCount: map[string]int{}, DynKinds: map[string]int{}, OnlyBy: map[string]int{}}
+	w := &PyWide{WideCount: map[string]int{}, DynKinds: map[string]int{}, OnlyBy: map[string]int{}, DynFiles: map[string]string{}}
+	causes := map[string]map[string]bool{} // seeded file -> causes
 	for _, x := range sel.Widening {
 		w.WideCount[x.Reason+"@"+string(x.Tier)]++
 		switch x.Reason {
@@ -336,10 +340,13 @@ func pySelStats(sel model.Selection) *PyWide {
 			switch {
 			case strings.Contains(x.Detail, `"sys.path"`):
 				w.DynKinds["sys_path"]++
+				pyAddCause(causes, x.Path, "sys_path")
 			case strings.Contains(x.Detail, "static prefix"):
 				w.DynKinds["static_prefix"]++
+				pyAddCause(causes, x.Path, "static_prefix")
 			default:
 				w.DynKinds["nonconstant"]++
+				pyAddCause(causes, x.Path, "nonconstant")
 			}
 		case model.ReasonUnknownImport:
 			w.Unk++
@@ -349,6 +356,15 @@ func pySelStats(sel model.Selection) *PyWide {
 			w.Unc++
 		}
 	}
+	for f, cs := range causes {
+		var l []string
+		for c := range cs {
+			l = append(l, c)
+		}
+		sort.Strings(l)
+		w.DynFiles[f] = strings.Join(l, ",")
+	}
+	only := func(f, c string) bool { cs := causes[f]; return len(cs) == 1 && cs[c] }
 	w.ProjectDynamic = w.Dyn > 0
 	w.ProjectUnresolved = w.Dyn+w.Unk+w.Amb+w.Unc > 0
 	w.Sel = len(sel.Tests)
@@ -360,7 +376,27 @@ func pySelStats(sel model.Selection) *PyWide {
 		for _, r := range t.Reasons {
 			src[pySource(r)] = true
 		}
-		var noDyn, noUnres, noWiden bool
+		var noDyn, noUnres, noWiden, noSys, noNon bool
+		for _, r := range t.Reasons {
+			s := pySource(r)
+			if s != "dynamic" {
+				noSys, noNon = true, true
+				continue
+			}
+			f := pySeedFile(r)
+			if !only(f, "sys_path") {
+				noSys = true
+			}
+			if !only(f, "nonconstant") {
+				noNon = true
+			}
+		}
+		if noSys {
+			w.SelNoSysPath++
+		}
+		if noNon {
+			w.SelNoNonconst++
+		}
 		for s := range src {
 			if s != "dynamic" {
 				noDyn = true
@@ -391,4 +427,21 @@ func pySelStats(sel model.Selection) *PyWide {
 		}
 	}
 	return w
+}
+
+func pyAddCause(m map[string]map[string]bool, f, c string) {
+	if m[f] == nil {
+		m[f] = map[string]bool{}
+	}
+	m[f][c] = true
+}
+
+var pySeedRe = regexp.MustCompile(`(\S+) \((?:dynamic|unknown|ambiguous|uncertain_scan) import, `)
+
+// pySeedFile returns the file whose Unresolved import seeded a reason chain ("" when the reason has none).
+func pySeedFile(r string) string {
+	if m := pySeedRe.FindStringSubmatch(r); m != nil {
+		return m[1]
+	}
+	return ""
 }

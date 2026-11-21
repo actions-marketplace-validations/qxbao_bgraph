@@ -90,6 +90,7 @@ func WritePyReport(dir string, rs []T1Result) error {
 	}
 	fmt.Fprintf(&md, "## Selectivity breakdown (non-full tasks: %d)\n\n", len(nonFull))
 	breakdown(&md, "all non-full", nonFull)
+	topDynFiles(&md, nonFull)
 	byKind := map[string][]T1Result{}
 	byRole := map[string][]T1Result{}
 	for _, r := range nonFull {
@@ -232,6 +233,8 @@ func breakdown(md *bytes.Buffer, title string, rs []T1Result) {
 	row("actual, tasks without any Unresolved-import seed", noUnresT, actual)
 	row("actual, tasks with no widening of any kind", noWide, actual)
 	row("counterfactual: dynamic seeds ignored, all tasks", rs, func(r T1Result) int { return r.PyW.SelNoDyn })
+	row("counterfactual: sys.path-only dynamic seeds ignored", rs, func(r T1Result) int { return r.PyW.SelNoSysPath })
+	row("counterfactual: non-constant-name-only dynamic seeds ignored", rs, func(r T1Result) int { return r.PyW.SelNoNonconst })
 	row("counterfactual: all Unresolved seeds ignored", rs, func(r T1Result) int { return r.PyW.SelNoUnres })
 	row("counterfactual: graph + Unresolved only (no scope widening, no whole units)", rs, func(r T1Result) int { return r.PyW.SelNoWiden })
 	row("counterfactual: graph-proven units only", rs, func(r T1Result) int { return r.PyW.SelGraph })
@@ -242,4 +245,41 @@ func breakdown(md *bytes.Buffer, title string, rs []T1Result) {
 		}
 	}
 	fmt.Fprintf(md, "\nunits selected by exactly one source class (summed over tasks): %s\n\n", mapStr(only))
+}
+
+// topDynFiles lists the files whose dynamic_import widening fired in the most tasks.
+func topDynFiles(md *bytes.Buffer, rs []T1Result) {
+	type fc struct {
+		f, cause string
+		n        int
+	}
+	cnt := map[string]*fc{}
+	var seeds []float64
+	for _, r := range rs {
+		seeds = append(seeds, float64(len(r.PyW.DynFiles)))
+		for f, c := range r.PyW.DynFiles {
+			if cnt[f] == nil {
+				cnt[f] = &fc{f: f, cause: c}
+			}
+			cnt[f].n++
+		}
+	}
+	var l []*fc
+	for _, v := range cnt {
+		l = append(l, v)
+	}
+	sort.Slice(l, func(i, j int) bool {
+		if l[i].n != l[j].n {
+			return l[i].n > l[j].n
+		}
+		return l[i].f < l[j].f
+	})
+	fmt.Fprintf(md, "Files seeded by dynamic_import per task: median %.0f, p90 %.0f, max %.0f; distinct files %d. Top seeded files (tasks, cause):\n\n", Percentile(seeds, 50), Percentile(seeds, 90), Percentile(seeds, 100), len(l))
+	for i, v := range l {
+		if i >= 15 {
+			break
+		}
+		fmt.Fprintf(md, "- %s: %d tasks (%s)\n", v.f, v.n, v.cause)
+	}
+	fmt.Fprintln(md)
 }
