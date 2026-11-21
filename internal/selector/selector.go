@@ -213,7 +213,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 		}
 		hit := ""
 		for _, c := range changed {
-			if eco.Within(c.Path, u.ScopeDir) {
+			if eco.Triggers(u, c.Path) {
 				hit = c.Path
 				break
 			}

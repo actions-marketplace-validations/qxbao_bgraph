@@ -228,6 +228,10 @@ type Unresolved struct {
 	ScopeTier Tier            `json:"scope_tier"`
 	ScopeDir  string          `json:"scope_dir"`
 	Detail    string          `json:"detail,omitempty"`
+	// TriggerGlobs narrows what counts as "a file changed within scope": when non-empty, only a changed path inside ScopeDir that
+	// also matches one of these globs seeds the importer. It is for imports that can only load files of a known kind (a dynamic
+	// Python import loads modules, never data files). Empty: any changed file within scope triggers.
+	TriggerGlobs []string `json:"trigger_globs,omitempty"`
 }
 
 // TestUnit is a unit a test runner can run on its own (docs/plan.md §2.3).

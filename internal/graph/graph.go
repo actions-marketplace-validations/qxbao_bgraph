@@ -3,6 +3,7 @@
 package graph
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -35,7 +36,7 @@ func Build(as ...*eco.Analysis) *Graph {
 		kind     model.EdgeKind
 	}
 	seen := map[key]bool{}
-	seenU := map[model.Unresolved]bool{}
+	seenU := map[string]bool{}
 	for _, a := range as {
 		if a == nil {
 			continue
@@ -69,8 +70,8 @@ func Build(as ...*eco.Analysis) *Graph {
 			g.rev[e.To] = append(g.rev[e.To], e)
 		}
 		for _, u := range a.Unresolved {
-			if !seenU[u] {
-				seenU[u] = true
+			if k := fmt.Sprintf("%#v", u); !seenU[k] {
+				seenU[k] = true
 				g.Unresolved = append(g.Unresolved, u)
 			}
 		}

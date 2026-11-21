@@ -9,6 +9,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/qxbao/bgraph/internal/glob"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/tree"
 )
@@ -54,6 +55,23 @@ func Within(p, dir string) bool {
 		return true
 	}
 	return p == dir || strings.HasPrefix(p, dir+"/")
+}
+
+// Triggers reports whether the changed path p makes the unresolved import u fire: p lies within u.ScopeDir and, when u.TriggerGlobs is
+// set, matches one of them.
+func Triggers(u model.Unresolved, p string) bool {
+	if !Within(p, u.ScopeDir) {
+		return false
+	}
+	if len(u.TriggerGlobs) == 0 {
+		return true
+	}
+	for _, g := range u.TriggerGlobs {
+		if glob.Match(g, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // NearestProject returns the deepest project containing p.

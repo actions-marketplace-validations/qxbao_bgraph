@@ -103,7 +103,7 @@ func (ix *Index) Dependents(ctx context.Context, q DependentsQuery) (DependentsR
 
 	for _, u := range g.Unresolved {
 		for _, f := range res.Files {
-			if eco.Within(f, u.ScopeDir) {
+			if eco.Triggers(u, f) {
 				res.Unresolved = append(res.Unresolved, u)
 				break
 			}
