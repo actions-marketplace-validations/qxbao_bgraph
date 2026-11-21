@@ -17,6 +17,8 @@ type testConfig struct {
 	// implicit: tệp trong repo mà cấu hình trỏ tới (setupFiles, globalSetup, preset, transform...): mọi test của dự án
 	// phụ thuộc vào chúng.
 	implicit []string
+	// implicitGlobs: như implicit nhưng là glob (đã thoát ký tự đặc biệt của phần đường dẫn chữ nghĩa).
+	implicitGlobs []string
 	// opaque: cấu hình có khoá ảnh hưởng phân giải/chọn test mà không đọc được dưới dạng literal → config_is_code.
 	opaque []string
 	// testGlobs/testRegex: mẫu tệp test do cấu hình khai (Jest testMatch/testRegex, Vitest include). Tệp là test nếu khớp
@@ -107,7 +109,28 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 		}
 	}
 	tc.readTestPatterns(src, file, roots, rootKnown)
-	for _, m := range strLit.FindAllStringSubmatch(src, -1) {
+	// JSX runtime (oxc/esbuild/swc/tsconfig importSource): mọi test phụ thuộc <importSource>/jsx-runtime và
+	// jsx-dev-runtime, không phải cả thư mục.
+	for _, key := range []string{"importSource", "jsxImportSource"} {
+		for _, i := range keyIndexes(src, key) {
+			if v, ok := literalValue(src[i:]); ok && v != "" {
+				base := strings.TrimSuffix(v, "/")
+				if strings.HasPrefix(base, "./") || strings.HasPrefix(base, "../") {
+					base = escapeGlob(path.Join(path.Dir(file), base))
+				} else {
+					base = "**/" + escapeGlob(base)
+				}
+				for _, rt := range []string{"jsx-runtime", "jsx-dev-runtime"} {
+					tc.implicitGlobs = append(tc.implicitGlobs, base+"/"+rt+"{,.*,/**}")
+				}
+			}
+		}
+	}
+	// Giá trị của các khoá chỉ LOẠI TRỪ (exclude, coverage) hoặc đã xử lý riêng (importSource) không bao giờ tạo phụ
+	// thuộc: xoá trắng trước khi gom đường dẫn.
+	scan := blankValues(src, "exclude", "coverage", "importSource", "jsxImportSource", "testPathIgnorePatterns",
+		"coveragePathIgnorePatterns", "watchPathIgnorePatterns")
+	for _, m := range strLit.FindAllStringSubmatch(scan, -1) {
 		s := m[1] + m[2] + m[3]
 		if s == "" {
 			continue
@@ -117,7 +140,7 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 				tc.implicit = append(tc.implicit, cand)
 			} else if t.IsDir(cand) && cand != "." && cand != dir {
 				// thư mục (setupFiles dir, roots...): mọi tệp dưới đó
-				tc.implicit = append(tc.implicit, cand+"/**")
+				tc.implicitGlobs = append(tc.implicitGlobs, escapeGlob(cand)+"/**")
 			}
 		}
 	}
@@ -146,8 +169,10 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 				// resolver đã thử mọi đuôi và lấy hợp mọi điều kiện: an toàn khi bỏ qua.
 				continue
 			case "projects", "workspace":
-				if arr, ok := stringArray(src[i:]); ok {
-					_ = arr // dự án con có cấu hình riêng, được đọc khi phân tích thư mục của chúng
+				// Phần tử là chuỗi (đường dẫn/glob tới cấu hình con, được tìm thấy vì cấu hình runner được quét ở mọi
+				// thư mục) hoặc object literal (khoá bên trong đã được quét trên toàn văn bản tệp): đọc được. Biến/lời gọi
+				// hàm → không biết dự án con nào → mờ.
+				if literalArrayOfStringsOrObjects(src[i:]) {
 					continue
 				}
 			}
@@ -158,7 +183,9 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 
 // configPathCandidates: chuỗi trong cấu hình có thể là đường dẫn tới tệp của repo.
 func configPathCandidates(dir, file, s string) []string {
-	if strings.ContainsAny(s, "\n*?{}()[]|^$") || strings.Contains(s, "://") || len(s) > 300 {
+	// "[id]", "{x}", "(group)" là tên tệp/thư mục hợp lệ (Next.js...): chỉ chặn wildcard thật; ứng viên vẫn chỉ được nhận
+	// khi khớp chính xác một tệp/thư mục có thật.
+	if strings.ContainsAny(s, "\n*?|^$") || strings.Contains(s, "://") || len(s) > 300 {
 		return nil
 	}
 	s = strings.ReplaceAll(s, "<rootDir>", ".")
@@ -188,15 +215,25 @@ func keyIndexes(src, key string) []int {
 		}
 		i += off
 		off = i + len(key)
-		// biên trái: không phải một phần của định danh dài hơn
-		if i > 0 {
-			c := src[i-1]
-			if c == '_' || c == '$' || c == '.' || isAlnum(c) {
+		// Biên trái: khoá của object đứng sau "{", ",", khoảng trắng hoặc đầu tệp; dạng có nháy thì dấu nháy mở đứng ngay
+		// trước và trước nó là một trong các ký tự đó ('typescript/no-this-alias' không phải khoá "alias").
+		quoted := byte(0)
+		k := i - 1
+		if k >= 0 && (src[k] == '"' || src[k] == '\'') {
+			quoted = src[k]
+			k--
+		}
+		if k >= 0 {
+			c := src[k]
+			if !(c == '{' || c == ',' || c == ' ' || c == '\t' || c == '\n' || c == '\r') {
 				continue
 			}
 		}
 		j := off
-		if j < len(src) && (src[j] == '"' || src[j] == '\'') {
+		if quoted != 0 {
+			if j >= len(src) || src[j] != quoted {
+				continue
+			}
 			j++
 		}
 		for j < len(src) && (src[j] == ' ' || src[j] == '\t') {
@@ -694,4 +731,86 @@ func convertExtglob(g string) (string, bool) {
 		b.WriteByte(c)
 	}
 	return b.String(), true
+}
+
+// literalArrayOfStringsOrObjects: [ 'a', "b", { ... }, ] chỉ gồm chuỗi hằng và object literal.
+func literalArrayOfStringsOrObjects(s string) bool {
+	body, ok := balanced(s, '[', ']')
+	if !ok {
+		return false
+	}
+	for _, part := range splitTop(body) {
+		part = strings.TrimSpace(part)
+		switch {
+		case part == "":
+		case strings.HasPrefix(part, "{"):
+			if obj, ok := balanced(part, '{', '}'); !ok || part != "{"+obj+"}" {
+				return false
+			}
+		default:
+			if quoteLen(part) != part {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// blankValues trả bản sao của src trong đó giá trị (chuỗi, mảng, object) của các khoá keys bị thay bằng khoảng trắng.
+func blankValues(src string, keys ...string) string {
+	b := []byte(src)
+	for _, key := range keys {
+		for _, i := range keyIndexes(src, key) {
+			if end := valueEnd(src, i); end > i {
+				for k := i; k < end; k++ {
+					if b[k] != '\n' {
+						b[k] = ' '
+					}
+				}
+			}
+		}
+	}
+	return string(b)
+}
+
+// valueEnd trả vị trí ngay sau giá trị bắt đầu ở i (mảng/object cân ngoặc, chuỗi hằng, hoặc tới dấu phẩy/ngoặc đóng
+// ở mức ngoài cùng).
+func valueEnd(src string, i int) int {
+	j := i
+	for j < len(src) && (src[j] == ' ' || src[j] == '\t' || src[j] == '\n' || src[j] == '\r') {
+		j++
+	}
+	if j >= len(src) {
+		return j
+	}
+	switch src[j] {
+	case '[':
+		if body, ok := balanced(src[j:], '[', ']'); ok {
+			return j + len(body) + 2
+		}
+	case '{':
+		if body, ok := balanced(src[j:], '{', '}'); ok {
+			return j + len(body) + 2
+		}
+	}
+	if q := quoteLen(src[j:]); q != "" {
+		return j + len(q)
+	}
+	depth := 0
+	for k := j; k < len(src); k++ {
+		switch src[k] {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth == 0 {
+				return k
+			}
+			depth--
+		case ',':
+			if depth == 0 {
+				return k
+			}
+		}
+	}
+	return len(src)
 }

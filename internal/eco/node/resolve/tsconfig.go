@@ -287,7 +287,16 @@ func (a *acc) tsCandidates(from, spec string) []string {
 // mapOutDir ánh xạ đường dẫn p dưới outDir của package pkgDir về ứng viên mã nguồn.
 func (a *acc) mapOutDir(pkgDir, p string) []string {
 	var out []string
+	var addOne func(root, rel string)
+	// add thử rel và, nếu đoạn đầu là thư mục biến thể định dạng (dist/cjs, dist/esm, dist/types...), cả phần sau nó:
+	// các biến thể được build từ cùng một nguồn.
 	add := func(root, rel string) {
+		addOne(root, rel)
+		if i := strings.IndexByte(rel, '/'); i > 0 && buildVariants[rel[:i]] {
+			addOne(root, rel[i+1:])
+		}
+	}
+	addOne = func(root, rel string) {
 		m, ok := join(root, rel)
 		if !ok {
 			return
@@ -331,8 +340,10 @@ func (a *acc) mapOutDir(pkgDir, p string) []string {
 			}
 		}
 	}
-	if !foundCfgOut {
-		// không có outDir khai báo: thử thư mục build quen thuộc khi có src/
+	// Thư mục build quen thuộc khi có src/ (cả khi tsconfig có outDir: tsconfig thường chỉ sinh .d.ts, còn JS do
+	// bundler sinh vào dist/). Chỉ thêm ứng viên nguồn — hợp, không bớt.
+	_ = foundCfgOut
+	{
 		if s, ok := join(pkgDir, "src"); ok && a.r.t.IsDir(s) {
 			for _, o := range []string{"dist", "build", "lib", "out"} {
 				if od, ok := join(pkgDir, o); ok && strings.HasPrefix(p, od+"/") {
@@ -343,3 +354,8 @@ func (a *acc) mapOutDir(pkgDir, p string) []string {
 	}
 	return out
 }
+
+// buildVariants là tên thư mục con của đầu ra build theo định dạng (cùng nguồn).
+var buildVariants = map[string]bool{"cjs": true, "esm": true, "es": true, "mjs": true, "umd": true, "types": true, "type": true,
+	"typings": true, "module": true, "commonjs": true, "node": true, "browser": true, "modern": true, "legacy": true, "lib": true,
+	"dts": true, "bundle": true}

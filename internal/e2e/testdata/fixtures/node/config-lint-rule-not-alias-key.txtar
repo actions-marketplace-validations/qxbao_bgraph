@@ -1,0 +1,22 @@
+Chuỗi 'typescript/no-this-alias' trong cấu hình (luật lint) không phải khoá alias; projects gồm chuỗi + object literal đọc được: không nới config_is_code (hono).
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vite.config.ts --
+export default { lint: { rules: { 'typescript/no-this-alias': 'error' } } }
+-- base/vitest.config.ts --
+import { defineConfig } from 'vitest/config'
+export default defineConfig({ test: { projects: ['./sub/*/vitest.config.ts', { extends: true, test: { include: ['src/**/*.test.ts'], name: 'main' } }] } })
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- base/src/b.test.ts --
+import { b } from './b'
+-- base/src/b.ts --
+export const b = 1
+-- head/src/a.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+nowiden unknown_import

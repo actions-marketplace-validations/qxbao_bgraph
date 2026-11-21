@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-6"
+const AnalyzerVersion = "node-8"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {
@@ -207,16 +207,18 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		}
 		slices.Sort(targets)
 		targets = slices.Compact(targets)
+		globs := slices.Clone(tc.implicitGlobs)
+		slices.Sort(globs)
+		globs = slices.Compact(globs)
 		for _, tf := range projTests {
+			// Đường dẫn chính xác (có thể chứa "[id]", "{x}") là cạnh thường; glob (đã thoát phần chữ nghĩa) là cạnh pattern.
 			for _, tg := range targets {
-				if tg == tf {
-					continue
+				if tg != tf {
+					a.Edges = append(a.Edges, model.Edge{From: tf, To: tg, Kind: model.EdgeImplicit, Provenance: model.ProvScan, Spec: "test config"})
 				}
-				k := model.EdgeImplicit
-				if strings.HasSuffix(tg, "/**") {
-					k = model.EdgePattern
-				}
-				a.Edges = append(a.Edges, model.Edge{From: tf, To: tg, Kind: k, Provenance: model.ProvScan, Spec: "test config"})
+			}
+			for _, g := range globs {
+				a.Edges = append(a.Edges, model.Edge{From: tf, To: g, Kind: model.EdgePattern, Provenance: model.ProvScan, Spec: "test config"})
 			}
 			for _, op := range tc.opaque {
 				a.Unresolved = append(a.Unresolved, model.Unresolved{File: tf, Spec: op, Class: model.UnresolvedUnknown,

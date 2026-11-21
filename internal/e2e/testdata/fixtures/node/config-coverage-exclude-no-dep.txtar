@@ -1,0 +1,24 @@
+Kiểu hono: thư mục trong coverage.exclude/test.exclude không phải phụ thuộc; importSource './src/jsx' chỉ là jsx-runtime/jsx-dev-runtime. Đổi benchmarks/ hoặc src/jsx/dom/x.ts không chọn mọi test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+export default { test: { coverage: { exclude: ['benchmarks', 'src/test-utils'] }, exclude: ['perf'] }, oxc: { jsx: { runtime: 'automatic', importSource: './src/jsx' } } }
+-- base/benchmarks/bench.ts --
+export const b = 1
+-- base/src/test-utils/u.ts --
+export const u = 1
+-- base/src/jsx/jsx-runtime.ts --
+export const jsx = 1
+-- base/src/jsx/dom/x.ts --
+export const x = 1
+-- base/src/jsx/dom/x.test.ts --
+import { x } from './x'
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- head/src/jsx/dom/x.ts --
+export const x = 2
+-- want --
+select src/jsx/dom/x.test.ts
+noselect src/a.test.ts

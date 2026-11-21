@@ -1,0 +1,16 @@
+Kiểu hono: đổi src/other.ts (không đi qua src/index.ts) không được chọn test adapters import 'hono' khi mọi biến thể dist ánh xạ được.
+-- base/package.json --
+{"name":"hono","exports":{".":{"types":"./dist/types/index.d.ts","import":"./dist/index.js","require":"./dist/cjs/index.js"}},"devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/index.ts --
+export const app = 1
+-- base/src/other.ts --
+export const o = 1
+-- base/src/other.test.ts --
+import { o } from './other'
+-- base/adapters/x/handler.test.ts --
+import { app } from 'hono'
+-- head/src/other.ts --
+export const o = 2
+-- want --
+select src/other.test.ts
+noselect adapters/x/handler.test.ts

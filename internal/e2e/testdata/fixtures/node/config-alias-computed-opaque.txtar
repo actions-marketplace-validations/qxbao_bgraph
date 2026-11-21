@@ -1,0 +1,20 @@
+alias tính bằng code (vue: alias: entries từ scripts/aliases.js) → config_is_code: mọi test của dự án bị ảnh hưởng khi có đổi trong dự án.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+import { entries } from './scripts/aliases.js'
+export default { resolve: { alias: entries } }
+-- base/scripts/aliases.js --
+export const entries = {}
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- base/src/b.test.ts --
+import { x } from 'mystery'
+-- head/src/a.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+select src/b.test.ts
+widen unknown_import

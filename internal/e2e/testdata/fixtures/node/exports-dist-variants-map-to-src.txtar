@@ -1,0 +1,17 @@
+Kiểu hono: exports có dist/index.js, dist/cjs/index.js, dist/types/index.d.ts (không có trong cây); mọi biến thể ánh xạ về src/index.ts → cạnh chính xác, không nới cả repo; đổi tệp không liên quan không chọn test.
+-- base/package.json --
+{"name":"hono","exports":{".":{"types":"./dist/types/index.d.ts","import":"./dist/index.js","require":"./dist/cjs/index.js"}},"devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/index.ts --
+export const app = 1
+-- base/src/other.ts --
+export const o = 1
+-- base/src/other.test.ts --
+import { o } from './other'
+-- base/adapters/x/handler.test.ts --
+import { app } from 'hono'
+-- head/src/index.ts --
+export const app = 2
+-- want --
+select adapters/x/handler.test.ts
+noselect src/other.test.ts
+nowiden unknown_import

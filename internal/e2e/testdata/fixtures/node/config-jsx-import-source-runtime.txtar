@@ -1,0 +1,17 @@
+importSource './src/jsx': đổi src/jsx/jsx-runtime.ts phải chọn mọi test của dự án (runtime JSX ngầm).
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+export default { oxc: { jsx: { runtime: 'automatic', importSource: './src/jsx' } } }
+-- base/src/jsx/jsx-runtime.ts --
+export const jsx = 1
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.tsx --
+import { a } from './a'
+const el = <div>{a}</div>
+-- head/src/jsx/jsx-runtime.ts --
+export const jsx = 2
+-- want --
+select src/a.test.tsx
+nowiden unreferenced_file
