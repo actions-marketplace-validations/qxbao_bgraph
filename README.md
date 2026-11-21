@@ -20,6 +20,14 @@ Status: three ecosystems.
   are dependencies. Non-constant `importlib`/`__import__`/`sys.path` use is unresolved at project scope and fires only when a loadable file (.py, .pyi, .pyc, .so, .pyd) changes there; `[[dynamic]]` in `bgraph.toml` describes what such a site can load. `bgraph command` emits
   `python -m pytest --rootdir R -c CFG <files>` (an `@argfile` for long lists needs pytest >= 8.2) or
   `python tests/runtests.py <labels>` / `python manage.py test <labels>`.
+- **.NET** (MSBuild projects; `dotnet test`), at project granularity: every `.csproj`/`.fsproj`/`.vbproj` is a unit
+  (`dotnet:<project file>`). A file belongs to every ancestor project whose directory contains it (SDK default globs); `Compile`/`None`/
+  `Content`/`EmbeddedResource` includes outside the directory, `ProjectReference` (analyzers included), `<Import>` (shared projects'
+  `.projitems`) and the `Directory.Build.props/targets` / `Directory.Packages.props` that apply to a project are dependencies, so a
+  props change selects exactly its subtree. `Condition` is never evaluated (union). Constructs bgraph cannot evaluate select the
+  project that contains them on any change; `global.json` is full, `nuget.config`/`*.runsettings` select every .NET unit.
+  `bgraph command` emits one `dotnet test <project>` per project (`--project <project>` when `global.json` selects
+  Microsoft.Testing.Platform).
 
 Other ecosystems are not supported yet: changes there widen to `full`.
 
