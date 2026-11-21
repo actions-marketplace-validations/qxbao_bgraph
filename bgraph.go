@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/dotnet"
 	"github.com/qxbao/bgraph/internal/eco/node"
 	"github.com/qxbao/bgraph/internal/eco/python"
 	"github.com/qxbao/bgraph/internal/eco/rust"
@@ -156,7 +157,7 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 
 // Ecosystems are the supported ecosystems.
 func Ecosystems(rf *rules.File) []eco.Ecosystem {
-	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf)}
+	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf)}
 }
 
 func loadRules(t tree.Tree) (*rules.File, error) {
