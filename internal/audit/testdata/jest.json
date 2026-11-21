@@ -1,0 +1,30 @@
+{
+  "numTotalTests": 3,
+  "success": false,
+  "testResults": [
+    {
+      "name": "D:\\Projects\\app\\src\\a.test.ts",
+      "status": "failed",
+      "message": "",
+      "assertionResults": [
+        {"fullName": "math adds", "title": "adds", "status": "passed", "failureMessages": []},
+        {"fullName": "math subtracts", "title": "subtracts", "status": "failed", "failureMessages": ["Error: expected 1 to be 2\n  at ..."]}
+      ]
+    },
+    {
+      "name": "D:\\Projects\\app\\src\\broken.test.ts",
+      "status": "failed",
+      "message": "Cannot find module './nope'",
+      "assertionResults": []
+    },
+    {
+      "name": "D:\\Projects\\app\\src\\b.test.ts",
+      "status": "passed",
+      "message": "",
+      "assertionResults": [
+        {"fullName": "b works", "title": "works", "status": "passed", "failureMessages": []},
+        {"fullName": "b todo", "title": "todo", "status": "pending", "failureMessages": []}
+      ]
+    }
+  ]
+}

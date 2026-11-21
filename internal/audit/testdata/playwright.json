@@ -1,0 +1,32 @@
+{
+  "config": {"rootDir": "/work/app/e2e"},
+  "suites": [
+    {
+      "title": "login.spec.ts",
+      "file": "login.spec.ts",
+      "suites": [
+        {
+          "title": "login",
+          "file": "login.spec.ts",
+          "specs": [
+            {"title": "shows form", "ok": true, "file": "login.spec.ts",
+             "tests": [{"status": "expected", "results": [{"status": "passed"}]}]},
+            {"title": "rejects bad password", "ok": false, "file": "login.spec.ts",
+             "tests": [{"status": "unexpected", "results": [{"status": "failed", "error": {"message": "expected visible"}}]}]},
+            {"title": "times out", "ok": false, "file": "login.spec.ts",
+             "tests": [{"status": "unexpected", "results": [{"status": "timedOut", "error": {"message": "Timeout 30000ms exceeded"}}]}]}
+          ]
+        }
+      ],
+      "specs": []
+    },
+    {
+      "title": "home.spec.ts",
+      "file": "home.spec.ts",
+      "specs": [
+        {"title": "flaky but passes", "ok": true, "file": "home.spec.ts",
+         "tests": [{"status": "flaky", "results": [{"status": "failed"}, {"status": "passed"}]}]}
+      ]
+    }
+  ]
+}

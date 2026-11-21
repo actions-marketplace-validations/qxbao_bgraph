@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<testsuites name="vitest tests" tests="3" failures="1" errors="0" time="0.5">
+    <testsuite name="src/a.test.ts" timestamp="2026-11-22T00:00:00.000Z" hostname="ci" tests="2" failures="1" errors="0" skipped="0" time="0.01">
+        <testcase classname="src/a.test.ts" name="adds" time="0.001">
+        </testcase>
+        <testcase classname="src/a.test.ts" name="subtracts" time="0.002">
+            <failure message="expected 1 to be 2" type="AssertionError">
+AssertionError: expected 1 to be 2
+            </failure>
+        </testcase>
+    </testsuite>
+    <testsuite name="src/b.test.ts" tests="1" failures="0" errors="0" skipped="1" time="0.01">
+        <testcase classname="src/b.test.ts" name="later" time="0">
+            <skipped/>
+        </testcase>
+    </testsuite>
+</testsuites>

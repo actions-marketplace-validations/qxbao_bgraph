@@ -1,0 +1,99 @@
+# bgraph shadow mode: example GitHub Actions workflow.
+#
+# The full test suite runs exactly as before. Afterwards `bgraph audit` computes the selection bgraph WOULD have made for
+# the same change and reports every failed test that lies outside it (a test the selection would have skipped although
+# it failed). Nothing is ever skipped and the job never blocks a merge. Switch selection on only after a run of clean
+# shadow runs (the --log file prints "clean shadow runs in a row: N").
+#
+# A reported failure is either an unsafe miss (report it!), a flaky test, or a failure that already existed on the base:
+# the audit cannot tell, so a human judges.
+#
+# bgraph audit exit codes: 0 clean, 3 at least one missed failure (--strict: or an unmapped failure), 1 error, 2 usage.
+
+name: bgraph shadow
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # bgraph needs the base commit: a shallow clone makes every run "full" (trivially clean)
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # 1. Run the FULL suite with a machine-readable reporter. Keep going when tests fail: the failures are the input.
+      #
+      # Vitest (JUnit):
+      #   npx vitest run --reporter=junit --outputFile=test-results/junit.xml
+      # Vitest (JSON; same shape as Jest):
+      #   npx vitest run --reporter=json --outputFile=test-results/results.json
+      # Jest (JSON):
+      #   npx jest --json --outputFile=test-results/results.json
+      # Jest (JUnit, needs the jest-junit package; set addFileAttribute so failures map to files):
+      #   JEST_JUNIT_ADD_FILE_ATTRIBUTE=true JEST_JUNIT_OUTPUT_DIR=test-results npx jest --reporters=jest-junit
+      # Playwright (JSON):
+      #   PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/playwright.json npx playwright test --reporter=json
+      - name: Run the full test suite
+        id: tests
+        continue-on-error: true
+        run: npx vitest run --reporter=junit --outputFile=test-results/junit.xml
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install bgraph
+        run: go install github.com/qxbao/bgraph/cmd/bgraph@latest # pin a version once you adopt it
+
+      # 2. Audit. The base is the PR target on pull_request, the previous commit on push.
+      #    Several --results files may be given (e.g. one per shard or per runner); --format defaults to auto-detection.
+      - name: bgraph audit (shadow, never blocks)
+        id: audit
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="origin/${{ github.base_ref }}"
+          else
+            BASE="HEAD~1"
+          fi
+          "$(go env GOPATH)/bin/bgraph" audit \
+            --results test-results/junit.xml \
+            --base "$BASE" \
+            --head HEAD \
+            --log test-results/bgraph-shadow.jsonl
+
+      # 3. Keep the log: it holds one JSON line per run. Persist it across runs (cache, a branch, an object store) to
+      #    make the "clean shadow runs in a row" counter meaningful; an artifact alone only shows this run.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bgraph-shadow
+          path: |
+            test-results/bgraph-shadow.jsonl
+            test-results/junit.xml
+          if-no-files-found: ignore
+
+      # The job itself only fails when the shadow could not run (e.g. the results file is missing: audit exit 1).
+      # Exit 3 (missed failure) is reported as a warning annotation and never blocks the merge.
+      - name: Report
+        if: always()
+        run: |
+          if [ "${{ steps.audit.outcome }}" = "failure" ]; then
+            echo "::warning title=bgraph shadow::audit reported a missed failure or could not run; see the step log"
+          fi

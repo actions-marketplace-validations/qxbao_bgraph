@@ -33,7 +33,8 @@ Usage:
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
   bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json]
   bgraph index     [--root DIR]
-  bgraph audit | doctor        (not implemented)
+  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict]
+  bgraph doctor                (not implemented)
   bgraph version | help
 `
 
@@ -51,7 +52,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "version", "--version":
 		fmt.Fprintln(stdout, "bgraph", version)
 		return 0
-	case "audit", "doctor":
+	case "audit":
+		return runAudit(rest, stdout, stderr)
+	case "doctor":
 		fmt.Fprintf(stderr, "bgraph %s: not implemented (later phase)\n", cmd)
 		return 2
 	case "affected", "explain", "unresolved", "command", "index":
