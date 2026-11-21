@@ -60,7 +60,8 @@ func T2Markdown(q T2Result) string {
 		fmt.Fprintf(&b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d/%d | %d | %d | %d | %.3f | %.3f | 1 | %d |\n", r.Repo.Name, r.Repo.R, r.Baseline.Files, len(r.Baseline.Failing), len(r.Baseline.Flaky),
 			r.Killed+r.Survived+r.Timeout+r.Errors, r.Killed, r.Survived, r.Timeout, r.Errors, r.Full, len(r.Violations), len(r.NativeNotSubset), r.MedBgraph, r.MedNative, r.CheckMs)
 	}
-	b.WriteString("\n## native ⊄ bgraph\n\n")
+	rustReport(&b, q)
+	b.WriteString("\n## native⊄ bgraph\n\n")
 	n = 0
 	for _, r := range q.Repos {
 		for _, c := range r.NativeNotSubset {
@@ -113,4 +114,30 @@ func WriteT2(dir string, q T2Result) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, "t2.md"), []byte(T2Markdown(q)), 0o644)
+}
+
+// rustReport writes the per-repo mutant accounting of the Rust repos (generated / compiled / killed / survived and the selection ratios).
+func rustReport(b *strings.Builder, q T2Result) {
+	any := false
+	for _, r := range q.Repos {
+		if r.Repo.Eco != "rust" {
+			continue
+		}
+		if !any {
+			b.WriteString("\n## Rust mutants\n\n| repo | R | generated | does not compile | compiled | killed | survived | timeout | errors | selected < all | full widening | violations | median selected/units | baseline units | pre-broken | flaky | suite ms |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+			any = true
+		}
+		partial := 0
+		for _, c := range r.Checks {
+			if c.Err == "" && !c.Full() && c.Units > 0 && c.Selected < c.Units {
+				partial++
+			}
+		}
+		suite := int64(0)
+		if len(r.Baseline.RunMs) > 0 {
+			suite = r.Baseline.RunMs[len(r.Baseline.RunMs)-1]
+		}
+		fmt.Fprintf(b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d | %d | %d | %d |\n", r.Repo.Name, r.Repo.R, r.Generated, r.NoCompile, r.Killed+r.Survived+r.Timeout,
+			r.Killed, r.Survived, r.Timeout, r.Errors, partial, r.Full, len(r.Violations), r.MedBgraph, r.Baseline.Files, len(r.Baseline.Failing), len(r.Baseline.Flaky), suite)
+	}
 }

@@ -4,7 +4,7 @@
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
 //	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
-//	bgraph-eval t2       [--run-tests] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
+//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust] [--budget 90m] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
@@ -415,7 +415,24 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
 	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
+	eco := fs.String("ecosystem", "node", "node | rust (rust defaults: --dir D:/bench/bgraph-eval/t2/rust, --manifest evalkit/manifest/t2-rust.json)")
+	budget := fs.Duration("budget", 0, "rust: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
+	if *eco == "rust" {
+		dirSet, manSet := false, false
+		fs.Visit(func(f *flag.Flag) {
+			dirSet = dirSet || f.Name == "dir"
+			manSet = manSet || f.Name == "manifest"
+		})
+		if !dirSet {
+			*dir = "D:/bench/bgraph-eval/t2/rust"
+		}
+		if !manSet {
+			*manPath = "evalkit/manifest/t2-rust.json"
+		}
+	} else if *eco != "node" {
+		return 2, fmt.Errorf("unknown --ecosystem %q", *eco)
+	}
 	if *out == "" {
 		*out = filepath.Join(*dir, "out")
 	}
@@ -431,7 +448,11 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 		sel = strings.Split(*repos, ",")
 	}
 	lg := logger(*out)
-	qr, err := evalkit.RunT2(ctx, evalkit.T2Config{Dir: *dir, Out: *out, Manifest: man, Repos: sel, RunTests: *run, Rebaseline: *rebase, Rebuild: *rebuild, Reconfirm: *reconf, Log: lg})
+	var dl time.Time
+	if *budget > 0 {
+		dl = time.Now().Add(*budget)
+	}
+	qr, err := evalkit.RunT2(ctx, evalkit.T2Config{Dir: *dir, Out: *out, Manifest: man, Repos: sel, RunTests: *run, Rebaseline: *rebase, Rebuild: *rebuild, Reconfirm: *reconf, Log: lg, Deadline: dl})
 	if err != nil {
 		return 2, err
 	}

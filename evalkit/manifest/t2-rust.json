@@ -1,0 +1,41 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "Rust T2 (`bgraph-eval t2 --ecosystem rust`). Root directory defaults to D:\bench\bgraph-eval\t2\rust: checkouts <dir>, CARGO_TARGET_DIR target-<dir>, oracle.jsonl. Checkouts are full clones (`git clone`, core.autocrlf=false) detached at R. Suite: `cargo test --workspace --no-fail-fast` (lib/bin/integration tests + doc-tests; benches are not run). `mutants` = killed mutants aimed at, `tries` = mutants generated at most. sharkdp/fd was dropped: its integration suite needs symlink privilege that this Windows host lacks (102 of 104 tests fail at R); sharkdp/bat replaces it. fd at HEAD and ripgrep at HEAD also need rustc newer than 1.92, so ripgrep's R is the parent of its MSRV-1.96 bump.",
+ "repos": [
+  {
+   "name": "tokio-rs/bytes",
+   "dir": "bytes",
+   "eco": "rust",
+   "remote": "https://github.com/tokio-rs/bytes.git",
+   "r": "67edc2b999d669eb4f471aff576e213dbcb58871",
+   "covers": "single lib crate: lib unit tests, 13 integration test targets, doc-tests",
+   "mutants": 20,
+   "tries": 60,
+   "seed": "t2-rust-v1"
+  },
+  {
+   "name": "sharkdp/bat",
+   "dir": "bat",
+   "eco": "rust",
+   "remote": "https://github.com/sharkdp/bat.git",
+   "r": "dbc11b6924729c9cdfe9a2555daa1cec2baa90fa",
+   "install": "git submodule update --init --depth 1 --jobs 16 (assets/ syntaxes and themes are submodules)",
+   "covers": "lib + bin + integration tests + doc-tests",
+   "mutants": 20,
+   "tries": 60,
+   "seed": "t2-rust-v1"
+  },
+  {
+   "name": "BurntSushi/ripgrep",
+   "dir": "ripgrep",
+   "eco": "rust",
+   "remote": "https://github.com/BurntSushi/ripgrep.git",
+   "r": "fc3dd04b7ca18ec8be97704dc098bbd062bad244",
+   "covers": "workspace of the ripgrep package and crates/*; two symlink integration tests fail at R on Windows (name-level baseline, see T2Baseline.failing_tests)",
+   "mutants": 20,
+   "tries": 60,
+   "seed": "t2-rust-v1"
+  }
+ ]
+}

@@ -47,6 +47,8 @@ type T2Repo struct {
 	Mutants    int      `json:"mutants"`
 	Seed       string   `json:"seed"`
 	Env        []string `json:"env,omitempty"`
+	Eco        string   `json:"eco,omitempty"`   // "rust" for Cargo repos; empty = Node
+	Tries      int      `json:"tries,omitempty"` // rust: how many mutants are generated at most (default 3x Mutants); Mutants is the number of killed mutants aimed at
 }
 
 // T2Manifest is the T2 repo manifest.
@@ -110,7 +112,9 @@ type T2Baseline struct {
 	Failing []string `json:"failing"` // red in all 3 runs
 	Flaky   []string `json:"flaky"`   // results differ between runs (or absent)
 	RunMs   []int64  `json:"run_ms"`
-	Tests   int      `json:"tests,omitempty"`
+	// FailingTests (Rust): for a unit red in both baseline runs, the test names failing in both. A mutant run turns such a unit red only when a test outside this set fails.
+	FailingTests map[string][]string `json:"failing_tests,omitempty"`
+	Tests        int                 `json:"tests,omitempty"`
 }
 
 func (b T2Baseline) excluded() map[string]bool {
@@ -456,8 +460,9 @@ type T2Config struct {
 	Repos      []string // empty = all
 	RunTests   bool     // build/refresh the oracle (run tests)
 	Rebaseline bool
-	Rebuild    bool // drop the repo's oracle cache, re-run every mutation
-	Reconfirm  bool // re-confirm killed mutations not yet confirmed (re-run just the red files), without re-running the full suite
+	Rebuild    bool      // drop the repo's oracle cache, re-run every mutation
+	Reconfirm  bool      // re-confirm killed mutations not yet confirmed (re-run just the red files), without re-running the full suite
+	Deadline   time.Time // rust: stop starting new mutants after this time (zero = no limit)
 	Log        func(format string, a ...any)
 }
 
@@ -577,6 +582,9 @@ func (r T2Repo) Baseline(ctx context.Context, cfg *T2Config, root string) (T2Bas
 
 // BuildOracle runs the mutations not yet in oracle.jsonl (sequential within a repo: the working tree holds only one mutation at a time).
 func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleStore, have map[string]T2Record) error {
+	if r.Eco == "rust" {
+		return r.buildOracleRust(ctx, cfg, store, have)
+	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
 		return err
@@ -703,8 +711,9 @@ type T2Check struct {
 	NativeOnly []string         `json:"native_only,omitempty"` // original-tool files absent from bgraph's selection
 	Widenings  map[string]int   `json:"widenings,omitempty"`
 	WideList   []model.Widening `json:"widening_list,omitempty"`
-	Diag       []FileDiag       `json:"diag,omitempty"` // diagnosis of missing (violation) or native-only files
-	Near       []string         `json:"near,omitempty"` // reason chains of the tests near the missing file
+	Diag       []FileDiag       `json:"diag,omitempty"`    // diagnosis of missing (violation) or native-only files
+	Near       []string         `json:"near,omitempty"`    // reason chains of the tests near the missing file
+	Changed    []string         `json:"changed,omitempty"` // rust: files bgraph saw as changed
 	Err        string           `json:"err,omitempty"`
 	Ms         int64            `json:"ms"`
 }
@@ -768,6 +777,11 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 			ck.NativeOnly = append(ck.NativeOnly, f)
 		}
 	}
+	if r.Eco == "rust" {
+		ck.Changed = sel.Changed
+		ck.Near = rustNear(sel, ck.Missed)
+		return ck
+	}
 	diagFor := ck.Missed
 	if len(diagFor) == 0 && len(ck.NativeOnly) > 0 {
 		diagFor = ck.NativeOnly
@@ -801,6 +815,8 @@ type T2RepoResult struct {
 	Killed               int        `json:"killed"`
 	Survived             int        `json:"survived"`
 	Timeout              int        `json:"timeout"`
+	NoCompile            int        `json:"no_compile,omitempty"` // rust: mutants that do not compile (excluded, not counted as killed)
+	Generated            int        `json:"generated,omitempty"`  // rust: mutants generated
 	Errors               int        `json:"errors"`
 	Full                 int        `json:"full"` // mutations widened to full (evidence not counted)
 	Violations           []T2Check  `json:"violations"`
@@ -891,6 +907,16 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
+	if r.Eco == "rust" {
+		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
+			var c struct {
+				Mutants []T2Mutant `json:"mutants"`
+			}
+			if json.Unmarshal(b, &c) == nil {
+				rr.Generated = len(c.Mutants)
+			}
+		}
+	}
 	var bg, nv []float64
 	for _, rec := range recs {
 		switch rec.Status {
@@ -900,6 +926,9 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 			rr.Survived++
 		case "timeout":
 			rr.Timeout++
+			continue
+		case "nocompile":
+			rr.NoCompile++
 			continue
 		default:
 			rr.Errors++
