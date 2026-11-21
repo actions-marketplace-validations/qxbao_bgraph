@@ -1,0 +1,16 @@
+Kiểu babel: jest.config.js ở gốc (testRegex) áp cho tệp trong package con có package.json riêng: packages/a/test/scope.js là test.
+-- base/package.json --
+{"name":"mono","private":true,"devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+module.exports = { testRegex: './packages/[^/]+/test/.+\.m?js$' }
+-- base/packages/a/package.json --
+{"name":"@m/a","main":"src/index.js"}
+-- base/packages/a/src/index.js --
+export const a = 1
+-- base/packages/a/test/scope.js --
+import { a } from '../src/index.js'
+test('s', () => { a })
+-- head/packages/a/src/index.js --
+export const a = 2
+-- want --
+select packages/a/test/scope.js

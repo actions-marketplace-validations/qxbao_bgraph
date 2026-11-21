@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-11"
+const AnalyzerVersion = "node-12"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {
@@ -156,8 +156,18 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		if proj == "" {
 			continue // JS ngoài mọi package.json: không thuộc hệ sinh thái này (bộ chọn coi là tệp lạ)
 		}
-		tc := configs[proj]
-		if isTestFile(p, detectRunner(pkgs, proj)) || tc.isTest(p) {
+		// Cấu hình runner ở dự án tổ tiên (jest.config.js ở gốc monorepo) cũng áp cho tệp trong package con: hợp.
+		inConfig := false
+		for d := proj; ; d = path.Dir(d) {
+			if tc, ok := configs[d]; ok && tc.isTest(p) {
+				inConfig = true
+				break
+			}
+			if d == "." || d == "/" || d == "" {
+				break
+			}
+		}
+		if isTestFile(p, detectRunner(pkgs, proj)) || inConfig {
 			a.Roles[p] = model.RoleTest
 			tests = append(tests, p)
 		} else if _, ok := a.Roles[p]; !ok {
