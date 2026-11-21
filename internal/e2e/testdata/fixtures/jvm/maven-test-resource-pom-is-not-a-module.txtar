@@ -1,0 +1,56 @@
+A pom.xml under src/test/resources is a fixture owned by the module, not a module of its own.
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/test/resources/project/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>fixture</artifactId>
+
+
+
+
+</project>
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>other</module></modules>
+
+</project>
+-- head/core/src/test/resources/project/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>fixture</artifactId>
+
+
+<dependencies><dependency><groupId>x</groupId><artifactId>y</artifactId><version>1</version></dependency></dependencies>
+
+</project>
+-- want --
+notfull
+select maven:core
+noselect maven:other
+noselect maven:core/src/test/resources/project

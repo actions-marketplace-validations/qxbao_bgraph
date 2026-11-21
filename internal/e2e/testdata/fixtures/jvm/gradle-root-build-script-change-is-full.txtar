@@ -1,0 +1,16 @@
+The root build script configures shared behaviour: full.
+-- base/build.gradle --
+// root
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+rootProject.name = 'demo'
+include ':core'
+-- head/build.gradle --
+// root changed
+-- want --
+full
+widen manifest_changed

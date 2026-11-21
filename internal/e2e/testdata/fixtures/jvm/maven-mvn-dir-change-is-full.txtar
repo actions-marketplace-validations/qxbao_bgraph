@@ -1,0 +1,66 @@
+.mvn/** is read by every module.
+-- base/.mvn/maven.config --
+-T 1C
+-- base/api/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>api</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/api/src/main/java/B.java --
+class B {}
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>api</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/main/java/A.java --
+class A {}
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>api</module><module>app</module></modules>
+
+</project>
+-- base/unrelated/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>unrelated</artifactId>
+
+
+
+
+</project>
+-- base/unrelated/src/main/java/U.java --
+class U {}
+-- head/.mvn/maven.config --
+-T 2C
+-- want --
+full
+widen global_input

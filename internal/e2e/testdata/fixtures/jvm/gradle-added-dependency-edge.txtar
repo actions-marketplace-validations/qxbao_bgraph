@@ -1,0 +1,25 @@
+The head script adds project(':core'): a change in core selects the dependent (union of both graphs).
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core', ':app'
+-- head/app/build.gradle --
+plugins { id 'java' }
+dependencies {
+  implementation project(':core')
+}
+
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+notfull
+select gradle::core
+select gradle::app

@@ -1,0 +1,13 @@
+Files under a project's build/ directory are build output, not inputs: they own nothing (a module-scoped unknown file at most).
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core'
+-- head/core/build/generated/X.java --
+class X {}
+-- want --
+notfull
+nowiden unreferenced_file

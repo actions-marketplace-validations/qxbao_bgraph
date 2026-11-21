@@ -1,0 +1,26 @@
+includeFlat names a sibling directory of the settings directory; an include list can span lines and omit the leading colon.
+-- base/flat/build.gradle --
+plugins { id 'java' }
+
+-- base/flat/src/main/java/Flat.java --
+class Flat {}
+-- base/wk/a/build.gradle --
+plugins { id 'java' }
+
+-- base/wk/a/src/main/java/A.java --
+class A {}
+-- base/wk/b/c/build.gradle --
+plugins { id 'java' }
+
+-- base/wk/b/c/src/main/java/C.java --
+class C {}
+-- base/wk/settings.gradle --
+include 'a',
+        'b:c'
+includeFlat 'flat'
+-- head/flat/src/main/java/Flat.java --
+class Flat { int a;}
+-- want --
+notfull
+select gradle:wk:flat
+noselect gradle:wk:a

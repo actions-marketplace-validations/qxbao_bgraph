@@ -1,0 +1,13 @@
+An include in a loop hides the project list: a change within the build is full.
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+rootDir.listFiles().each { if (new File(it, 'build.gradle').exists()) include it.name }
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+full
+widen dynamic_import

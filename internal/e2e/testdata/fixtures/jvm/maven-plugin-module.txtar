@@ -1,0 +1,62 @@
+A <plugin> that is a reactor module is an edge from the module that uses it.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+
+<build><plugins><plugin><groupId>org.ex</groupId><artifactId>codegen</artifactId><version>1.0</version><dependencies><dependency><groupId>org.ex</groupId><artifactId>helper</artifactId><version>1.0</version></dependency></dependencies></plugin></plugins></build>
+</project>
+-- base/codegen/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>codegen</artifactId>
+<packaging>maven-plugin</packaging>
+
+
+
+</project>
+-- base/codegen/src/main/java/Mojo.java --
+class Mojo {}
+-- base/helper/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>helper</artifactId>
+
+
+
+
+</project>
+-- base/helper/src/main/java/H.java --
+class H {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>codegen</module><module>helper</module><module>app</module><module>other</module></modules>
+
+</project>
+-- head/codegen/src/main/java/Mojo.java --
+class Mojo { int a;}
+-- want --
+notfull
+select maven:codegen
+select maven:app
+noselect maven:other

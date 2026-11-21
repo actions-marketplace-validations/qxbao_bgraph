@@ -1,0 +1,21 @@
+A Node change does not select Gradle projects.
+-- base/backend/core/build.gradle --
+plugins { id 'java' }
+
+-- base/backend/core/src/main/java/Core.java --
+class Core {}
+-- base/backend/settings.gradle --
+include ':core'
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/web/src/a.ts --
+export const a = 2
+-- want --
+notfull
+select web/src/a.test.ts
+noselect gradle:backend:core

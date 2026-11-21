@@ -1,0 +1,30 @@
+project(':testutil') inside subprojects { } is an edge from every subproject.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/build.gradle --
+subprojects {
+  dependencies { testImplementation project(':testutil') }
+}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':testutil', ':core', ':app'
+-- base/testutil/build.gradle --
+plugins { id 'java' }
+
+-- base/testutil/src/main/java/testutil.java --
+class testutil {}
+-- head/testutil/src/main/java/testutil.java --
+class testutil { int a;}
+-- want --
+notfull
+select gradle::testutil
+select gradle::core
+select gradle::app
+noselect gradle::

@@ -1,0 +1,24 @@
+A build.gradle under src/test/resources (plugin test project) is a fixture of its project, not a build.
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/plugin/build.gradle --
+plugins { id 'java' }
+
+-- base/plugin/src/main/java/plugin.java --
+class plugin {}
+-- base/plugin/src/test/resources/proj/build.gradle --
+plugins { id 'java' }
+-- base/plugin/src/test/resources/proj/settings.gradle --
+include 'x'
+-- base/settings.gradle --
+include ':plugin', ':other'
+-- head/plugin/src/test/resources/proj/build.gradle --
+plugins { id 'java' }
+// v2
+-- want --
+notfull
+select gradle::plugin
+noselect gradle::other

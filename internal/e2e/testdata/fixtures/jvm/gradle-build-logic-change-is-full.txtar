@@ -1,0 +1,21 @@
+Anything under build-logic/ (convention plugins) is build logic of every project: full.
+-- base/build-logic/convention/build.gradle.kts --
+plugins { `kotlin-dsl` }
+-- base/build-logic/convention/src/main/kotlin/c.gradle.kts --
+plugins { java }
+-- base/build-logic/settings.gradle.kts --
+include(":convention")
+-- base/core/build.gradle.kts --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle.kts --
+pluginManagement { includeBuild("build-logic") }
+include(":core")
+-- head/build-logic/convention/src/main/kotlin/c.gradle.kts --
+plugins { java }
+// changed
+-- want --
+full
+widen global_input

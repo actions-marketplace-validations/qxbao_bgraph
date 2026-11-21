@@ -1,0 +1,24 @@
+A non-source file in the enclosing project's directory (config/) may be read by the nested projects.
+-- base/a/b/build.gradle --
+plugins { id 'java' }
+
+-- base/a/b/src/main/java/B.java --
+class B {}
+-- base/a/build.gradle --
+plugins { id 'java' }
+-- base/a/config/rules.xml --
+<r/>
+-- base/c/build.gradle --
+plugins { id 'java' }
+
+-- base/c/src/main/java/c.java --
+class c {}
+-- base/settings.gradle --
+include ':a:b', ':c'
+-- head/a/config/rules.xml --
+<r a='1'/>
+-- want --
+notfull
+select gradle::a
+select gradle::a:b
+noselect gradle::c

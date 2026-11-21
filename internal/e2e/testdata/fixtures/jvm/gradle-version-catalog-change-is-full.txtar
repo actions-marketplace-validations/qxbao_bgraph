@@ -1,0 +1,18 @@
+gradle/libs.versions.toml is read by the whole build: full.
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/gradle/libs.versions.toml --
+[versions]
+a = "1"
+-- base/settings.gradle --
+rootProject.name = 'demo'
+include ':core'
+-- head/gradle/libs.versions.toml --
+[versions]
+a = "2"
+-- want --
+full
+widen global_input

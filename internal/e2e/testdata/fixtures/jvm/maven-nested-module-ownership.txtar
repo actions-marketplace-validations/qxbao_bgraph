@@ -1,0 +1,26 @@
+A nested module's file belongs to the nested module only.
+-- base/outer/inner/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>outer</artifactId><version>1.0</version></parent><artifactId>inner</artifactId></project>
+-- base/outer/inner/src/main/java/I.java --
+class I {}
+-- base/outer/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent><artifactId>outer</artifactId><packaging>pom</packaging><modules><module>inner</module></modules></project>
+-- base/outer/src/main/java/O.java --
+class O {}
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>outer</module></modules>
+
+</project>
+-- head/outer/inner/src/main/java/I.java --
+class I { int a;}
+-- want --
+notfull
+select maven:outer/inner
+noselect maven:outer
+noselect maven:.

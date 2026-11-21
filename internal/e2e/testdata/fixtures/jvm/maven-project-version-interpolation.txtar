@@ -1,0 +1,50 @@
+${project.version}, ${project.groupId} and an inherited property resolve: the dependency is an internal edge, no widening.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>${project.groupId}</groupId><artifactId>${core.name}</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/main/java/A.java --
+class A {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module><module>other</module></modules>
+<properties><core.name>core</core.name></properties>
+</project>
+-- head/core/src/main/java/A.java --
+class A { int x;}
+-- want --
+notfull
+nowiden unknown_import
+select maven:app
+noselect maven:other

@@ -1,0 +1,31 @@
+A project's own build script: the project and its dependents, no widening.
+-- base/app/build.gradle --
+plugins { id 'java' }
+dependencies {
+  implementation project(':core')
+}
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle --
+include ':core', ':app', ':other'
+-- head/core/build.gradle --
+plugins { id 'java' }
+dependencies { implementation 'com.google.guava:guava:33' }
+
+-- want --
+notfull
+nowiden manifest_changed
+select gradle::core
+select gradle::app
+noselect gradle::other

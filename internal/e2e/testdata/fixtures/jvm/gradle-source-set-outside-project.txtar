@@ -1,0 +1,21 @@
+A srcDir outside the project directory is a dependency of the project.
+-- base/app/build.gradle --
+plugins { id 'java' }
+sourceSets { main { java.srcDir '../shared/src' } }
+
+-- base/app/src/main/java/App.java --
+class App {}
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle --
+include ':app', ':other'
+-- base/shared/src/S.java --
+class S {}
+-- head/shared/src/S.java --
+class S { int a;}
+-- want --
+notfull
+select gradle::app

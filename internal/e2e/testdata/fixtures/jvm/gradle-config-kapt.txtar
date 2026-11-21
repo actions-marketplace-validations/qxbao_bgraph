@@ -1,0 +1,28 @@
+project(':core') in `kapt project(':core')` is an edge app -> core, whatever the configuration.
+-- base/app/build.gradle --
+plugins { id 'java' }
+dependencies {
+  kapt project(':core')
+}
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle --
+include ':core', ':app', ':other'
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+notfull
+select gradle::core
+select gradle::app
+noselect gradle::other

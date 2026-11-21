@@ -1,0 +1,28 @@
+apply from: a root script plugin that references project(':core'): the applying project depends on core.
+-- base/app/build.gradle --
+plugins { id 'java' }
+apply from: "$rootDir/gradle/common.gradle"
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/gradle/common.gradle --
+dependencies { implementation project(':core') }
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle --
+include ':core', ':app', ':other'
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+notfull
+select gradle::core
+select gradle::app
+noselect gradle::other

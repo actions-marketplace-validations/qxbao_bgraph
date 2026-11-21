@@ -1,0 +1,44 @@
+A POM whose profile declares <modules> has an activation-dependent module list: any change forces full.
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/extra/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>extra</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module></modules>
+<profiles><profile><id>extra</id><modules><module>extra</module></modules></profile></profiles>
+</project>
+-- head/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.1</version>
+<packaging>pom</packaging>
+<modules><module>core</module></modules>
+<profiles><profile><id>extra</id><modules><module>extra</module></modules></profile></profiles>
+</project>
+-- want --
+full
+widen manifest_changed

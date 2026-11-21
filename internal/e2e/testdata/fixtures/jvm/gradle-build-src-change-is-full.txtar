@@ -1,0 +1,16 @@
+Anything under buildSrc/ is build logic of every project: full.
+-- base/buildSrc/src/main/kotlin/Conv.kt --
+object Conv
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+rootProject.name = 'demo'
+include ':core'
+-- head/buildSrc/src/main/kotlin/Conv.kt --
+object Conv { val a = 1 }
+-- want --
+full
+widen global_input

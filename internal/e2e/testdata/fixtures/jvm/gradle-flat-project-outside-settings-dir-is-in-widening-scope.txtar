@@ -1,0 +1,31 @@
+A settings change widens to the directory that contains every project of the build, including an includeFlat sibling of the settings directory.
+-- base/mono/flat/build.gradle --
+plugins { id 'java' }
+
+-- base/mono/flat/src/main/java/Flat.java --
+class Flat {}
+-- base/mono/wk/a/build.gradle --
+plugins { id 'java' }
+
+-- base/mono/wk/a/src/main/java/A.java --
+class A {}
+-- base/mono/wk/settings.gradle --
+include 'a'
+includeFlat 'flat'
+-- base/other/settings.gradle --
+include 'x'
+-- base/other/x/build.gradle --
+plugins { id 'java' }
+
+-- base/other/x/src/main/java/X.java --
+class X {}
+-- head/mono/wk/settings.gradle --
+include 'a'
+includeFlat 'flat'
+// changed
+-- want --
+notfull
+widen manifest_changed
+select gradle:mono/wk:a
+select gradle:mono/wk:flat
+noselect gradle:other:x

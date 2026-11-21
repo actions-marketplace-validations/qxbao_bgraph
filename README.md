@@ -28,6 +28,16 @@ Status: three ecosystems.
   project that contains them on any change; `global.json` is full, `nuget.config`/`*.runsettings` select every .NET unit.
   `bgraph command` emits one `dotnet test <project>` per project (`--project <project>` when `global.json` selects
   Microsoft.Testing.Platform).
+- **JVM** (Maven; Gradle), at module/project granularity: every Maven module (`maven:<dir>`) and Gradle project
+  (`gradle:<builddir>:<path>`, e.g. `gradle::core:api`) is a unit, read as text (no Maven/Gradle run). A unit owns every file under its
+  directory (nested modules and `target/` / `build/` excluded; files an enclosing module keeps outside `src/` are shared with the
+  nested ones). Edges: Maven `<dependency>` (any scope, `test-jar`), plugins and plugin dependencies that are reactor modules, build
+  extensions, BOM imports and the local `<parent>` chain; Gradle `project(":x")`, `projects.x.y`, `testFixtures(project(..))`,
+  `platform(project(..))`, any configuration, `includeBuild`. Property interpolation (`${project.version}`, `${revision}`) is done;
+  what cannot be resolved or placed widens. Root/shared POMs (except a `<version>`-only change), `.mvn/`, profiles with
+  `<modules>`, Gradle settings and root scripts, `buildSrc/`, `build-logic/`, version catalogs, the wrapper and
+  `gradle.properties` widen to every JVM unit of the build (full at the repo root). `bgraph command` emits
+  `mvn -pl <modules> -am -DskipTests install` then `mvn -pl <modules> verify` (`./mvnw` when present), or `./gradlew :a:test :b:test`.
 
 Other ecosystems are not supported yet: changes there widen to `full`.
 

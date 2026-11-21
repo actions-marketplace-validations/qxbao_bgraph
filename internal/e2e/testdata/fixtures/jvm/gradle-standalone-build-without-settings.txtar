@@ -1,0 +1,15 @@
+A build script with no settings script is a single-project build of its own.
+-- base/other/build.gradle --
+plugins { id 'java' }
+-- base/other/src/main/java/O.java --
+class O {}
+-- base/tools/build.gradle --
+plugins { id 'java' }
+-- base/tools/src/main/java/T.java --
+class T {}
+-- head/tools/src/main/java/T.java --
+class T { int a;}
+-- want --
+notfull
+select gradle:tools:
+noselect gradle:other:

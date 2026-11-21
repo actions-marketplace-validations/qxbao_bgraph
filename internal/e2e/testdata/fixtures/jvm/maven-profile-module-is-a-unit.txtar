@@ -1,0 +1,39 @@
+Modules listed only in a profile are modules (union over profiles).
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/deep/extra/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>extra</artifactId>
+
+
+
+
+</project>
+-- base/deep/extra/src/main/java/X.java --
+class X {}
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module></modules>
+<profiles><profile><id>extra</id><modules><module>deep/extra</module></modules></profile></profiles>
+</project>
+-- head/deep/extra/src/main/java/X.java --
+class X { int a;}
+-- want --
+notfull
+select maven:deep/extra
+noselect maven:core

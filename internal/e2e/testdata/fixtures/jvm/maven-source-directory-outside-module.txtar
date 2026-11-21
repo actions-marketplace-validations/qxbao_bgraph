@@ -1,0 +1,50 @@
+A source root added outside the module directory (build-helper): files there are dependencies of the module.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+
+<build><plugins><plugin><artifactId>build-helper-maven-plugin</artifactId><configuration><sources><source>${basedir}/../shared/src</source></sources></configuration></plugin></plugins></build>
+</project>
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>app</module><module>other</module><module>shared</module></modules>
+
+</project>
+-- base/shared/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>shared</artifactId>
+
+
+
+
+</project>
+-- base/shared/src/S.java --
+class S {}
+-- head/shared/src/S.java --
+class S { int a;}
+-- want --
+notfull
+select maven:shared
+select maven:app
+noselect maven:other

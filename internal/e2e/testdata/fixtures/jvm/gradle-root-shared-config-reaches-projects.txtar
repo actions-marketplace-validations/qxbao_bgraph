@@ -1,0 +1,21 @@
+A file owned by the root project outside src/ (config/) reaches every project.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/config/checkstyle.xml --
+<c/>
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core', ':app'
+-- head/config/checkstyle.xml --
+<c a='1'/>
+-- want --
+notfull
+select gradle::core
+select gradle::app

@@ -1,0 +1,57 @@
+A leaf module's own POM change is not shared: the module and its dependents are selected, nothing is widened.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module><module>other</module></modules>
+
+</project>
+-- head/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+<dependencies><dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13</version></dependency></dependencies>
+
+</project>
+-- want --
+notfull
+nowiden manifest_changed
+select maven:core
+select maven:app
+noselect maven:other

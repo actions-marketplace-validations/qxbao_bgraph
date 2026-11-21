@@ -1,0 +1,20 @@
+gradle.beforeProject { } in a subproject script has an effect on other projects that cannot be modelled: full at the repo root.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core', ':app'
+-- head/core/build.gradle --
+plugins { id 'java' }
+gradle.beforeProject { }
+
+-- want --
+full
+widen manifest_changed

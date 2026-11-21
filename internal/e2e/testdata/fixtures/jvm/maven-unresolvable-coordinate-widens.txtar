@@ -1,0 +1,49 @@
+The groupId of a dependency comes from a property that is not defined in this repo (remote parent): it could name a module, so the dependent is selected and the widening is reported.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>${missing.group}</groupId><artifactId>core</artifactId><version>1</version></dependency></dependencies>
+
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/main/java/A.java --
+class A {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module><module>other</module></modules>
+
+</project>
+-- head/core/src/main/java/A.java --
+class A { int x;}
+-- want --
+widen unknown_import
+select maven:app
+noselect maven:other

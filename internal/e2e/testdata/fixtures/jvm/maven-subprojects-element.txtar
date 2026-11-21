@@ -1,0 +1,23 @@
+Maven 4 <subprojects> declare modules, including a path two levels down.
+-- base/mods/a/pom.xml --
+<project><modelVersion>4.1.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version><relativePath>../../pom.xml</relativePath></parent><artifactId>a</artifactId></project>
+-- base/mods/a/src/A.java --
+class A {}
+-- base/mods/b/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>b</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project><modelVersion>4.1.0</modelVersion><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version><packaging>pom</packaging><subprojects><subproject>mods/a</subproject></subprojects></project>
+-- head/mods/a/src/A.java --
+class A { int a;}
+-- want --
+notfull
+select maven:mods/a
+noselect maven:mods/b

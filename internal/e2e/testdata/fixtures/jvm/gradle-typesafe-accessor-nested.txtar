@@ -1,0 +1,29 @@
+projects.core.api is the project :core:api.
+-- base/app/build.gradle.kts --
+plugins { id 'java' }
+dependencies {
+  implementation(projects.core.api)
+}
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/api/build.gradle.kts --
+plugins { id 'java' }
+
+-- base/core/api/src/main/java/core_api.java --
+class core_api {}
+-- base/other/build.gradle.kts --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle.kts --
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+include(":core:api", ":app", ":other")
+-- head/core/api/src/main/java/core_api.java --
+class core_api { int a;}
+-- want --
+notfull
+select gradle::core:api
+select gradle::app
+noselect gradle::other

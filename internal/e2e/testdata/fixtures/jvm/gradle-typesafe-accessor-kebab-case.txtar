@@ -1,0 +1,30 @@
+projects.myLib is the project :my-lib; a Kotlin accessor chain with a property on the end still resolves.
+-- base/app/build.gradle.kts --
+plugins { id 'java' }
+dependencies {
+  implementation(projects.myLib)
+  testRuntimeOnly(projects.myLib.dependencyProject)
+}
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/my-lib/build.gradle.kts --
+plugins { id 'java' }
+
+-- base/my-lib/src/main/java/my_lib.java --
+class my_lib {}
+-- base/other/build.gradle.kts --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle.kts --
+enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
+include(":my-lib", ":app", ":other")
+-- head/my-lib/src/main/java/my_lib.java --
+class my_lib { int a;}
+-- want --
+notfull
+select gradle::my-lib
+select gradle::app
+noselect gradle::other

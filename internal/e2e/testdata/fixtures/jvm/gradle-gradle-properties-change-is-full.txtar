@@ -1,0 +1,16 @@
+gradle.properties is read by the whole build: full.
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/gradle.properties --
+org.gradle.jvmargs=-Xmx1g
+-- base/settings.gradle --
+rootProject.name = 'demo'
+include ':core'
+-- head/gradle.properties --
+org.gradle.jvmargs=-Xmx2g
+-- want --
+full
+widen global_input

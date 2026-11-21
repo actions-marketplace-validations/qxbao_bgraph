@@ -1,0 +1,45 @@
+An intermediate aggregator/parent POM (not the top of its reactor) widens to its own directory; a module elsewhere that inherits from it is reached through the parent edge.
+-- base/elsewhere/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><relativePath>../outer/pom.xml</relativePath><groupId>org.ex</groupId><artifactId>outer</artifactId><version>1.0</version></parent>
+<artifactId>elsewhere</artifactId>
+
+
+
+
+</project>
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/outer/inner/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>outer</artifactId><version>1.0</version></parent><artifactId>inner</artifactId></project>
+-- base/outer/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent><artifactId>outer</artifactId><packaging>pom</packaging><modules><module>inner</module></modules></project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>outer</module><module>other</module><module>elsewhere</module></modules>
+
+</project>
+-- head/outer/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent><artifactId>outer</artifactId><packaging>pom</packaging><modules><module>inner</module></modules><properties><x>1</x></properties></project>
+-- want --
+notfull
+widen manifest_changed
+scope module
+select maven:outer
+select maven:outer/inner
+select maven:elsewhere
+noselect maven:other

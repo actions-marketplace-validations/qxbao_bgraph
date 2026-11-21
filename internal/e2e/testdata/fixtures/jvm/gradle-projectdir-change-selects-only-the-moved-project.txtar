@@ -1,0 +1,34 @@
+A change under the moved projectDir selects that project and not the one in the default directory.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/Wrong.java --
+class Wrong {}
+-- base/apps/app/build.gradle --
+plugins { id 'java' }
+dependencies {
+  implementation project(':core')
+}
+
+-- base/apps/app/src/main/java/App.java --
+class App {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle --
+include ':core', ':app', ':other'
+project(':app').projectDir = file('apps/app')
+-- head/apps/app/src/main/java/App.java --
+class App { int a;}
+-- want --
+notfull
+select gradle::app
+noselect gradle::core
+noselect gradle::other

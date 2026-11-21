@@ -1,0 +1,15 @@
+The settings script defines the project set: full.
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+rootProject.name = 'demo'
+include ':core'
+-- head/settings.gradle --
+rootProject.name = 'demo'
+include ':core', ':newproj'
+-- want --
+full
+widen manifest_changed

@@ -1,0 +1,29 @@
+The Maven wrapper script pins the tool: every module of the reactor is re-run.
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/mvnw --
+#!/bin/sh
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module></modules>
+
+</project>
+-- head/mvnw --
+#!/bin/sh
+# v2
+-- want --
+full
+widen global_input

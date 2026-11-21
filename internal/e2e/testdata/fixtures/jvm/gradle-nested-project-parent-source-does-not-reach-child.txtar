@@ -1,0 +1,18 @@
+The parent project's source file does not select its nested project.
+-- base/a/b/build.gradle --
+plugins { id 'java' }
+
+-- base/a/b/src/main/java/B.java --
+class B {}
+-- base/a/build.gradle --
+plugins { id 'java' }
+-- base/a/src/main/java/A.java --
+class A {}
+-- base/settings.gradle --
+include ':a:b'
+-- head/a/src/main/java/A.java --
+class A { int a;}
+-- want --
+notfull
+select gradle::a
+noselect gradle::a:b

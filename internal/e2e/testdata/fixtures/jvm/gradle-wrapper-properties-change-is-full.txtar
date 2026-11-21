@@ -1,0 +1,16 @@
+gradle/wrapper/gradle-wrapper.properties is read by the whole build: full.
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/gradle/wrapper/gradle-wrapper.properties --
+distributionUrl=a
+-- base/settings.gradle --
+rootProject.name = 'demo'
+include ':core'
+-- head/gradle/wrapper/gradle-wrapper.properties --
+distributionUrl=b
+-- want --
+full
+widen global_input

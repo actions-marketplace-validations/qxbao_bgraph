@@ -1,0 +1,10 @@
+The parent POM is not in the repo and its version changed: inherited configuration differs.
+-- base/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.1.0</version></parent><artifactId>svc</artifactId></project>
+-- base/src/main/java/S.java --
+class S {}
+-- head/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-parent</artifactId><version>3.2.0</version></parent><artifactId>svc</artifactId></project>
+-- want --
+full
+widen manifest_changed

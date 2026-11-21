@@ -1,0 +1,21 @@
+A Java change in a Gradle build next to a Node package selects only the Gradle project.
+-- base/backend/core/build.gradle --
+plugins { id 'java' }
+
+-- base/backend/core/src/main/java/Core.java --
+class Core {}
+-- base/backend/settings.gradle --
+include ':core'
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/backend/core/src/main/java/Core.java --
+class Core { int a;}
+-- want --
+notfull
+select gradle:backend:core
+noselect web/src/a.test.ts

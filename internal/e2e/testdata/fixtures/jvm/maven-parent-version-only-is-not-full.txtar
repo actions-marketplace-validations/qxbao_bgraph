@@ -1,0 +1,86 @@
+Only the <version> of the parent POM changed: not full; the modules inheriting from it are reached through the parent edge, an unrelated standalone project is not.
+-- base/api/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>api</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/api/src/main/java/B.java --
+class B {}
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>api</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/main/java/A.java --
+class A {}
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>api</module><module>app</module></modules>
+
+</project>
+-- base/tools/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>tools</artifactId>
+
+
+
+
+</project>
+-- base/unrelated/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>unrelated</artifactId>
+
+
+
+
+</project>
+-- base/unrelated/src/main/java/U.java --
+class U {}
+-- head/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.1</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>api</module><module>app</module></modules>
+
+</project>
+-- want --
+notfull
+nowiden manifest_changed
+select maven:core
+select maven:api
+select maven:app
+noselect maven:tools

@@ -1,0 +1,40 @@
+An internal BOM imported in dependencyManagement is an edge although Maven does not count it as a module dependency.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+
+<dependencyManagement><dependencies><dependency><groupId>org.ex</groupId><artifactId>bom</artifactId><version>1.0</version><type>pom</type><scope>import</scope></dependency></dependencies></dependencyManagement>
+</project>
+-- base/bom/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><groupId>org.ex</groupId><artifactId>bom</artifactId><version>1.0</version><packaging>pom</packaging><dependencyManagement><dependencies><dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.13</version></dependency></dependencies></dependencyManagement></project>
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>bom</module><module>app</module><module>other</module></modules>
+
+</project>
+-- head/bom/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><groupId>org.ex</groupId><artifactId>bom</artifactId><version>1.0</version><packaging>pom</packaging><dependencyManagement><dependencies><dependency><groupId>junit</groupId><artifactId>junit</artifactId><version>4.14</version></dependency></dependencies></dependencyManagement></project>
+-- want --
+notfull
+select maven:bom
+select maven:app
+noselect maven:other

@@ -1,0 +1,23 @@
+The word subprojects in a comment or string does not make a script cross-project.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core', ':app'
+-- head/core/build.gradle --
+plugins { id 'java' }
+// subprojects { } is not used here
+println 'allprojects'
+
+-- want --
+notfull
+nowiden manifest_changed
+select gradle::core
+noselect gradle::app

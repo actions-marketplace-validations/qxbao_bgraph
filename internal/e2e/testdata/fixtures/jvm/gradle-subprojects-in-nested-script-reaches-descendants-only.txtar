@@ -1,0 +1,26 @@
+subprojects { } in the script of :a configures :a:b but not the unrelated :c.
+-- base/a/b/build.gradle --
+plugins { id 'java' }
+
+-- base/a/b/src/main/java/B.java --
+class B {}
+-- base/a/build.gradle --
+plugins { id 'java' }
+-- base/a/src/main/java/A.java --
+class A {}
+-- base/c/build.gradle --
+plugins { id 'java' }
+
+-- base/c/src/main/java/c.java --
+class c {}
+-- base/settings.gradle --
+include ':a:b', ':c'
+-- head/a/build.gradle --
+plugins { id 'java' }
+subprojects { apply plugin: 'java' }
+
+-- want --
+notfull
+select gradle::a
+select gradle::a:b
+noselect gradle::c

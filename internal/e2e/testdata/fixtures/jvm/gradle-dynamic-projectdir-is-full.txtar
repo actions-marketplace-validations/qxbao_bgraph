@@ -1,0 +1,14 @@
+projectDir assigned in a loop cannot be placed.
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core'
+rootProject.children.each { it.projectDir = new File(rootDir, 'x/' + it.name) }
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+full
+widen dynamic_import

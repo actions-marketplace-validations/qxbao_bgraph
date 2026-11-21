@@ -1,0 +1,30 @@
+Kotlin settings: include(a, b) and projectDir = file(...) / File(settingsDir, ...).
+-- base/apps/app/build.gradle.kts --
+plugins { id 'java' }
+dependencies {
+  implementation(project(":core"))
+}
+
+-- base/apps/app/src/main/java/App.java --
+class App {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/other/build.gradle --
+plugins { id 'java' }
+
+-- base/other/src/main/java/other.java --
+class other {}
+-- base/settings.gradle.kts --
+include(":core", ":app")
+include(":other")
+project(":app").projectDir = File(settingsDir, "apps/app")
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+notfull
+select gradle::core
+select gradle::app
+noselect gradle::other

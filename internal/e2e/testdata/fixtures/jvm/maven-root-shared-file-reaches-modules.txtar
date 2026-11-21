@@ -1,0 +1,40 @@
+A data file owned by the root module (outside src/) is selected for the root module and every nested module.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+
+
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module></modules>
+
+</project>
+-- base/test-data/users.json --
+{"a":1}
+-- head/test-data/users.json --
+{"a":2}
+-- want --
+notfull
+select maven:core
+select maven:app
+select maven:.

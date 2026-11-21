@@ -1,0 +1,15 @@
+A CI-friendly ${revision} version resolves through the parent chain.
+-- base/app/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>${revision}</version></parent><artifactId>app</artifactId><dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${revision}</version></dependency></dependencies></project>
+-- base/core/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>${revision}</version></parent><artifactId>core</artifactId></project>
+-- base/core/src/main/java/A.java --
+class A {}
+-- base/pom.xml --
+<project><modelVersion>4.0.0</modelVersion><groupId>org.ex</groupId><artifactId>root</artifactId><version>${revision}</version><packaging>pom</packaging><properties><revision>2.0</revision></properties><modules><module>core</module><module>app</module></modules></project>
+-- head/core/src/main/java/A.java --
+class A { int x;}
+-- want --
+notfull
+nowiden unknown_import
+select maven:app

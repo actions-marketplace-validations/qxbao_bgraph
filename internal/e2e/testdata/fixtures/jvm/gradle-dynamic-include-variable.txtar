@@ -1,0 +1,14 @@
+include(name) with a variable is dynamic.
+-- base/core/build.gradle.kts --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle.kts --
+val mods = listOf("core")
+mods.forEach { include(":$it") }
+-- head/core/src/main/java/core.java --
+class core { int a;}
+-- want --
+full
+widen dynamic_import

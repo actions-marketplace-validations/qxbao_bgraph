@@ -1,0 +1,21 @@
+rootProject.allprojects { } in a subproject script configures every project of the build: all of them depend on that script.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/core/build.gradle --
+plugins { id 'java' }
+
+-- base/core/src/main/java/core.java --
+class core {}
+-- base/settings.gradle --
+include ':core', ':app'
+-- head/core/build.gradle --
+plugins { id 'java' }
+rootProject.allprojects { group = 'x' }
+
+-- want --
+notfull
+select gradle::core
+select gradle::app

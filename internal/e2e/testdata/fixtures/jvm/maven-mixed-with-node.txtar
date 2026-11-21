@@ -1,0 +1,36 @@
+A Java change in a repo with a Maven reactor and a Node package selects only the Maven units.
+-- base/backend/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/backend/core/src/main/java/A.java --
+class A {}
+-- base/backend/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module></modules>
+
+</project>
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/backend/core/src/main/java/A.java --
+class A { int a;}
+-- want --
+notfull
+select maven:backend/core
+noselect web/src/a.test.ts

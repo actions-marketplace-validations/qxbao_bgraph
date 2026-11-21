@@ -1,0 +1,50 @@
+A test-jar/classifier dependency is an edge: changing the library's test sources selects the dependent.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${project.version}</version><type>test-jar</type><classifier>tests</classifier><scope>test</scope></dependency></dependencies>
+
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/core/src/test/java/Fixtures.java --
+class Fixtures {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module><module>other</module></modules>
+
+</project>
+-- head/core/src/test/java/Fixtures.java --
+class Fixtures { int z;}
+-- want --
+notfull
+select maven:core
+select maven:app
+noselect maven:other

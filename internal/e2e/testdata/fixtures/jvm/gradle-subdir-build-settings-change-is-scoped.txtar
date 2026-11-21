@@ -1,0 +1,22 @@
+Settings of a build in backend/ widen to that build's JVM units only, not to the repo.
+-- base/backend/core/build.gradle --
+plugins { id 'java' }
+
+-- base/backend/core/src/main/java/Core.java --
+class Core {}
+-- base/backend/settings.gradle --
+include ':core'
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/backend/settings.gradle --
+include ':core', ':extra'
+-- want --
+notfull
+widen manifest_changed
+select gradle:backend:core
+noselect web/src/a.test.ts

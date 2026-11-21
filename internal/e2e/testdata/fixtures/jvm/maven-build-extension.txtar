@@ -1,0 +1,49 @@
+A build <extension> that is a reactor module is an edge.
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+
+<build><extensions><extension><groupId>org.ex</groupId><artifactId>ext</artifactId><version>1.0</version></extension></extensions></build>
+</project>
+-- base/ext/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>ext</artifactId>
+
+
+
+
+</project>
+-- base/ext/src/main/java/E.java --
+class E {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>ext</module><module>app</module><module>other</module></modules>
+
+</project>
+-- head/ext/src/main/java/E.java --
+class E { int a;}
+-- want --
+notfull
+select maven:app
+noselect maven:other

@@ -1,0 +1,66 @@
+The shared POM of a reactor in a subdirectory widens to that reactor's JVM units only, not to the whole repo or to Node tests.
+-- base/backend/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+
+
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>core</artifactId><version>${project.version}</version></dependency></dependencies>
+
+</project>
+-- base/backend/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+
+
+
+
+</project>
+-- base/backend/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module></modules>
+<properties><junit.version>4.13</junit.version></properties>
+</project>
+-- base/tools/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId><version>1.0</version>
+<artifactId>tools</artifactId>
+
+
+
+
+</project>
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/backend/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module></modules>
+<properties><junit.version>4.14</junit.version></properties>
+</project>
+-- want --
+notfull
+widen manifest_changed
+scope module
+select maven:backend/core
+select maven:backend/app
+noselect maven:tools
+noselect web/src/a.test.ts

@@ -1,0 +1,31 @@
+A pom-packaging POM without <modules> still has the POMs of its subdirectories as modules (Maven 4 auto-discovery).
+-- base/a/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>a</artifactId>
+
+
+
+
+</project>
+-- base/a/src/A.java --
+class A {}
+-- base/b/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>b</artifactId>
+
+
+
+
+</project>
+-- base/pom.xml --
+<project><modelVersion>4.1.0</modelVersion><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version><packaging>pom</packaging></project>
+-- head/a/src/A.java --
+class A { int a;}
+-- want --
+notfull
+select maven:a
+noselect maven:b

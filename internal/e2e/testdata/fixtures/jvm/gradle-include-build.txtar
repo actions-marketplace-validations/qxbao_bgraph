@@ -1,0 +1,22 @@
+includeBuild makes every project of the including build depend on the projects of the included build; the included build's projects are units of their own.
+-- base/app/build.gradle --
+plugins { id 'java' }
+
+-- base/app/src/main/java/app.java --
+class app {}
+-- base/settings.gradle --
+include ':app'
+includeBuild('tools/shared')
+-- base/tools/shared/lib/build.gradle --
+plugins { id 'java' }
+
+-- base/tools/shared/lib/src/main/java/Lib.java --
+class Lib {}
+-- base/tools/shared/settings.gradle --
+include ':lib'
+-- head/tools/shared/lib/src/main/java/Lib.java --
+class Lib { int a;}
+-- want --
+notfull
+select gradle:tools/shared:lib
+select gradle::app
