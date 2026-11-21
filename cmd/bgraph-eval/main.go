@@ -6,6 +6,7 @@
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
 //	bgraph-eval t2       [--run-tests] [--ecosystem node|rust] [--budget 90m] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
+//	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
@@ -63,6 +64,8 @@ func main() {
 		err = cmdCargoMeta(ctx, os.Args[2:])
 	case "rust-locate":
 		err = cmdRustLocate(ctx, os.Args[2:])
+	case "py-locate":
+		err = cmdPyLocate(ctx, os.Args[2:])
 	case "manifest":
 		err = cmdManifest(os.Args[2:])
 	default:
@@ -272,7 +275,7 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust")
+	eco := fs.String("ecosystem", "node", "node | rust | python")
 	fs.Parse(args)
 	tasks, err := evalkit.LoadTasks(*tasksPath)
 	if err != nil {
@@ -319,7 +322,13 @@ func cmdManifest(args []string) error {
 		}
 	}
 	var man evalkit.Manifest
-	if *eco == "rust" {
+	if *eco == "python" {
+		ds = []evalkit.DatasetInfo{{Name: "princeton-nlp/SWE-bench_Verified", URL: "https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified", Notes: "test split (500 tasks); all repos are libraries/frameworks"}}
+		if rev := metaString(*metaPath, "python_datasets", ds[0].Name); rev != "" {
+			ds[0].Revision = rev
+		}
+		man = evalkit.BuildCountManifest("python", t1, ds, *maxPer)
+	} else if *eco == "rust" {
 		ds[0].Notes = "test split; keeps Rust repos (burntsushi/ripgrep respelled BurntSushi/ripgrep)"
 		ds[1].Notes = "rust/ directory (JSONL); FAIL_TO_PASS = f2p_tests keys, else n2p_tests keys (task field f2p_kind)"
 		man = evalkit.BuildRustManifest(t1, ds, *maxPer)
@@ -581,6 +590,175 @@ func cmdRustLocate(ctx context.Context, args []string) error {
 		type rec struct {
 			evalkit.RustLocateRow
 			Locs []evalkit.RustTestLoc `json:"locs"`
+		}
+		var rs []rec
+		for _, r := range rows {
+			rs = append(rs, rec{r, r.Locs})
+		}
+		b, _ := json.MarshalIndent(rs, "", " ")
+		return os.WriteFile(*out, b, 0o644)
+	}
+	return nil
+}
+
+// metaString reads meta[key][sub] (a string in a nested object) from meta.json; "" when absent.
+func metaString(metaPath, key, sub string) string {
+	b, err := os.ReadFile(metaPath)
+	if err != nil {
+		return ""
+	}
+	var m map[string]map[string]string
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(b, &raw) != nil {
+		return ""
+	}
+	m = map[string]map[string]string{}
+	if v, ok := raw[key]; ok {
+		var inner map[string]string
+		if json.Unmarshal(v, &inner) == nil {
+			m[key] = inner
+		}
+	}
+	return m[key][sub]
+}
+
+// cmdPyLocate runs the Python test-name locator over every task's P tree and prints unique / ambiguous / not-found statistics.
+func cmdPyLocate(ctx context.Context, args []string) error {
+	fs := flag.NewFlagSet("py-locate", flag.ExitOnError)
+	tasksPath := fs.String("tasks", "", "Python task JSONL (tasks-python.jsonl)")
+	work := fs.String("work", "", "work directory (clones in <work>/repos)")
+	out := fs.String("out", "", "write per-name locations as JSON here")
+	examples := fs.Int("examples", 3, "examples printed per category")
+	fs.Parse(args)
+	if *tasksPath == "" || *work == "" {
+		return fmt.Errorf("--tasks and --work are required")
+	}
+	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
+		return err
+	}
+	tasks, err := evalkit.LoadTasks(*tasksPath)
+	if err != nil {
+		return err
+	}
+	byRepo := map[string][]evalkit.Task{}
+	for _, t := range tasks {
+		k := strings.ToLower(t.Repo)
+		byRepo[k] = append(byRepo[k], t)
+	}
+	var mu sync.Mutex
+	var rows []evalkit.PyLocateRow
+	var wg sync.WaitGroup
+	sem := make(chan struct{}, 4)
+	for _, ts := range byRepo {
+		wg.Add(1)
+		go func(ts []evalkit.Task) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			for i, t := range ts {
+				if ctx.Err() != nil {
+					return
+				}
+				idx := filepath.Join(*work, "idx", fmt.Sprintf("pyloc_%s_%d.index", strings.ReplaceAll(t.Repo, "/", "__"), i))
+				os.MkdirAll(filepath.Dir(idx), 0o755)
+				r := evalkit.PyLocateTask(ctx, evalkit.RustRepoDir(*work, t.Repo), idx, t)
+				mu.Lock()
+				rows = append(rows, r)
+				fmt.Fprintf(os.Stderr, "%-44s f2p=%-4d unique=%-4d ambiguous=%-3d notfound=%-4d %s\n", r.ID, r.F2P, r.Unique, r.Ambig, r.NotFnd, r.Err)
+				mu.Unlock()
+			}
+		}(ts)
+	}
+	wg.Wait()
+	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
+	type agg struct{ tasks, names, uniq, amb, nf, errs int }
+	by := map[string]*agg{}
+	add := func(k string, r evalkit.PyLocateRow) {
+		a := by[k]
+		if a == nil {
+			a = &agg{}
+			by[k] = a
+		}
+		a.tasks++
+		a.names += r.F2P
+		a.uniq += r.Unique
+		a.amb += r.Ambig
+		a.nf += r.NotFnd
+		if r.Err != "" {
+			a.errs++
+		}
+	}
+	form := map[string]*agg{}
+	for _, r := range rows {
+		add("ALL", r)
+		add("repo="+strings.ToLower(r.Repo), r)
+		for _, l := range r.Locs {
+			a := form[l.Form]
+			if a == nil {
+				a = &agg{}
+				form[l.Form] = a
+			}
+			a.names++
+			switch {
+			case l.NotFound:
+				a.nf++
+			case l.Ambiguous:
+				a.amb++
+			default:
+				a.uniq++
+			}
+		}
+	}
+	keys := make([]string, 0, len(by))
+	for k := range by {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	fmt.Printf("%-32s %6s %7s %7s %7s %9s %5s\n", "group", "tasks", "names", "unique", "ambig", "notfound", "errs")
+	for _, k := range keys {
+		a := by[k]
+		fmt.Printf("%-32s %6d %7d %7d %7d %9d %5d\n", k, a.tasks, a.names, a.uniq, a.amb, a.nf, a.errs)
+	}
+	fmt.Println()
+	for _, k := range []string{"nodeid", "django", "docstring", "bare", "other"} {
+		if a := form[k]; a != nil {
+			fmt.Printf("%-32s %6s %7d %7d %7d %9d\n", "form="+k, "", a.names, a.uniq, a.amb, a.nf)
+		}
+	}
+	// One example per (outcome, form, repo), at most -examples per outcome and form.
+	cat := map[string][]string{}
+	seen := map[string]int{}
+	for _, r := range rows {
+		for _, l := range r.Locs {
+			c := "unique"
+			switch {
+			case l.NotFound:
+				c = "notfound"
+			case l.Ambiguous:
+				c = "ambiguous"
+			}
+			k := c + "|" + l.Form
+			if seen[k] < *examples {
+				seen[k]++
+				cat[k] = append(cat[k], fmt.Sprintf("%s  %.110s -> %v", r.ID, l.Name, l.Files))
+			}
+		}
+	}
+	ckeys := make([]string, 0, len(cat))
+	for k := range cat {
+		ckeys = append(ckeys, k)
+	}
+	sort.Strings(ckeys)
+	for _, k := range ckeys {
+		fmt.Printf("\nexamples (%s):\n", strings.ReplaceAll(k, "|", ", form="))
+		for _, e := range cat[k] {
+			fmt.Println("  " + e)
+		}
+	}
+	if *out != "" {
+		type rec struct {
+			evalkit.PyLocateRow
+			Locs []evalkit.PyTestLoc `json:"locs"`
 		}
 		var rs []rec
 		for _, r := range rows {

@@ -161,10 +161,12 @@ type DatasetInfo struct {
 
 // ManifestRepo is one repo in the manifest.
 type ManifestRepo struct {
-	Name    string   `json:"name"`
-	Role    string   `json:"role"` // dev | holdout
-	T1      int      `json:"t1_tasks"`
-	Replay  bool     `json:"replay"`
+	Name   string `json:"name"`
+	Role   string `json:"role"` // dev | holdout
+	T1     int    `json:"t1_tasks"`
+	Replay bool   `json:"replay"`
+	// Kind is library | framework | application (set for Python; plan section 6.2 reports selectivity per kind).
+	Kind    string   `json:"kind,omitempty"`
 	Sources []string `json:"sources,omitempty"`
 }
 

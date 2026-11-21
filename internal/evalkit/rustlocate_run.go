@@ -92,6 +92,11 @@ type gitTree struct {
 }
 
 func newGitTree(ctx context.Context, repoDir, rev string) (*gitTree, error) {
+	return newGitTreeWant(ctx, repoDir, rev, func(p string) bool { return strings.HasSuffix(p, ".rs") || strings.HasSuffix(p, ".toml") })
+}
+
+// newGitTreeWant is newGitTree with a caller-chosen set of paths whose blobs are prefetched in one batch (the ones the caller will Read).
+func newGitTreeWant(ctx context.Context, repoDir, rev string, want func(string) bool) (*gitTree, error) {
 	ls, err := git(ctx, repoDir, "ls-tree", "-r", "-z", "--full-tree", rev)
 	if err != nil {
 		return nil, err
@@ -114,7 +119,7 @@ func newGitTree(ctx context.Context, repoDir, rev string) (*gitTree, error) {
 		}
 	}
 	sort.Strings(t.files)
-	if err := prefetchRustBlobs(ctx, repoDir, t); err != nil {
+	if err := prefetchBlobs(ctx, repoDir, t, want); err != nil {
 		return nil, err
 	}
 	t.cmd = exec.CommandContext(ctx, "git", "-c", "gc.auto=0", "cat-file", "--batch")
@@ -182,12 +187,12 @@ func (t *gitTree) Read(p string) ([]byte, error) {
 
 var _ tree.Tree = (*gitTree)(nil)
 
-// prefetchRustBlobs fetches the .rs blobs of the tree that a partial clone lacks in one batched round trip (the same command git itself
+// prefetchBlobs fetches the wanted blobs of the tree that a partial clone lacks in one batched round trip (the same command git itself
 // uses for lazy fetches); a `cat-file --batch` would otherwise fetch them one by one.
-func prefetchRustBlobs(ctx context.Context, repoDir string, t *gitTree) error {
+func prefetchBlobs(ctx context.Context, repoDir string, t *gitTree, want func(string) bool) error {
 	var in strings.Builder
 	for _, p := range t.files {
-		if strings.HasSuffix(p, ".rs") || strings.HasSuffix(p, ".toml") {
+		if want(p) {
 			in.WriteString(t.oid[p] + "\n")
 		}
 	}

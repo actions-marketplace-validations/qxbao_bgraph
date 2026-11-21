@@ -1,0 +1,136 @@
+{
+ "ecosystem": "python",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "princeton-nlp/SWE-bench_Verified",
+   "url": "https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified",
+   "revision": "c104f840cc67f8b6eec6f759ebc8b2693d585d4a",
+   "notes": "test split (500 tasks); all repos are libraries/frameworks"
+  }
+ ],
+ "repos": [
+  {
+   "name": "astropy/astropy",
+   "role": "holdout",
+   "t1_tasks": 22,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "mwaskom/seaborn",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "pydata/xarray",
+   "role": "holdout",
+   "t1_tasks": 22,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "sympy/sympy",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "matplotlib/matplotlib",
+   "role": "dev",
+   "t1_tasks": 34,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "django/django",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "pallets/flask",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "psf/requests",
+   "role": "dev",
+   "t1_tasks": 8,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "scikit-learn/scikit-learn",
+   "role": "dev",
+   "t1_tasks": 32,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "pytest-dev/pytest",
+   "role": "dev",
+   "t1_tasks": 19,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "sphinx-doc/sphinx",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  },
+  {
+   "name": "pylint-dev/pylint",
+   "role": "dev",
+   "t1_tasks": 10,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Verified"
+   ]
+  }
+ ]
+}
