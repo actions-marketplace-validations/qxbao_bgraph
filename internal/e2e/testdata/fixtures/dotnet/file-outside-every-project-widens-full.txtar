@@ -1,0 +1,12 @@
+A script outside every project that nothing references can be run by a test: unknown_file, not skipped.
+-- base/build/run.ps1 --
+echo a
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/build/run.ps1 --
+echo b
+-- want --
+full
+widen unknown_file

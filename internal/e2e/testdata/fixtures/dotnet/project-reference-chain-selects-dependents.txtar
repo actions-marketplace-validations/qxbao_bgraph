@@ -1,0 +1,40 @@
+A change in a project selects it and every project that references it, transitively; an unrelated project stays out.
+-- base/src/Core/Core.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Core/C.cs --
+class C {}
+-- base/src/Lib/Lib.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/Lib/L.cs --
+class L {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Lib\Lib.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/App/A.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/O.cs --
+class O {}
+-- head/src/Core/C.cs --
+class C { int x; }
+-- want --
+notfull
+scope graph
+select dotnet:src/Core/Core.csproj
+select dotnet:src/Lib/Lib.csproj
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

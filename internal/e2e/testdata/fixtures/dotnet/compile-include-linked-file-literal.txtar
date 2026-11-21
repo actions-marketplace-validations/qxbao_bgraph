@@ -1,0 +1,24 @@
+A literal Compile Include outside the directory (Link) is an input of the project.
+-- base/tools/Gen.cs --
+class G {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\tools\Gen.cs" Link="Gen.cs" />
+  </ItemGroup>
+</Project>
+-- base/src/App/A.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/O.cs --
+class O {}
+-- head/tools/Gen.cs --
+class G { int x; }
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

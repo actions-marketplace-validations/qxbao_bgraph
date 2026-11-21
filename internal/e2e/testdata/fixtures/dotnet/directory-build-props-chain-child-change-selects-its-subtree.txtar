@@ -1,0 +1,29 @@
+With the chain in place a change to the child file selects only the projects below the child.
+-- base/Directory.Build.props --
+<Project><PropertyGroup><A>1</A></PropertyGroup></Project>
+-- base/src/Directory.Build.props --
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup><B>1</B></PropertyGroup>
+</Project>
+-- base/src/P/P.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/P/p.cs --
+class P {}
+-- base/tests/Q/Q.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/tests/Q/q.cs --
+class Q {}
+-- head/src/Directory.Build.props --
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup><B>2</B></PropertyGroup>
+</Project>
+-- want --
+notfull
+select dotnet:src/P/P.csproj
+noselect dotnet:tests/Q/Q.csproj

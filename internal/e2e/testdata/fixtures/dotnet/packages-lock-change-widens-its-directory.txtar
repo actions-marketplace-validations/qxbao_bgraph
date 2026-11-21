@@ -1,0 +1,20 @@
+packages.lock.json is handled at level L0: the projects under its directory.
+-- base/src/A/packages.lock.json --
+{"version":1}
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/B/b.cs --
+class B {}
+-- head/src/A/packages.lock.json --
+{"version":1,"dependencies":{}}
+-- want --
+notfull
+widen lock_changed
+select dotnet:src/A/A.csproj
+noselect dotnet:src/B/B.csproj

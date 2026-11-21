@@ -1,0 +1,25 @@
+An Import in a props file that cannot be evaluated is seeded at the props file: every project that applies it is selected.
+-- base/a/Directory.Build.props --
+<Project><Import Project="$(EngRoot)\x.props" /></Project>
+-- base/a/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/b/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/b/B/b.cs --
+class B {}
+-- base/d/D/D.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/b/B/b.cs --
+class B { int x; }
+-- want --
+notfull
+widen unknown_import
+select dotnet:a/A/A.csproj
+select dotnet:b/B/B.csproj
+noselect dotnet:d/D/D.csproj

@@ -1,0 +1,19 @@
+A file owned only by the outer project does not select the nested one.
+-- base/src/Outer/Outer.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Outer/Y.cs --
+class Y {}
+-- base/src/Outer/Inner/Inner.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Outer/Inner/X.cs --
+class X {}
+-- head/src/Outer/Y.cs --
+class Y { int a; }
+-- want --
+notfull
+select dotnet:src/Outer/Outer.csproj
+noselect dotnet:src/Outer/Inner/Inner.csproj

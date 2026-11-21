@@ -1,0 +1,29 @@
+OutputItemType=Analyzer and ReferenceOutputAssembly=false still make the referenced project an input of the build.
+-- base/src/Gen/Gen.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Gen/G.cs --
+class G {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gen\Gen.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+</Project>
+-- base/src/App/A.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/O.cs --
+class O {}
+-- head/src/Gen/G.cs --
+class G { int x; }
+-- want --
+notfull
+select dotnet:src/Gen/Gen.csproj
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

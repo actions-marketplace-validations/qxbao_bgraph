@@ -1,0 +1,26 @@
+A ProjectReference whose whole path is an undefined property may name a project anywhere (command line, environment): it is Unresolved even under a Condition.
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup Condition="'$(Lib)' != ''">
+    <ProjectReference Include="$(Lib)" />
+  </ItemGroup>
+</Project>
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- base/src/Free/Free.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/src/Other/o.cs --
+class O { int x; }
+-- want --
+notfull
+widen unknown_import
+select dotnet:src/App/App.csproj
+select dotnet:src/Other/Other.csproj
+noselect dotnet:src/Free/Free.csproj

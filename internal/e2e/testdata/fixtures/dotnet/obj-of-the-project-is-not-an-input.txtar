@@ -1,0 +1,21 @@
+Files under the project's obj/ are build output and are not owned.
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- base/src/App/obj/gen.cs --
+class G {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- head/src/Other/o.cs --
+class O { int x; }
+-- want --
+notfull
+select dotnet:src/Other/Other.csproj
+noselect dotnet:src/App/App.csproj

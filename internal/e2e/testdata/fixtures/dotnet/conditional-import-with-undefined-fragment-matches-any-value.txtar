@@ -1,0 +1,19 @@
+Under a Condition an undefined property glued to literal text (eng/$(ProjectType).targets) is any value: every matching file is imported, so a change to one of them selects the importer.
+-- base/Directory.Build.targets --
+<Project><Import Project="$(MSBuildThisFileDirectory)eng/$(ProjectType).targets" Condition="$(ProjectType) != ''" /></Project>
+-- base/eng/Library.targets --
+<Project />
+-- base/eng/Test.targets --
+<Project />
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- head/eng/Test.targets --
+<Project><PropertyGroup><X>1</X></PropertyGroup></Project>
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+nowiden unknown_import

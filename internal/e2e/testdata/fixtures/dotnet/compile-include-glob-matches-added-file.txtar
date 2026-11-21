@@ -1,0 +1,22 @@
+A file added later under an Include glob outside the project selects the project.
+-- base/src/Shared/S.cs --
+class S {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\**\*.cs" />
+  </ItemGroup>
+</Project>
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- head/src/Shared/deep/New.cs --
+class N {}
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

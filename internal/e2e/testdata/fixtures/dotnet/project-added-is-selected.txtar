@@ -1,0 +1,15 @@
+A project added by the change is selected.
+-- base/src/Old/Old.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/src/New/New.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/src/New/n.cs --
+class N {}
+-- want --
+notfull
+select dotnet:src/New/New.csproj
+noselect dotnet:src/Old/Old.csproj

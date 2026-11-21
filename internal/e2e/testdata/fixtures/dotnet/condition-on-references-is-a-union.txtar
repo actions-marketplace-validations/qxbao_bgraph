@@ -1,0 +1,30 @@
+A Condition is never evaluated: a ProjectReference behind a TargetFramework condition counts, and a conditional import of a missing file is not a widening.
+-- base/src/Lib/Lib.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Lib/l.cs --
+class L {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net48'">
+    <ProjectReference Include="..\Lib\Lib.csproj" />
+  </ItemGroup>
+  <Import Project="local.props" Condition="Exists('local.props')" />
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- head/src/Lib/l.cs --
+class L { int x; }
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj
+nowiden unknown_import

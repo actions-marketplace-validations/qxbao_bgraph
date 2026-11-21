@@ -1,0 +1,29 @@
+Directory.Build.props applies to the projects below its directory: a change selects exactly those and widens nothing.
+-- base/src/a/Directory.Build.props --
+<Project><PropertyGroup><LangVersion>11</LangVersion></PropertyGroup></Project>
+-- base/src/a/A1/A1.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/a/A1/x.cs --
+class X {}
+-- base/src/a/A2/A2.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/a/A2/y.cs --
+class Y {}
+-- base/src/b/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/b/B/z.cs --
+class Z {}
+-- head/src/a/Directory.Build.props --
+<Project><PropertyGroup><LangVersion>12</LangVersion></PropertyGroup></Project>
+-- want --
+notfull
+select dotnet:src/a/A1/A1.csproj
+select dotnet:src/a/A2/A2.csproj
+noselect dotnet:src/b/B/B.csproj
+nowiden global_input

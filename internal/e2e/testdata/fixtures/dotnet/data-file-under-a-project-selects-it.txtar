@@ -1,0 +1,17 @@
+A data file below the project directory is an item (None/Content) of the project.
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/App/data/x.json --
+{}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/src/App/data/x.json --
+{"a":1}
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

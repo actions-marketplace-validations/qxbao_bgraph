@@ -1,0 +1,17 @@
+Directory.Build.targets is applied like the props file.
+-- base/eng/a/Directory.Build.targets --
+<Project />
+-- base/eng/a/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/eng/b/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/eng/a/Directory.Build.targets --
+<Project><Target Name="X" /></Project>
+-- want --
+notfull
+select dotnet:eng/a/A/A.csproj
+noselect dotnet:eng/b/B/B.csproj

@@ -1,0 +1,26 @@
+A ProjectReference to a file that does not exist (and has no Condition) is reported and selects the referencing project.
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gone\Gone.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/Free/Free.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Third/Third.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Third/t.cs --
+class T {}
+-- head/src/Third/t.cs --
+class T { int x; }
+-- want --
+notfull
+widen unknown_import
+select dotnet:src/App/App.csproj
+select dotnet:src/Third/Third.csproj
+noselect dotnet:src/Free/Free.csproj

@@ -1,0 +1,14 @@
+Markdown below a project directory is not a build input.
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/App/README.md --
+a
+-- base/src/App/a.cs --
+class A {}
+-- head/src/App/README.md --
+b
+-- want --
+scope none
+noselect dotnet:src/App/App.csproj

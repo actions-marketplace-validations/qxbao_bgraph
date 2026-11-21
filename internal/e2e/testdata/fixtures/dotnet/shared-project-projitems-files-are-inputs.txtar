@@ -1,0 +1,30 @@
+The importing project depends on the .projitems it imports and on the files that file lists, even though they live outside its directory.
+-- base/shared/Shared.projitems --
+<Project>
+  <ItemGroup>
+    <Compile Include="$(MSBuildThisFileDirectory)S.cs" />
+  </ItemGroup>
+</Project>
+-- base/shared/Shared.shproj --
+<Project />
+-- base/shared/S.cs --
+class S {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Import Project="..\..\shared\Shared.projitems" Label="Shared" />
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- head/shared/S.cs --
+class S { int x; }
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

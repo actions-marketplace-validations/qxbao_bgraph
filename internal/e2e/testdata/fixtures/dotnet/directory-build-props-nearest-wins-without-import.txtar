@@ -1,0 +1,23 @@
+The nearest Directory.Build.props wins: a child file that does not import its parent cuts the chain, so the root file does not apply below it.
+-- base/Directory.Build.props --
+<Project><PropertyGroup><A>1</A></PropertyGroup></Project>
+-- base/src/Directory.Build.props --
+<Project><PropertyGroup><B>1</B></PropertyGroup></Project>
+-- base/src/P/P.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/P/p.cs --
+class P {}
+-- base/tests/Q/Q.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/tests/Q/q.cs --
+class Q {}
+-- head/Directory.Build.props --
+<Project><PropertyGroup><A>2</A></PropertyGroup></Project>
+-- want --
+notfull
+select dotnet:tests/Q/Q.csproj
+noselect dotnet:src/P/P.csproj

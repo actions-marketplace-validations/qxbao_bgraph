@@ -1,0 +1,18 @@
+A .runsettings file can be selected from any props file: every .NET unit.
+-- base/x.runsettings --
+<RunSettings />
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/x.runsettings --
+<RunSettings><RunConfiguration /></RunSettings>
+-- want --
+notfull
+widen test_config_changed
+select dotnet:src/A/A.csproj
+select dotnet:src/B/B.csproj

@@ -1,0 +1,38 @@
+A ProjectReference whose path cannot be evaluated could name any project: the referencing project (and its dependents) is selected for any change; projects without the construct are not.
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="$(Mystery)\X.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- base/src/Top/Top.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../App/App.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/Free/Free.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Free/f.cs --
+class F {}
+-- head/src/Other/o.cs --
+class O { int x; }
+-- want --
+notfull
+widen unknown_import
+select dotnet:src/Other/Other.csproj
+select dotnet:src/App/App.csproj
+select dotnet:src/Top/Top.csproj
+noselect dotnet:src/Free/Free.csproj

@@ -1,0 +1,14 @@
+global.json selects the SDK and the test runner: every test is affected.
+-- base/global.json --
+{"sdk":{"version":"8.0.100"}}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- head/global.json --
+{"sdk":{"version":"8.0.200"}}
+-- want --
+full
+widen global_input

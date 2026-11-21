@@ -1,0 +1,22 @@
+Changing the .projitems itself selects the importing project; a .shproj change is harmless.
+-- base/shared/Shared.projitems --
+<Project />
+-- base/shared/Shared.shproj --
+<Project />
+-- base/shared/S.cs --
+class S {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Import Project="..\..\shared\Shared.projitems" Label="Shared" />
+</Project>
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/shared/Shared.projitems --
+<Project><ItemGroup><Compile Include="$(MSBuildThisFileDirectory)S.cs" /></ItemGroup></Project>
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

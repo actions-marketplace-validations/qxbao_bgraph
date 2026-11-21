@@ -1,0 +1,23 @@
+A change in the leaf project selects only that project.
+-- base/src/Core/Core.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Core/C.cs --
+class C {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Core/Core.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/App/A.cs --
+class A {}
+-- head/src/App/A.cs --
+class A { int x; }
+-- want --
+notfull
+scope graph
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Core/Core.csproj

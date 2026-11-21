@@ -1,0 +1,23 @@
+nuget.config (any case) is read for every project: every .NET unit, and no other ecosystem's.
+-- base/NuGet.Config --
+<configuration />
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^5.0.0"}}
+-- base/web/a.test.ts --
+export {}
+-- head/NuGet.Config --
+<configuration><packageSources /></configuration>
+-- want --
+notfull
+widen global_input
+select dotnet:src/A/A.csproj
+select dotnet:src/B/B.csproj
+noselect web/a.test.ts

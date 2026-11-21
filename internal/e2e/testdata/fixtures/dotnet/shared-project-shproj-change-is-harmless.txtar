@@ -1,0 +1,15 @@
+A .shproj change selects nothing.
+-- base/shared/Shared.projitems --
+<Project />
+-- base/shared/Shared.shproj --
+<Project />
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Import Project="..\..\shared\Shared.projitems" Label="Shared" />
+</Project>
+-- head/shared/Shared.shproj --
+<Project><PropertyGroup /></Project>
+-- want --
+scope none
+noselect dotnet:src/App/App.csproj

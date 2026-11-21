@@ -1,0 +1,24 @@
+A file named by <Import Project> is an input of the importing project, and so is whatever that file imports.
+-- base/build/common.props --
+<Project><Import Project="extra.props" /></Project>
+-- base/build/extra.props --
+<Project><PropertyGroup><X>1</X></PropertyGroup></Project>
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <Import Project="..\..\build\common.props" />
+</Project>
+-- base/src/App/a.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/o.cs --
+class O {}
+-- head/build/extra.props --
+<Project><PropertyGroup><X>2</X></PropertyGroup></Project>
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

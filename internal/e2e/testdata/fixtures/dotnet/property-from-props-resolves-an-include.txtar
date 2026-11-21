@@ -1,0 +1,25 @@
+A property defined in Directory.Build.props from $(MSBuildThisFileDirectory) resolves the Include of a project below it.
+-- base/src/Directory.Build.props --
+<Project><PropertyGroup><RepoRoot>$(MSBuildThisFileDirectory)</RepoRoot></PropertyGroup></Project>
+-- base/src/shared/S.cs --
+class S {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(RepoRoot)shared\*.cs" />
+  </ItemGroup>
+</Project>
+-- base/other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/other/o.cs --
+class O {}
+-- head/src/shared/S.cs --
+class S { int x; }
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:other/Other.csproj
+nowiden unknown_import

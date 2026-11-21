@@ -1,0 +1,19 @@
+In a mixed repository a change in the Node project selects no .NET project.
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^5.0.0"}}
+-- base/web/src/a.ts --
+export const a = 1
+-- base/web/src/a.test.ts --
+import { a } from './a'
+-- base/api/Api.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/api/a.cs --
+class A {}
+-- head/web/src/a.ts --
+export const a = 2
+-- want --
+notfull
+select web/src/a.test.ts
+noselect dotnet:api/Api.csproj

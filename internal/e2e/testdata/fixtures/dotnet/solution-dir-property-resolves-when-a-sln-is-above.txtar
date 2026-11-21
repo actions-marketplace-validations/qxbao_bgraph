@@ -1,0 +1,25 @@
+$(SolutionDir) resolves to the directory of a .sln above the project.
+-- base/src/App.sln --
+Microsoft Visual Studio Solution File
+-- base/src/lib/L.cs --
+class L {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(SolutionDir)lib\*.cs" />
+  </ItemGroup>
+</Project>
+-- base/other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/other/o.cs --
+class O {}
+-- head/src/lib/L.cs --
+class L { int x; }
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:other/Other.csproj
+nowiden unknown_import

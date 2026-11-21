@@ -1,0 +1,22 @@
+A reference to a project type that is not modelled (.vcxproj) depends on its file and everything below its directory.
+-- base/native/Native.vcxproj --
+<Project />
+-- base/native/n.cpp --
+int x;
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\native\Native.vcxproj" />
+  </ItemGroup>
+</Project>
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/native/n.cpp --
+int y;
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

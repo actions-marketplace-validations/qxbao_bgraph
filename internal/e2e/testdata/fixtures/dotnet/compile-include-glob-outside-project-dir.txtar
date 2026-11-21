@@ -1,0 +1,26 @@
+Compile Include (glob) points at files outside the project directory: those files are inputs of the project.
+-- base/src/Shared/S.cs --
+class S {}
+-- base/src/Shared/T.cs --
+class T {}
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Shared\*.cs" />
+  </ItemGroup>
+</Project>
+-- base/src/App/A.cs --
+class A {}
+-- base/src/Other/Other.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Other/O.cs --
+class O {}
+-- head/src/Shared/S.cs --
+class S { int x; }
+-- want --
+notfull
+select dotnet:src/App/App.csproj
+noselect dotnet:src/Other/Other.csproj

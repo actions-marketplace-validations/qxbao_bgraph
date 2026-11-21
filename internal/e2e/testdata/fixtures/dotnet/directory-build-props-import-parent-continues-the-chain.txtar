@@ -1,0 +1,27 @@
+A child Directory.Build.props that imports its parent with GetPathOfFileAbove continues the chain: the root file applies below it.
+-- base/Directory.Build.props --
+<Project><PropertyGroup><A>1</A></PropertyGroup></Project>
+-- base/src/Directory.Build.props --
+<Project>
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+  <PropertyGroup><B>1</B></PropertyGroup>
+</Project>
+-- base/src/P/P.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/P/p.cs --
+class P {}
+-- base/tests/Q/Q.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/tests/Q/q.cs --
+class Q {}
+-- head/Directory.Build.props --
+<Project><PropertyGroup><A>2</A></PropertyGroup></Project>
+-- want --
+notfull
+select dotnet:src/P/P.csproj
+select dotnet:tests/Q/Q.csproj
+nowiden unknown_import

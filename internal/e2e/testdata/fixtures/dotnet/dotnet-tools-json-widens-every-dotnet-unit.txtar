@@ -1,0 +1,17 @@
+The local tool manifest can change test tooling: every .NET unit.
+-- base/.config/dotnet-tools.json --
+{"version":1}
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^5.0.0"}}
+-- base/web/a.test.ts --
+export {}
+-- head/.config/dotnet-tools.json --
+{"version":1,"tools":{}}
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+noselect web/a.test.ts

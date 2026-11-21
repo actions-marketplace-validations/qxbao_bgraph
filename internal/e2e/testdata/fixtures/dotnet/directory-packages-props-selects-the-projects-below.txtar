@@ -1,0 +1,21 @@
+Directory.Packages.props (central package management) applies to the projects below it; a nearer one cuts the chain.
+-- base/Directory.Packages.props --
+<Project><ItemGroup><PackageVersion Include="X" Version="1" /></ItemGroup></Project>
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/A/a.cs --
+class A {}
+-- base/other/Directory.Packages.props --
+<Project />
+-- base/other/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/Directory.Packages.props --
+<Project><ItemGroup><PackageVersion Include="X" Version="2" /></ItemGroup></Project>
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+noselect dotnet:other/B/B.csproj

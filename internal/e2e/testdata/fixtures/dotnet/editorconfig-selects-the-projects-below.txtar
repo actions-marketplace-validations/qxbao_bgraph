@@ -1,0 +1,19 @@
+.editorconfig can turn diagnostics into build errors: it is an input of every project below it.
+-- base/src/.editorconfig --
+root = true
+-- base/src/A/A.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/tests/B/B.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/src/.editorconfig --
+root = true
+[*.cs]
+dotnet_diagnostic.CS1591.severity = error
+-- want --
+notfull
+select dotnet:src/A/A.csproj
+noselect dotnet:tests/B/B.csproj
