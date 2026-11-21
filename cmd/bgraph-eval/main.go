@@ -6,6 +6,7 @@
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
 //	bgraph-eval t2       [--run-tests] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
+//	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
 
@@ -58,6 +59,8 @@ func main() {
 		}
 	case "replay":
 		err = cmdReplay(ctx, os.Args[2:])
+	case "cargometa":
+		err = cmdCargoMeta(ctx, os.Args[2:])
 	case "rust-locate":
 		err = cmdRustLocate(ctx, os.Args[2:])
 	case "manifest":

@@ -680,9 +680,7 @@ func WriteT1(dir string, rs []T1Result) error {
 			n++
 			fmt.Fprintf(&md, "- `%s` (%s) scope=%s missing %v; widenings %v\n", r.ID, r.Role, r.Scope, r.Missing, r.Widenings)
 			if r.Rust != nil {
-				for _, v := range r.Rust.Violations {
-					fmt.Fprintf(&md, "  - missing unit `%s`; F2P name `%s`; located in %v; changed files %v\n", v.Unit, v.Name, v.Files, v.Changed)
-				}
+				writeRustViolations(&md, r.Rust.Violations)
 			}
 		}
 	}
@@ -768,4 +766,32 @@ func mapStr(m map[string]int) string {
 		b = append(b, fmt.Sprintf("%s=%d", k, m[k]))
 	}
 	return strings.Join(b, ", ")
+}
+
+// writeRustViolations prints one line per (missing unit, located files) with its F2P names, and the changed files once.
+func writeRustViolations(md *bytes.Buffer, vs []RustViolation) {
+	type key struct{ unit, files string }
+	names := map[key][]string{}
+	var keys []key
+	var changed []string
+	for _, v := range vs {
+		k := key{v.Unit, strings.Join(v.Files, ",")}
+		if _, ok := names[k]; !ok {
+			keys = append(keys, k)
+		}
+		names[k] = append(names[k], v.Name)
+		changed = v.Changed
+	}
+	for _, k := range keys {
+		ns := names[k]
+		more := ""
+		if len(ns) > 6 {
+			more = fmt.Sprintf(" (+%d more)", len(ns)-6)
+			ns = ns[:6]
+		}
+		fmt.Fprintf(md, "  - missing unit `%s`; F2P names %q%s; located in %s\n", k.unit, ns, more, k.files)
+	}
+	if len(changed) > 0 {
+		fmt.Fprintf(md, "  - changed files (%d): %v\n", len(changed), changed)
+	}
 }
