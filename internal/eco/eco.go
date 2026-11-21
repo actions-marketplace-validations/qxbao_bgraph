@@ -1,7 +1,7 @@
-// Package eco định nghĩa giao diện của một hệ sinh thái (node, python, rust...) đối với bộ chọn (mục 4.1, 4.3).
+// Package eco defines the interface of an ecosystem (node, python, rust...) towards the selector (docs/plan.md §4.1, §4.3).
 //
-// Một hệ sinh thái phân tích MỘT cây (mốc hoặc hiện tại) thành Analysis; bộ chọn lấy hợp Analysis của hai cây.
-// Nó cũng phân loại tệp đổi là manifest/cấu hình của nó (nới theo luật riêng) dựa trên cả hai cây.
+// An ecosystem analyzes ONE tree (base or current) into an Analysis; the selector takes the union of the Analyses of both trees.
+// It also classifies a changed file as its own manifest/config (widened by its own rules), based on both trees.
 package eco
 
 import (
@@ -13,42 +13,42 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// Project là một dự án của hệ sinh thái (package.json, crate, module...). Dir là thư mục gốc dự án ("." là gốc repo).
+// Project is a project of the ecosystem (package.json, crate, module...). Dir is the project root directory ("." is the repo root).
 type Project struct {
 	Eco  string `json:"eco"`
 	Dir  string `json:"dir"`
 	Name string `json:"name,omitempty"`
 }
 
-// Analysis là kết quả phân tích một cây.
+// Analysis is the result of analyzing one tree.
 type Analysis struct {
 	Projects   []Project
-	Roles      map[string]model.Role // tệp do hệ sinh thái này nhận (source, test, config, manifest, lock, data)
-	Edges      []model.Edge          // From phụ thuộc To; Kind=pattern thì To là glob đánh giá trên cả hai cây
+	Roles      map[string]model.Role // files claimed by this ecosystem (source, test, config, manifest, lock, data)
+	Edges      []model.Edge          // From depends on To; when Kind=pattern, To is a glob evaluated on both trees
 	Unresolved []model.Unresolved
 	Tests      []model.TestUnit
-	// Warnings không đổi phạm vi (case_mismatch...); Path là tệp chứa vấn đề.
+	// Warnings do not change the scope (case_mismatch...); Path is the file containing the problem.
 	Warnings []model.Widening
 }
 
-// Scanner trả kết quả quét import của một tệp, có cache theo khoá nội dung.
+// Scanner returns the import scan result of a file, cached by content key.
 type Scanner interface {
 	Scan(t tree.Tree, p string) (model.ScanResult, error)
 }
 
-// Ecosystem là một hệ sinh thái.
+// Ecosystem is an ecosystem.
 type Ecosystem interface {
 	Name() string
-	// Version đổi khi luật phân tích đổi (vô hiệu snapshot phân tích đã lưu).
+	// Version changes when the analysis rules change (invalidates stored analysis snapshots).
 	Version() string
-	// Analyze phân tích cây t. Lỗi trả về làm bộ chọn nới full (internal_error); lỗi cục bộ nên thành Unresolved.
+	// Analyze analyzes tree t. A returned error makes the selector widen to full (internal_error); local errors should become Unresolved.
 	Analyze(ctx context.Context, t tree.Tree, sc Scanner) (*Analysis, error)
-	// ClassifyChange: p (đã đổi giữa base và head) là manifest/cấu hình/lockfile của hệ sinh thái này? Trả các lần nới và
-	// true nếu đã nhận tệp. base có thể nil (không có mốc).
+	// ClassifyChange: is p (changed between base and head) a manifest/config/lockfile of this ecosystem? Returns the widenings and
+	// true if the file was claimed. base may be nil (no base).
 	ClassifyChange(p string, base, head tree.Tree, a *Analysis) ([]model.Widening, bool)
 }
 
-// Within: p nằm trong thư mục dir (dir "." hoặc "" chứa mọi thứ).
+// Within reports whether p lies inside directory dir (dir "." or "" contains everything).
 func Within(p, dir string) bool {
 	if dir == "" || dir == "." {
 		return true
@@ -56,7 +56,7 @@ func Within(p, dir string) bool {
 	return p == dir || strings.HasPrefix(p, dir+"/")
 }
 
-// NearestProject trả dự án sâu nhất chứa p.
+// NearestProject returns the deepest project containing p.
 func NearestProject(projects []Project, p string) (Project, bool) {
 	best, ok := Project{}, false
 	for _, pr := range projects {

@@ -9,17 +9,17 @@ import (
 )
 
 type tsEntry struct {
-	val string // giá trị (có thể chứa '*')
-	abs bool   // đã là đường dẫn tương đối gốc repo (do ${configDir}), không nối thêm base
+	val string // value (may contain '*')
+	abs bool   // already a repo-root-relative path (via ${configDir}); do not join base again
 }
 
-// tsEff là compilerOptions hiệu lực (sau extends) của một tsconfig/jsconfig.
+// tsEff is the effective compilerOptions (after extends) of a tsconfig/jsconfig.
 type tsEff struct {
 	HasBase   bool
-	BaseURL   string // tương đối gốc repo
+	BaseURL   string // repo-root-relative
 	HasPaths  bool
 	Paths     map[string][]tsEntry
-	PathsBase string // thư mục của config ĐỊNH NGHĨA paths
+	PathsBase string // directory of the config that DEFINES paths
 	HasOut    bool
 	OutDir    string
 	HasRoot   bool
@@ -35,7 +35,7 @@ func (e *tsEff) merge(p *tsEff) {
 	if p.HasBase {
 		e.HasBase, e.BaseURL = true, p.BaseURL
 	}
-	if p.HasPaths { // paths thay thế nguyên khối qua extends
+	if p.HasPaths { // paths replace wholesale through extends
 		e.HasPaths, e.Paths, e.PathsBase = true, p.Paths, p.PathsBase
 	}
 	if p.HasOut {
@@ -46,7 +46,7 @@ func (e *tsEff) merge(p *tsEff) {
 	}
 }
 
-// configsIn liệt kê tsconfig*.json / jsconfig*.json trong đúng thư mục dir.
+// configsIn lists tsconfig*.json / jsconfig*.json directly in directory dir.
 func (r *Resolver) configsIn(dir string) []string {
 	if r.cfgIdx == nil {
 		r.cfgIdx = map[string][]string{}
@@ -70,7 +70,7 @@ func (r *Resolver) effective(cfg string) (*tsEff, error) {
 	return eff, err
 }
 
-// resolveVal chuyển một giá trị đường dẫn trong config cfg thành đường dẫn tương đối gốc repo.
+// resolveVal converts a path value in config cfg into a repo-root-relative path.
 func resolveVal(cfgDir, rootDir, s string) (string, bool, bool) {
 	if strings.Contains(s, "${configDir}") {
 		p, ok := join(".", strings.ReplaceAll(s, "${configDir}", rootDir))
@@ -91,7 +91,7 @@ func (r *Resolver) loadEff(cfg, rootDir string, stack []string) (*tsEff, error) 
 	}
 	v, err := ParseJSONC(data)
 	if err == nil && v.Kind != KObject {
-		err = errors.New("config không phải object")
+		err = errors.New("config is not an object")
 	}
 	if err != nil {
 		r.recordErr(cfg, err)
@@ -117,7 +117,7 @@ func (r *Resolver) loadEff(cfg, rootDir string, stack []string) (*tsEff, error) 
 			continue
 		}
 		if slices.Contains(stack, pp) {
-			err := fmt.Errorf("extends vòng: %s", pp)
+			err := fmt.Errorf("extends cycle: %s", pp)
 			r.recordErr(cfg, err)
 			return nil, err
 		}
@@ -179,7 +179,7 @@ func (r *Resolver) loadEff(cfg, rootDir string, stack []string) (*tsEff, error) 
 	return eff, nil
 }
 
-// resolveExtends tìm tệp được extends. Đường dẫn tương đối thiếu → ConfigError; tên package → thử workspace, không có thì bỏ qua.
+// resolveExtends finds the extended file. A missing relative path → ConfigError; a package name → try the workspace, otherwise ignore.
 func (r *Resolver) resolveExtends(cfg, e string) (string, bool) {
 	try := func(c string) (string, bool) {
 		for _, x := range []string{c, c + ".json", c + "/tsconfig.json"} {
@@ -196,7 +196,7 @@ func (r *Resolver) resolveExtends(cfg, e string) (string, bool) {
 				return p, true
 			}
 		}
-		r.recordErr(cfg, fmt.Errorf("extends %q không tồn tại", e))
+		r.recordErr(cfg, fmt.Errorf("extends %q does not exist", e))
 		return "", false
 	}
 	name, sub, ok := splitPkg(e)
@@ -211,10 +211,10 @@ func (r *Resolver) resolveExtends(cfg, e string) (string, bool) {
 			}
 		}
 	}
-	return "", false // package ngoài cây: bỏ qua
+	return "", false // package outside the tree: ignore
 }
 
-// tsMatch chọn mục paths: khoá chính xác trước, sau đó mẫu có '*' với tiền tố dài nhất.
+// tsMatch picks a paths entry: exact key first, then a '*' pattern with the longest prefix.
 func tsMatch(paths map[string][]tsEntry, spec string) ([]tsEntry, string, bool) {
 	if v, ok := paths[spec]; ok && !strings.Contains(spec, "*") {
 		return v, "", true
@@ -242,8 +242,8 @@ func tsMatch(paths map[string][]tsEntry, spec string) ([]tsEntry, string, bool) 
 	return paths[bestKey], subst, true
 }
 
-// tsCandidates sinh các đường dẫn ứng viên (chưa dò) cho spec không tương đối từ mọi tsconfig/jsconfig
-// ở dir(from) và tổ tiên. Lỗi config ghi vào a.cfgErr.
+// tsCandidates generates candidate paths (not yet probed) for a non-relative spec from every tsconfig/jsconfig
+// at dir(from) and its ancestors. Config errors are recorded in a.cfgErr.
 func (a *acc) tsCandidates(from, spec string) []string {
 	var out []string
 	for d := dirOf(from); ; d = path.Dir(d) {
@@ -284,12 +284,12 @@ func (a *acc) tsCandidates(from, spec string) []string {
 	return out
 }
 
-// mapOutDir ánh xạ đường dẫn p dưới outDir của package pkgDir về ứng viên mã nguồn.
+// mapOutDir maps path p under package pkgDir's outDir to source candidates.
 func (a *acc) mapOutDir(pkgDir, p string) []string {
 	var out []string
 	var addOne func(root, rel string)
-	// add thử rel và, nếu đoạn đầu là thư mục biến thể định dạng (dist/cjs, dist/esm, dist/types...), cả phần sau nó:
-	// các biến thể được build từ cùng một nguồn.
+	// add tries rel and, if the first segment is a format-variant directory (dist/cjs, dist/esm, dist/types...), also the part after it:
+	// the variants are built from the same source.
 	add := func(root, rel string) {
 		addOne(root, rel)
 		if i := strings.IndexByte(rel, '/'); i > 0 && buildVariants[rel[:i]] {
@@ -340,8 +340,8 @@ func (a *acc) mapOutDir(pkgDir, p string) []string {
 			}
 		}
 	}
-	// Thư mục build quen thuộc khi có src/ (cả khi tsconfig có outDir: tsconfig thường chỉ sinh .d.ts, còn JS do
-	// bundler sinh vào dist/). Chỉ thêm ứng viên nguồn — hợp, không bớt.
+	// Well-known build directories when src/ exists (even when tsconfig has outDir: tsconfig often only emits .d.ts, while JS is
+	// emitted into dist/ by a bundler). Only add source candidates — union, never subtract.
 	_ = foundCfgOut
 	{
 		if s, ok := join(pkgDir, "src"); ok && a.r.t.IsDir(s) {
@@ -355,7 +355,7 @@ func (a *acc) mapOutDir(pkgDir, p string) []string {
 	return out
 }
 
-// buildVariants là tên thư mục con của đầu ra build theo định dạng (cùng nguồn).
+// buildVariants are the names of build-output subdirectories by format (same source).
 var buildVariants = map[string]bool{"cjs": true, "esm": true, "es": true, "mjs": true, "umd": true, "types": true, "type": true,
 	"typings": true, "module": true, "commonjs": true, "node": true, "browser": true, "modern": true, "legacy": true, "lib": true,
 	"dts": true, "bundle": true}

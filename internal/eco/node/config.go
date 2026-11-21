@@ -10,31 +10,31 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// testConfig là phần đọc được từ cấu hình runner của một dự án (jest/vitest/vite/playwright...).
+// testConfig is what can be read from a project's runner config (jest/vitest/vite/playwright...).
 type testConfig struct {
-	files   []string        // tệp cấu hình đã thấy
-	aliases []resolve.Alias // moduleNameMapper / resolve.alias đọc được
-	// implicit: tệp trong repo mà cấu hình trỏ tới (setupFiles, globalSetup, preset, transform...): mọi test của dự án
-	// phụ thuộc vào chúng.
+	files   []string        // config files seen
+	aliases []resolve.Alias // moduleNameMapper / resolve.alias that could be read
+	// implicit: repo files the config points to (setupFiles, globalSetup, preset, transform...): every test in the project
+	// depends on them.
 	implicit []string
-	// implicitGlobs: như implicit nhưng là glob (đã thoát ký tự đặc biệt của phần đường dẫn chữ nghĩa).
+	// implicitGlobs: like implicit but globs (special characters in the literal path part escaped).
 	implicitGlobs []string
-	// opaque: cấu hình có khoá ảnh hưởng phân giải/chọn test mà không đọc được dưới dạng literal → config_is_code.
+	// opaque: the config has keys affecting resolution/test selection that cannot be read as literals → config_is_code.
 	opaque []string
-	// testGlobs/testRegex: mẫu tệp test do cấu hình khai (Jest testMatch/testRegex, Vitest include). Tệp là test nếu khớp
-	// mẫu cấu hình HOẶC mẫu mặc định (hợp: không bao giờ thu hẹp tập test).
+	// testGlobs/testRegex: test-file patterns declared by the config (Jest testMatch/testRegex, Vitest include). A file is a test if it matches
+	// a config pattern OR the default pattern (union: never narrows the test set).
 	testGlobs []*glob.Pattern
 	testRegex []*regexp.Regexp
-	// testsOpaque: mẫu tệp test không đọc được → tập test của dự án không biết (đơn vị Whole).
+	// testsOpaque: test-file patterns cannot be read → the project's test set is unknown (Whole unit).
 	testsOpaque bool
-	// testIgnore: testPathIgnorePatterns đọc được (chỉ các phần tử chuỗi hằng; phần tử spread/biến bị bỏ qua = loại trừ ít
-	// hơn = vẫn là tập cha). Chỉ áp cho khớp theo mẫu cấu hình.
+	// testIgnore: testPathIgnorePatterns that could be read (only constant string elements; spread/variable elements are dropped = excludes less
+	// = still a superset). Applies only to matches by config pattern.
 	testIgnore []*regexp.Regexp
-	// roots: thư mục roots của Jest (tương đối gốc repo) — nơi tìm test và __mocks__ của module ngoài.
+	// roots: Jest roots directories (repo-root-relative) — where to look for tests and __mocks__ of external modules.
 	roots []string
 }
 
-// isTest: p khớp mẫu tệp test của cấu hình.
+// isTest: p matches the config's test-file pattern.
 func (tc *testConfig) isTest(p string) bool {
 	for _, g := range tc.testGlobs {
 		if g.Match(p) {
@@ -43,7 +43,7 @@ func (tc *testConfig) isTest(p string) bool {
 	}
 	abs := fakeAbs(p)
 	for _, re := range tc.testRegex {
-		// Jest so testRegex với đường dẫn TUYỆT ĐỐI: tiền tố giả để mẫu như "./packages/" có ký tự đứng trước.
+		// Jest matches testRegex against ABSOLUTE paths: fake prefix so patterns like "./packages/" have a character before them.
 		if re.MatchString(abs) {
 			return !tc.ignored(abs)
 		}
@@ -60,7 +60,7 @@ func (tc *testConfig) ignored(abs string) bool {
 	return false
 }
 
-// fakeAbs là đường dẫn tuyệt đối giả của tệp repo p (gốc repo là /__repo__).
+// fakeAbs is the fake absolute path of repo file p (the repo root is /__repo__).
 func fakeAbs(p string) string {
 	if p == "." || p == "" {
 		return "/__repo__"
@@ -68,16 +68,16 @@ func fakeAbs(p string) string {
 	return "/__repo__/" + p
 }
 
-// configBases là tên (không đuôi) của tệp cấu hình runner, tìm ở MỌI thư mục của dự án (cấu hình lồng như
-// tests/unit/jest.config.mjs chạy bằng --config).
+// configBases are the names (without extension) of runner config files, searched in EVERY project directory (nested config such as
+// tests/unit/jest.config.mjs run with --config).
 var configBases = []string{"jest.config", "vitest.config", "vite.config", "playwright.config", "vitest.workspace", "jest.preset", "jest-preset"}
 
 var runnerConfigName = regexp.MustCompile(`^(vitest|vite|jest|playwright)(\.[\w-]+)*\.(config|workspace)(\.[\w-]+)*\.(js|ts|mjs|cjs|mts|cts|json)$`)
 
-// isRunnerConfig: p là tệp cấu hình runner (jest.config.ts, vitest.config.e2e.mts, ...).
+// isRunnerConfig: p is a runner config file (jest.config.ts, vitest.config.e2e.mts, ...).
 func isRunnerConfig(p string) bool {
 	base := path.Base(p)
-	// Tên có đoạn giữa: vitest.compile.config.ts, vitest.unit.config.mts, jest.e2e.config.js (zod, nhiều monorepo).
+	// Names with a middle segment: vitest.compile.config.ts, vitest.unit.config.mts, jest.e2e.config.js (zod, many monorepos).
 	if runnerConfigName.MatchString(base) {
 		return true
 	}
@@ -92,19 +92,19 @@ func isRunnerConfig(p string) bool {
 	return false
 }
 
-// resolutionKeys là khoá cấu hình làm đổi cách phân giải import hoặc tập test; gặp mà không đọc được thì nới.
-// Không có ở đây (bỏ qua vẫn là tập cha vì resolver lấy hợp mọi ứng viên): modulePathIgnorePatterns (chỉ ẩn bớt đường
-// dẫn khỏi bộ nạp), dedupe (chỉ gộp bản sao gói ngoài).
+// resolutionKeys are config keys that change how imports resolve or the test set; when met and unreadable, widen.
+// Not listed here (ignoring them is still a superset because the resolver takes the union of all candidates): modulePathIgnorePatterns (only hides some
+// paths from the loader), dedupe (only merges copies of external packages).
 var resolutionKeys = []string{"moduleNameMapper", "alias", "modulePaths", "moduleDirectories", "resolver", "roots", "rootDir",
 	"haste", "projects", "workspace", "conditions", "mainFields", "extensions",
 	"moduleFileExtensions", "customExportConditions", "testEnvironmentOptions"}
 
 var strLit = regexp.MustCompile(`'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|` + "`([^`$\\\\]*)`")
 
-// readTestConfig đọc các tệp cấu hình runner cfgFiles của dự án dir (và khoá "jest" trong package.json).
+// readTestConfig reads the runner config files cfgFiles of project dir (and the "jest" key in package.json).
 func readTestConfig(t tree.Tree, dir string, pkgJest []byte, cfgFiles []string) testConfig {
 	var tc testConfig
-	// Hàng đợi: tệp cấu hình mà projects/workspace khai bằng đường dẫn (tên tuỳ ý) cũng được đọc như cấu hình runner.
+	// Queue: config files that projects/workspace declare by path (arbitrary name) are also read as runner config.
 	seen := map[string]bool{}
 	queue := append([]string(nil), cfgFiles...)
 	for len(queue) > 0 {
@@ -130,14 +130,14 @@ func readTestConfig(t tree.Tree, dir string, pkgJest []byte, cfgFiles []string) 
 	return tc
 }
 
-// readOne trích từ văn bản cấu hình:
-//   - mọi chuỗi hằng trỏ tới tệp/thư mục có thật trong repo (tương đối dir, hoặc <rootDir>/) → phụ thuộc ngầm của mọi test;
-//   - moduleNameMapper / alias dạng object literal chỉ có chuỗi hằng → Alias;
-//   - khoá phân giải khác không đọc được → opaque.
+// readOne extracts from config text:
+//   - every constant string pointing to a file/directory that really exists in the repo (relative to dir, or <rootDir>/) → implicit dependency of every test;
+//   - moduleNameMapper / alias as an object literal with only constant strings → Alias;
+//   - other unreadable resolution keys → opaque.
 func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 	src = stripJSComments(src)
-	// <rootDir>: mặc định Jest là thư mục của tệp cấu hình (package.json → thư mục dự án). rootDir literal → theo đó;
-	// tính bằng code → không biết: mẫu test dùng "**/" (tập cha), đích alias thử cả thư mục cấu hình lẫn thư mục dự án.
+	// <rootDir>: Jest's default is the directory of the config file (package.json → the project directory). A literal rootDir → follow it;
+	// computed by code → unknown: test patterns use "**/" (superset), alias targets try both the config directory and the project directory.
 	roots := []string{path.Dir(file)}
 	if path.Dir(file) != dir {
 		roots = append(roots, dir)
@@ -150,10 +150,10 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 			rootKnown = false
 		}
 	}
-	// include/testMatch nằm trong các khối này không định nghĩa tập test (coverage.include là tệp đo coverage).
+	// include/testMatch inside these blocks do not define the test set (coverage.include is the files measured for coverage).
 	tc.readTestPatterns(blankValues(src, "coverage", "optimizeDeps", "build", "server", "preview", "ssr", "deps", "css", "worker"), file, roots, rootKnown)
-	// JSX runtime (oxc/esbuild/swc/tsconfig importSource): mọi test phụ thuộc <importSource>/jsx-runtime và
-	// jsx-dev-runtime, không phải cả thư mục.
+	// JSX runtime (oxc/esbuild/swc/tsconfig importSource): every test depends on <importSource>/jsx-runtime and
+	// jsx-dev-runtime, not the whole directory.
 	for _, key := range []string{"importSource", "jsxImportSource"} {
 		for _, i := range keyIndexes(src, key) {
 			if v, ok := literalValue(src[i:]); ok && v != "" {
@@ -169,8 +169,8 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 			}
 		}
 	}
-	// Giá trị của các khoá chỉ LOẠI TRỪ (exclude, coverage) hoặc đã xử lý riêng (importSource) không bao giờ tạo phụ
-	// thuộc: xoá trắng trước khi gom đường dẫn.
+	// Values of keys that only EXCLUDE (exclude, coverage) or are handled separately (importSource) never create a
+	// dependency: blank them out before gathering paths.
 	scan := blankValues(src, "exclude", "coverage", "importSource", "jsxImportSource", "testPathIgnorePatterns", "include", "testMatch", "testRegex",
 		"roots", "collectCoverageFrom", "coverageDirectory", "coverageReporters",
 		"coveragePathIgnorePatterns", "watchPathIgnorePatterns")
@@ -183,7 +183,7 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 			if t.Has(cand) {
 				tc.implicit = append(tc.implicit, cand)
 			} else if t.IsDir(cand) && cand != "." && cand != dir {
-				// thư mục (setupFiles dir, roots...): mọi tệp dưới đó
+				// directory (setupFiles dir, roots...): every file under it
 				tc.implicitGlobs = append(tc.implicitGlobs, escapeGlob(cand)+"/**")
 			}
 		}
@@ -207,7 +207,7 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 					continue
 				}
 			case "rootDir":
-				// literal: đã áp vào roots; tính bằng code: mẫu test dùng "**/", alias thử mọi gốc → vẫn là tập cha.
+				// literal: already applied to roots; computed by code: test patterns use "**/", alias tries every root → still a superset.
 				continue
 			case "roots":
 				if arr, ok := stringArray(src[i:]); ok {
@@ -216,15 +216,15 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 							tc.roots = append(tc.roots, path.Clean(path.Join(root, strings.TrimPrefix(strings.ReplaceAll(r, "<rootDir>", ""), "/"))))
 						}
 					}
-					continue // roots chỉ giới hạn nơi tìm: không tạo phụ thuộc (đã xoá trắng khỏi phép gom đường dẫn)
+					continue // roots only limit where to look: no dependency created (already blanked out of path gathering)
 				}
 			case "moduleFileExtensions", "extensions", "mainFields", "conditions", "customExportConditions", "testEnvironmentOptions":
-				// resolver đã thử mọi đuôi và lấy hợp mọi điều kiện: an toàn khi bỏ qua.
+				// the resolver already tried every extension and took the union of every condition: safe to ignore.
 				continue
 			case "projects", "workspace":
-				// Phần tử là chuỗi (đường dẫn/glob tới cấu hình con, được tìm thấy vì cấu hình runner được quét ở mọi
-				// thư mục) hoặc object literal (khoá bên trong đã được quét trên toàn văn bản tệp): đọc được. Biến/lời gọi
-				// hàm → không biết dự án con nào → mờ.
+				// An element is a string (path/glob to a sub-config, found because runner config is scanned in every
+				// directory) or an object literal (inner keys were already scanned over the whole file text): readable. A variable/function
+				// call → unknown which sub-project → opaque.
 				if literalArrayOfStringsOrObjects(src[i:]) {
 					continue
 				}
@@ -234,10 +234,10 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 	}
 }
 
-// configPathCandidates: chuỗi trong cấu hình có thể là đường dẫn tới tệp của repo.
+// configPathCandidates: strings in config that may be a path to a repo file.
 func configPathCandidates(dir, file, s string) []string {
-	// "[id]", "{x}", "(group)" là tên tệp/thư mục hợp lệ (Next.js...): chỉ chặn wildcard thật; ứng viên vẫn chỉ được nhận
-	// khi khớp chính xác một tệp/thư mục có thật.
+	// "[id]", "{x}", "(group)" are valid file/directory names (Next.js...): only block real wildcards; a candidate is still accepted only
+	// when it matches exactly a real file/directory.
 	if strings.ContainsAny(s, "\n*?|^$") || strings.Contains(s, "://") || len(s) > 300 {
 		return nil
 	}
@@ -258,7 +258,7 @@ func configPathCandidates(dir, file, s string) []string {
 	return out
 }
 
-// keyIndexes trả vị trí ngay sau "key:" (hoặc "\"key\":") trong văn bản cấu hình.
+// keyIndexes returns positions right after "key:" (or "\"key\":") in the config text.
 func keyIndexes(src, key string) []int {
 	var out []int
 	for off := 0; ; {
@@ -268,8 +268,8 @@ func keyIndexes(src, key string) []int {
 		}
 		i += off
 		off = i + len(key)
-		// Biên trái: khoá của object đứng sau "{", ",", khoảng trắng hoặc đầu tệp; dạng có nháy thì dấu nháy mở đứng ngay
-		// trước và trước nó là một trong các ký tự đó ('typescript/no-this-alias' không phải khoá "alias").
+		// Left boundary: an object key follows "{", ",", whitespace or the start of file; the quoted form has the opening quote immediately
+		// before it and one of those characters before that ('typescript/no-this-alias' is not the key "alias").
 		quoted := byte(0)
 		k := i - 1
 		if k >= 0 && (src[k] == '"' || src[k] == '\'') {
@@ -295,7 +295,7 @@ func keyIndexes(src, key string) []int {
 		if j < len(src) && src[j] == ':' {
 			out = append(out, j+1)
 		} else if j < len(src) && (src[j] == ',' || src[j] == '}') {
-			// shorthand { alias } → giá trị là biến: không đọc được
+			// shorthand { alias } → the value is a variable: unreadable
 			out = append(out, j)
 		}
 	}
@@ -305,7 +305,7 @@ func isAlnum(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
 }
 
-// literalValue đọc một chuỗi hằng ngay sau vị trí s.
+// literalValue reads a constant string right after position s.
 func literalValue(s string) (string, bool) {
 	s = strings.TrimLeft(s, " \t\r\n")
 	m := strLit.FindStringSubmatchIndex(s)
@@ -316,7 +316,7 @@ func literalValue(s string) (string, bool) {
 	return unescapeJS(sm[1] + sm[2] + sm[3]), true
 }
 
-// unescapeJS bỏ một lớp thoát của chuỗi JS: \n \t \r → ký tự điều khiển, \X khác → X.
+// unescapeJS removes one escape layer of a JS string: \n \t \r → control characters, any other \X → X.
 func unescapeJS(s string) string {
 	if !strings.Contains(s, "\\") {
 		return s
@@ -343,7 +343,7 @@ func unescapeJS(s string) string {
 	return b.String()
 }
 
-// balanced trả nội dung giữa cặp ngoặc open/close bắt đầu ở s (bỏ khoảng trắng đầu); bỏ qua ngoặc trong chuỗi.
+// balanced returns the content between the bracket pair open/close starting at s (leading whitespace skipped); brackets inside strings are ignored.
 func balanced(s string, open, close byte) (string, bool) {
 	s = strings.TrimLeft(s, " \t\r\n")
 	if len(s) == 0 || s[0] != open {
@@ -376,7 +376,7 @@ func balanced(s string, open, close byte) (string, bool) {
 	return "", false
 }
 
-// stringArray đọc [ 'a', "b" ] chỉ gồm chuỗi hằng.
+// stringArray reads [ 'a', "b" ] consisting only of constant strings.
 func stringArray(s string) ([]string, bool) {
 	body, ok := balanced(s, '[', ']')
 	if !ok {
@@ -397,7 +397,7 @@ func stringArray(s string) ([]string, bool) {
 	return out, true
 }
 
-// quoteLen trả phần chuỗi hằng đầu tiên của part (để kiểm part chỉ là một chuỗi hằng).
+// quoteLen returns the first constant-string part of part (to check that part is a single constant string).
 func quoteLen(part string) string {
 	part = strings.TrimSpace(part)
 	m := strLit.FindStringIndex(part)
@@ -407,7 +407,7 @@ func quoteLen(part string) string {
 	return part[:m[1]]
 }
 
-// splitTop tách theo dấu phẩy ở mức ngoài cùng.
+// splitTop splits on top-level commas.
 func splitTop(s string) []string {
 	var out []string
 	depth, start := 0, 0
@@ -439,7 +439,7 @@ func splitTop(s string) []string {
 	return append(out, s[start:])
 }
 
-// splitKV tách "key: value" ở mức ngoài cùng.
+// splitKV splits "key: value" at the top level.
 func splitKV(part string) (string, string, bool) {
 	part = strings.TrimSpace(part)
 	var q byte
@@ -470,7 +470,7 @@ func splitKV(part string) (string, string, bool) {
 	return "", "", false
 }
 
-// parseMapper đọc moduleNameMapper: { 'regex': 'target' | ['t1','t2'] }.
+// parseMapper reads moduleNameMapper: { 'regex': 'target' | ['t1','t2'] }.
 func parseMapper(s string, roots []string) ([]resolve.Alias, bool) {
 	body, ok := balanced(s, '{', '}')
 	if !ok {
@@ -525,14 +525,14 @@ func parseMapper(s string, roots []string) ([]resolve.Alias, bool) {
 var pathResolveCall = regexp.MustCompile(`^(?:path\.)?(?:resolve|join)\(\s*(?:__dirname|process\.cwd\(\)|import\.meta\.dirname)\s*,\s*(['"])([^'"]*)['"]\s*\)$`)
 var urlCall = regexp.MustCompile(`^fileURLToPath\(\s*new URL\(\s*(['"])([^'"]*)['"]\s*,\s*import\.meta\.url\s*\)\s*\)$`)
 
-// parseViteAlias đọc resolve.alias dạng { '@': path.resolve(__dirname, 'src') } hoặc [{ find: '@', replacement: '...' }].
+// parseViteAlias reads resolve.alias as { '@': path.resolve(__dirname, 'src') } or [{ find: '@', replacement: '...' }].
 func parseViteAlias(s, dir, file string) ([]resolve.Alias, bool) {
 	trim := strings.TrimLeft(s, " \t\r\n")
 	target := func(v string) (string, bool) {
 		v = strings.TrimSpace(v)
 		if lit, ok := literalValue(v); ok && quoteLen(v) == v {
 			if strings.HasPrefix(lit, "/") {
-				return path.Clean(path.Join(dir, lit)), true // vite: tuyệt đối theo root dự án
+				return path.Clean(path.Join(dir, lit)), true // vite: absolute relative to the project root
 			}
 			return path.Clean(path.Join(dir, lit)), true
 		}
@@ -620,7 +620,7 @@ func isIdent(s string) bool {
 	return true
 }
 
-// stripJSComments bỏ comment // và /* */ ngoài chuỗi (đủ cho tệp cấu hình; không xử lý regex literal).
+// stripJSComments removes // and /* */ comments outside strings (enough for config files; regex literals are not handled).
 func stripJSComments(s string) string {
 	var b strings.Builder
 	var q byte
@@ -662,13 +662,13 @@ func stripJSComments(s string) string {
 	return b.String()
 }
 
-// readTestPatterns đọc testMatch (glob), testRegex (regex) của Jest và include của Vitest. Mẫu không chuyển được →
-// opaque (không biết tập test → nới dự án), vì bỏ qua sẽ làm test thật không bao giờ được chọn.
+// readTestPatterns reads Jest's testMatch (glob) and testRegex (regex) and Vitest's include. A pattern that cannot be converted →
+// opaque (test set unknown → widen the project), because ignoring it would make real tests never get selected.
 func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKnown bool) {
 	addGlob := func(g string) bool {
 		g = strings.TrimPrefix(g, "./")
 		if strings.HasPrefix(g, "!") {
-			return true // phủ định chỉ bớt test: bỏ qua là tập cha
+			return true // negation only removes tests: ignoring it is a superset
 		}
 		conv, ok := convertExtglob(g)
 		if !ok {
@@ -701,7 +701,7 @@ func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKno
 		}
 		return true
 	}
-	// testPathIgnorePatterns: chỉ phần tử chuỗi hằng; <rootDir> thay bằng gốc khi biết, không biết thì bỏ mẫu đó.
+	// testPathIgnorePatterns: only constant string elements; <rootDir> is replaced by the root when known, otherwise that pattern is dropped.
 	for _, i := range keyIndexes(src, "testPathIgnorePatterns") {
 		for _, pat := range literalElements(src[i:]) {
 			if strings.Contains(pat, "<rootDir>") {
@@ -748,7 +748,7 @@ func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKno
 		} else if re, ok := regexLiteral(src[i:]); ok {
 			pats = []string{re}
 		} else if alts, ok := templateAlternatives(src[i:]); ok {
-			pats = alts // hợp mọi tổ hợp nhánh: tập cha của regex thật
+			pats = alts // union of every branch combination: a superset of the real regex
 		} else {
 			opaqueTest(file + ": testRegex")
 			continue
@@ -764,9 +764,9 @@ func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKno
 	}
 }
 
-// templateAlternatives khai triển template literal `a${x}b` ngay sau vị trí s khi mỗi biểu thức là chuỗi hằng hoặc
-// toán tử ba ngôi có hai nhánh chuỗi hằng (`${cond ? "" : "|eslint"}`): trả mọi tổ hợp (tối đa 64). Giá trị thật là một
-// trong các tổ hợp nên hợp của chúng là tập cha. Biểu thức khác → false.
+// templateAlternatives expands a template literal `a${x}b` right after position s when each expression is a constant string or
+// a ternary with two constant-string branches (`${cond ? "" : "|eslint"}`): returns every combination (at most 64). The real value is one
+// of the combinations so their union is a superset. Any other expression → false.
 func templateAlternatives(s string) ([]string, bool) {
 	s = strings.TrimLeft(s, " \t\r\n")
 	if !strings.HasPrefix(s, "`") {
@@ -816,14 +816,14 @@ func templateAlternatives(s string) ([]string, bool) {
 	return nil, false
 }
 
-// exprAlternatives: chuỗi hằng → [v]; `cond ? A : B` với A, B là chuỗi hằng (hoặc ba ngôi lồng như vậy) → các nhánh.
+// exprAlternatives: constant string → [v]; `cond ? A : B` with A, B constant strings (or nested ternaries like that) → the branches.
 func exprAlternatives(e string) ([]string, bool) {
 	e = strings.TrimSpace(e)
 	if q := quoteLen(e); q != "" && q == e {
 		v, _ := literalValue(e)
 		return []string{v}, true
 	}
-	// tách "?" và ":" ở mức ngoài cùng (bỏ qua trong chuỗi/ngoặc)
+	// split "?" and ":" at the top level (ignoring those in strings/brackets)
 	q, colon := -1, -1
 	depth := 0
 	var quote byte
@@ -865,7 +865,7 @@ func exprAlternatives(e string) ([]string, bool) {
 	return append(a, b...), true
 }
 
-// regexLiteral đọc /.../flags ngay sau vị trí s (nội dung trả nguyên văn, đã là cú pháp regex).
+// regexLiteral reads /.../flags right after position s (content returned verbatim, already regex syntax).
 func regexLiteral(s string) (string, bool) {
 	s = strings.TrimLeft(s, " \t\r\n")
 	if !strings.HasPrefix(s, "/") {
@@ -884,9 +884,9 @@ func regexLiteral(s string) (string, bool) {
 	return "", false
 }
 
-// convertExtglob đổi extglob của micromatch sang cú pháp của gói glob: ?(a|b) và *(a|b) → {,a,b}; @(a|b) và +(a|b) →
-// {a,b}. "+(…)" chỉ một lần là xấp xỉ hẹp hơn "một hoặc nhiều"; tên tệp test thực tế lặp không quá một lần và vẫn khớp
-// mẫu mặc định. !(…) không hỗ trợ → false (người gọi nới).
+// convertExtglob converts micromatch extglob to the glob package's syntax: ?(a|b) and *(a|b) → {,a,b}; @(a|b) and +(a|b) →
+// {a,b}. "+(…)" only once is a narrower approximation of "one or more"; real test file names repeat at most once and still match the
+// default pattern. !(…) is unsupported → false (the caller widens).
 func convertExtglob(g string) (string, bool) {
 	var b strings.Builder
 	for i := 0; i < len(g); i++ {
@@ -910,7 +910,7 @@ func convertExtglob(g string) (string, bool) {
 	return b.String(), true
 }
 
-// literalArrayOfStringsOrObjects: [ 'a', "b", { ... }, ] chỉ gồm chuỗi hằng và object literal.
+// literalArrayOfStringsOrObjects: [ 'a', "b", { ... }, ] consisting only of constant strings and object literals.
 func literalArrayOfStringsOrObjects(s string) bool {
 	body, ok := balanced(s, '[', ']')
 	if !ok {
@@ -933,7 +933,7 @@ func literalArrayOfStringsOrObjects(s string) bool {
 	return true
 }
 
-// blankValues trả bản sao của src trong đó giá trị (chuỗi, mảng, object) của các khoá keys bị thay bằng khoảng trắng.
+// blankValues returns a copy of src in which the values (string, array, object) of keys are replaced with whitespace.
 func blankValues(src string, keys ...string) string {
 	b := []byte(src)
 	for _, key := range keys {
@@ -950,8 +950,8 @@ func blankValues(src string, keys ...string) string {
 	return string(b)
 }
 
-// valueEnd trả vị trí ngay sau giá trị bắt đầu ở i (mảng/object cân ngoặc, chuỗi hằng, hoặc tới dấu phẩy/ngoặc đóng
-// ở mức ngoài cùng).
+// valueEnd returns the position right after the value starting at i (array/object with balanced brackets, constant string, or up to the comma/closing bracket
+// at the top level).
 func valueEnd(src string, i int) int {
 	j := i
 	for j < len(src) && (src[j] == ' ' || src[j] == '\t' || src[j] == '\n' || src[j] == '\r') {
@@ -992,7 +992,7 @@ func valueEnd(src string, i int) int {
 	return len(src)
 }
 
-// literalElements trả các phần tử là chuỗi hằng của mảng ngay sau vị trí s; phần tử khác (spread, biến, lời gọi) bị bỏ.
+// literalElements returns the constant-string elements of the array right after position s; other elements (spread, variable, call) are dropped.
 func literalElements(s string) []string {
 	body, ok := balanced(s, '[', ']')
 	if !ok {
@@ -1010,8 +1010,8 @@ func literalElements(s string) []string {
 	return out
 }
 
-// projectConfigFiles: tệp cấu hình con mà projects/workspace của cấu hình file khai bằng chuỗi (đường dẫn hoặc glob tới
-// tệp JS/TS/JSON). Thư mục ("packages/*") không cần: cấu hình runner trong đó được tìm ở mọi thư mục.
+// projectConfigFiles: sub-config files that a file config's projects/workspace declare as strings (a path or glob to
+// a JS/TS/JSON file). Directories ("packages/*") are not needed: runner config in them is found in every directory.
 func projectConfigFiles(t tree.Tree, file, src string) []string {
 	src = stripJSComments(src)
 	var out []string

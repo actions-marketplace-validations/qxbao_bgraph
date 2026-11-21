@@ -2,7 +2,7 @@ package resolve
 
 import "strings"
 
-// Tên built-in của Node 22–26 (module.builtinModules, không kèm tiền tố node:).
+// Node 22–26 built-in names (module.builtinModules, without the node: prefix).
 var builtinNames = map[string]bool{
 	"assert": true, "async_hooks": true, "buffer": true, "child_process": true, "cluster": true,
 	"console": true, "constants": true, "crypto": true, "dgram": true, "diagnostics_channel": true,
@@ -18,8 +18,8 @@ var builtinSubs = map[string]bool{
 	"promises": true, "posix": true, "win32": true, "web": true, "consumers": true, "strict": true, "types": true,
 }
 
-// isBuiltin: spec có phải module lõi của Node không. Tiền tố node: luôn là built-in
-// (node:test, node:sqlite... chỉ tồn tại với tiền tố).
+// isBuiltin: whether spec is a Node core module. The node: prefix is always built-in
+// (node:test, node:sqlite... exist only with the prefix).
 func isBuiltin(spec string) bool {
 	if strings.HasPrefix(spec, "node:") {
 		return true

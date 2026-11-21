@@ -6,10 +6,10 @@ import (
 	"sort"
 )
 
-// PackageJSON là phần package.json mà bộ phân giải và lớp eco cần.
+// PackageJSON is the part of package.json that the resolver and the eco layer need.
 type PackageJSON struct {
-	Path string // đường dẫn tệp trong cây
-	Dir  string // thư mục chứa
+	Path string // file path in the tree
+	Dir  string // containing directory
 	Name string
 	Type string
 
@@ -17,9 +17,9 @@ type PackageJSON struct {
 	// Source is the build entry by microbundle/parcel convention ("source": "src/index.js"): outputs in main/module
 	// are compiled from it.
 	Source               string
-	BrowserString        string     // browser khi là chuỗi
-	Browser              *JSONValue // browser thô (chuỗi hoặc object)
-	Exports, Imports     *JSONValue // thô, có thứ tự khoá; nil nếu vắng hoặc null
+	BrowserString        string     // browser when it is a string
+	Browser              *JSONValue // raw browser (string or object)
+	Exports, Imports     *JSONValue // raw, key-ordered; nil if absent or null
 	Dependencies         map[string]string
 	DevDependencies      map[string]string
 	PeerDependencies     map[string]string
@@ -27,7 +27,7 @@ type PackageJSON struct {
 	Workspaces           []string
 }
 
-// HasDep: tên có trong một trong bốn nhóm phụ thuộc.
+// HasDep: the name appears in one of the four dependency groups.
 func (p *PackageJSON) HasDep(name string) bool {
 	for _, m := range []map[string]string{p.Dependencies, p.DevDependencies, p.PeerDependencies, p.OptionalDependencies} {
 		if _, ok := m[name]; ok {
@@ -37,7 +37,7 @@ func (p *PackageJSON) HasDep(name string) bool {
 	return false
 }
 
-// ConfigError là một tệp cấu hình (package.json, tsconfig) không đọc/parse được.
+// ConfigError is a config file (package.json, tsconfig) that cannot be read/parsed.
 type ConfigError struct {
 	Path string
 	Err  error
@@ -56,7 +56,7 @@ func (r *Resolver) recordErr(p string, err error) {
 	}
 }
 
-// ConfigErrors trả các cấu hình lỗi đã gặp, sắp theo đường dẫn.
+// ConfigErrors returns the config errors encountered, sorted by path.
 func (r *Resolver) ConfigErrors() []ConfigError {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -68,7 +68,7 @@ func (r *Resolver) ConfigErrors() []ConfigError {
 	return out
 }
 
-// PackageJSON đọc package.json của thư mục dir (có cache). (nil, nil) nếu không có tệp.
+// PackageJSON reads the package.json of directory dir (cached). (nil, nil) if there is no file.
 func (r *Resolver) PackageJSON(dir string) (*PackageJSON, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -107,7 +107,7 @@ func (r *Resolver) parsePkg(p, dir string) (*PackageJSON, error) {
 		return nil, err
 	}
 	if v.Kind != KObject {
-		return nil, fmt.Errorf("package.json không phải object")
+		return nil, fmt.Errorf("package.json is not an object")
 	}
 	pj := &PackageJSON{Path: p, Dir: dir}
 	str := func(k string) string { s, _ := v.Get(k).AsString(); return s }
@@ -152,5 +152,5 @@ func (r *Resolver) parsePkg(p, dir string) (*PackageJSON, error) {
 	return pj, nil
 }
 
-// dirOf trả thư mục của một tệp theo quy ước model ("." cho gốc).
+// dirOf returns the directory of a file by the model convention ("." for the root).
 func dirOf(file string) string { return path.Dir(file) }

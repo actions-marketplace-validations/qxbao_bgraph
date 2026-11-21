@@ -12,11 +12,11 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// harmlessPkgKeys là khoá cấp cao của package.json mà đổi chúng chứng minh được không ảnh hưởng test.
+// harmlessPkgKeys are top-level package.json keys whose change is provably harmless to tests.
 var harmlessPkgKeys = map[string]bool{"version": true, "description": true, "keywords": true, "author": true, "contributors": true,
 	"homepage": true, "repository": true, "bugs": true, "license": true, "funding": true, "maintainers": true, "publishConfig": true}
 
-// ClassifyChange phân loại manifest/cấu hình/lockfile của Node (mục 6.1 "Nới", 6.8 mức L0).
+// ClassifyChange classifies Node manifests/configs/lockfiles (plan §6.1 "Widening", §6.8 level L0).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if inNodeModules(p) {
 		return nil, false
@@ -49,13 +49,13 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 				return nil, true
 			}
 			return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonManifestChanged, Path: p, Scope: dir,
-				Detail: "khoá đổi: " + strings.Join(keys, ", ")}}, true
+				Detail: "keys changed: " + strings.Join(keys, ", ")}}, true
 		}
 		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonManifestChanged, Path: p, Scope: dir}}, true
 	case isLockfile(p):
-		// L0: chưa so closure → mọi dự án dưới thư mục của lockfile (thường là gốc workspace).
+		// L0: closure not compared yet → every project under the lockfile's directory (usually the workspace root).
 		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonLockChanged, Path: p, Scope: path.Dir(p),
-			Detail: "lockfile ở mức L0 (chưa so closure)"}}, true
+			Detail: "lockfile at level L0 (closure not compared)"}}, true
 	case isTSConfig(p):
 		dirs := []string{path.Dir(p)}
 		dirs = append(dirs, tsconfigExtenders(base, p)...)
@@ -64,18 +64,18 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 		dirs = slices.Compact(dirs)
 		var ws []model.Widening
 		for _, d := range dirs {
-			ws = append(ws, model.Widening{Tier: model.TierModule, Reason: model.ReasonTestConfig, Path: p, Scope: d, Detail: "tsconfig/jsconfig đổi"})
+			ws = append(ws, model.Widening{Tier: model.TierModule, Reason: model.ReasonTestConfig, Path: p, Scope: d, Detail: "tsconfig/jsconfig changed"})
 		}
 		return ws, true
 	case configKind(p) != "":
 		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonTestConfig, Path: p, Scope: scopeOf(p),
-			Detail: configKind(p) + " config đổi"}}, true
+			Detail: configKind(p) + " config changed"}}, true
 	}
 	return nil, false
 }
 
-// changedTopKeys trả các khoá cấp cao khác nhau giữa hai phiên bản JSON; ok=false nếu một phía không đọc được
-// (tệp thêm/xoá cũng trả ok=false → nới).
+// changedTopKeys returns the top-level keys that differ between two JSON versions; ok=false if one side is unreadable
+// (added/deleted files also return ok=false → widen).
 func changedTopKeys(base, head tree.Tree, p string) ([]string, bool) {
 	if base == nil || head == nil {
 		return nil, false
@@ -114,7 +114,7 @@ func jsonEqual(a, b json.RawMessage) bool {
 	return bytes.Equal(xa, ya)
 }
 
-// tsconfigExtenders trả thư mục của mọi tsconfig/jsconfig trong t mà `extends` (bắc cầu) trỏ tới target.
+// tsconfigExtenders returns the directory of every tsconfig/jsconfig in t whose `extends` (transitively) points to target.
 func tsconfigExtenders(t tree.Tree, target string) []string {
 	if t == nil {
 		return nil
@@ -125,7 +125,7 @@ func tsconfigExtenders(t tree.Tree, target string) []string {
 			cfgs = append(cfgs, f)
 		}
 	}
-	parents := map[string][]string{} // cfg → các tệp nó extends (chỉ đường dẫn tương đối trong repo)
+	parents := map[string][]string{} // cfg → files it extends (repo-relative paths only)
 	for _, c := range cfgs {
 		b, err := t.Read(c)
 		if err != nil {
@@ -133,7 +133,7 @@ func tsconfigExtenders(t tree.Tree, target string) []string {
 		}
 		for _, ext := range extendsOf(b) {
 			if !strings.HasPrefix(ext, "./") && !strings.HasPrefix(ext, "../") {
-				// extends tới package: nếu là workspace thì khó biết; tập cha: coi như có thể là target khi tên trùng đuôi
+				// extends to a package: hard to know if it is a workspace; superset: treat it as a possible target when the name matches the suffix
 				if strings.HasSuffix(target, strings.TrimPrefix(ext, "@")) {
 					parents[c] = append(parents[c], target)
 				}
@@ -172,7 +172,7 @@ func tsconfigExtenders(t tree.Tree, target string) []string {
 	return dirs
 }
 
-// extendsOf đọc trường extends (chuỗi hoặc mảng) của tsconfig dạng JSONC; lỗi → nil.
+// extendsOf reads the extends field (string or array) of a JSONC tsconfig; error → nil.
 func extendsOf(b []byte) []string {
 	s := stripJSComments(string(b))
 	idx := keyIndexes(s, "extends")

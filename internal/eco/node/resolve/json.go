@@ -7,7 +7,7 @@ import (
 	"io"
 )
 
-// Kind là loại của một giá trị JSON có thứ tự khoá.
+// Kind is the kind of a JSON value with ordered keys.
 type Kind int
 
 const (
@@ -15,19 +15,19 @@ const (
 	KString
 	KArray
 	KObject
-	KOther // số, bool
+	KOther // number, bool
 )
 
-// JSONValue là cây JSON giữ nguyên THỨ TỰ khoá của object (cần cho exports/imports).
+// JSONValue is a JSON tree that preserves object key ORDER (needed for exports/imports).
 type JSONValue struct {
 	Kind Kind
 	Str  string
 	Arr  []*JSONValue
-	Keys []string     // chỉ với KObject, theo thứ tự xuất hiện
-	Vals []*JSONValue // song song với Keys
+	Keys []string     // KObject only, in order of appearance
+	Vals []*JSONValue // parallel to Keys
 }
 
-// Get trả giá trị của khoá (khoá cuối cùng nếu trùng); nil nếu không phải object hoặc không có.
+// Get returns the value of a key (the last one if duplicated); nil if not an object or absent.
 func (v *JSONValue) Get(key string) *JSONValue {
 	if v == nil || v.Kind != KObject {
 		return nil
@@ -40,7 +40,7 @@ func (v *JSONValue) Get(key string) *JSONValue {
 	return nil
 }
 
-// AsString trả chuỗi nếu v là string.
+// AsString returns the string if v is a string.
 func (v *JSONValue) AsString() (string, bool) {
 	if v != nil && v.Kind == KString {
 		return v.Str, true
@@ -48,7 +48,7 @@ func (v *JSONValue) AsString() (string, bool) {
 	return "", false
 }
 
-// ParseJSONC đọc JSON có chú thích (// và /* */) và dấu phẩy thừa.
+// ParseJSONC reads JSON with comments (// and /* */) and trailing commas.
 func ParseJSONC(data []byte) (*JSONValue, error) {
 	dec := json.NewDecoder(bytes.NewReader(stripJSONC(data)))
 	v, err := parseValue(dec)
@@ -56,7 +56,7 @@ func ParseJSONC(data []byte) (*JSONValue, error) {
 		return nil, err
 	}
 	if _, err := dec.Token(); err != io.EOF {
-		return nil, errors.New("dữ liệu thừa sau giá trị JSON")
+		return nil, errors.New("trailing data after JSON value")
 	}
 	return v, nil
 }
@@ -78,7 +78,7 @@ func parseValue(dec *json.Decoder) (*JSONValue, error) {
 				}
 				k, ok := kt.(string)
 				if !ok {
-					return nil, errors.New("khoá object không phải chuỗi")
+					return nil, errors.New("object key is not a string")
 				}
 				val, err := parseValue(dec)
 				if err != nil {
@@ -105,7 +105,7 @@ func parseValue(dec *json.Decoder) (*JSONValue, error) {
 			}
 			return v, nil
 		}
-		return nil, errors.New("dấu phân cách JSON bất ngờ")
+		return nil, errors.New("unexpected JSON delimiter")
 	case string:
 		return &JSONValue{Kind: KString, Str: t}, nil
 	case nil:
@@ -115,7 +115,7 @@ func parseValue(dec *json.Decoder) (*JSONValue, error) {
 	}
 }
 
-// skipTrivia bỏ khoảng trắng và chú thích từ vị trí i, trả vị trí ký tự có nghĩa kế tiếp.
+// skipTrivia skips whitespace and comments from position i, returning the position of the next significant character.
 func skipTrivia(b []byte, i int) int {
 	for i < len(b) {
 		c := b[i]
@@ -139,7 +139,7 @@ func skipTrivia(b []byte, i int) int {
 	return i
 }
 
-// stripJSONC xoá BOM, chú thích và dấu phẩy thừa (trước } hoặc ]) ngoài chuỗi.
+// stripJSONC removes the BOM, comments and trailing commas (before } or ]) outside strings.
 func stripJSONC(b []byte) []byte {
 	b = bytes.TrimPrefix(b, []byte("\xef\xbb\xbf"))
 	out := make([]byte, 0, len(b))
@@ -164,7 +164,7 @@ func stripJSONC(b []byte) []byte {
 		case c == ',':
 			k := skipTrivia(b, i+1)
 			if k < len(b) && (b[k] == '}' || b[k] == ']') {
-				i++ // bỏ dấu phẩy thừa
+				i++ // skip trailing comma
 			} else {
 				out = append(out, c)
 				i++

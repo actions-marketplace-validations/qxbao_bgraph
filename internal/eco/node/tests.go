@@ -5,10 +5,10 @@ import (
 	"strings"
 )
 
-// jsExts là đuôi tệp mã JS/TS mà bộ quét hiểu.
+// jsExts are the JS/TS source file extensions the scanner understands.
 var jsExts = []string{".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}
 
-// sfcExts là định dạng nhúng script: bản đầu coi là uncertain_scan (mục 5).
+// sfcExts are embedded-script formats: the first version treats them as uncertain_scan (plan §5).
 var sfcExts = []string{".vue", ".svelte", ".astro", ".mdx"}
 
 func hasExt(p string, exts []string) bool {
@@ -23,15 +23,15 @@ func hasExt(p string, exts []string) bool {
 func isJS(p string) bool  { return hasExt(p, jsExts) }
 func isSFC(p string) bool { return hasExt(p, sfcExts) }
 
-// inNodeModules: đường dẫn đi qua node_modules (không bao giờ là mã của repo).
+// inNodeModules: the path passes through node_modules (never repo code).
 func inNodeModules(p string) bool {
 	return p == "node_modules" || strings.HasPrefix(p, "node_modules/") || strings.Contains(p, "/node_modules/")
 }
 
-// isTestFile: mẫu tệp test mặc định theo runner. Tên *.test.* / *.spec.* / __tests__ là test với mọi runner. Luật
-// "mọi .js dưới test/ hoặc tests/" chỉ đúng với node:test, Mocha, AVA: với Jest/Vitest/Playwright, tệp trong test/
-// không theo mẫu tên là helper hoặc DỮ LIỆU (fixture mà spec đọc qua fs) — nhận nhầm là test thì runner chạy dữ liệu
-// như test, còn spec thật không được chọn khi dữ liệu đổi.
+// isTestFile: default test-file patterns per runner. Names *.test.* / *.spec.* / __tests__ are tests for every runner. The rule
+// "every .js under test/ or tests/" is only right for node:test, Mocha, AVA: with Jest/Vitest/Playwright, files in test/
+// not matching the name pattern are helpers or DATA (fixtures a spec reads via fs) — mistaking them for tests makes the runner run data
+// as tests, while the real spec is not selected when the data changes.
 func isTestFile(p, runner string) bool {
 	if !isJS(p) || strings.HasSuffix(p, ".d.ts") || strings.HasSuffix(p, ".d.mts") || strings.HasSuffix(p, ".d.cts") {
 		return false
@@ -42,7 +42,7 @@ func isTestFile(p, runner string) bool {
 	if strings.Contains("/"+p, "/__tests__/") {
 		return true
 	}
-	// Jest/Vitest/Playwright: *.test.*, *.spec.*, và tên chính là test/spec.
+	// Jest/Vitest/Playwright: *.test.*, *.spec.*, and the name being exactly test/spec.
 	for _, suf := range []string{".test", ".spec", "-test", "_test", ".e2e", ".e2e-spec"} {
 		if strings.HasSuffix(stem, suf) {
 			return true
@@ -51,17 +51,17 @@ func isTestFile(p, runner string) bool {
 	if stem == "test" || stem == "spec" || strings.HasPrefix(stem, "test-") {
 		return true // node:test: test.js, test-*.js
 	}
-	// node:test / Mocha: mọi tệp .js/.cjs/.mjs dưới thư mục test/ (Mocha mặc định ./test/*.spec.js, node --test test/**).
+	// node:test / Mocha: every .js/.cjs/.mjs file under test/ (Mocha default ./test/*.spec.js, node --test test/**).
 	dirRule := runner == "node-test" || runner == "mocha" || runner == "ava"
 	if dirRule && (strings.Contains("/"+path.Dir(p)+"/", "/test/") || strings.Contains("/"+path.Dir(p)+"/", "/tests/")) {
-		// Không loại trừ theo tên (utils.js, index.js trong test/ có thể là test thật: axios, babel). Chạy thừa một helper
-		// là vô hại; bỏ một test thật là sót im lặng.
+		// No exclusion by name (utils.js, index.js in test/ may be real tests: axios, babel). Running an extra helper
+		// is harmless; dropping a real test is a silent miss.
 		return true
 	}
 	return false
 }
 
-// snapshotOwner: "__snapshots__/a.test.ts.snap" → "a.test.ts" (cùng thư mục cha).
+// snapshotOwner: "__snapshots__/a.test.ts.snap" → "a.test.ts" (same parent directory).
 func snapshotOwner(p string) (string, bool) {
 	dir, base := path.Split(p)
 	dir = strings.TrimSuffix(dir, "/")
@@ -71,7 +71,7 @@ func snapshotOwner(p string) (string, bool) {
 	return path.Join(path.Dir(dir), strings.TrimSuffix(base, ".snap")), true
 }
 
-// configKind phân loại tệp cấu hình liên quan test/biên dịch của dự án Node.
+// configKind classifies config files related to tests/compilation of a Node project.
 func configKind(p string) string {
 	base := path.Base(p)
 	name := base

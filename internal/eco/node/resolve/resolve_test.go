@@ -17,7 +17,7 @@ type tc struct {
 	files  []string
 	pkg    string
 	mism   bool
-	detail string // chuỗi con mong đợi trong Detail
+	detail string // expected substring of Detail
 }
 
 func run(t *testing.T, files map[string]string, opt Options, cases []tc) *Resolver {
@@ -156,7 +156,7 @@ func TestBuiltins(t *testing.T) {
 		{name: "alias remaps builtin", from: "a.ts", spec: "fs", class: ClassInternal, files: ss("mocks/fs.ts")},
 		{name: "node prefix still builtin", from: "a.ts", spec: "node:fs", class: ClassBuiltin},
 	})
-	// workspace trùng tên builtin không che được
+	// a workspace with the same name as a builtin cannot shadow it
 	run(t, map[string]string{"pk/package.json": `{"name":"fs","main":"i.js"}`, "pk/i.js": "", "a.ts": ""},
 		Options{Workspaces: map[string]string{"fs": "pk"}}, []tc{
 			{name: "workspace cannot shadow", from: "a.ts", spec: "fs", class: ClassBuiltin},
@@ -494,7 +494,7 @@ func TestTsconfigExtends(t *testing.T) {
 	})
 	errs := r.ConfigErrors()
 	if len(errs) != 0 {
-		// pkg6 chỉ bị ghi khi tsconfig của nó được đọc (bare specifier)
+		// pkg6 is only recorded when its tsconfig is read (bare specifier)
 		t.Logf("errs: %v", errs)
 	}
 	res := r.Resolve("pkg6/a.ts", "whatever")

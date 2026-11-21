@@ -1,8 +1,8 @@
-// Package resolve là bộ phân giải import tĩnh của hệ sinh thái Node (JS/TS) trên tree.Tree.
+// Package resolve is the static import resolver of the Node (JS/TS) ecosystem over tree.Tree.
 //
-// Nguyên tắc FAIL-CLOSED: không chắc thì trả Unknown, không bao giờ im lặng trả "không phụ thuộc".
-// Mọi nơi dùng ngữ nghĩa HỢP: gom mọi đích hợp lý (mọi điều kiện exports, mọi tsconfig, mọi ứng viên paths);
-// thừa cạnh được chấp nhận, thiếu cạnh là lỗi.
+// FAIL-CLOSED principle: when unsure return Unknown, never silently return "no dependency".
+// Everywhere uses UNION semantics: collect every plausible target (every exports condition, every tsconfig, every paths candidate);
+// extra edges are acceptable, missing edges are a bug.
 package resolve
 
 import (
@@ -16,7 +16,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// Class là phân loại kết quả.
+// Class is the classification of a result.
 type Class string
 
 const (
@@ -27,35 +27,35 @@ const (
 	ClassGenerated Class = "generated"
 )
 
-// Result là kết quả phân giải một specifier.
+// Result is the outcome of resolving one specifier.
 type Result struct {
 	Class        Class
-	Files        []string // đích nội bộ (sắp xếp, duy nhất) — hợp mọi đích hợp lý
-	Probes       []string // ứng viên đã dò nhưng không tồn tại (cho phân giải lại tăng dần)
-	Package      string   // tên package trần cho external/generated
-	PackageDir   string   // generated: thư mục package có đầu ra bị thiếu
-	CaseMismatch bool     // đích chỉ khớp khi bỏ qua hoa thường (Files là tệp khớp đó)
-	// AlsoGenerated: Class internal nhưng một số đích (exports/main/imports) là đầu ra build không có trong cây và không
-	// ánh xạ ngược được về nguồn; PackageDir là package sinh ra chúng. Lúc chạy, runner có thể nạp đúng đầu ra đó
-	// (ví dụ exports → dist/, types → src/index.d.ts): phụ thuộc thật vào nguồn của package bị mất nếu chỉ giữ Files.
+	Files        []string // internal targets (sorted, unique) — union of all plausible targets
+	Probes       []string // candidates probed but nonexistent (for incremental re-resolution)
+	Package      string   // bare package name for external/generated
+	PackageDir   string   // generated: the package directory whose build output is missing
+	CaseMismatch bool     // the target matches only when ignoring case (Files is the matching file)
+	// AlsoGenerated: Class is internal but some targets (exports/main/imports) are build outputs absent from the tree that cannot be
+	// mapped back to source; PackageDir is the package that produces them. At run time the runner may load exactly that output
+	// (e.g. exports → dist/, types → src/index.d.ts): the real dependency on the package's source is lost if only Files is kept.
 	AlsoGenerated bool
-	Detail        string // lý do cho unknown/generated
+	Detail        string // reason for unknown/generated
 }
 
-// Alias từ jest moduleNameMapper / vite resolve.alias / bgraph.toml; người gọi đã thay <rootDir>.
+// Alias from jest moduleNameMapper / vite resolve.alias / bgraph.toml; the caller has already substituted <rootDir>.
 type Alias struct {
-	Regex   *regexp.Regexp // jest: khớp toàn spec, $1.. thay trong Targets
-	Prefix  string         // vite: khớp chính xác hoặc prefix + "/"
-	Targets []string       // đường dẫn tương đối gốc repo
+	Regex   *regexp.Regexp // jest: matches the whole spec, $1.. substituted in Targets
+	Prefix  string         // vite: exact match or prefix + "/"
+	Targets []string       // repo-root-relative paths
 }
 
-// Options cấu hình bộ phân giải.
+// Options configures the resolver.
 type Options struct {
-	Workspaces map[string]string // tên package workspace -> thư mục
+	Workspaces map[string]string // workspace package name -> directory
 	Aliases    []Alias
 }
 
-// Resolver phân giải specifier; cache package.json/tsconfig theo đường dẫn. An toàn đồng thời (một khoá chung).
+// Resolver resolves specifiers; caches package.json/tsconfig by path. Safe for concurrent use (one shared lock).
 type Resolver struct {
 	mu     sync.Mutex
 	t      tree.Tree
@@ -66,7 +66,7 @@ type Resolver struct {
 	cfgIdx map[string][]string
 }
 
-// New tạo bộ phân giải trên cây t.
+// New creates a resolver over tree t.
 func New(t tree.Tree, opt Options) *Resolver {
 	return &Resolver{t: t, opt: opt, pkgs: map[string]*pkgEntry{}, effs: map[string]*effEntry{}, errs: map[string]error{}}
 }
@@ -84,7 +84,7 @@ const sentinel = "\x00"
 
 type genInfo struct{ pkg, dir string }
 
-// acc gom kết quả của một lần Resolve.
+// acc accumulates the result of one Resolve call.
 type acc struct {
 	r        *Resolver
 	files    map[string]struct{}
@@ -107,7 +107,7 @@ func (a *acc) setCfgErr(p string, err error) {
 	}
 }
 
-// join nối base/rel; false nếu thoát khỏi gốc repo.
+// join joins base/rel; false if it escapes the repo root.
 func join(base, rel string) (string, bool) {
 	p := path.Join(base, rel)
 	if p == ".." || strings.HasPrefix(p, "../") || strings.HasPrefix(p, "/") {
@@ -129,7 +129,7 @@ func hasSeg(p, seg string) bool {
 	return false
 }
 
-// splitPkg tách "name[/sub]" hoặc "@scope/name[/sub]"; sub gồm cả "/" đầu.
+// splitPkg splits "name[/sub]" or "@scope/name[/sub]"; sub includes the leading "/".
 func splitPkg(spec string) (name, sub string, ok bool) {
 	parts := strings.SplitN(spec, "/", 3)
 	if strings.HasPrefix(spec, "@") {
@@ -152,7 +152,7 @@ func splitPkg(spec string) (name, sub string, ok bool) {
 	return name, sub, true
 }
 
-// ---- dò tệp ----
+// ---- file probing ----
 
 func (a *acc) tryFile(c string) bool {
 	a.cands = append(a.cands, c)
@@ -164,7 +164,7 @@ func (a *acc) tryFile(c string) bool {
 	return false
 }
 
-// fileCands: chính xác, thêm từng đuôi, thay thế đuôi TS.
+// fileCands: exact, each extension appended, TS extension substitution.
 func (a *acc) fileCands(p string) bool {
 	if p == "." {
 		return false
@@ -197,7 +197,7 @@ func (a *acc) probeIndex(dir string) bool {
 	return found
 }
 
-// pkg đọc package.json của dir; lỗi parse → cfgErr. ok=false khi lỗi.
+// pkg reads the package.json of dir; parse error → cfgErr. ok=false on error.
 func (a *acc) pkg(dir string) (*PackageJSON, bool) {
 	pj, err := a.r.pkgJSON(dir)
 	if err != nil {
@@ -211,7 +211,7 @@ func (a *acc) pkg(dir string) (*PackageJSON, bool) {
 	return pj, true
 }
 
-// probePath dò p như tệp rồi như thư mục (luật 3).
+// probePath probes p as a file, then as a directory (rule 3).
 func (a *acc) probePath(p string) bool {
 	found := a.fileCands(p)
 	if a.probeDir(p) {
@@ -255,8 +255,8 @@ func (a *acc) probeDir(p string) bool {
 	return found
 }
 
-// probePkgTarget dò một đích trong package pkgDir (main/exports/imports). Nếu không có trong cây:
-// ánh xạ ngược outDir → mã nguồn; vẫn không có → ghi nhận "generated".
+// probePkgTarget probes a target inside package pkgDir (main/exports/imports). If absent from the tree:
+// reverse-map outDir → source; if still absent, record "generated".
 func (a *acc) probePkgTarget(pkgDir, name, rel string) bool {
 	p, ok := join(pkgDir, rel)
 	if !ok {
@@ -294,7 +294,7 @@ type kv struct {
 	vals []*JSONValue
 }
 
-// exportsKV chuẩn hoá exports về bảng khoá con đường. ok=false nếu cấu hình sai (trộn khoá).
+// exportsKV normalizes exports into a table of subpath keys. ok=false if the config is invalid (mixed keys).
 func exportsKV(v *JSONValue) (kv, bool) {
 	if v.Kind == KObject && len(v.Keys) > 0 {
 		dot := 0
@@ -313,7 +313,7 @@ func exportsKV(v *JSONValue) (kv, bool) {
 	return kv{[]string{"."}, []*JSONValue{v}}, true
 }
 
-// matchKey: khoá chính xác trước, sau đó mẫu '*' tốt nhất theo PATTERN_KEY_COMPARE của Node.
+// matchKey: exact key first, then the best '*' pattern per Node's PATTERN_KEY_COMPARE.
 func matchKey(m kv, sub string) (val *JSONValue, subst string, pat, ok bool) {
 	for i, k := range m.keys {
 		if k == sub && !strings.Contains(k, "*") {
@@ -343,7 +343,7 @@ type tgt struct {
 	nulls int
 }
 
-// collectTargets gom đích từ MỌI khoá điều kiện và mọi phần tử mảng (siêu tập của mọi bộ điều kiện).
+// collectTargets gathers targets from EVERY condition key and every array element (superset of any condition set).
 func collectTargets(v *JSONValue, subst string, pat bool, t *tgt) {
 	switch v.Kind {
 	case KString:
@@ -365,7 +365,7 @@ func collectTargets(v *JSONValue, subst string, pat bool, t *tgt) {
 	}
 }
 
-// resolveInPackage phân giải subpath ("" hoặc "/x") trong package pkgDir bằng exports/main.
+// resolveInPackage resolves a subpath ("" or "/x") in package pkgDir via exports/main.
 func (a *acc) resolveInPackage(pkgDir string, pj *PackageJSON, name, sub string) {
 	if pj != nil && pj.Exports != nil {
 		kvs, ok := exportsKV(pj.Exports)
@@ -412,7 +412,7 @@ func (a *acc) resolveInPackage(pkgDir string, pj *PackageJSON, name, sub string)
 
 type impItem struct{ raw, pkgDir, name string }
 
-// importTargets tìm scope package gần nhất và khớp khoá imports (luật 4).
+// importTargets finds the nearest package scope and matches the imports keys (rule 4).
 func (a *acc) importTargets(from, spec string) ([]impItem, string) {
 	var scope *PackageJSON
 	for d := dirOf(from); ; d = path.Dir(d) {
@@ -476,7 +476,7 @@ func (a *acc) imports(from, spec string, depth int) {
 	}
 }
 
-// merge hợp kết quả của một lần phân giải con (đích imports không bắt đầu bằng ./).
+// merge unions the result of a sub-resolution (an imports target not starting with ./).
 func (a *acc) merge(res Result) {
 	for _, f := range res.Files {
 		a.files[f] = struct{}{}
@@ -531,7 +531,7 @@ func expandTarget(spec string, m []int, t string) string {
 	return sb.String()
 }
 
-// aliasCandidates trả đường dẫn đích (tương đối gốc repo) của mọi alias khớp spec.
+// aliasCandidates returns the target paths (repo-root-relative) of every alias matching spec.
 func (a *acc) aliasCandidates(spec string) []string {
 	var out []string
 	rel := isRelative(spec)
@@ -572,7 +572,7 @@ func (a *acc) aliasCandidates(spec string) []string {
 
 // ---- Resolve ----
 
-// Resolve phân giải spec được import từ tệp from.
+// Resolve resolves the spec imported from file from.
 func (r *Resolver) Resolve(from, spec string) Result {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -648,7 +648,7 @@ func (a *acc) bare(from, spec string) {
 		return
 	}
 	seen := map[string]bool{}
-	// (c) tự tham chiếu: package tổ tiên có name trùng
+	// (c) self-reference: an ancestor package has the same name
 	for d := dirOf(from); ; d = path.Dir(d) {
 		if pj, ok := a.pkg(d); pj != nil && pj.Name == name && !seen[d] {
 			seen[d] = true
@@ -660,7 +660,7 @@ func (a *acc) bare(from, spec string) {
 			break
 		}
 	}
-	// (d) workspace theo tên
+	// (d) workspace by name
 	if dir, ok := a.r.opt.Workspaces[name]; ok && !seen[dir] {
 		pj, _ := a.pkg(dir)
 		if pj != nil || a.cfgErr == "" {
@@ -670,7 +670,7 @@ func (a *acc) bare(from, spec string) {
 	if len(a.files) > 0 || a.gen != nil || a.pkgFail != "" {
 		return
 	}
-	// (g) khai báo phụ thuộc
+	// (g) declared dependency
 	if a.declared(from, name) {
 		a.external = name
 	}
@@ -708,10 +708,10 @@ func (a *acc) finish(spec string, fold bool) Result {
 		res.Class, res.Detail = ClassUnknown, a.cfgErr
 	case len(res.Files) > 0:
 		res.Class = ClassInternal
-		// Đầu ra build thiếu bên cạnh đích có thật: nếu đích có thật gồm tệp MÃ (không chỉ .d.ts) — mẫu "điều kiện nguồn"
-		// ("@pkg/source": "./src/index.ts" cạnh "import": "./dist/index.js") — đầu ra được biên dịch từ chính entry đó,
-		// cạnh tới nó đã phủ phụ thuộc. Chỉ có .d.ts (preact: types → src/index.d.ts, main → dist/) thì mã thật nằm
-		// trong đầu ra build: giữ tín hiệu để importer phụ thuộc cả package.
+		// Build output missing next to a real target: if the real target includes CODE files (not only .d.ts) — the "source condition" pattern
+		// ("@pkg/source": "./src/index.ts" next to "import": "./dist/index.js") — the output is compiled from that very entry,
+		// so the edge to it already covers the dependency. With only .d.ts (preact: types → src/index.d.ts, main → dist/) the real code lives
+		// in the build output: keep the signal so the importer depends on the whole package.
 		if a.gen != nil && !hasCodeFile(res.Files) {
 			res.AlsoGenerated, res.Package, res.PackageDir = true, a.gen.pkg, a.gen.dir
 		}
@@ -736,7 +736,7 @@ func (a *acc) finish(spec string, fold bool) Result {
 	return res
 }
 
-// foldMatch: không ứng viên nào khớp chính xác; thử khớp bỏ qua hoa thường.
+// foldMatch: no candidate matches exactly; try a case-insensitive match.
 func (a *acc) foldMatch(res *Result) bool {
 	set := map[string]struct{}{}
 	for _, c := range a.cands {
@@ -754,8 +754,8 @@ func (a *acc) foldMatch(res *Result) bool {
 
 // ---- ResolvePattern ----
 
-// ResolvePattern xử lý import() động có tiền tố tĩnh: mọi tệp dưới thư mục của prefix mà đường dẫn có
-// prefix và suffix. Tiền tố rỗng/trần không giải được → Unknown. Thư mục không tồn tại → Unknown.
+// ResolvePattern handles dynamic import() with a static prefix: every file under the prefix's directory whose path has
+// the prefix and suffix. An empty/bare prefix cannot be resolved → Unknown. A nonexistent directory → Unknown.
 func (r *Resolver) ResolvePattern(from, spec, suffix string) Result {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -842,7 +842,7 @@ func (r *Resolver) ResolvePattern(from, spec, suffix string) Result {
 		res.Class = ClassInternal
 		return res
 	}
-	// bare thuần: package đã khai báo → external
+	// bare only: declared package → external
 	if !isRelative(spec) && !strings.HasPrefix(spec, "#") && len(prefixes) == 0 {
 		if name, sub, ok := splitPkg(strings.TrimSuffix(spec, "/")); ok && sub != "" || ok && strings.HasSuffix(spec, "/") {
 			if isBuiltin(name) {
@@ -857,7 +857,7 @@ func (r *Resolver) ResolvePattern(from, spec, suffix string) Result {
 	return res
 }
 
-// hasCodeFile: có tệp mã JS/TS (không phải khai báo .d.ts/.d.mts/.d.cts, không phải JSON/asset).
+// hasCodeFile: there is a JS/TS code file (not a .d.ts/.d.mts/.d.cts declaration, not JSON/asset).
 func hasCodeFile(files []string) bool {
 	for _, f := range files {
 		if strings.HasSuffix(f, ".d.ts") || strings.HasSuffix(f, ".d.mts") || strings.HasSuffix(f, ".d.cts") {
