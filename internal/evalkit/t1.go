@@ -30,7 +30,8 @@ type T1Config struct {
 	Jobs       int
 	MaxPerRepo int
 	Resume     bool
-	Checkout   bool // true: build P/C with a worktree as before (default: temporary index, no checkout)
+	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go)
+	Checkout   bool   // true: build P/C with a worktree as before (default: temporary index, no checkout)
 	Timeout    time.Duration
 	Log        func(format string, a ...any)
 }
@@ -51,6 +52,8 @@ type T1Result struct {
 	Unmapped []string   `json:"unmapped_ids,omitempty"`
 	// FixtureReqs: requirements handled by the fixture rule (see CheckRequired), with the satisfying unit.
 	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
+
+	Rust *RustT1Info `json:"rust,omitempty"` // Rust oracle details (ecosystem rust only)
 
 	Scope     string           `json:"scope,omitempty"`
 	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → count
@@ -366,10 +369,26 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		_, err := git(ctx, dir, "cat-file", "-e", res.P+":"+p)
 		return err == nil
 	}
-	req, mapping, unmapped := MapF2P(ids, files, existsInP)
-	res.Required, res.Mapping, res.Unmapped = req, mapping, unmapped
-	if len(req) == 0 {
-		return skip("unmapped", nil)
+	var req []string
+	if rr.cfg.Ecosystem == "rust" {
+		rreq, info, err := rustRequired(ctx, dir, res.P, files, t, ids)
+		res.Rust = info
+		if err != nil {
+			return skip("rust_oracle", err)
+		}
+		req = rreq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("unmapped", nil)
+		}
+	} else {
+		var mapping []MapEntry
+		var unmapped []string
+		req, mapping, unmapped = MapF2P(ids, files, existsInP)
+		res.Required, res.Mapping, res.Unmapped = req, mapping, unmapped
+		if len(req) == 0 {
+			return skip("unmapped", nil)
+		}
 	}
 
 	chg := bgraph.Change{Base: res.P, Worktree: true}
@@ -412,7 +431,11 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	for _, st := range sel.Tests {
 		su = append(su, SelUnit{Unit: st.Unit, Files: st.Files, Whole: st.Whole, WholeProject: st.Project})
 	}
-	res.Missing, res.FixtureReqs = CheckRequired(req, su)
+	if rr.cfg.Ecosystem == "rust" {
+		res.Missing = rustMissing(req, su, res.Rust, sel.Changed)
+	} else {
+		res.Missing, res.FixtureReqs = CheckRequired(req, su)
+	}
 	switch {
 	case sel.Scope == model.TierFull:
 		res.Status = "full"
@@ -421,7 +444,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	default:
 		res.Status = "violation"
 		res.WideList = sel.Widening
-		res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
+		if rr.cfg.Ecosystem != "rust" {
+			res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
+		}
 	}
 	return res, false
 }
@@ -654,10 +679,44 @@ func WriteT1(dir string, rs []T1Result) error {
 		if r.Status == "violation" {
 			n++
 			fmt.Fprintf(&md, "- `%s` (%s) scope=%s missing %v; widenings %v\n", r.ID, r.Role, r.Scope, r.Missing, r.Widenings)
+			if r.Rust != nil {
+				for _, v := range r.Rust.Violations {
+					fmt.Fprintf(&md, "  - missing unit `%s`; F2P name `%s`; located in %v; changed files %v\n", v.Unit, v.Name, v.Files, v.Changed)
+				}
+			}
 		}
 	}
 	if n == 0 {
 		fmt.Fprintf(&md, "(none)\n")
+	}
+	var ms, tms []float64
+	for _, r := range rs {
+		if r.Ms > 0 {
+			ms = append(ms, float64(r.Ms))
+		}
+		if r.TaskMs > 0 {
+			tms = append(tms, float64(r.TaskMs))
+		}
+	}
+	fmt.Fprintf(&md, "\n## Timings\n\nSelect (ms): median %.0f, p90 %.0f, max %.0f; whole task (ms): median %.0f, p90 %.0f\n", Percentile(ms, 50), Percentile(ms, 90), Percentile(ms, 100), Percentile(tms, 50), Percentile(tms, 90))
+	var ri RustT1Info
+	nr := 0
+	for _, r := range rs {
+		if r.Rust == nil {
+			continue
+		}
+		nr++
+		ri.Names += r.Rust.Names
+		ri.Kept += r.Rust.Kept
+		ri.Untouched += r.Rust.Untouched
+		ri.NotFound += r.Rust.NotFound
+		ri.NoOwner += r.Rust.NoOwner
+		ri.Doc += r.Rust.Doc
+		ri.Ambiguous += r.Rust.Ambiguous
+		ri.MacroOnly += r.Rust.MacroOnly
+	}
+	if nr > 0 {
+		fmt.Fprintf(&md, "\n## Rust oracle\n\n%d tasks; FAIL_TO_PASS names %d; kept as requirements %d (ambiguous %d, doc-tests %d, macro-only %d); dropped: not touched by the test patch (n2p) %d, not found %d, no owning unit %d\n", nr, ri.Names, ri.Kept, ri.Ambiguous, ri.Doc, ri.MacroOnly, ri.Untouched, ri.NotFound, ri.NoOwner)
 	}
 	fmt.Fprintf(&md, "\n## Tasks by repo\n\n| repo | role | tried | ok | full | violations | skipped |\n|---|---|---|---|---|---|---|\n")
 	repos := map[string][]T1Result{}

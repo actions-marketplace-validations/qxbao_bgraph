@@ -187,7 +187,7 @@ var _ tree.Tree = (*gitTree)(nil)
 func prefetchRustBlobs(ctx context.Context, repoDir string, t *gitTree) error {
 	var in strings.Builder
 	for _, p := range t.files {
-		if strings.HasSuffix(p, ".rs") {
+		if strings.HasSuffix(p, ".rs") || strings.HasSuffix(p, ".toml") {
 			in.WriteString(t.oid[p] + "\n")
 		}
 	}
