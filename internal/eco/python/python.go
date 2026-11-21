@@ -50,13 +50,15 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "python-1"
+const AnalyzerVersion = "python-2"
 
 // Eco is the Python ecosystem.
-type Eco struct{}
+type Eco struct {
+	rules *rules.File // [[dynamic]]; may be nil
+}
 
-// New creates the Python ecosystem. The rules file is accepted for symmetry with the other ecosystems; user rules are applied by the selector.
-func New(_ *rules.File) *Eco { return &Eco{} }
+// New creates the Python ecosystem. [[rule]] entries are applied by the selector; [[dynamic]] entries are read here.
+func New(r *rules.File) *Eco { return &Eco{rules: r} }
 
 func (e *Eco) Name() string    { return Name }
 func (e *Eco) Version() string { return AnalyzerVersion }
@@ -91,7 +93,14 @@ type builder struct {
 
 	initChain map[string][]string
 	pluginMod []string // modules of pytest11 entry points declared in the repo
+
+	dyn     []rules.Dynamic // [[dynamic]] declarations
+	dynUsed []bool
 }
+
+// moduleTriggers: the files the import system can load. A dynamic import (or a sys.path edit) can only ever load these, so a change to
+// anything else (data, docs, configuration) cannot reach it through the dynamic site.
+var moduleTriggers = []string{"**/*.py", "**/*.pyi", "**/*.pyc", "**/*.so", "**/*.pyd", "**/*.so.*"}
 
 // skipDir: paths below these directories are never repo code.
 func skipPath(p string) bool {
@@ -113,6 +122,10 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	b := &builder{t: t, sc: sc, a: a, fileSet: map[string]bool{}, pyDirs: map[string]bool{}, byLast: map[string][]string{},
 		markers: map[string]bool{}, cfgAt: map[string]*pytestCfg{}, cfgFor: map[string]*pytestCfg{}, rootSeen: map[string]bool{},
 		cache: map[string]resolved{}, seen: map[edgeKey]bool{}, projOf: map[string]string{}, initChain: map[string][]string{}}
+	if e.rules != nil {
+		b.dyn = e.rules.Dynamics
+		b.dynUsed = make([]bool, len(b.dyn))
+	}
 	files := t.Files()
 	var meta []string
 	for _, p := range files {
@@ -267,7 +280,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		b.setRole(p, role)
 		if fi.scan.Uncertain {
 			a.Unresolved = append(a.Unresolved, model.Unresolved{File: p, Spec: "*", Class: model.UnresolvedUncertainScan,
-				ScopeTier: model.TierModule, ScopeDir: proj, Detail: fi.scan.UncertainReason})
+				ScopeTier: model.TierModule, ScopeDir: proj, Detail: fi.scan.UncertainReason, TriggerGlobs: moduleTriggers})
 		}
 		for _, im := range fi.scan.Imports {
 			b.addImport(p, proj, im)
@@ -319,6 +332,16 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		a.Tests = append(a.Tests, model.TestUnit{Eco: Name, ID: WholeUnitID(d), Project: d, Runner: RunnerPytest, Whole: true, Config: c.file})
 		a.Unresolved = append(a.Unresolved, model.Unresolved{File: c.file, Spec: strings.Join(c.opaque, "; "), Class: model.UnresolvedUnknown,
 			ScopeTier: model.TierNone, Detail: "pytest collection settings are computed: the project's whole suite is one unit"})
+	}
+	for i, d := range b.dyn {
+		if !b.dynUsed[i] {
+			why := "matches no dynamic import site (stale declaration?): the widening stays"
+			if !b.fileSet[d.File] {
+				why = "is not a Python file of the repo: the declaration is inert"
+			}
+			a.Unresolved = append(a.Unresolved, model.Unresolved{File: rules.FileName, Spec: fmt.Sprintf("[[dynamic]] #%d file = %q", i+1, d.File),
+				Class: model.UnresolvedUnknown, ScopeTier: model.TierNone, Detail: "[[dynamic]] " + why})
+		}
 	}
 	b.configRoles(files)
 	slices.SortFunc(a.Edges, func(x, y model.Edge) int {
@@ -646,7 +669,7 @@ func (b *builder) heuristicFiles(spec string, names []string) []string {
 func (b *builder) addImport(from, proj string, im model.ImportRef) {
 	if im.Kind == model.ImportSysPath {
 		if im.Dynamic {
-			b.unres(from, "sys.path", model.UnresolvedDynamic, model.TierModule, proj, im.Line,
+			b.dynSite(from, "sys.path", proj, im.Line, true,
 				"sys.path is changed by an expression bgraph cannot evaluate: imports may resolve from an unknown directory")
 		}
 		return
@@ -658,7 +681,7 @@ func (b *builder) addImport(from, proj string, im model.ImportRef) {
 	}
 	if im.Dynamic {
 		if im.Kind == model.ImportPlugin || im.Spec == "" {
-			b.unres(from, im.Spec, model.UnresolvedDynamic, model.TierModule, proj, im.Line, "module name is not a constant")
+			b.dynSite(from, im.Spec, proj, im.Line, false, "module name is not a constant")
 			return
 		}
 		b.dynamicHead(from, proj, im)
@@ -758,7 +781,7 @@ func (b *builder) dynamicHead(from, proj string, im model.ImportRef) {
 		comps = comps[:len(comps)-1] // the last component is only a prefix of a module name
 	}
 	if len(comps) == 0 || comps[0] == "" {
-		b.unres(from, im.Spec, model.UnresolvedDynamic, model.TierModule, proj, im.Line, "module name is not a constant")
+		b.dynSite(from, im.Spec, proj, im.Line, false, "module name is not a constant")
 		return
 	}
 	hit := false
@@ -785,5 +808,26 @@ func (b *builder) dynamicHead(from, proj string, im model.ImportRef) {
 	if b.isExternal(comps[0]) {
 		return
 	}
-	b.unres(from, im.Spec, model.UnresolvedDynamic, model.TierModule, proj, im.Line, "module name has a static prefix that is not a package of the repo")
+	b.dynSite(from, im.Spec, proj, im.Line, false, "module name has a static prefix that is not a package of the repo")
+}
+
+// dynSite records a dynamic import or sys.path site: described by a [[dynamic]] declaration (pattern edges to what it loads, nothing
+// else), or an Unresolved at project scope that fires only when a loadable file changes.
+func (b *builder) dynSite(from, spec, proj string, line int, sysPath bool, detail string) {
+	for i, d := range b.dyn {
+		if d.File != from || d.SysPathOnly && !sysPath || len(d.Lines) > 0 && !slices.Contains(d.Lines, line) {
+			continue
+		}
+		b.dynUsed[i] = true
+		for _, g := range d.RawLoads {
+			k := edgeKey{from, g, model.EdgePattern}
+			if !b.seen[k] {
+				b.seen[k] = true
+				b.a.Edges = append(b.a.Edges, model.Edge{From: from, To: g, Kind: model.EdgePattern, Line: line, Spec: "bgraph.toml [[dynamic]]", Provenance: model.ProvRule})
+			}
+		}
+		return
+	}
+	b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: from, Spec: spec, Class: model.UnresolvedDynamic, Line: line,
+		ScopeTier: model.TierModule, ScopeDir: proj, Detail: detail, TriggerGlobs: moduleTriggers})
 }

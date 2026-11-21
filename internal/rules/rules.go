@@ -65,6 +65,21 @@ type Config struct {
 	Reason      string
 }
 
+// Dynamic is a [[dynamic]]: the user's description of what the dynamic imports (importlib.import_module(name), __import__(name),
+// non-literal sys.path edits...) of one file can load. Without it bgraph cannot know and treats any change in the project as a
+// possible target. Like [[config]] it narrows the selection on the user's word: a reason is required. Only the Python ecosystem
+// consumes it for now.
+type Dynamic struct {
+	Index       int
+	File        string // repo-relative file containing the dynamic sites
+	Lines       []int  // only these sites; empty: every dynamic site of the file
+	Loads       []*glob.Pattern
+	RawLoads    []string
+	None        bool // the sites load nothing from the repo
+	SysPathOnly bool // the declaration covers only the sys.path sites of the file
+	Reason      string
+}
+
 // Config keys a [[config]] may replace, by kind.
 var (
 	AliasKeys       = []string{"alias", "moduleNameMapper"}
@@ -85,6 +100,7 @@ type File struct {
 	Rules     []Rule
 	Generated []Generated
 	Configs   []Config
+	Dynamics  []Dynamic
 	Options   Options
 	Path      string // path of the file read; empty if there is no file
 }
@@ -110,6 +126,14 @@ type rawFile struct {
 		IgnorePaths []string          `toml:"ignore_paths"`
 		Reason      string            `toml:"reason"`
 	} `toml:"config"`
+	Dynamic []struct {
+		File        string   `toml:"file"`
+		Lines       []int64  `toml:"lines"`
+		Loads       []string `toml:"loads"`
+		None        bool     `toml:"none"`
+		SysPathOnly bool     `toml:"sys_path_only"`
+		Reason      string   `toml:"reason"`
+	} `toml:"dynamic"`
 	Options struct {
 		MaxChanged *int64 `toml:"max_changed"`
 	} `toml:"options"`
@@ -280,6 +304,44 @@ func Parse(name string, data []byte) (*File, error) {
 			}
 		}
 		f.Configs = append(f.Configs, out)
+	}
+
+	for i, d := range raw.Dynamic {
+		at := fmt.Sprintf("%s: dynamic[%d]", name, i)
+		file, ok := repoPath(d.File)
+		if !ok {
+			return nil, fmt.Errorf("%s: 'file' is required: the repo-relative path of the file that contains the dynamic imports", at)
+		}
+		out := Dynamic{Index: i, File: file, RawLoads: d.Loads, None: d.None, SysPathOnly: d.SysPathOnly, Reason: d.Reason}
+		if strings.TrimSpace(d.Reason) == "" {
+			return nil, fmt.Errorf("%s: 'reason' is required (a declaration narrows the selection: say why it is right)", at)
+		}
+		for _, ln := range d.Lines {
+			if ln < 1 {
+				return nil, fmt.Errorf("%s.lines: line numbers start at 1 (got %d)", at, ln)
+			}
+			out.Lines = append(out.Lines, int(ln))
+		}
+		switch {
+		case d.None && len(d.Loads) > 0:
+			return nil, fmt.Errorf("%s: 'none = true' and 'loads' are mutually exclusive", at)
+		case len(d.Loads) == 0 && !d.None && !d.SysPathOnly:
+			return nil, fmt.Errorf("%s: 'loads' is required (globs of what the dynamic imports can load), or 'none = true', or 'sys_path_only = true'", at)
+		}
+		if d.SysPathOnly && len(d.Lines) > 0 {
+			return nil, fmt.Errorf("%s: 'sys_path_only' and 'lines' cannot be combined (pick the sites by line or all sys.path sites)", at)
+		}
+		for _, g := range d.Loads {
+			if g == "" {
+				return nil, fmt.Errorf("%s.loads: empty glob", at)
+			}
+			p, err := glob.Compile(g)
+			if err != nil {
+				return nil, fmt.Errorf("%s.loads: %w", at, err)
+			}
+			out.Loads = append(out.Loads, p)
+		}
+		f.Dynamics = append(f.Dynamics, out)
 	}
 
 	if m := raw.Options.MaxChanged; m != nil {

@@ -1,0 +1,26 @@
+An extension module file (.so) is loadable by the import system.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/loader.py --
+import importlib
+def load(n):
+    return importlib.import_module(n)
+-- base/pkg/unrelated.py --
+X = 1
+-- base/tests/test_loader.py --
+from pkg.loader import load
+-- base/tests/test_unrelated.py --
+import pkg.unrelated
+-- base/docs/notes.md --
+a
+-- base/.flake8 --
+[flake8]
+-- head/pkg/_speed.cpython-311-x86_64-linux-gnu.so --
+bin
+-- want --
+notfull
+widen dynamic_import
+select tests/test_loader.py

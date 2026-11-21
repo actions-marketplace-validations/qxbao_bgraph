@@ -91,7 +91,7 @@ func TestExampleFileParses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(f.Rules) == 0 || len(f.Generated) == 0 || len(f.Configs) != 2 {
+	if len(f.Rules) == 0 || len(f.Generated) == 0 || len(f.Configs) != 2 || len(f.Dynamics) != 3 {
 		t.Fatalf("%+v", f)
 	}
 }

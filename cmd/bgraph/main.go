@@ -17,6 +17,7 @@ import (
 	"github.com/qxbao/bgraph"
 	"github.com/qxbao/bgraph/internal/explain"
 	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
 	"github.com/qxbao/bgraph/internal/runner"
 )
 
@@ -140,6 +141,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			if u.Detail != "" {
 				fmt.Fprintf(stdout, "    %s\n", u.Detail)
 			}
+			if u.ScopeTier == model.TierNone && u.File == rules.FileName {
+				continue // a stale [[dynamic]] declaration: the detail above says what to fix
+			}
 			fmt.Fprintf(stdout, "    bgraph.toml suggestion:\n%s\n", indent(suggestRule(u), "      "))
 		}
 		fmt.Fprintf(stdout, "total: %d\n", n)
@@ -255,6 +259,14 @@ func suggestRule(u model.Unresolved) string {
 			return fmt.Sprintf("[[config]]\nfile = %q\nreplaces = [%q]\n"+
 				"# alias = { ... } / alias_regex = { ... } / tests = [ ... ]: what the code computes\nreason = \"...\"", file, key)
 		}
+	}
+	// A dynamic import or sys.path edit that bgraph cannot evaluate: describe what it loads with [[dynamic]].
+	if u.Class == model.UnresolvedDynamic && u.ScopeTier != model.TierNone && strings.HasSuffix(u.File, ".py") {
+		lines := ""
+		if u.Line > 0 {
+			lines = fmt.Sprintf("lines = [%d]\n", u.Line)
+		}
+		return fmt.Sprintf("[[dynamic]]\nfile = %q\n%sloads = [\"<globs of the files this site can load>\"]  # or: none = true (loads nothing from the repo)\nreason = \"...\"", u.File, lines)
 	}
 	dir := u.ScopeDir
 	if dir == "" {

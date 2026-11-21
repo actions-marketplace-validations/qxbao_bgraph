@@ -17,7 +17,7 @@ Status: three ecosystems.
   Imports are resolved against the union of every plausible import root (repo root, project dirs, `src/`, pyproject/setup.cfg
   package locations, pytest `pythonpath`, rootdir-insertion dirs of tests and conftests, literal `sys.path` edits), including
   ancestor `__init__.py`, namespace packages and `.pyi` stubs; every conftest above a test, `-p` plugins and `pytest11` entry points
-  are dependencies. Non-constant `importlib`/`__import__`/`sys.path` use is unresolved at project scope. `bgraph command` emits
+  are dependencies. Non-constant `importlib`/`__import__`/`sys.path` use is unresolved at project scope and fires only when a loadable file (.py, .pyi, .pyc, .so, .pyd) changes there; `[[dynamic]]` in `bgraph.toml` describes what such a site can load. `bgraph command` emits
   `python -m pytest --rootdir R -c CFG <files>` (an `@argfile` for long lists needs pytest >= 8.2) or
   `python tests/runtests.py <labels>` / `python manage.py test <labels>`.
 

@@ -139,6 +139,52 @@ ignore_paths = ["packages/svelte"]
 reason = "svelte_alias() follows the package exports; the projects only shard the same test files"
 
 # ---------------------------------------------------------------------------------------------------------------------
+# [[dynamic]]: describe what the dynamic imports of one file can load.                                (NARROWING)
+#
+# `importlib.import_module(name)`, `__import__(name)`, `pkgutil.iter_modules(...)` and a `sys.path` edit built at run
+# time can load a module bgraph cannot name. By default such a site is unresolved at project scope: when a file the
+# import system can load changes in the project (a .py, .pyi, .pyc, .so or .pyd file, added, changed or deleted), the
+# file with the site and everything that depends on it is selected. Data files, docs and configuration never trigger
+# it (they have their own rules). That is the sound default and it is often wide: a test runner that imports the test
+# modules it collects makes every change select the runner's dependents.
+#
+# A [[dynamic]] entry replaces that rule for the sites it names with edges from the file to the globs you say it can
+# load: a change to any file matching a glob (including files added later) reaches the file and its dependents, and
+# nothing else does. Currently only the Python ecosystem reads [[dynamic]]; other ecosystems ignore it.
+#
+# If `file` does not exist, is not Python, or no dynamic site matches (a wrong `lines`), the entry is inert, the
+# default stays, and `bgraph unresolved` lists it as a stale declaration. `bgraph unresolved` also prints a snippet to
+# start from next to every dynamic site.
+#
+#   file          : repo-relative file that contains the dynamic sites (required).
+#   lines         : only the sites on these lines (optional; default: every dynamic site of the file).
+#   loads         : globs of the files those sites can load (one of loads / none / sys_path_only is required).
+#   none          : true when the sites load nothing from the repo (plugins of installed packages only).
+#   sys_path_only : true to describe the file's sys.path edits only: they change where imports are looked up, which
+#                   bgraph already covers by matching unresolved imports anywhere in the repo. Cannot be combined
+#                   with `lines`.
+#   reason        : why the description is right (required).
+# ---------------------------------------------------------------------------------------------------------------------
+
+[[dynamic]]
+# sympy-style: the test runner imports every test module it collects.
+file = "sympy/utilities/runtests.py"
+loads = ["sympy/**/tests/test_*.py", "sympy/**/tests/__init__.py"]
+reason = "runtests.py only imports the test modules of the sympy tree it was asked to run"
+
+[[dynamic]]
+# django-style: settings are imported by dotted path from the DJANGO_SETTINGS_MODULE environment variable.
+file = "django/conf/__init__.py"
+lines = [112]
+loads = ["django/conf/**/*.py", "tests/settings/*.py", "tests/*_settings.py"]
+reason = "the settings module is a project settings file; no other repo module is imported by name here"
+
+[[dynamic]]
+file = "app/plugins.py"
+none = true
+reason = "load_plugins() imports entry points of installed packages, never a module of this repo"
+
+# ---------------------------------------------------------------------------------------------------------------------
 # [options]
 #   max_changed : above this many changed files, run the full suite (diff_too_large). Default 5000.
 # ---------------------------------------------------------------------------------------------------------------------

@@ -1,0 +1,25 @@
+sys_path_only = true declares the sys.path sites of a file as not loading anything.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/__init__.py --
+-- base/tests/conftest.py --
+import sys
+sys.path.insert(0, compute())
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import pkg.x
+-- base/other/test_b.py --
+import json
+-- base/bgraph.toml --
+[[dynamic]]
+file = "tests/conftest.py"
+sys_path_only = true
+reason = "adds the installed site dir"
+-- head/pkg/new.py --
+X = 2
+-- want --
+notfull
+nowiden dynamic_import

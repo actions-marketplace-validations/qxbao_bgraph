@@ -1,0 +1,26 @@
+A dynamic import can only load modules: a documentation change inside the project does not seed the dynamic site.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/loader.py --
+import importlib
+def load(n):
+    return importlib.import_module(n)
+-- base/pkg/unrelated.py --
+X = 1
+-- base/tests/test_loader.py --
+from pkg.loader import load
+-- base/tests/test_unrelated.py --
+import pkg.unrelated
+-- base/docs/notes.md --
+a
+-- base/.flake8 --
+[flake8]
+-- head/docs/notes.md --
+b
+-- want --
+notfull
+scope none
+noselect tests/test_loader.py
