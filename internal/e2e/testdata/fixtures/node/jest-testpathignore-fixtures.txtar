@@ -1,0 +1,21 @@
+testRegex khớp cả test/fixtures/**, testPathIgnorePatterns loại "/test/fixtures/" (kèm phần tử spread không đọc được): fixture không là đơn vị test, runner test/index.js vẫn được chọn.
+-- base/package.json --
+{"name":"mono","private":true,"devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+module.exports = {
+  testRegex: './packages/[^/]+/test/.+\.m?js$',
+  testPathIgnorePatterns: ["/node_modules/", "/test/fixtures/", "<rootDir>/build/", ...(process.env.X ? ["\.skip\.js$"] : [])],
+}
+-- base/packages/a/package.json --
+{"name":"@m/a"}
+-- base/packages/a/src/index.js --
+export const a = 1
+-- base/packages/a/test/index.js --
+import { a } from '../src/index.js'
+-- base/packages/a/test/fixtures/x/input.js --
+let x = 1
+-- head/packages/a/src/index.js --
+export const a = 2
+-- want --
+select packages/a/test/index.js
+noselect packages/a/test/fixtures/x/input.js

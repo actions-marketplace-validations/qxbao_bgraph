@@ -27,22 +27,43 @@ type testConfig struct {
 	testRegex []*regexp.Regexp
 	// testsOpaque: mẫu tệp test không đọc được → tập test của dự án không biết (đơn vị Whole).
 	testsOpaque bool
+	// testIgnore: testPathIgnorePatterns đọc được (chỉ các phần tử chuỗi hằng; phần tử spread/biến bị bỏ qua = loại trừ ít
+	// hơn = vẫn là tập cha). Chỉ áp cho khớp theo mẫu cấu hình.
+	testIgnore []*regexp.Regexp
 }
 
 // isTest: p khớp mẫu tệp test của cấu hình.
 func (tc *testConfig) isTest(p string) bool {
 	for _, g := range tc.testGlobs {
 		if g.Match(p) {
-			return true
+			return !tc.ignored(fakeAbs(p))
 		}
 	}
+	abs := fakeAbs(p)
 	for _, re := range tc.testRegex {
 		// Jest so testRegex với đường dẫn TUYỆT ĐỐI: tiền tố giả để mẫu như "./packages/" có ký tự đứng trước.
-		if re.MatchString("/__repo__/" + p) {
+		if re.MatchString(abs) {
+			return !tc.ignored(abs)
+		}
+	}
+	return false
+}
+
+func (tc *testConfig) ignored(abs string) bool {
+	for _, re := range tc.testIgnore {
+		if re.MatchString(abs) {
 			return true
 		}
 	}
 	return false
+}
+
+// fakeAbs là đường dẫn tuyệt đối giả của tệp repo p (gốc repo là /__repo__).
+func fakeAbs(p string) string {
+	if p == "." || p == "" {
+		return "/__repo__"
+	}
+	return "/__repo__/" + p
 }
 
 // configBases là tên (không đuôi) của tệp cấu hình runner, tìm ở MỌI thư mục của dự án (cấu hình lồng như
@@ -650,6 +671,20 @@ func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKno
 		}
 		return true
 	}
+	// testPathIgnorePatterns: chỉ phần tử chuỗi hằng; <rootDir> thay bằng gốc khi biết, không biết thì bỏ mẫu đó.
+	for _, i := range keyIndexes(src, "testPathIgnorePatterns") {
+		for _, pat := range literalElements(src[i:]) {
+			if strings.Contains(pat, "<rootDir>") {
+				if !rootKnown || len(roots) != 1 {
+					continue
+				}
+				pat = strings.ReplaceAll(pat, "<rootDir>", regexp.QuoteMeta(fakeAbs(roots[0])))
+			}
+			if re, err := regexp.Compile(pat); err == nil {
+				tc.testIgnore = append(tc.testIgnore, re)
+			}
+		}
+	}
 	opaqueTest := func(msg string) {
 		tc.opaque = append(tc.opaque, msg)
 		tc.testsOpaque = true
@@ -925,4 +960,22 @@ func valueEnd(src string, i int) int {
 		}
 	}
 	return len(src)
+}
+
+// literalElements trả các phần tử là chuỗi hằng của mảng ngay sau vị trí s; phần tử khác (spread, biến, lời gọi) bị bỏ.
+func literalElements(s string) []string {
+	body, ok := balanced(s, '[', ']')
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, part := range splitTop(body) {
+		part = strings.TrimSpace(part)
+		if part != "" && quoteLen(part) == part {
+			if v, ok := literalValue(part); ok {
+				out = append(out, v)
+			}
+		}
+	}
+	return out
 }
