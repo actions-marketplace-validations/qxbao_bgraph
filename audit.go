@@ -103,6 +103,9 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 	}
 	for _, r := range results {
 		m := &audit.Mapper{Root: ix.repo.Root, Known: known, Projects: projects}
+		if r, err := filepath.EvalSymlinks(ix.repo.Root); err == nil && r != ix.repo.Root {
+			m.AltRoots = append(m.AltRoots, r)
+		}
 		if r.Source != "" {
 			if abs, err := filepath.Abs(filepath.Dir(r.Source)); err == nil {
 				m.ResultsDir = abs

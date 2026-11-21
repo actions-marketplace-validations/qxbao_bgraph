@@ -9,11 +9,13 @@ import (
 // Mapper maps the candidate paths of a failure to a known repo-relative test file.
 type Mapper struct {
 	Root       string   // absolute repo root (any slash style)
+	AltRoots   []string // other spellings of Root (symlink-resolved, Windows long/short names); tried after Root
 	ResultsDir string   // absolute directory of the results file ("" if unknown)
 	Known      []string // every known test file, repo-relative with forward slashes
 	Projects   []string // test project directories (repo-relative); "." for the repo root
 
 	root, resDir string
+	roots        []string
 	set          map[string]bool
 }
 
@@ -36,6 +38,10 @@ func (m *Mapper) Map(cands []string) (string, Outcome) {
 			m.set[k] = true
 		}
 		m.root = normSlashes(m.Root)
+		m.roots = []string{m.root}
+		for _, r := range m.AltRoots {
+			m.roots = append(m.roots, normSlashes(r))
+		}
 		m.resDir = normSlashes(m.ResultsDir)
 	}
 	norm := make([]string, 0, len(cands))
@@ -112,19 +118,21 @@ func (m *Mapper) normalize(c string) string {
 // toRepoRel makes the absolute slash path p relative to the repo root. The comparison is case-insensitive on Windows
 // and whenever a drive letter is involved.
 func (m *Mapper) toRepoRel(p string) (string, bool) {
-	if m.root == "" {
-		return "", false
-	}
 	p = path.Clean(p)
-	root := strings.TrimSuffix(path.Clean(m.root), "/")
-	a, b := p, root
-	if runtime.GOOS == "windows" || hasDrive(root) || hasDrive(p) {
-		a, b = strings.ToLower(p), strings.ToLower(root)
+	for _, r := range m.roots {
+		if r == "" {
+			continue
+		}
+		root := strings.TrimSuffix(path.Clean(r), "/")
+		a, b := p, root
+		if runtime.GOOS == "windows" || hasDrive(root) || hasDrive(p) {
+			a, b = strings.ToLower(p), strings.ToLower(root)
+		}
+		if strings.HasPrefix(a, b+"/") {
+			return p[len(root)+1:], true
+		}
 	}
-	if !strings.HasPrefix(a, b+"/") {
-		return "", false
-	}
-	return p[len(root)+1:], true
+	return "", false
 }
 
 func normSlashes(s string) string {

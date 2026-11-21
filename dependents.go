@@ -115,9 +115,37 @@ func (ix *Index) Dependents(ctx context.Context, q DependentsQuery) (DependentsR
 // normalizePath turns a user-supplied path into the repo-relative, forward-slash form used by the graph.
 func (ix *Index) normalizePath(p string) string {
 	if filepath.IsAbs(p) {
-		if rel, err := filepath.Rel(filepath.Clean(ix.Root()), filepath.Clean(p)); err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-			return filepath.ToSlash(rel)
+		if rel, ok := relUnder(ix.Root(), p); ok {
+			return rel
+		}
+		// Different spellings of the same directory (symlinks, Windows 8.3 short names such as RUNNER~1): compare the
+		// resolved forms. The file itself may not exist (deleted file), so resolve its nearest existing ancestor.
+		if root, err := filepath.EvalSymlinks(ix.Root()); err == nil {
+			dir, rest := filepath.Clean(p), ""
+			for {
+				if r, err := filepath.EvalSymlinks(dir); err == nil {
+					if rel, ok := relUnder(root, filepath.Join(r, rest)); ok {
+						return rel
+					}
+					break
+				}
+				parent := filepath.Dir(dir)
+				if parent == dir {
+					break
+				}
+				rest = filepath.Join(filepath.Base(dir), rest)
+				dir = parent
+			}
 		}
 	}
 	return path.Clean(strings.TrimPrefix(strings.ReplaceAll(p, "\\", "/"), "./"))
+}
+
+// relUnder returns p relative to root (forward slashes) when p lies inside root.
+func relUnder(root, p string) (string, bool) {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(p))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) {
+		return "", false
+	}
+	return filepath.ToSlash(rel), true
 }
