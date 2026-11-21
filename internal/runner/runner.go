@@ -7,6 +7,7 @@
 //   - jest: uses --runTestsByPath, so it is an exact path, not a regex.
 //   - playwright: a regex → escaped with regexp.QuoteMeta; prefers --test-list when ListDir is set.
 //   - mocha, ava: paths/globs; a file name with glob characters → fall back to a whole-project command.
+//   - pytest, django: see python.go (rootdir/config pinned, @argfile for long lists, dotted labels).
 //   - cargo: units are Cargo targets addressed by package (-p) and target flags (--lib, --test, ...); see cargo.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
@@ -85,10 +86,14 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests []model.SelectedTest
+	var cargoTests, pyTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
+			continue
+		}
+		if t.Runner == "pytest" || t.Runner == "django" {
+			pyTests = append(pyTests, t) // dedicated adapter: rootdir/config pinning, dotted labels
 			continue
 		}
 		proj := cleanProject(t.Project)
@@ -138,6 +143,14 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 			continue
 		}
 		cmds, notes, err := sp.build(k.project, k.runner, paths, opt)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(pyTests) > 0 {
+		cmds, notes, err := pythonCommands(pyTests, opt)
 		if err != nil {
 			return Plan{}, err
 		}
