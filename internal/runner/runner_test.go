@@ -29,7 +29,7 @@ func TestPerRunner(t *testing.T) {
 		{"mocha", sel("mocha", ".", "t/a.js"), [][]string{{"npx", "mocha", "t/a.js"}}},
 		{"ava", sel("ava", ".", "t/a.js"), [][]string{{"npx", "ava", "t/a.js"}}},
 		{"node-test", sel("node-test", ".", "t/a.test.js"), [][]string{{"node", "--test", "t/a.test.js"}}},
-		{"playwright regex", sel("playwright", ".", "e2e/a.spec.ts", "e2e/c++.spec.ts"), [][]string{{"npx", "playwright", "test", `e2e/a\.spec\.ts`, `e2e/c\+\+\.spec\.ts`}}},
+		{"playwright regex", sel("playwright", ".", "e2e/a.spec.ts", "e2e/c++.spec.ts"), [][]string{{"npx", "playwright", "test", `e2e[\\/]a\.spec\.ts`, `e2e[\\/]c\+\+\.spec\.ts`}}},
 		{"project-relative + windows slashes", sel("vitest", "packages/x", `packages\x\src\a.test.ts`), [][]string{{"npx", "vitest", "run", "src/a.test.ts"}}},
 		{"special chars vitest", sel("vitest", ".", "src/a b (1).test.ts"), [][]string{{"npx", "vitest", "run", "src/a b (1).test.ts"}}},
 		{"glob chars node-test falls back", sel("node-test", "p", "p/t/[id].test.js"), [][]string{{"node", "--test"}}},
@@ -117,7 +117,11 @@ func TestBatching(t *testing.T) {
 
 func TestPlaywrightListFile(t *testing.T) {
 	dir := t.TempDir()
-	p, err := Commands(sel("playwright", "web", "web/e2e/a.spec.ts", "web/e2e/b.spec.ts"), Options{ListDir: dir})
+	// Ngắn: vẫn dùng đối số vị trí dù có ListDir (tệp danh sách chỉ khi quá dài).
+	if p, _ := Commands(sel("playwright", "web", "web/e2e/a.spec.ts"), Options{ListDir: dir}); p.Commands[0].ListFile != "" {
+		t.Fatalf("ngắn mà dùng tệp danh sách: %+v", p.Commands[0])
+	}
+	p, err := Commands(sel("playwright", "web", "web/e2e/a.spec.ts", "web/e2e/b.spec.ts"), Options{ListDir: dir, MaxArgChars: 10})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -170,8 +170,18 @@ var specs = map[string]spec{
 	"playwright": {whole: []string{"npx", "playwright", "test"}, build: buildPlaywright},
 }
 
+// buildPlaywright: ưu tiên đối số vị trí. Đối số là regex so với đường dẫn tuyệt đối của tệp test (Windows dùng "\"),
+// nên mỗi "/" thành [\\/]. --test-list (Playwright ≥ 1.56) không nói rõ đường dẫn tương đối với gì: dòng không khớp làm
+// Playwright chạy 0 test (sót im lặng), vì vậy chỉ dùng khi danh sách quá dài, có ghi chú, và dòng là đường dẫn tương đối
+// dự án đúng như --list in ra.
 func buildPlaywright(project, runner string, paths []string, opt Options) ([]Command, []string, error) {
-	if opt.ListDir != "" {
+	args := make([]string, len(paths))
+	total := 0
+	for i, p := range paths {
+		args[i] = strings.ReplaceAll(regexp.QuoteMeta(p), "/", `[\\/]`)
+		total += len(args[i]) + 1
+	}
+	if opt.ListDir != "" && total > maxArgs(opt) {
 		if err := os.MkdirAll(opt.ListDir, 0o755); err != nil {
 			return nil, nil, err
 		}
@@ -179,14 +189,18 @@ func buildPlaywright(project, runner string, paths []string, opt Options) ([]Com
 		if err := os.WriteFile(file, []byte(strings.Join(paths, "\n")+"\n"), 0o644); err != nil {
 			return nil, nil, err
 		}
-		return []Command{{Runner: runner, Project: project, Argv: []string{"npx", "playwright", "test", "--test-list", file}, ListFile: file}}, nil, nil
-	}
-	args := make([]string, len(paths))
-	for i, p := range paths {
-		args[i] = regexp.QuoteMeta(p) // đối số vị trí của Playwright là regex
+		return []Command{{Runner: runner, Project: project, Argv: []string{"npx", "playwright", "test", "--test-list", file}, ListFile: file}},
+			[]string{"playwright: --test-list cần Playwright ≥ 1.56; đường dẫn trong tệp tương đối thư mục dự án — kiểm bằng --list rằng số test > 0"}, nil
 	}
 	cmds, notes := batch(runner, project, []string{"npx", "playwright", "test"}, args, opt.MaxArgChars)
 	return cmds, append(notes, "playwright: đối số là regex (đã QuoteMeta, không neo): có thể chọn thừa"), nil
+}
+
+func maxArgs(opt Options) int {
+	if opt.MaxArgChars > 0 {
+		return opt.MaxArgChars
+	}
+	return 8000
 }
 
 // batch chia args thành các lô sao cho độ dài dòng lệnh <= max (một đối số quá dài vẫn chiếm một lô riêng, không bị bỏ).
