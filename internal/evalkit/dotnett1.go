@@ -14,7 +14,8 @@ import (
 )
 
 // dotnetWholeSuite is the size of a FAIL_TO_PASS list from which it is treated as a whole-suite list (the test patch broke the build, so
-// every test of the project "fails before"): only the names located in files the test patch touches become requirements.
+// every test of the project "fails before"): only the names located in files the test patch touches, or in a project that owns such a
+// file, become requirements.
 const dotnetWholeSuite = 50
 
 // DotnetReq is the requirement derived from one FAIL_TO_PASS name: the nearest project of every candidate test file (the test project
@@ -25,6 +26,9 @@ type DotnetReq struct {
 	Units     []string `json:"units"`
 	Ancestors []string `json:"ancestors,omitempty"`
 	Ambiguous bool     `json:"ambiguous,omitempty"`
+	// Touched: some candidate file is touched by the test patch. A name in an untouched file passes or fails independently of the
+	// patch pair (flaky or environment-dependent in the dataset), so a violation on such a name is an oracle artefact candidate.
+	Touched bool `json:"touched"`
 }
 
 // DotnetViolation is one required unit missing from the selection, with what a reviewer needs to classify it.
@@ -42,6 +46,7 @@ type DotnetViolation struct {
 	// ChangedOwners: for each changed file, the projects that own it by ancestor ownership at P (what a hand check compares with the
 	// project's ProjectReferences).
 	ChangedOwners map[string][]string `json:"changed_owners,omitempty"`
+	Touched       bool                `json:"touched"`         // the name's file is touched by the test patch
 	Class         string              `json:"class,omitempty"` // first pass: "real-miss?" (a path exists) | "no-path" (needs a reviewer)
 }
 
@@ -97,6 +102,12 @@ func dotnetRequired(ctx context.Context, dir, p string, ids []string, tp map[str
 		}
 	}
 	oi := newDotnetOwnerIndex(projects)
+	touchedProj := map[string]bool{} // projects that own a file the test patch touches (nearest owner)
+	for f := range tp {
+		if os := oi.owners(f); len(os) > 0 {
+			touchedProj[os[0]] = true
+		}
+	}
 	set := map[string]bool{}
 	noOwn := map[string]bool{}
 	for _, l := range LocateDotnetTests(jvmGitTree{gt, ctx, dir}, ids) {
@@ -105,16 +116,25 @@ func dotnetRequired(ctx context.Context, dir, p string, ids []string, tp map[str
 			continue
 		}
 		if info.Whole {
-			touched := false
+			// The test patch broke the build of the projects it touches, so every test of such a project fails before: keep the names
+			// whose file is touched or whose nearest project contains a touched file.
+			keep := false
 			for _, f := range l.Files {
-				touched = touched || tp[f]
+				if tp[f] {
+					keep = true
+				} else if os := oi.owners(f); len(os) > 0 && touchedProj[os[0]] {
+					keep = true
+				}
 			}
-			if !touched {
+			if !keep {
 				info.Untouched++
 				continue
 			}
 		}
 		req := DotnetReq{Name: l.Name, Files: l.Files, Ambiguous: l.Ambiguous}
+		for _, f := range l.Files {
+			req.Touched = req.Touched || tp[f]
+		}
 		nearest, anc := map[string]bool{}, map[string]bool{}
 		for _, f := range l.Files {
 			owners := oi.owners(f) // nearest first
@@ -205,7 +225,7 @@ func dotnetMissing(req []string, sel []SelUnit, info *DotnetT1Info, changed []st
 		for _, r := range info.Reqs {
 			for _, u := range r.Units {
 				if !have[u] {
-					info.Violations = append(info.Violations, DotnetViolation{Unit: u, Name: r.Name, Files: r.Files, Changed: changed})
+					info.Violations = append(info.Violations, DotnetViolation{Unit: u, Name: r.Name, Files: r.Files, Changed: changed, Touched: r.Touched})
 				}
 			}
 		}

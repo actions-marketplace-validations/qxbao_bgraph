@@ -102,7 +102,7 @@ func WriteDotnetReport(dir string, rs []T1Result) error {
 		nv++
 		fmt.Fprintf(&md, "### `%s` (%s, %s) scope=%s, selected %d/%d\n\n- missing: %v\n- changed (%d): %v\n- widenings: %v\n", r.ID, r.Repo, r.Role, r.Scope, r.Selected, r.Units, r.Missing, len(r.Changed), r.Changed, r.Widenings)
 		for _, v := range r.Dotnet.Violations {
-			fmt.Fprintf(&md, "- unit `%s` (name `%.120s`, file %v): class **%s**, forward reach %d nodes, reached changed files %v\n", v.Unit, v.Name, v.Files, v.Class, v.ReachSize, v.ReachedChanged)
+			fmt.Fprintf(&md, "- unit `%s` (name `%.120s`, file %v, touched by test patch: %v): class **%s**, forward reach %d nodes, reached changed files %v\n", v.Unit, v.Name, v.Files, v.Touched, v.Class, v.ReachSize, v.ReachedChanged)
 			if len(v.ReachedProjects) > 0 {
 				fmt.Fprintf(&md, "  - referenced projects (transitive): %v\n", v.ReachedProjects)
 			}

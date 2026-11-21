@@ -7,6 +7,7 @@
 //	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python] [--budget 90m] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-locate|dotnet-locate --tasks tasks-jvm.jsonl --work DIR [--out locate.json] [--examples 3]   (locate JVM / .NET FAIL_TO_PASS tests in the P trees)
+//	bgraph-eval dotnet-affected|dotnet-provider --tasks tasks-dotnet.jsonl --work DIR --out DIR   (.NET: superset check against dotnet-affected; ProjectReference edges against msbuild)
 //	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
@@ -67,6 +68,10 @@ func main() {
 		err = cmdRustLocate(ctx, os.Args[2:])
 	case "py-locate":
 		err = cmdPyLocate(ctx, os.Args[2:])
+	case "dotnet-affected":
+		err = cmdDotnetAffected(ctx, os.Args[2:])
+	case "dotnet-provider":
+		err = cmdDotnetProvider(ctx, os.Args[2:])
 	case "jvm-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "jvm")
 	case "dotnet-locate":
