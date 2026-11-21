@@ -61,6 +61,7 @@ func T2Markdown(q T2Result) string {
 			r.Killed+r.Survived+r.Timeout+r.Errors, r.Killed, r.Survived, r.Timeout, r.Errors, r.Full, len(r.Violations), len(r.NativeNotSubset), r.MedBgraph, r.MedNative, r.CheckMs)
 	}
 	rustReport(&b, q)
+	pythonReport(&b, q)
 	b.WriteString("\n## native⊄ bgraph\n\n")
 	n = 0
 	for _, r := range q.Repos {
@@ -139,5 +140,43 @@ func rustReport(b *strings.Builder, q T2Result) {
 		}
 		fmt.Fprintf(b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d | %d | %d | %d |\n", r.Repo.Name, r.Repo.R, r.Generated, r.NoCompile, r.Killed+r.Survived+r.Timeout,
 			r.Killed, r.Survived, r.Timeout, r.Errors, partial, r.Full, len(r.Violations), r.MedBgraph, r.Baseline.Files, len(r.Baseline.Failing), len(r.Baseline.Flaky), suite)
+	}
+}
+
+// pythonReport writes the per-repo mutant accounting of the Python repos, with the dynamic-import widening count: a mutant's selection is
+// "inflated" when units remain selected only because a dynamic_import Unresolved seeded a file (the selection without dynamic seeds is smaller).
+func pythonReport(b *strings.Builder, q T2Result) {
+	any := false
+	for _, r := range q.Repos {
+		if r.Repo.Eco != "python" {
+			continue
+		}
+		if !any {
+			b.WriteString("\n## Python mutants\n\n")
+			b.WriteString("| repo | R | generated | does not compile | run | killed | survived | timeout | errors | selected < all | full | violations | median selected/units | dynamic seed fired | dynamic-inflated | test files | pre-broken | flaky | suite ms |\n")
+			b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+			any = true
+		}
+		partial, dyn, inflated := 0, 0, 0
+		for _, c := range r.Checks {
+			if c.Err != "" || c.Full() {
+				continue
+			}
+			if c.Units > 0 && c.Selected < c.Units {
+				partial++
+			}
+			if c.Py != nil && c.Py.Dyn > 0 {
+				dyn++
+				if c.Py.SelNoDyn < c.Py.Sel {
+					inflated++
+				}
+			}
+		}
+		suite := int64(0)
+		if len(r.Baseline.RunMs) > 0 {
+			suite = r.Baseline.RunMs[len(r.Baseline.RunMs)-1]
+		}
+		fmt.Fprintf(b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d | %d | %d | %d | %d | %d |\n", r.Repo.Name, r.Repo.R, r.Generated, r.NoCompile, r.Killed+r.Survived+r.Timeout,
+			r.Killed, r.Survived, r.Timeout, r.Errors, partial, r.Full, len(r.Violations), r.MedBgraph, dyn, inflated, r.Baseline.Files, len(r.Baseline.Failing), len(r.Baseline.Flaky), suite)
 	}
 }

@@ -47,8 +47,9 @@ type T2Repo struct {
 	Mutants    int      `json:"mutants"`
 	Seed       string   `json:"seed"`
 	Env        []string `json:"env,omitempty"`
-	Eco        string   `json:"eco,omitempty"`   // "rust" for Cargo repos; empty = Node
-	Tries      int      `json:"tries,omitempty"` // rust: how many mutants are generated at most (default 3x Mutants); Mutants is the number of killed mutants aimed at
+	Eco        string   `json:"eco,omitempty"`   // "rust" for Cargo repos, "python" for pytest repos; empty = Node
+	Tries      int      `json:"tries,omitempty"` // rust/python: how many mutants are generated at most (default 3x Mutants); Mutants is the number of killed mutants aimed at
+	Venv       string   `json:"venv,omitempty"`  // python: virtual environment directory, relative to the T2 root (holds the repo's dependencies and the editable install)
 }
 
 // T2Manifest is the T2 repo manifest.
@@ -115,6 +116,7 @@ type T2Baseline struct {
 	// FailingTests (Rust): for a unit red in both baseline runs, the test names failing in both. A mutant run turns such a unit red only when a test outside this set fails.
 	FailingTests map[string][]string `json:"failing_tests,omitempty"`
 	Tests        int                 `json:"tests,omitempty"`
+	Known        []string            `json:"known,omitempty"` // Python: every test file seen in the baseline runs
 }
 
 func (b T2Baseline) excluded() map[string]bool {
@@ -582,8 +584,11 @@ func (r T2Repo) Baseline(ctx context.Context, cfg *T2Config, root string) (T2Bas
 
 // BuildOracle runs the mutations not yet in oracle.jsonl (sequential within a repo: the working tree holds only one mutation at a time).
 func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleStore, have map[string]T2Record) error {
-	if r.Eco == "rust" {
+	switch r.Eco {
+	case "rust":
 		return r.buildOracleRust(ctx, cfg, store, have)
+	case "python":
+		return r.buildOraclePython(ctx, cfg, store, have)
 	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -713,7 +718,8 @@ type T2Check struct {
 	WideList   []model.Widening `json:"widening_list,omitempty"`
 	Diag       []FileDiag       `json:"diag,omitempty"`    // diagnosis of missing (violation) or native-only files
 	Near       []string         `json:"near,omitempty"`    // reason chains of the tests near the missing file
-	Changed    []string         `json:"changed,omitempty"` // rust: files bgraph saw as changed
+	Changed    []string         `json:"changed,omitempty"` // rust/python: files bgraph saw as changed
+	Py         *PyWide          `json:"py,omitempty"`      // python: where the selection came from (graph, unresolved/dynamic seeds, widenings)
 	Err        string           `json:"err,omitempty"`
 	Ms         int64            `json:"ms"`
 }
@@ -760,6 +766,9 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 	for _, w := range sel.Widening {
 		ck.Widenings[string(w.Tier)+":"+w.Reason]++
 	}
+	if r.Eco == "python" {
+		ck.Py = pySelStats(sel)
+	}
 	ck.WideList = sel.Widening
 	if len(ck.WideList) > 12 {
 		ck.WideList = ck.WideList[:12]
@@ -777,9 +786,14 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 			ck.NativeOnly = append(ck.NativeOnly, f)
 		}
 	}
-	if r.Eco == "rust" {
+	switch r.Eco {
+	case "rust":
 		ck.Changed = sel.Changed
 		ck.Near = rustNear(sel, ck.Missed)
+		return ck
+	case "python":
+		ck.Changed = sel.Changed
+		ck.Near = pyNear(sel, ck.Missed)
 		return ck
 	}
 	diagFor := ck.Missed
@@ -907,7 +921,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" {
+	if r.Eco == "rust" || r.Eco == "python" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`

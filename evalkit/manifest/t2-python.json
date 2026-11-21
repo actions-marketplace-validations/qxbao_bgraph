@@ -1,0 +1,52 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "Python T2 (`bgraph-eval t2 --ecosystem python`). Root directory defaults to D:/bench/bgraph-eval/t2/python: checkouts <dir> (full clones, core.autocrlf=false, detached at R), one virtual environment venv-<dir> per repo (`uv venv --python 3.13 venv-<dir>`, then the `install` command with `uv pip install --python venv-<dir>/Scripts/python.exe`), oracle.jsonl. Suite: `<venv python> -m pytest <args> --junitxml=F`; `junit_family=xunit1` makes pytest write the `file` attribute that maps testcases to test files, `--continue-on-collection-errors` keeps one import failure from aborting the session (the files that cannot be collected are red). A run without a report (conftest/startup failure) makes every test file red. Unit = test file, as bgraph models it. `mutants` = killed mutants aimed at, `tries` = mutants generated at most. Mutants are one-token operator flips (==/!=, <//>=, >//<=, and/or, is/is not, in/not in, True/False, +/-, simple `return x` -> `return None`) in non-test source; a mutant that does not compile is dropped. Baseline = 2 runs at R; red/differing files are excluded; each red file is re-run alone once to confirm.",
+ "repos": [
+  {
+   "name": "pallets/click",
+   "dir": "click",
+   "eco": "python",
+   "runner": "pytest",
+   "venv": "venv-click",
+   "remote": "https://github.com/pallets/click.git",
+   "r": "08b803cf32ceb2ae6a772c62d5da42757a897d44",
+   "args": ["-p", "no:cacheprovider", "-q", "--continue-on-collection-errors", "-o", "junit_family=xunit1"],
+   "install": "uv pip install --python venv-click/Scripts/python.exe -e click pytest",
+   "covers": "src/click (a dozen modules), tests/ (21 test files incl. test_types/, test_utils/, test_exceptions/)",
+   "mutants": 20,
+   "tries": 90,
+   "seed": "t2-python-v1"
+  },
+  {
+   "name": "marshmallow-code/marshmallow",
+   "dir": "marshmallow",
+   "eco": "python",
+   "runner": "pytest",
+   "venv": "venv-marshmallow",
+   "remote": "https://github.com/marshmallow-code/marshmallow.git",
+   "r": "f268f0c4d12c4edb43743ca5703eed7954320245",
+   "args": ["-p", "no:cacheprovider", "-q", "--continue-on-collection-errors", "-o", "junit_family=xunit1"],
+   "install": "uv pip install --python venv-marshmallow/Scripts/python.exe -e marshmallow pytest simplejson tzdata (tzdata: tests/base.py needs the IANA zone database, absent on Windows)",
+   "covers": "src/marshmallow, tests/ (13 test files)",
+   "mutants": 20,
+   "tries": 90,
+   "seed": "t2-python-v1"
+  },
+  {
+   "name": "python-attrs/attrs",
+   "dir": "attrs",
+   "eco": "python",
+   "runner": "pytest",
+   "venv": "venv-attrs",
+   "remote": "https://github.com/python-attrs/attrs.git",
+   "r": "2a1fb86d44816afcc60e86d57956ce3604820326",
+   "args": ["-p", "no:cacheprovider", "-q", "--continue-on-collection-errors", "-o", "junit_family=xunit1"],
+   "install": "uv pip install --python venv-attrs/Scripts/python.exe -e attrs cloudpickle hypothesis pympler pytest==9.* (any pytest 9)",
+   "covers": "src/attr + src/attrs, tests/ (28 test files, hypothesis-based; ~10 s suite)",
+   "mutants": 20,
+   "tries": 90,
+   "seed": "t2-python-v1"
+  }
+ ]
+}

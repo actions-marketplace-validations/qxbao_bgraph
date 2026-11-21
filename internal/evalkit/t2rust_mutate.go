@@ -452,15 +452,11 @@ func lineOf(src []byte, off int) (int, string) {
 // GenRustMutants deterministically picks up to n mutants spread over the files: candidates are ranked per file by a seeded hash, one per line,
 // and files are visited round-robin in seeded order. Files that are test modules of a parent (`#[cfg(test)] mod x;`) are excluded.
 func GenRustMutants(files []RustMutantSource, seed, idPrefix string, n int) []T2Mutant {
-	type fc struct {
-		src   RustMutantSource
-		cands []rustCand
-	}
-	by := map[string]*fc{}
+	cands := map[string][]rustCand{}
 	excluded := map[string]bool{}
 	for _, f := range files {
 		cs, tm := rustScan(f.Data)
-		by[f.Path] = &fc{src: f, cands: cs}
+		cands[f.Path] = cs
 		dir := path.Dir(f.Path)
 		base := strings.TrimSuffix(path.Base(f.Path), ".rs")
 		sub := dir
@@ -472,12 +468,22 @@ func GenRustMutants(files []RustMutantSource, seed, idPrefix string, n int) []T2
 			excluded[path.Join(sub, m, "mod.rs")] = true
 		}
 	}
+	return spreadMutants(files, cands, excluded, seed, idPrefix, n)
+}
+
+// spreadMutants picks up to n mutants from the per-file candidates (keyed by path), skipping the files in skip: candidates are ranked per
+// file by a seeded hash, one per line, and files are visited round-robin in seeded order. Shared by the Rust and Python generators.
+func spreadMutants(files []RustMutantSource, candsByPath map[string][]rustCand, skip map[string]bool, seed, idPrefix string, n int) []T2Mutant {
+	type fc struct {
+		src   RustMutantSource
+		cands []rustCand
+	}
 	var order []*fc
-	for p, f := range by {
-		if excluded[p] || len(f.cands) == 0 {
+	for _, f := range files {
+		if skip[f.Path] || len(candsByPath[f.Path]) == 0 {
 			continue
 		}
-		order = append(order, f)
+		order = append(order, &fc{src: f, cands: append([]rustCand(nil), candsByPath[f.Path]...)})
 	}
 	sort.Slice(order, func(i, j int) bool {
 		return seedHash(seed, "file", order[i].src.Path) < seedHash(seed, "file", order[j].src.Path)
