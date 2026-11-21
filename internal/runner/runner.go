@@ -7,6 +7,7 @@
 //   - jest: uses --runTestsByPath, so it is an exact path, not a regex.
 //   - playwright: a regex → escaped with regexp.QuoteMeta; prefers --test-list when ListDir is set.
 //   - mocha, ava: paths/globs; a file name with glob characters → fall back to a whole-project command.
+//   - cargo: units are Cargo targets addressed by package (-p) and target flags (--lib, --test, ...); see cargo.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -84,7 +85,12 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
+	var cargoTests []model.SelectedTest
 	for _, t := range sel.Tests {
+		if t.Runner == "cargo" {
+			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
+			continue
+		}
 		proj := cleanProject(t.Project)
 		k := key{proj, t.Runner}
 		if _, ok := groups[k]; !ok {
@@ -135,6 +141,11 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		if err != nil {
 			return Plan{}, err
 		}
+		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(cargoTests) > 0 {
+		cmds, notes := cargoCommands(cargoTests)
 		plan.Commands = append(plan.Commands, cmds...)
 		plan.Notes = append(plan.Notes, notes...)
 	}

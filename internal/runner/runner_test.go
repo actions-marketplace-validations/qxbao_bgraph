@@ -66,7 +66,7 @@ func TestNoneFullEmpty(t *testing.T) {
 	if len(p.Commands) != 0 || p.Scope != model.TierFull {
 		t.Fatalf("empty graph: %+v", p)
 	}
-	p, _ = Commands(sel("cargo", ".", "a"), Options{}) // unknown runner
+	p, _ = Commands(sel("gotest", ".", "a"), Options{}) // unknown runner (cargo is supported now)
 	if len(p.Commands) != 0 || p.Scope != model.TierFull {
 		t.Fatalf("unknown runner: %+v", p)
 	}
