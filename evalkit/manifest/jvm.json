@@ -1,0 +1,243 @@
+{
+ "ecosystem": "jvm",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "SWE-bench/SWE-bench_Multilingual",
+   "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual",
+   "revision": "846e647b9f33c0b51b739d005d13d85493c9af09",
+   "notes": "test split; keeps Java repos (RxJava, druid, lucene, gson, javaparser, lombok)"
+  },
+  {
+   "name": "ByteDance-Seed/Multi-SWE-bench",
+   "url": "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench",
+   "revision": "56ff018c04a38e27ada1e9d0a6d5839a51f88f0d",
+   "notes": "java/ and kotlin/ directories (JSONL); FAIL_TO_PASS = f2p_tests keys, else n2p_tests keys (task field f2p_kind)"
+  }
+ ],
+ "repos": [
+  {
+   "name": "pinterest/ktlint",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "apache/dubbo",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "apache/lucene",
+   "role": "holdout",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "fasterxml/jackson-core",
+   "role": "holdout",
+   "t1_tasks": 18,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "GradleUp/shadow",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "google/gson",
+   "role": "holdout",
+   "t1_tasks": 13,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench",
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "javaparser/javaparser",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "mockito/mockito",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "projectlombok/lombok",
+   "role": "dev",
+   "t1_tasks": 17,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "fasterxml/jackson-dataformat-xml",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "alibaba/fastjson2",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "apache/druid",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "elastic/logstash",
+   "role": "dev",
+   "t1_tasks": 38,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "googlecontainertools/jib",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "fasterxml/jackson-databind",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "Hannah-Sten/TeXiFy-IDEA",
+   "role": "dev",
+   "t1_tasks": 8,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "oss-review-toolkit/ort",
+   "role": "dev",
+   "t1_tasks": 12,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "square/okhttp",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "detekt/detekt",
+   "role": "dev",
+   "t1_tasks": 28,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "ankidroid/Anki-Android",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "ReactiveX/RxJava",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "Kotlin/dataframe",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  }
+ ]
+}

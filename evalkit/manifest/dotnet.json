@@ -1,0 +1,585 @@
+{
+ "ecosystem": "dotnet",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "microsoft/SWE-Sharp-Bench",
+   "url": "https://huggingface.co/datasets/microsoft/SWE-Sharp-Bench",
+   "revision": "41e599424ff967e0f44d69750f9f023a89f7758d",
+   "notes": "swe-sharp-bench.csv (150 tasks, 17 repos); FAIL_TO_PASS is a Python list literal; tasks with an empty FAIL_TO_PASS dropped"
+  },
+  {
+   "name": "SWE-bench-Live/MultiLang",
+   "url": "https://huggingface.co/datasets/SWE-bench-Live/MultiLang",
+   "revision": "eb09c2e5db6e4c5a95e01c903c8fd1d5da33c4f3",
+   "notes": "split cs (136 tasks, 41 repos)"
+  },
+  {
+   "name": "SWE-bench-Live/Windows",
+   "url": "https://huggingface.co/datasets/SWE-bench-Live/Windows",
+   "revision": "45c30d227055e19ab2e52a1ed8dd899e1f5bfa67",
+   "notes": "test split, rows with language C# only"
+  }
+ ],
+ "repos": [
+  {
+   "name": "dotnet/command-line-api",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnetcore/BootstrapBlazor",
+   "role": "holdout",
+   "t1_tasks": 8,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "JasperFx/marten",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "riok/mapperly",
+   "role": "holdout",
+   "t1_tasks": 8,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "OrchardCMS/OrchardCore",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "StackExchange/StackExchange.Redis",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "dotnet/aspnetcore",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "angularsen/UnitsNet",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "nissl-lab/npoi",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnet/efcore",
+   "role": "holdout",
+   "t1_tasks": 11,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-Sharp-Bench",
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "serilog/serilog",
+   "role": "holdout",
+   "t1_tasks": 10,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "dotnet-state-machine/stateless",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "autofac/Autofac",
+   "role": "holdout",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "MessagePack-CSharp/MessagePack-CSharp",
+   "role": "holdout",
+   "t1_tasks": 17,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "gui-cs/Terminal.Gui",
+   "role": "holdout",
+   "t1_tasks": 7,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench",
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnet/orleans",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnet/winforms",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "App-vNext/Polly",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "elsa-workflows/elsa-core",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnet/BenchmarkDotNet",
+   "role": "dev",
+   "t1_tasks": 7,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "shimat/opencvsharp",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "JasperFx/wolverine",
+   "role": "dev",
+   "t1_tasks": 17,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "quartznet/quartznet",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "JoshClose/CsvHelper",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "Finbuckle/Finbuckle.MultiTenant",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "openai/openai-dotnet",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "UglyToad/PdfPig",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnet/runtime",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang",
+    "SWE-bench-Live_Windows"
+   ]
+  },
+  {
+   "name": "openclaw/openclaw-windows-node",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_Windows"
+   ]
+  },
+  {
+   "name": "dotnet/sdk",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "jellyfin/jellyfin",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "ardalis/CleanArchitecture",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "Megabit/Blazorise",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "Kareadita/Kavita",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "naudio/NAudio",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "Ombi-app/Ombi",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "AvaloniaUI/Avalonia",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-Sharp-Bench",
+    "SWE-bench-Live_MultiLang",
+    "SWE-bench-Live_Windows"
+   ]
+  },
+  {
+   "name": "fluentmigrator/fluentmigrator",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "devlooped/moq",
+   "role": "dev",
+   "t1_tasks": 4,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "MudBlazor/MudBlazor",
+   "role": "dev",
+   "t1_tasks": 14,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dotnet/machinelearning",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "nunit/nunit",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "spectreconsole/spectre.console",
+   "role": "dev",
+   "t1_tasks": 10,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench",
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "Flow-Launcher/Flow.Launcher",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_Windows"
+   ]
+  },
+  {
+   "name": "SubtitleEdit/subtitleedit",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "Azure/azure-mcp",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "SixLabors/ImageSharp",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench",
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "restsharp/RestSharp",
+   "role": "dev",
+   "t1_tasks": 4,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "dotnet/yarp",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "KSP-CKAN/CKAN",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "ErikEJ/EFCorePowerTools",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "ThreeMammals/Ocelot",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-Sharp-Bench"
+   ]
+  },
+  {
+   "name": "ppy/osu",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "unoplatform/uno",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "Azure/azure-sdk-for-net",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  }
+ ]
+}
