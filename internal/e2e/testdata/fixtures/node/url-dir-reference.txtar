@@ -1,4 +1,4 @@
-new URL('.', import.meta.url) là tham chiếu thư mục: không nới unknown_import; đổi tệp trong thư mục chọn test đi qua tệp đó.
+new URL('.', import.meta.url) is a directory reference: no unknown_import widening; changing a file in the directory selects the test that goes through that file.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/paths.ts --

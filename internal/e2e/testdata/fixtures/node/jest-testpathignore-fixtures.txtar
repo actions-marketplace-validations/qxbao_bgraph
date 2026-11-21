@@ -1,4 +1,4 @@
-testRegex khớp cả test/fixtures/**, testPathIgnorePatterns loại "/test/fixtures/" (kèm phần tử spread không đọc được): fixture không là đơn vị test, runner test/index.js vẫn được chọn.
+testRegex also matches test/fixtures/**, testPathIgnorePatterns excludes "/test/fixtures/" (with an unreadable spread element): a fixture is not a test unit, and the test/index.js runner is still selected.
 -- base/package.json --
 {"name":"mono","private":true,"devDependencies":{"jest":"^29.0.0"}}
 -- base/jest.config.js --

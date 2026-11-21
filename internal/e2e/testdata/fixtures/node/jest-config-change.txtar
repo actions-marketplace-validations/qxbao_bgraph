@@ -1,4 +1,4 @@
-Đổi jest.config.js nới test_config_changed và chọn mọi test của dự án.
+Changing jest.config.js widens test_config_changed and selects every test of the project.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jest.config.js --

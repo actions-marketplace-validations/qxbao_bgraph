@@ -1,4 +1,4 @@
-Đổi tsconfig.json của dự án nới test_config_changed và chọn test dự án đó.
+Changing the project's tsconfig.json widens test_config_changed and selects that project's tests.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/tsconfig.json --

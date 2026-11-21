@@ -1,4 +1,4 @@
-bin/cli.js không ai import; test chạy nó qua child_process bằng đường dẫn ghép. Đổi bin/cli.js phải chọn test đó.
+bin/cli.js is imported by nobody; a test runs it via child_process with a concatenated path. Changing bin/cli.js must select that test.
 -- base/package.json --
 {"name":"app","bin":{"app":"bin/cli.js"},"devDependencies":{"vitest":"^5.0.0"}}
 -- base/bin/cli.js --

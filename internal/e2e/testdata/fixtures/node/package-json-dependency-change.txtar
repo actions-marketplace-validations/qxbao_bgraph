@@ -1,4 +1,4 @@
-Đổi dependencies trong package.json: nới manifest_changed tới dự án.
+Changing dependencies in package.json: widens manifest_changed to the project.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"},"dependencies":{"lodash":"4.17.20"}}
 -- base/src/a.test.ts --

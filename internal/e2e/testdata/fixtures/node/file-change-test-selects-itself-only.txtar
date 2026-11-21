@@ -1,4 +1,4 @@
-Đổi một tệp test chỉ chọn chính nó.
+Changing a test file selects only itself.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

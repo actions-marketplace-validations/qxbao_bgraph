@@ -1,4 +1,4 @@
-Thêm tệp locale MỚI khớp mẫu import động phải chọn test (tệp mới chưa có trong đồ thị mốc).
+Adding a NEW locale file that matches the dynamic import pattern must select the test (the new file is not yet in the base graph).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/i18n.ts --

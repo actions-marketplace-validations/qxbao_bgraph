@@ -1,4 +1,4 @@
-packages/a được packages/b import theo tên: đổi a chọn test của b, không chọn test của c.
+packages/a is imported by packages/b by name: changing a selects b's test, not c's test.
 -- base/package.json --
 {"name":"root","private":true,"workspaces":["packages/*"]}
 -- base/packages/a/package.json --

@@ -1,4 +1,4 @@
-Tệp __mocks__ đổi: test của dự án được chọn (Jest tự nạp mock kề module).
+A __mocks__ file changed: the project's tests are selected (Jest loads the mock next to the module automatically).
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/src/__mocks__/api.js --

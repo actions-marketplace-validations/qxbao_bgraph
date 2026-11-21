@@ -1,4 +1,4 @@
-Import gói trần không khai báo ('ghost-package'): theo dõi qua glob **/ghost-package{,.*,/**}. Tệp vendor/ghost-package/index.js đổi → chọn test import nó; tệp khác đổi → không chọn.
+An undeclared bare package import ('ghost-package'): tracked via the glob **/ghost-package{,.*,/**}. Changing vendor/ghost-package/index.js → selects the test that imports it; changing another file → does not.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

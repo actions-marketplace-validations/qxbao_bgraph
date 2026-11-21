@@ -1,4 +1,4 @@
-Import thư mục phân giải tới index.ts.
+Importing a directory resolves to index.ts.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/lib/index.ts --

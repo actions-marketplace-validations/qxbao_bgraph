@@ -1,4 +1,4 @@
-Chuỗi barrel export * ba tầng: đổi tệp lá chọn test chỉ import barrel trên cùng.
+Three-level `export *` barrel chain: changing the leaf file selects the test that imports only the top barrel.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/index.ts --

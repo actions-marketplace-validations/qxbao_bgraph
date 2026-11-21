@@ -1,4 +1,4 @@
-Chuỗi 'typescript/no-this-alias' trong cấu hình (luật lint) không phải khoá alias; projects gồm chuỗi + object literal đọc được: không nới config_is_code (hono).
+The string 'typescript/no-this-alias' in the config (a lint rule) is not an alias key; projects consists of a string plus a readable object literal: no config_is_code widening (hono).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vite.config.ts --

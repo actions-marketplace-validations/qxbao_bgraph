@@ -1,4 +1,4 @@
-Đổi vite.config.ts nới test_config_changed.
+Changing vite.config.ts widens test_config_changed.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vite.config.ts --

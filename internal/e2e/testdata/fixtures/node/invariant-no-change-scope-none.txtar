@@ -1,4 +1,4 @@
-RTSCheck: hai cây giống nhau thì phần chọn rỗng, scope none.
+RTSCheck: identical trees give an empty selection, scope none.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

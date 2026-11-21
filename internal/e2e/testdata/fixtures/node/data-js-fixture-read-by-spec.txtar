@@ -1,4 +1,4 @@
-Kiểu prettier: tests/format/foo/*.js là dữ liệu mà jsfmt.spec.js đọc cả thư mục qua import.meta (không import). Đổi tệp dữ liệu phải chọn spec (qua nới unreferenced_file), không được im lặng chọn rỗng.
+Prettier style: tests/format/foo/*.js are data that jsfmt.spec.js reads as a whole directory via import.meta (no import). Changing a data file must select the spec (through an unreferenced_file widening), never silently select nothing.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/tests/format/foo/jsfmt.spec.js --

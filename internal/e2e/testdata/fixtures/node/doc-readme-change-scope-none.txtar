@@ -1,4 +1,4 @@
-README.md không ai tham chiếu: scope none, không full.
+README.md is referenced by nobody: scope none, not full.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/README.md --

@@ -1,4 +1,4 @@
-package.json exports với điều kiện import/require/types: đổi đích của bất kỳ điều kiện nào đều chọn test (hợp mọi điều kiện).
+package.json exports with import/require/types conditions: changing the target of any condition selects the test (union of all conditions).
 -- base/package.json --
 {"name":"root","private":true,"devDependencies":{"vitest":"^5.0.0"}}
 -- base/packages/lib/package.json --

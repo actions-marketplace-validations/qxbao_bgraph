@@ -1,4 +1,4 @@
-Chỉ đổi "version" trong package.json: vô hại, không nới, không chọn gì.
+Changing only "version" in package.json: harmless, no widening, selects nothing.
 -- base/package.json --
 {"name":"app","version":"1.0.0","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

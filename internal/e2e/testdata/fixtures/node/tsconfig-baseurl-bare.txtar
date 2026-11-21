@@ -1,4 +1,4 @@
-tsconfig baseUrl "src": import 'lib/x' (không có paths) phân giải qua baseUrl.
+tsconfig baseUrl "src": import 'lib/x' (no paths) resolves through baseUrl.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/tsconfig.json --

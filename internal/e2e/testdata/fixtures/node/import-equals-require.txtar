@@ -1,4 +1,4 @@
-Cú pháp TS `import x = require('./cjs')` tạo cạnh.
+The TS syntax `import x = require('./cjs')` creates an edge.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/cjs.ts --

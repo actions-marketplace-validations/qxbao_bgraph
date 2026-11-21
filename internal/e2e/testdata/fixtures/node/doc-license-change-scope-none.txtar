@@ -1,4 +1,4 @@
-LICENSE đổi: vô hại, scope none.
+LICENSE changed: harmless, scope none.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/LICENSE --

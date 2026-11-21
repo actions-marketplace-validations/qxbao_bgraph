@@ -1,4 +1,4 @@
-Luật bgraph.toml affects=["services/api"] cho proto/*.proto: chọn test services/api, không chọn services/web, và luật "claim" tệp (không nới unknown_file).
+bgraph.toml rule affects=["services/api"] for proto/*.proto: selects services/api tests, not services/web, and the rule "claims" the file (no unknown_file widening).
 -- base/package.json --
 {"name":"root","private":true}
 -- base/bgraph.toml --

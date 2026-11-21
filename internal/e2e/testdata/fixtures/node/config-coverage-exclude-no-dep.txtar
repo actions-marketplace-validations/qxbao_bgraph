@@ -1,4 +1,4 @@
-Kiểu hono: thư mục trong coverage.exclude/test.exclude không phải phụ thuộc; importSource './src/jsx' chỉ là jsx-runtime/jsx-dev-runtime. Đổi benchmarks/ hoặc src/jsx/dom/x.ts không chọn mọi test.
+Hono style: directories in coverage.exclude/test.exclude are not dependencies; importSource './src/jsx' is only the jsx-runtime/jsx-dev-runtime. Changing benchmarks/ or src/jsx/dom/x.ts does not select every test.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vitest.config.ts --

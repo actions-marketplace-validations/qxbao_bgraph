@@ -1,4 +1,4 @@
-Import tương đối không đuôi và có đuôi đều phân giải; chỉ test import tệp đổi được chọn.
+Relative imports with and without an extension both resolve; only the test that imports the changed file is selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/util.ts --

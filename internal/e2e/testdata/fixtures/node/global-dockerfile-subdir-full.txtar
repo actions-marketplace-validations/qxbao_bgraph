@@ -1,4 +1,4 @@
-Dockerfile ở thư mục con đổi: full global_input.
+Dockerfile in a subdirectory changed: full global_input.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/services/api/Dockerfile --

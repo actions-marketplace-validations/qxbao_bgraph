@@ -1,4 +1,4 @@
-Kiểu zod: exports có điều kiện nguồn ("@zod/source" → src) cạnh đầu ra build ở gốc package (không có trong cây). Đổi một tệp test trong package không chọn mọi importer của package; đổi nguồn entry thì chọn.
+Zod style: exports with a source condition ("@zod/source" → src), build-output edges at the package root (absent from the tree). Changing a test file in the package does not select every importer of the package; changing the source entry does.
 -- base/package.json --
 {"name":"root","private":true,"devDependencies":{"vitest":"^5.0.0"}}
 -- base/packages/zod/package.json --

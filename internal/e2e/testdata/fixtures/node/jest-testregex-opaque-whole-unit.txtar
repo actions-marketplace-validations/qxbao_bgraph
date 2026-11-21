@@ -1,4 +1,4 @@
-testRegex tính bằng hàm (không đọc được): tập test không biết → đơn vị "cả dự án" được chọn khi có thay đổi; tệp check.js (khớp regex thật, không khớp mẫu mặc định) không bị sót.
+testRegex computed by a function (unreadable): the test set is unknown → the "whole project" unit is selected on any change; the file check.js (matches the real regex, not the default pattern) is not missed.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^29.0.0"}}
 -- base/jest.config.js --

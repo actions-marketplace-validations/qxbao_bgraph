@@ -1,4 +1,4 @@
-import(`./locales/${l}.json`): đổi một tệp locale chọn test đi qua tệp chứa import động.
+import(`./locales/${l}.json`): changing one locale file selects the tests that go through the file containing the dynamic import.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/i18n.ts --

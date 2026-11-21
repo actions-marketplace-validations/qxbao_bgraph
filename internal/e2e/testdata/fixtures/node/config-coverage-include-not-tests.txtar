@@ -1,4 +1,4 @@
-coverage.include ['src/**/*'] không phải mẫu tệp test (TanStack): src/a.ts không thành đơn vị test.
+coverage.include ['src/**/*'] is not a test-file pattern (TanStack): src/a.ts does not become a test unit.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vite.config.ts --

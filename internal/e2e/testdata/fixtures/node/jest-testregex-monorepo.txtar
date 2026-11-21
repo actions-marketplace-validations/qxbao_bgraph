@@ -1,4 +1,4 @@
-Jest testRegex './packages/[^/]+/test/.+\.m?js$' (babel): packages/a/test/scope.js là test.
+Jest testRegex './packages/[^/]+/test/.+\.m?js$' (babel): packages/a/test/scope.js is a test.
 -- base/package.json --
 {"name":"mono","devDependencies":{"jest":"^29.0.0"}}
 -- base/jest.config.js --

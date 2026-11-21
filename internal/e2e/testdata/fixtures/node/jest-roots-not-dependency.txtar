@@ -1,4 +1,4 @@
-jest roots ['test'] chỉ giới hạn nơi tìm test: sửa một tệp test không chọn mọi test khác.
+jest roots ['test'] only limit where tests are looked up: editing one test file does not select every other test.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^29.0.0"},"jest":{"roots":["test"]}}
 -- base/src/a.js --

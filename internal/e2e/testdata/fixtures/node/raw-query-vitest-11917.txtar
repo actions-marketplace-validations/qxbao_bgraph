@@ -1,4 +1,4 @@
-Vitest #11917: import x from './x.sql?raw' — đổi tệp raw phải chọn test.
+Vitest #11917: import x from './x.sql?raw' — changing the raw file must select the test.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/query.sql --

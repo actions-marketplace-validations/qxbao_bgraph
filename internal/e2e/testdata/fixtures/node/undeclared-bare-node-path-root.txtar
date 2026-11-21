@@ -1,4 +1,4 @@
-Import bare chưa khai báo ("shared/util") có thể trỏ vào repo qua NODE_PATH/moduleDirectories: đổi lib/shared/util.js phải chọn test; đổi tệp khác không được chọn nó.
+An undeclared bare import ("shared/util") may point into the repo via NODE_PATH/moduleDirectories: changing lib/shared/util.js must select the test; changing another file must not select it.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/src/a.js --

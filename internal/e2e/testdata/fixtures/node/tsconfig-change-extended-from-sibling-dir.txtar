@@ -1,4 +1,4 @@
-Đổi tsconfig.base.json ở gốc nới test_config_changed tới dự án con có tsconfig extends nó.
+Changing the root tsconfig.base.json widens test_config_changed to the sub-project whose tsconfig extends it.
 -- base/package.json --
 {"name":"root","private":true}
 -- base/tsconfig.base.json --

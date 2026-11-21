@@ -1,4 +1,4 @@
-exports trỏ ./dist/index.js (không có trong cây) và tsconfig outDir/rootDir ánh xạ về src: đổi src chọn test của b.
+exports points to ./dist/index.js (absent from the tree) and tsconfig outDir/rootDir maps back to src: changing src selects b's test.
 -- base/package.json --
 {"name":"root","private":true,"workspaces":["packages/*"]}
 -- base/packages/a/package.json --

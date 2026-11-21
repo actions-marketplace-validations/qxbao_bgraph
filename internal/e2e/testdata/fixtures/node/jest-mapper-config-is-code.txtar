@@ -1,4 +1,4 @@
-moduleNameMapper: buildMapper() là mã: không đọc được thì nới (config_is_code qua unknown_import) và chọn test của dự án.
+moduleNameMapper: buildMapper() is code: unreadable, so widen (config_is_code via unknown_import) and select the project's tests.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jest.config.js --

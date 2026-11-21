@@ -1,4 +1,4 @@
-Kiểu preact: jsconfig paths preact → "." ; package.json types → src/index.d.ts, main → dist/ (không có). Đổi src/index.js phải chọn test (không chỉ cạnh tới .d.ts).
+Preact style: jsconfig paths preact → "." ; package.json types → src/index.d.ts, main → dist/ (absent). Changing src/index.js must select the test (not only an edge to the .d.ts).
 -- base/package.json --
 {"name":"preact","main":"dist/preact.js","source":"src/index.js","types":"src/index.d.ts","devDependencies":{"mocha":"^10.0.0"}}
 -- base/jsconfig.json --

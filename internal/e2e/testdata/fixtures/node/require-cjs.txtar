@@ -1,4 +1,4 @@
-require() CJS với đường dẫn tương đối tạo cạnh.
+A CJS require() with a relative path creates an edge.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/src/lib.js --

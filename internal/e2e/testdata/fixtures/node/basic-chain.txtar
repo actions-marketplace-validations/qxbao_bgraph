@@ -1,4 +1,4 @@
-Chuỗi import ba tầng: đổi tệp lá chọn test đi qua nó, không chọn test không liên quan.
+Three-level import chain: changing the leaf file selects the test that goes through it, and does not select unrelated tests.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/util.ts --

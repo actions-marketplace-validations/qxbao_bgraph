@@ -1,4 +1,4 @@
-Import tương đối tới tệp chưa có; thay đổi THÊM tệp đó phải chọn test (phụ thuộc âm).
+A relative import to a file that does not exist yet; a change that ADDS that file must select the test (negative dependency).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

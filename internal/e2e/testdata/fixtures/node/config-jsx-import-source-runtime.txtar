@@ -1,4 +1,4 @@
-importSource './src/jsx': đổi src/jsx/jsx-runtime.ts phải chọn mọi test của dự án (runtime JSX ngầm).
+importSource './src/jsx': changing src/jsx/jsx-runtime.ts must select every test of the project (implicit JSX runtime).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vitest.config.ts --

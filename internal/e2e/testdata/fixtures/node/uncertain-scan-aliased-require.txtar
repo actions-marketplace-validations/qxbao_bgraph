@@ -1,4 +1,4 @@
-const r = require; r('x'): không tin được danh sách import: nới uncertain_scan.
+const r = require; r('x'): the import list cannot be trusted: widens uncertain_scan.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/src/weird.js --

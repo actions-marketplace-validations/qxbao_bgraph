@@ -1,4 +1,4 @@
-affects="none" cho docs/**: tệp lạ trong docs không nới.
+affects="none" for docs/**: an unknown file under docs does not widen.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/bgraph.toml --

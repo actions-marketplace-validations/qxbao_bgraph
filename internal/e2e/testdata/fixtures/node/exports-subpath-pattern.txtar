@@ -1,4 +1,4 @@
-exports subpath pattern "./features/*": import 'lib/features/foo' phân giải tới tệp theo mẫu.
+exports subpath pattern "./features/*": import 'lib/features/foo' resolves to the file by the pattern.
 -- base/package.json --
 {"name":"root","private":true}
 -- base/packages/lib/package.json --

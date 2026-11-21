@@ -1,4 +1,4 @@
-exports trỏ ./dist/index.js không có trong cây, không có outDir: phải chọn test của b (bằng cạnh heuristic hoặc nới).
+exports points to ./dist/index.js absent from the tree, no outDir: b's test must be selected (via a heuristic edge or a widening).
 -- base/package.json --
 {"name":"root","private":true,"workspaces":["packages/*"]}
 -- base/packages/a/package.json --

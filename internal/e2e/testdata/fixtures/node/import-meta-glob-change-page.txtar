@@ -1,4 +1,4 @@
-import.meta.glob: đổi trang sẵn có chọn test.
+import.meta.glob: changing an existing page selects the test.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/routes.ts --

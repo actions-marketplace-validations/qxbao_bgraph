@@ -1,4 +1,4 @@
-Xoá tệp nguồn chọn test từng import nó.
+Deleting a source file selects the tests that imported it.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/gone.ts --

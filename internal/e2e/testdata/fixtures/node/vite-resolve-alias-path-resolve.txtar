@@ -1,4 +1,4 @@
-Vitest resolve.alias { '@': path.resolve(__dirname, 'src') } phân giải import '@/util'.
+Vitest resolve.alias { '@': path.resolve(__dirname, 'src') } resolves import '@/util'.
 -- base/package.json --
 {"name":"app","type":"module","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vitest.config.ts --

@@ -1,4 +1,4 @@
-Cạnh import type vẫn chọn test (đổi kiểu làm hỏng typecheck).
+A type-only import edge still selects the test (changing the type breaks typecheck).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/types.ts --

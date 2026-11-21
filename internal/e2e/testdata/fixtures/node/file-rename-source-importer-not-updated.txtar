@@ -1,4 +1,4 @@
-Đổi tên tệp nguồn mà importer KHÔNG được sửa (hỏng import): test importer vẫn phải được chọn.
+Renaming a source file while the importer is NOT fixed (broken import): the importer's test must still be selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/old.ts --
@@ -12,5 +12,5 @@ export {}
 export const v = 1
 -- want --
 select src/a.test.ts
-# new.ts không ai import: nới tới dự án (test có thể đọc nó ngoài đồ thị)
+# nobody imports new.ts: widens to the project (a test may read it outside the graph)
 widen unreferenced_file

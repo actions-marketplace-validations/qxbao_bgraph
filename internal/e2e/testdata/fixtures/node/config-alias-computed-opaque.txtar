@@ -1,4 +1,4 @@
-alias tính bằng code (vue: alias: entries từ scripts/aliases.js) → config_is_code: mọi test của dự án bị ảnh hưởng khi có đổi trong dự án.
+Alias computed in code (vue: alias entries from scripts/aliases.js) → config_is_code: every test of the project is affected by a change within the project.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vitest.config.ts --

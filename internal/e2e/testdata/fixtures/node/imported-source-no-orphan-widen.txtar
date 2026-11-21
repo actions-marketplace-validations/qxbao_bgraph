@@ -1,4 +1,4 @@
-Tệp có người import: không nới unreferenced_file (giữ độ chọn lọc).
+A file that someone imports: no unreferenced_file widening (keeps selectivity).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.ts --

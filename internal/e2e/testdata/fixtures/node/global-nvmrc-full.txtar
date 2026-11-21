@@ -1,4 +1,4 @@
-.nvmrc đổi: full global_input (ghim toolchain).
+.nvmrc changed: full global_input (toolchain pin).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/.nvmrc --

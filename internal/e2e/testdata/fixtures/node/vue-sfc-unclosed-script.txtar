@@ -1,4 +1,4 @@
-Khối <script> không đóng trong .vue: uncertain_scan, test phụ thuộc App.vue vẫn được chọn khi có đổi ở nơi khác.
+An unclosed <script> block in a .vue file: uncertain_scan, the test depending on App.vue is still selected when something else changes.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/App.vue --

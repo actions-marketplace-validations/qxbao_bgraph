@@ -1,4 +1,4 @@
-require(variable) không có tiền tố tĩnh: bất kỳ thay đổi nào trong repo chọn test chạm tệp đó.
+require(variable) has no static prefix: any change in the repo selects the tests that touch that file.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/src/loader.js --

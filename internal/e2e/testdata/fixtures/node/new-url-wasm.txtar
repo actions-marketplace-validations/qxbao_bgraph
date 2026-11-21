@@ -1,4 +1,4 @@
-new URL('./w.wasm', import.meta.url) là tham chiếu tệp: đổi wasm chọn test.
+new URL('./w.wasm', import.meta.url) is a file reference: changing the wasm selects the test.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/w.wasm --

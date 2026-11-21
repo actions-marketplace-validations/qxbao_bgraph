@@ -1,4 +1,4 @@
-[[generated]] khai đầu ra dist bị ignore và nguồn của nó: đổi nguồn chọn test của b mà không cần nới unknown_import.
+[[generated]] declares an ignored dist output and its source: changing the source selects b's test without needing an unknown_import widening.
 -- base/package.json --
 {"name":"root","private":true,"workspaces":["packages/*"]}
 -- base/bgraph.toml --

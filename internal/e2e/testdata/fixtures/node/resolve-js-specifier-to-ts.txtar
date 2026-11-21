@@ -1,4 +1,4 @@
-ESM TypeScript viết import './util.js' nhưng tệp thật là util.ts (thay thế đuôi).
+ESM TypeScript writes import './util.js' but the real file is util.ts (extension substitution).
 -- base/package.json --
 {"name":"app","type":"module","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/util.ts --

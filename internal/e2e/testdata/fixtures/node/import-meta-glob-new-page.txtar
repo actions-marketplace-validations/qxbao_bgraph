@@ -1,4 +1,4 @@
-import.meta.glob('./pages/*.ts'): thêm trang mới chọn test của tệp dùng glob.
+import.meta.glob('./pages/*.ts'): adding a new page selects the test of the file that uses the glob.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/routes.ts --

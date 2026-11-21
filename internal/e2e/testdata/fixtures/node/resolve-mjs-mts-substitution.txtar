@@ -1,4 +1,4 @@
-Import './u.mjs' phân giải tới u.mts, và './c.cjs' tới c.cts.
+Import './u.mjs' resolves to u.mts, and './c.cjs' to c.cts.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/u.mts --

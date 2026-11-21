@@ -1,4 +1,4 @@
-Import tài sản css/json/svg là cạnh; đổi svg chỉ chọn test import nó.
+Asset imports (css/json/svg) are edges; changing the svg selects only the tests that import it.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/s.css --

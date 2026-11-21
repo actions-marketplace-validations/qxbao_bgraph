@@ -1,4 +1,4 @@
-Tệp mới gen.ts che gen/index.ts trong thứ tự dò: importer './gen' phải được chọn.
+A new file gen.ts shadows gen/index.ts in the probing order: the './gen' importer must be selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/gen/index.ts --

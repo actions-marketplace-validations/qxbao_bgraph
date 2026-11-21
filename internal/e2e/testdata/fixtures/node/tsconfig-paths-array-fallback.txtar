@@ -1,4 +1,4 @@
-paths có mảng đích dự phòng: đích thứ hai mới tồn tại vẫn tạo cạnh.
+paths with an array of fallback targets: a second target that exists still creates an edge.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/tsconfig.json --

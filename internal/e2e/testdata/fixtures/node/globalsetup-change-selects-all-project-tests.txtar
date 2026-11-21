@@ -1,4 +1,4 @@
-globalSetup đổi: mọi test của dự án được chọn.
+globalSetup changed: every test of the project is selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jest.config.js --

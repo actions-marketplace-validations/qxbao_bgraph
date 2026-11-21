@@ -1,4 +1,4 @@
-Import bare chưa khai báo (phantom dep "tslib"): đổi tệp không liên quan không được chọn test của importer.
+An undeclared bare import (phantom dep "tslib"): changing an unrelated file must not select the importer's test.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.ts --

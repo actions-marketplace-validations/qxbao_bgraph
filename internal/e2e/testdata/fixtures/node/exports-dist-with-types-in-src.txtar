@@ -1,4 +1,4 @@
-Kiểu preact: test import 'preact' (tự tham chiếu); exports trỏ dist/ (không có trong cây) còn types trỏ src/index.d.ts (có). Đổi src/render.js phải chọn test, dù resolver tìm thấy một đích (.d.ts).
+Preact style: the test imports 'preact' (self-reference); exports points to dist/ (absent from the tree) while types points to src/index.d.ts (present). Changing src/render.js must select the test, even though the resolver finds one target (.d.ts).
 -- base/package.json --
 {"name":"preact","main":"dist/preact.js","types":"src/index.d.ts","exports":{".":{"types":"./src/index.d.ts","import":"./dist/preact.mjs","require":"./dist/preact.js"}},"devDependencies":{"mocha":"^10.0.0"}}
 -- base/src/index.d.ts --

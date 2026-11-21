@@ -1,4 +1,4 @@
-Đổi tên tệp nguồn (xoá + thêm) kèm sửa importer: test importer được chọn.
+Renaming a source file (delete + add) together with fixing the importer: the importer's test is selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/old.ts --

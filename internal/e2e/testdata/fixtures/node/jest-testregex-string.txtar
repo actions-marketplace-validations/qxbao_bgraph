@@ -1,4 +1,4 @@
-Jest testRegex chuỗi ('tests/.*\.tests\.ts$'): parse.tests.ts là test (darkreader).
+Jest testRegex string ('tests/.*\.tests\.ts$'): parse.tests.ts is a test (darkreader).
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^29.0.0"}}
 -- base/jest.config.js --

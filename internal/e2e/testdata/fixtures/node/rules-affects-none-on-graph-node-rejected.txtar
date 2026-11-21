@@ -1,4 +1,4 @@
-affects="none" trên tệp là nút đồ thị (json được import): bị từ chối, cảnh báo rule_rejected, test vẫn được chọn.
+affects="none" on a file that is a graph node (an imported json): rejected, rule_rejected warning, the test is still selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/bgraph.toml --

@@ -1,4 +1,4 @@
-imports "#internal/*" trong package.json phân giải tới tệp nội bộ.
+imports "#internal/*" in package.json resolves to an internal file.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"},"imports":{"#internal/*":"./src/internal/*.js"}}
 -- base/src/internal/x.js --

@@ -1,4 +1,4 @@
-tsconfig paths "@/*" -> "src/*": import '@/util' tạo cạnh.
+tsconfig paths "@/*" -> "src/*": import '@/util' creates an edge.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/tsconfig.json --

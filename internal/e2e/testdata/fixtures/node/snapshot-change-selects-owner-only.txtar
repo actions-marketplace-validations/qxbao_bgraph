@@ -1,4 +1,4 @@
-__snapshots__/a.test.ts.snap đổi chỉ chọn test sở hữu nó.
+__snapshots__/a.test.ts.snap changed: selects only the test that owns it.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

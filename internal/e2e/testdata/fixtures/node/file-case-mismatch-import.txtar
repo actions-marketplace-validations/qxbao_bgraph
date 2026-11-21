@@ -1,4 +1,4 @@
-import './Util' với tệp thật util.ts (Windows/macOS chạy được, Linux hỏng): vẫn chọn test.
+import './Util' with the real file util.ts (works on Windows/macOS, breaks on Linux): the test is still selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/util.ts --

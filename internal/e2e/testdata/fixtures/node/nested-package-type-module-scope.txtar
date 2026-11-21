@@ -1,4 +1,4 @@
-package.json lồng {"type":"module"} tạo dự án con; test ở gốc import tệp trong phạm vi đó vẫn được chọn.
+A nested package.json {"type":"module"} creates a sub-project; a test at the root that imports a file in that scope is still selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/esm/package.json --

@@ -1,4 +1,4 @@
-include: ['src/hooks/dom.test.tsx'] chỉ định nghĩa tập test, không phải phụ thuộc: đổi thứ dom.test.tsx import không chọn mọi test (hono).
+include: ['src/hooks/dom.test.tsx'] only defines the test set, it is not a dependency: changing something that dom.test.tsx imports does not select every test (hono).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vitest.config.ts --

@@ -1,4 +1,4 @@
-Import thư mục có package.json với "main" phân giải tới tệp main.
+Importing a directory with a package.json "main" resolves to the main file.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/vendor/lib/package.json --

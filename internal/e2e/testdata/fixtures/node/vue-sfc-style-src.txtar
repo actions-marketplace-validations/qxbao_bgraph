@@ -1,4 +1,4 @@
-<style src="theme.css"> (không có ./) là tương đối: đổi theme.css chọn test import App.vue.
+<style src="theme.css"> (without ./) is relative: changing theme.css selects the test that imports App.vue.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/App.vue --

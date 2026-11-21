@@ -1,4 +1,4 @@
-Thêm tệp test mới: được chọn.
+Adding a new test file: it is selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

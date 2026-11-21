@@ -1,4 +1,4 @@
-paths định nghĩa ở tsconfig.base.json, tsconfig.json chỉ extends: alias vẫn phân giải theo thư mục của config định nghĩa paths.
+paths defined in tsconfig.base.json, tsconfig.json only extends: the alias still resolves relative to the directory of the config that defines paths.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/tsconfig.base.json --

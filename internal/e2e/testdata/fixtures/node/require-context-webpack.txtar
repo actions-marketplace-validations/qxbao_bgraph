@@ -1,4 +1,4 @@
-require.context('./cases', true, /\.js$/): thêm tệp trong thư mục chọn test.
+require.context('./cases', true, /\.js$/): adding a file in the directory selects the test.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/src/all.js --

@@ -1,4 +1,4 @@
-Bẫy L3 (plan 1.2): package tự tham chiếu mình bằng import('my-pkg/public') qua exports.
+L3 trap (docs/plan.md §1.2): a package references itself with import('my-pkg/public') through exports.
 -- base/package.json --
 {"name":"my-pkg","devDependencies":{"vitest":"^5.0.0"},"exports":{"./public":"./src/public.ts"}}
 -- base/src/public.ts --

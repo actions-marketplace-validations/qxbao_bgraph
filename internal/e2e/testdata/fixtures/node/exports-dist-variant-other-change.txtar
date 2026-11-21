@@ -1,4 +1,4 @@
-Kiểu hono: đổi src/other.ts (không đi qua src/index.ts) không được chọn test adapters import 'hono' khi mọi biến thể dist ánh xạ được.
+Hono style: changing src/other.ts (not reached through src/index.ts) must not select the adapters test that imports 'hono' when every dist variant maps.
 -- base/package.json --
 {"name":"hono","exports":{".":{"types":"./dist/types/index.d.ts","import":"./dist/index.js","require":"./dist/cjs/index.js"}},"devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/index.ts --

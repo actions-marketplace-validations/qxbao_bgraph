@@ -1,4 +1,4 @@
-Đầu ra build/ (không có trong cây), nguồn ở source/ lạ, không có tsconfig/luật: đổi nguồn phải chọn test của b qua nới unknown_import.
+build/ output (absent from the tree), source in an unusual source/, no tsconfig/rule: changing the source must select b's test via an unknown_import widening.
 -- base/package.json --
 {"name":"root","private":true,"workspaces":["packages/*"]}
 -- base/packages/a/package.json --

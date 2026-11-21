@@ -1,4 +1,4 @@
-.github/workflows/ci.yml đổi: full global_input.
+.github/workflows/ci.yml changed: full global_input.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/.github/workflows/ci.yml --

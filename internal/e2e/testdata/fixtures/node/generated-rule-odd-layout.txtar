@@ -1,4 +1,4 @@
-[[generated]] với đầu ra build/ và nguồn source/ lạ: luật tạo cạnh tới nguồn, test của b được chọn, không nới unknown_import.
+[[generated]] with a build/ output and an unusual source/ source: the rule creates an edge to the source, b's test is selected, no unknown_import widening.
 -- base/package.json --
 {"name":"root","private":true,"workspaces":["packages/*"]}
 -- base/bgraph.toml --

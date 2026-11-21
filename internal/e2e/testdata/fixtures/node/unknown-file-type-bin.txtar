@@ -1,4 +1,4 @@
-Tệp lạ src/data.bin không ai tham chiếu: nới unknown_file tới dự án (module), không full.
+An unknown file src/data.bin referenced by nobody: widens unknown_file to the project (module), not full.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/data.bin --

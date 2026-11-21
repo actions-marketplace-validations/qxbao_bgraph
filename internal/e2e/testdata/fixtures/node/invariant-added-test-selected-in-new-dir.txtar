@@ -1,4 +1,4 @@
-RTSCheck: thêm test ở thư mục mới (không ai import) thì test đó được chọn, test cũ thì không.
+RTSCheck: adding a test in a new directory (imported by nobody) selects that test and not the old ones.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/a.test.ts --

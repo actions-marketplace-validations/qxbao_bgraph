@@ -1,4 +1,4 @@
-Kiểu babel: testRegex là template có ${cond ? "" : "|eslint"} → khai triển hai nhánh; packages/a/test/scope.js là test và được chọn khi nguồn đổi; không cần đơn vị cả dự án.
+Babel style: testRegex is a template with ${cond ? "" : "|eslint"} → expand both branches; packages/a/test/scope.js is a test and is selected when the source changes; no whole-project unit needed.
 -- base/package.json --
 {"name":"mono","devDependencies":{"jest":"^29.0.0"}}
 -- base/jest.config.js --

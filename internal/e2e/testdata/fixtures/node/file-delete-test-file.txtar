@@ -1,4 +1,4 @@
-Xoá tệp test: nó không còn tồn tại nên không được chọn; test khác không bị ảnh hưởng.
+Deleting a test file: it no longer exists so it is not selected; other tests are not affected.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/gone.test.ts --

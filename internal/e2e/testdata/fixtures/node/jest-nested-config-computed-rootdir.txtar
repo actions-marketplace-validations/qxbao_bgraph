@@ -1,4 +1,4 @@
-Kiểu darkreader: cấu hình Jest lồng (tests/unit/jest.config.mjs), rootDir tính bằng code, testMatch '<rootDir>/tests/unit/**/*.tests.ts', moduleNameMapper '<rootDir>/src/stubs/$1'.
+Darkreader style: nested Jest config (tests/unit/jest.config.mjs), rootDir computed in code, testMatch '<rootDir>/tests/unit/**/*.tests.ts', moduleNameMapper '<rootDir>/src/stubs/$1'.
 -- base/package.json --
 {"name":"darkreader","devDependencies":{"jest":"^29.0.0"}}
 -- base/tests/unit/jest.config.mjs --

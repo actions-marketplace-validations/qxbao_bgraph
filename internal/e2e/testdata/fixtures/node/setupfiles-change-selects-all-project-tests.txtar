@@ -1,4 +1,4 @@
-setupFiles đổi: mọi test của dự án được chọn, kể cả test không import gì.
+setupFiles changed: every test of the project is selected, even tests that import nothing.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jest.config.js --

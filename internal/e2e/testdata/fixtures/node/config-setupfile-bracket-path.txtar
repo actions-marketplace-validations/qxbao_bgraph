@@ -1,4 +1,4 @@
-setupFiles trỏ tới tệp có "[" trong tên (kiểu Next.js): cạnh chính xác, không bị hiểu thành glob. Đổi tệp đó chọn mọi test của dự án.
+setupFiles points to a file with "[" in its name (Next.js style): an exact edge, not interpreted as a glob. Changing that file selects every test of the project.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jest.config.js --

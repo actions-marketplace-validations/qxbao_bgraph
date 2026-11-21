@@ -1,4 +1,4 @@
-Tệp .vue: khối <script setup> được tách và quét; đổi helper chọn test import App.vue, không nới, không chọn test khác.
+A .vue file: the <script setup> block is extracted and scanned; changing the helper selects the test that imports App.vue, no widening, and does not select other tests.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/App.vue --

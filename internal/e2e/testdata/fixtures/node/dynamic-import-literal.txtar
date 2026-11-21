@@ -1,4 +1,4 @@
-import('./x') với chuỗi hằng là cạnh bình thường.
+import('./x') with a constant string is a normal edge.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/src/x.ts --

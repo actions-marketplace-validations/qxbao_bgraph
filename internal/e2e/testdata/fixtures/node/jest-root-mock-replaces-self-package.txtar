@@ -1,4 +1,4 @@
-Kiểu dayjs: locale import 'dayjs' (main → dayjs.min.js, đầu ra build không có trong cây); jest roots ['test'] và test/__mocks__/dayjs.js require('../../src'). Cạnh qua mock chính xác: đổi plugin không liên quan không chọn test locale; đổi src/index.js thì chọn.
+Dayjs style: locale imports 'dayjs' (main → dayjs.min.js, a build output absent from the tree); jest roots ['test'] and test/__mocks__/dayjs.js requires '../../src'. The edge through the mock is exact: changing an unrelated plugin does not select the locale tests; changing src/index.js does.
 -- base/package.json --
 {"name":"dayjs","main":"dayjs.min.js","devDependencies":{"jest":"^22.0.0"},"jest":{"roots":["test"],"testRegex":"test/(.*?/)?.*test.js$"}}
 -- base/src/index.js --

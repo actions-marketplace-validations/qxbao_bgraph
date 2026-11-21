@@ -1,22 +1,22 @@
-// Package e2e chạy fixture bẫy (mục 10.1): mỗi tệp testdata/fixtures/**/*.txtar mô tả cây mốc, thay đổi và đáp án viết tay.
+// Package e2e runs the trap fixtures (docs/plan.md §10.1): each testdata/fixtures/**/*.txtar file describes a base tree, a change and hand-written expected answers.
 //
-// Định dạng (kiểu txtar):
+// Format (txtar style):
 //
-//	comment tự do ở đầu
-//	-- base/<path> --        tệp ở cây mốc (cũng có ở cây hiện tại nếu không bị ghi đè/xoá)
-//	-- head/<path> --        tệp thêm mới hoặc sửa ở cây hiện tại
-//	-- delete/<path> --      tệp bị xoá ở cây hiện tại (nội dung bỏ qua)
-//	-- want --               đáp án, mỗi dòng một khẳng định:
-//	    select <unit>        phải được chọn (hoặc phạm vi full)
-//	    noselect <unit>      không được chọn (và phạm vi không phải full)
-//	    scope <tier>         phạm vi đúng bằng
-//	    widen <reason>       phải có một lần nới với lý do này
-//	    nowiden <reason>     không được có lần nới với lý do này
-//	    full                 phạm vi phải là full
-//	    notfull              phạm vi không được là full
-//	    warn <reason>        phải có cảnh báo với lý do này
+//	free-form comment at the top
+//	-- base/<path> --        file in the base tree (also in the current tree unless overridden/deleted)
+//	-- head/<path> --        file added or modified in the current tree
+//	-- delete/<path> --      file deleted in the current tree (content ignored)
+//	-- want --               expected answers, one assertion per line:
+//	    select <unit>        must be selected (or the scope is full)
+//	    noselect <unit>      must not be selected (and the scope is not full)
+//	    scope <tier>         scope must equal this
+//	    widen <reason>       there must be a widening with this reason
+//	    nowiden <reason>     there must be no widening with this reason
+//	    full                 scope must be full
+//	    notfull              scope must not be full
+//	    warn <reason>        there must be a warning with this reason
 //
-// Dòng "# ..." trong want là chú thích.
+// A "# ..." line in want is a comment.
 package e2e
 
 import (
@@ -86,7 +86,7 @@ func parseFixture(data string) (fixture, error) {
 	return f, nil
 }
 
-// run dựng hai cây, tính tập thay đổi và gọi bộ chọn với mọi hệ sinh thái đã hỗ trợ.
+// run builds the two trees, computes the change set and calls the selector with every supported ecosystem.
 func run(t *testing.T, f fixture) model.Selection {
 	t.Helper()
 	headFiles := map[string]string{}
@@ -157,10 +157,10 @@ func check(t *testing.T, sel model.Selection, want []string) {
 		case "warn":
 			ok = hasReason(sel.Warnings, arg)
 		default:
-			t.Fatalf("khẳng định lạ: %q", w)
+			t.Fatalf("unknown assertion: %q", w)
 		}
 		if !ok {
-			t.Errorf("sai: %s", w)
+			t.Errorf("failed: %s", w)
 		}
 	}
 	if t.Failed() {
@@ -184,7 +184,7 @@ func TestFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(paths) == 0 {
-		t.Fatal("không có fixture")
+		t.Fatal("no fixtures")
 	}
 	for _, p := range paths {
 		name := strings.TrimSuffix(filepath.ToSlash(strings.TrimPrefix(p, filepath.FromSlash("testdata/fixtures/"))), ".txtar")
@@ -198,7 +198,7 @@ func TestFixtures(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(f.want) == 0 {
-				t.Fatal("fixture thiếu mục want")
+				t.Fatal("fixture is missing a want section")
 			}
 			check(t, run(t, f), f.want)
 		})

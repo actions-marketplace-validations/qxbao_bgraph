@@ -1,4 +1,4 @@
-Kiểu dayjs: đổi src/index.js phải chọn test locale (locale → 'dayjs' → test/__mocks__/dayjs.js → src).
+Dayjs style: changing src/index.js must select the locale tests (locale → 'dayjs' → test/__mocks__/dayjs.js → src).
 -- base/package.json --
 {"name":"dayjs","main":"dayjs.min.js","devDependencies":{"jest":"^22.0.0"},"jest":{"roots":["test"],"testRegex":"test/(.*?/)?.*test.js$"}}
 -- base/src/index.js --

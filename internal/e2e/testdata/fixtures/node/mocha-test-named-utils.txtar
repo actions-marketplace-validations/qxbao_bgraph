@@ -1,4 +1,4 @@
-Mocha: tệp test tên utils.js trong test/ là test thật (axios-5661), không được loại trừ như helper.
+Mocha: a test file named utils.js under test/ is a real test (axios-5661), it must not be excluded as a helper.
 -- base/package.json --
 {"name":"app","devDependencies":{"mocha":"^10.0.0"}}
 -- base/lib/utils.js --

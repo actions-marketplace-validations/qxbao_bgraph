@@ -1,4 +1,4 @@
-jsconfig.json cũng cung cấp paths cho dự án JS.
+jsconfig.json also provides paths for a JS project.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jsconfig.json --

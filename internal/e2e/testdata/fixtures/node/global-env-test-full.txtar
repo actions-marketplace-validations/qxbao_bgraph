@@ -1,4 +1,4 @@
-.env.test đổi: full global_input.
+.env.test changed: full global_input.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/.env.test --

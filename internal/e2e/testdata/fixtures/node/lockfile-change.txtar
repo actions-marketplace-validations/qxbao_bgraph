@@ -1,4 +1,4 @@
-Đổi lockfile nới lock_changed (mức L0).
+Changing a lockfile widens lock_changed (level L0).
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/pnpm-lock.yaml --

@@ -1,4 +1,4 @@
-Kiểu zod: đổi entry nguồn src/v4/index.ts chọn test của importer 'zod/v4'.
+Zod style: changing the source entry src/v4/index.ts selects the test of the 'zod/v4' importer.
 -- base/package.json --
 {"name":"root","private":true,"devDependencies":{"vitest":"^5.0.0"}}
 -- base/packages/zod/package.json --

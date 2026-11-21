@@ -1,4 +1,4 @@
-Jest #10222: test đi tới module qua moduleNameMapper (jest.config.js literal) phải được chọn.
+Jest #10222: a test that reaches a module through moduleNameMapper (literal jest.config.js) must be selected.
 -- base/package.json --
 {"name":"app","devDependencies":{"jest":"^30.0.0"}}
 -- base/jest.config.js --

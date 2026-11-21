@@ -1,4 +1,4 @@
-Kiểu babel: jest.config.js ở gốc (testRegex) áp cho tệp trong package con có package.json riêng: packages/a/test/scope.js là test.
+Babel style: a root jest.config.js (testRegex) applies to files in a sub-package that has its own package.json: packages/a/test/scope.js is a test.
 -- base/package.json --
 {"name":"mono","private":true,"devDependencies":{"jest":"^29.0.0"}}
 -- base/jest.config.js --
