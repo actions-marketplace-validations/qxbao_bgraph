@@ -8,29 +8,29 @@ import (
 	"unicode"
 )
 
-// MapEntry ghi cách một id FAIL_TO_PASS được ánh xạ tới tệp test (để kiểm toán oracle).
+// MapEntry records how a FAIL_TO_PASS id was mapped to a test file (for oracle auditing).
 type MapEntry struct {
 	ID        string   `json:"id"`
 	Files     []string `json:"files,omitempty"`
 	Method    string   `json:"method"` // path | title | path_norm | suffix | none
 	Title     string   `json:"title,omitempty"`
-	Ambiguous bool     `json:"ambiguous,omitempty"` // tiêu đề trúng nhiều tệp
+	Ambiguous bool     `json:"ambiguous,omitempty"` // title matched several files
 }
 
 const minTitleLen = 6
 
 var idPathRe = regexp.MustCompile(`[A-Za-z0-9_@./\-]+\.(?:[cm]?[jt]sx?|vue|svelte)\b`)
 
-// Các phương pháp ánh xạ:
+// Mapping methods:
 //
-//	path       id chứa đường dẫn tệp
-//	path_p     id chứa đường dẫn tệp có ở P nhưng không do test_patch đổi (mở rộng; gắn nhãn)
-//	title      nội dung tệp chứa đoạn tiêu đề cuối của id (tách theo " > ", " › ", "::"; gộp khoảng trắng; bỏ nếu < 6 ký tự)
-//	path_norm  id (chuẩn hoá chữ-số) nằm trong đường dẫn tệp mã JS/TS (chuẩn hoá): fixture dạng thư mục của Babel
-//	suffix     dự phòng: hậu tố theo từ của tiêu đề (≥ 3 từ, ≥ 12 ký tự) nằm trong nội dung (mocha nối mô tả bằng dấu cách)
+//	path       id contains the file path
+//	path_p     id contains a file path that exists at P but was not changed by test_patch (extension; labelled)
+//	title      file content contains the last title fragment of the id (split on " > ", " › ", "::"; whitespace collapsed; dropped if < 6 chars)
+//	path_norm  id (alphanumeric-normalised) lies within the (normalised) path of a JS/TS source file: Babel's directory-style fixtures
+//	suffix     fallback: word suffix of the title (≥ 3 words, ≥ 12 chars) found in the content (mocha joins descriptions with spaces)
 //
-// Thứ tự thử: path, path_p, title, path_norm, suffix; dừng ở phương pháp đầu tiên cho kết quả. Ba phương pháp mở rộng (path_p, path_norm, suffix) so
-// với đặc tả gốc và được gắn nhãn để kiểm toán.
+// Order tried: path, path_p, title, path_norm, suffix; stops at the first method that yields a result. Three extension methods (path_p, path_norm, suffix) compared
+// to the original spec are labelled for auditing.
 func MapF2P(ids []string, files map[string]string, existsInP func(string) bool) (required []string, mapping []MapEntry, unmapped []string) {
 	names := make([]string, 0, len(files))
 	for p := range files {
@@ -55,7 +55,7 @@ func MapF2P(ids []string, files map[string]string, existsInP func(string) bool) 
 			e.Method = "path"
 		}
 		if e.Method == "none" && existsInP != nil {
-			// Đường dẫn có trong id nhưng không do test_patch đổi (runner dùng chung, vd. tests/runtime/test.ts): vẫn là tệp test bắt buộc.
+			// The path is in the id but not changed by test_patch (shared runner, e.g. tests/runtime/test.ts): still a required test file.
 			for _, m := range idPathRe.FindAllString(id, -1) {
 				if strings.Contains(m, "/") && existsInP(m) {
 					e.Files = append(e.Files, m)
@@ -158,7 +158,7 @@ func isCodeExt(p string) bool {
 	return false
 }
 
-// candidateFile: tệp có thể chứa test (loại snapshot, tài liệu, ảnh...).
+// candidateFile: a file that may contain tests (excludes snapshots, docs, images...).
 func candidateFile(p string) bool {
 	switch strings.ToLower(path.Ext(p)) {
 	case ".snap", ".md", ".mdx", ".txt", ".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico", ".lock", ".map", ".woff", ".woff2", ".ttf", ".zip", ".gz":

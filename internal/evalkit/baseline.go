@@ -16,11 +16,11 @@ import (
 	"github.com/qxbao/bgraph/internal/scancache"
 )
 
-// Đối chứng giai đoạn 0b: chấm các công cụ đồ thị ngoài (codegraph, graphify, gitnexus) bằng đúng oracle T1.
-// Hai bước: BaselinePrep dựng P/C (index tạm, không checkout), oracle, danh sách đơn vị test của bgraph và phần chọn của bgraph;
-// phía công cụ ngoài (script Python) chỉ cần P, C và tệp đổi. BaselineScore đọc bao đóng tệp của từng công cụ và chấm.
+// Phase 0b baseline: scores external graph tools (codegraph, graphify, gitnexus) with exactly the T1 oracle.
+// Two steps: BaselinePrep builds P/C (temporary index, no checkout), the oracle, bgraph's list of test units and bgraph's selection;
+// the external-tool side (a Python script) only needs P, C and the changed files. BaselineScore reads each tool's file closure and scores it.
 
-// BUnit là một đơn vị test của bgraph (phân tích cây C), mẫu số chung cho mọi công cụ.
+// BUnit is one bgraph test unit (analysis of tree C), the common denominator for all tools.
 type BUnit struct {
 	ID      string   `json:"id"`
 	Project string   `json:"project"`
@@ -28,7 +28,7 @@ type BUnit struct {
 	Whole   bool     `json:"whole,omitempty"`
 }
 
-// BTask là một task T1 đã dựng sẵn cho đối chứng.
+// BTask is a T1 task already built for the baseline.
 type BTask struct {
 	ID       string   `json:"id"`
 	Repo     string   `json:"repo"`
@@ -37,11 +37,11 @@ type BTask struct {
 	Base     string   `json:"base"`
 	P        string   `json:"p"`
 	C        string   `json:"c"`
-	Changed  []string `json:"changed"` // tệp đổi bởi patch vàng (P→C), gồm tệp xoá/thêm
+	Changed  []string `json:"changed"` // files changed by the gold patch (P→C), including deleted/added files
 	Required []string `json:"required"`
 	Units    []BUnit  `json:"units"`
 
-	// bgraph trên cùng P→C
+	// bgraph on the same P→C
 	BgStatus   string   `json:"bg_status"` // ok | full | violation
 	BgScope    string   `json:"bg_scope"`
 	BgSelected int      `json:"bg_selected"`
@@ -51,7 +51,7 @@ type BTask struct {
 	Skip       string   `json:"skip,omitempty"`
 }
 
-// BaselinePrep dựng danh sách BTask cho mẫu tasks và ghi tasks.json vào out. Dùng lại mirror của work/repos.
+// BaselinePrep builds the list of BTask for the tasks sample and writes tasks.json into out. Reuses the mirrors under work/repos.
 func BaselinePrep(ctx context.Context, cfg T1Config) ([]BTask, error) {
 	if cfg.Jobs <= 0 {
 		cfg.Jobs = 3
@@ -174,14 +174,14 @@ func (rr *repoRunner) prepOne(ctx context.Context, t Task) (bt BTask) {
 			bt.Changed = append(bt.Changed, f)
 		}
 	}
-	// Đơn vị test: phân tích cây C như selector (mọi hệ sinh thái, quy tắc rỗng).
+	// Test units: analyse tree C like the selector (all ecosystems, empty rules).
 	units, err := unitsOf(ctx, dir, c)
 	if err != nil {
 		bt.Skip = "units: " + err.Error()
 		return
 	}
 	bt.Units = units
-	// bgraph trên cùng P→C.
+	// bgraph on the same P→C.
 	state := filepath.Join(rr.cfg.Work, "state", repoDirName(rr.repo))
 	ix, err := bgraph.Open(ctx, dir, bgraph.Options{StateDir: state})
 	if err != nil {
@@ -243,9 +243,9 @@ func unitsOf(ctx context.Context, root, commit string) ([]BUnit, error) {
 	return out, nil
 }
 
-// ---- Chấm ----
+// ---- Scoring ----
 
-// ToolRun là kết quả của một công cụ ngoài trên một task (do script Python ghi).
+// ToolRun is the result of an external tool on one task (written by the Python script).
 type ToolRun struct {
 	Status   string   `json:"status"` // ok | timeout | error
 	Detail   string   `json:"detail,omitempty"`
@@ -253,11 +253,11 @@ type ToolRun struct {
 	IndexC   float64  `json:"index_c_s"`
 	EdgesP   int      `json:"edges_p"`
 	EdgesC   int      `json:"edges_c"`
-	Closure  []string `json:"closure"` // bao đóng ngược (hợp đồ thị P và C) từ tệp đổi
+	Closure  []string `json:"closure"` // reverse closure (union of graphs P and C) from the changed files
 	NodesAll int      `json:"nodes_all,omitempty"`
 }
 
-// BScore là kết quả chấm một (task, công cụ).
+// BScore is the scoring result for one (task, tool).
 type BScore struct {
 	ID       string   `json:"id"`
 	Repo     string   `json:"repo"`
@@ -267,12 +267,12 @@ type BScore struct {
 	Units    int      `json:"units"`
 	Whole    int      `json:"whole_units_selected"`
 	Missing  []string `json:"missing,omitempty"`
-	IndexS   float64  `json:"index_s"` // tổng P + C
+	IndexS   float64  `json:"index_s"` // total P + C
 	Detail   string   `json:"detail,omitempty"`
 }
 
-// ScoreTool chấm bao đóng của một công cụ: đơn vị được chọn nếu có tệp nào của nó nằm trong bao đóng; đơn vị Whole được chọn nếu có tệp
-// nào của bao đóng nằm trong thư mục dự án của nó.
+// ScoreTool scores one tool's closure: a unit is selected if any of its files is in the closure; a Whole unit is selected if any
+// file of the closure lies inside its project directory.
 func ScoreTool(bt BTask, tool string, tr *ToolRun) BScore {
 	sc := BScore{ID: bt.ID, Repo: bt.Repo, Tool: tool, Units: len(bt.Units)}
 	if tr == nil {
@@ -324,7 +324,7 @@ func ScoreTool(bt BTask, tool string, tr *ToolRun) BScore {
 	return sc
 }
 
-// LoadBTasks đọc tasks.json.
+// LoadBTasks reads tasks.json.
 func LoadBTasks(path string) ([]BTask, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -334,7 +334,7 @@ func LoadBTasks(path string) ([]BTask, error) {
 	return ts, json.Unmarshal(b, &ts)
 }
 
-// BaselineScoreAll đọc <dir>/runs/<tool>/<id>.json cho mỗi công cụ, chấm và ghi scores.json.
+// BaselineScoreAll reads <dir>/runs/<tool>/<id>.json for each tool, scores it and writes scores.json.
 func BaselineScoreAll(dir string, tasks []BTask, tools []string) ([]BScore, error) {
 	var all []BScore
 	for _, bt := range tasks {
@@ -357,7 +357,7 @@ func BaselineScoreAll(dir string, tasks []BTask, tools []string) ([]BScore, erro
 	return all, os.WriteFile(filepath.Join(dir, "scores.json"), b, 0o644)
 }
 
-// BaselineSummary tổng hợp theo công cụ: số task, ok, vi phạm, timeout, trung vị/p90 selected/units (trên task ok), trung vị thời gian chỉ mục.
+// BaselineSummary aggregates per tool: task count, ok, violations, timeouts, median/p90 selected/units (over ok tasks), median index time.
 type BaselineSummary struct {
 	Tool       string
 	Tasks      int
@@ -369,7 +369,7 @@ type BaselineSummary struct {
 	MedRatio   float64
 	P90Ratio   float64
 	MedIndexS  float64
-	MedRatioV  float64 // trung vị trên mọi task có kết quả (ok + vi phạm)
+	MedRatioV  float64 // median over all tasks with a result (ok + violation)
 }
 
 func SummarizeScores(ss []BScore, tool string) BaselineSummary {

@@ -29,11 +29,11 @@ func writeF(t *testing.T, dir, name string, data []byte) {
 	}
 }
 
-// TestIndexBuilder: P và C dựng bằng index tạm phải có đúng cây của commit tham chiếu (tệp mới có mode thực thi, đổi tên, nhị phân),
-// P có cha là base và cùng OID với `git commit` cũ; cây làm việc không bị đụng tới.
+// TestIndexBuilder: P and C built with a temporary index must have exactly the tree of the reference commit (new file with exec mode, rename, binary),
+// P has base as parent and the same OID as the old `git commit`; the working tree is not touched.
 func TestIndexBuilder(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("không có git")
+		t.Skip("git not available")
 	}
 	if err := SetupHermeticEnv(t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -48,7 +48,7 @@ func TestIndexBuilder(t *testing.T) {
 	tgit(t, repo, "commit", "-q", "-m", "base")
 	base := tgit(t, repo, "rev-parse", "HEAD")
 
-	// T = base + test patch: thêm tệp test (mode 755) và một tệp nhị phân mới.
+	// T = base + test patch: add a test file (mode 755) and a new binary file.
 	writeF(t, repo, "test/new.test.js", []byte("it('x', () => {})\n"))
 	if err := os.Chmod(filepath.Join(repo, "test/new.test.js"), 0o755); err != nil {
 		t.Fatal(err)
@@ -58,7 +58,7 @@ func TestIndexBuilder(t *testing.T) {
 	tgit(t, repo, "add", "-A")
 	tgit(t, repo, "commit", "-q", "-m", "T")
 	tc := tgit(t, repo, "rev-parse", "HEAD")
-	// G = T + patch vàng: sửa b.js, đổi tên a.txt (có sửa nhẹ), sửa tệp nhị phân.
+	// G = T + gold patch: edit b.js, rename a.txt (with a small edit), edit the binary file.
 	writeF(t, repo, "src/b.js", []byte("module.exports = 2\n"))
 	os.MkdirAll(filepath.Join(repo, "renamed"), 0o755)
 	tgit(t, repo, "mv", "a.txt", "renamed/c.txt")
@@ -78,9 +78,9 @@ func TestIndexBuilder(t *testing.T) {
 	}
 	if !strings.Contains(testPatch, "new file mode 100755") || !strings.Contains(testPatch, "GIT binary patch") ||
 		!strings.Contains(gold, "rename from a.txt") || !strings.Contains(gold, "GIT binary patch") {
-		t.Fatalf("patch thử nghiệm thiếu thành phần:\n%s\n%s", testPatch, gold)
+		t.Fatalf("test patch is missing a component:\n%s\n%s", testPatch, gold)
 	}
-	// Đưa cây làm việc về base để chắc chắn dựng P/C không phụ thuộc cây làm việc.
+	// Reset the working tree to base to make sure building P/C does not depend on the working tree.
 	tgit(t, repo, "checkout", "-q", base)
 	before := tgit(t, repo, "status", "--porcelain")
 
@@ -92,33 +92,33 @@ func TestIndexBuilder(t *testing.T) {
 		t.Fatal(err)
 	}
 	if got, want := tgit(t, repo, "rev-parse", p+"^{tree}"), tgit(t, repo, "rev-parse", tc+"^{tree}"); got != want {
-		t.Fatalf("cây P %s != cây T %s", got, want)
+		t.Fatalf("tree P %s != tree T %s", got, want)
 	}
 	if par := tgit(t, repo, "rev-parse", p+"^"); par != base {
-		t.Fatalf("cha của P = %s, muốn %s", par, base)
+		t.Fatalf("parent of P = %s, want %s", par, base)
 	}
 	if mode := tgit(t, repo, "ls-tree", p, "test/new.test.js"); !strings.HasPrefix(mode, "100755") {
-		t.Fatalf("mất mode thực thi: %s", mode)
+		t.Fatalf("exec mode lost: %s", mode)
 	}
 	c, err := ib.Apply(ctx, gold, "eval: gold patch")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got, want := tgit(t, repo, "rev-parse", c+"^{tree}"), tgit(t, repo, "rev-parse", gc+"^{tree}"); got != want {
-		t.Fatalf("cây C %s != cây G %s", got, want)
+		t.Fatalf("tree C %s != tree G %s", got, want)
 	}
 	if par := tgit(t, repo, "rev-parse", c+"^"); par != p {
-		t.Fatalf("cha của C = %s, muốn P %s", par, p)
+		t.Fatalf("parent of C = %s, want P %s", par, p)
 	}
 	if after := tgit(t, repo, "status", "--porcelain"); after != before {
-		t.Fatalf("cây làm việc bị đổi: %q -> %q", before, after)
+		t.Fatalf("working tree changed: %q -> %q", before, after)
 	}
 	if _, err := os.Stat(filepath.Join(repo, "test")); err == nil {
-		t.Fatal("tệp test xuất hiện trong cây làm việc")
+		t.Fatal("test file appeared in the working tree")
 	}
 
-	// Lối cũ (áp lên cây làm việc rồi `git commit`) cho cùng nội dung; riêng mode thực thi của tệp mới có thể mất trên Windows
-	// (core.fileMode=false) nên so theo (đường dẫn, blob) chứ không so OID cây.
+	// The old way (apply to the working tree then `git commit`) gives the same content; only the exec mode of the new file may be lost on Windows
+	// (core.fileMode=false), so compare by (path, blob) rather than by tree OID.
 	tgit(t, repo, "apply", "--binary", "--whitespace=nowarn", writePatch(t, testPatch))
 	tgit(t, repo, "add", "-A")
 	tgit(t, repo, "commit", "-q", "--no-verify", "--allow-empty", "-m", "eval: test patch")
@@ -132,17 +132,17 @@ func TestIndexBuilder(t *testing.T) {
 		return strings.Join(out, "\n")
 	}
 	if strip("HEAD") != strip(p) {
-		t.Fatalf("nội dung P index khác lối worktree:\n%s\n---\n%s", strip(p), strip("HEAD"))
+		t.Fatalf("content of P (index) differs from the worktree path:\n%s\n---\n%s", strip(p), strip("HEAD"))
 	}
 
-	// Patch không áp được → lỗi (người gọi rơi về worktree).
+	// A patch that does not apply → error (the caller falls back to the worktree).
 	ib2 := newIndexBuilder(repo, filepath.Join(t.TempDir(), "y.index"), base)
 	defer ib2.Close()
 	if _, err := ib2.Apply(ctx, "--- a/nothere.txt\n+++ b/nothere.txt\n@@ -1 +1 @@\n-x\n+y\n", "m"); err == nil {
-		t.Fatal("patch không áp được phải lỗi")
+		t.Fatal("a patch that does not apply must error")
 	}
 	if _, err := ib2.Apply(ctx, "", "m"); err == nil {
-		t.Fatal("patch rỗng phải lỗi")
+		t.Fatal("an empty patch must error")
 	}
 }
 

@@ -1,8 +1,8 @@
-// Bộ sinh đột biến tất định cho T2 (xem internal/evalkit/t2.go). Chạy bằng node, đọc một đối số JSON:
+// Deterministic mutation generator for T2 (see internal/evalkit/t2.go). Run with node, reads one JSON argument:
 //   {ts, repo, rev, include:[regex], exclude:[regex], count, seed}
-// In ra stdout một mảng JSON các đột biến {file, line, op, start, end, repl, before, after, blob} (start/end là OFFSET BYTE trong blob tại rev).
-// Đột biến dựa trên AST của TypeScript (đọc được cả JS): mỗi đột biến sửa đúng một nút, nằm trong thân hàm (trừ đổi tên export),
-// và được kiểm tra cú pháp bằng transpileModule trước khi nhận. Chọn xoay vòng theo thư mục và toán tử, dùng PRNG gieo từ `seed`.
+// Prints to stdout a JSON array of mutations {file, line, op, start, end, repl, before, after, blob} (start/end are BYTE OFFSETS in the blob at rev).
+// Mutations are based on the TypeScript AST (which also reads JS): each mutation edits exactly one node, inside a function body (except export renames),
+// and is syntax-checked with transpileModule before being accepted. Selection round-robins over directories and operators, using a PRNG seeded from `seed`.
 'use strict';
 const cp = require('child_process');
 const cfg = JSON.parse(process.argv[2].startsWith('@') ? require('fs').readFileSync(process.argv[2].slice(1), 'utf8') : process.argv[2]);

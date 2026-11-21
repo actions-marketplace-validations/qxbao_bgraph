@@ -17,28 +17,28 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// ReplayConfig cấu hình phát lại.
+// ReplayConfig configures replay.
 type ReplayConfig struct {
 	Work      string
 	Out       string
-	Repos     []string // "owner/name" hoặc URL https
+	Repos     []string // "owner/name" or https URL
 	Commits   int
-	Depth     int // độ sâu clone nông; 0 → 3*Commits+20
-	ColdEvery int // cứ mỗi ColdEvery commit, kiểm tất định bằng Index mới không cache bền (0 → 25)
+	Depth     int // shallow clone depth; 0 → 3*Commits+20
+	ColdEvery int // every ColdEvery commits, check determinism with a fresh Index without the durable cache (0 → 25)
 	Jobs      int
 	Manifest  Manifest
 	Timeout   time.Duration
 	Log       func(format string, a ...any)
 }
 
-// Violation là một vi phạm bất biến.
+// Violation is one invariant violation.
 type Violation struct {
 	Inv    string `json:"invariant"` // I1 | I2 | I3
 	Commit string `json:"commit"`
 	Detail string `json:"detail"`
 }
 
-// CommitResult là kết quả một commit.
+// CommitResult is the result for one commit.
 type CommitResult struct {
 	Commit    string           `json:"commit"`
 	Parent    string           `json:"parent"`
@@ -54,7 +54,7 @@ type CommitResult struct {
 	Err       string           `json:"error,omitempty"`
 }
 
-// RepoReplay là kết quả một repo.
+// RepoReplay is the result for one repo.
 type RepoReplay struct {
 	Repo       string         `json:"repo"`
 	Role       string         `json:"role"`
@@ -78,7 +78,7 @@ func nameOf(repo string) string {
 	return r
 }
 
-// RunReplay phát lại mọi repo (song song theo repo).
+// RunReplay replays every repo (in parallel across repos).
 func RunReplay(ctx context.Context, cfg ReplayConfig) ([]RepoReplay, error) {
 	if cfg.Jobs <= 0 {
 		cfg.Jobs = 4
@@ -150,7 +150,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 	var list []cp
 	for _, l := range strings.Split(strings.TrimSpace(out), "\n") {
 		f := strings.Fields(l)
-		if len(f) != 2 { // gốc hoặc merge
+		if len(f) != 2 { // root or merge
 			continue
 		}
 		if _, err := git(ctx, dir, "cat-file", "-e", f[1]+"^{commit}"); err != nil {
@@ -176,7 +176,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 		rr.Violations = append(rr.Violations, Violation{inv, c, d})
 		cfg.logf("%s %s VIOLATION %s %s", rr.Repo, c[:10], inv, d)
 	}
-	// Chạy từ cũ đến mới để cache ấm như dùng thật.
+	// Run from oldest to newest so the cache is warm as in real use.
 	for k := len(list) - 1; k >= 0; k-- {
 		if ctx.Err() != nil {
 			rr.Error = "ctx: " + ctx.Err().Error()
@@ -227,7 +227,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 		}
 		cr.Selected, cr.Units = len(sel.Tests), sel.IndexStats["units"]
 
-		// I1: hai revision giống nhau → rỗng.
+		// I1: two identical revisions → empty.
 		s1, err := ix.Select(ctx, bgraph.Change{Base: c, Head: c})
 		switch {
 		case err != nil:
@@ -235,12 +235,12 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 		case s1.Scope != model.TierNone || len(s1.Tests) > 0 || len(s1.Widening) > 0 || len(s1.Changed) > 0:
 			vio("I1", c, fmt.Sprintf("Select(C,C): scope=%s tests=%d widenings=%d changed=%d %v", s1.Scope, len(s1.Tests), len(s1.Widening), len(s1.Changed), s1.Widening))
 		}
-		// I3: tất định (cùng Index, cache ấm).
+		// I3: deterministic (same Index, warm cache).
 		s2, err := ix.Select(ctx, bgraph.Change{Base: p, Head: c})
 		if err != nil || !reflect.DeepEqual(canon(sel), canon(s2)) {
 			vio("I3", c, fmt.Sprintf("two Select calls differ (err=%v)", err))
 		}
-		// I3 mạnh: Index mới chỉ trong bộ nhớ (không cache bền) phải cho cùng kết quả.
+		// Strong I3: a fresh in-memory-only Index (no durable cache) must give the same result.
 		if k%coldEvery == 0 {
 			rr.ColdChecks++
 			if cix, err := bgraph.Open(ctx, dir, bgraph.Options{MemoryOnly: true}); err == nil {
@@ -251,7 +251,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 				}
 			}
 		}
-		// I2: tệp test thêm/sửa phải được chọn (trừ khi full).
+		// I2: added/modified test files must be selected (unless full).
 		if sel.Scope != model.TierFull {
 			have := map[string]bool{}
 			for _, st := range sel.Tests {
@@ -274,7 +274,7 @@ func replayRepo(ctx context.Context, cfg *ReplayConfig, repo string) (rr RepoRep
 
 var codeExt = map[string]bool{".js": true, ".jsx": true, ".ts": true, ".tsx": true, ".mjs": true, ".cjs": true, ".mts": true, ".cts": true}
 
-// IsTestPath: tệp khớp mẫu test thường gặp (*.test.*, *.spec.*, __tests__/) và là mã JS/TS; loại fixture/snapshot/mock.
+// IsTestPath: the file matches common test patterns (*.test.*, *.spec.*, __tests__/) and is JS/TS source; excludes fixtures/snapshots/mocks.
 func IsTestPath(p string) bool {
 	if !codeExt[strings.ToLower(path.Ext(p))] {
 		return false
@@ -292,7 +292,7 @@ func IsTestPath(p string) bool {
 	return strings.Contains("/"+p, "/__tests__/")
 }
 
-// ClassifyCommit phân loại độc lập với công cụ: docs_only, config, ordinary.
+// ClassifyCommit classifies independently of the tool: docs_only, config, ordinary.
 func ClassifyCommit(paths []string) string {
 	if len(paths) == 0 {
 		return "docs_only"
@@ -350,9 +350,9 @@ func isConfig(p string) bool {
 	return false
 }
 
-// ---- Tổng hợp ----
+// ---- Summary ----
 
-// ReplaySummary tổng hợp một repo.
+// ReplaySummary aggregates one repo.
 type ReplaySummary struct {
 	Repo        string         `json:"repo"`
 	Role        string         `json:"role"`
@@ -374,7 +374,7 @@ type ReplaySummary struct {
 	Viol        map[string]int `json:"violations"`
 }
 
-// SummarizeReplay tính tổng hợp cho từng repo và cho nhóm role ("" = tất cả; Repo="ALL").
+// SummarizeReplay computes the summary per repo and per role group ("" = all; Repo="ALL").
 func SummarizeReplay(rrs []RepoReplay, role string) ReplaySummary {
 	s := ReplaySummary{Repo: "ALL", Role: role, FullReasons: map[string]int{}, Viol: map[string]int{}}
 	if role == "" {
@@ -439,7 +439,7 @@ func foldReplay(s ReplaySummary, rs []RepoReplay) ReplaySummary {
 	return s
 }
 
-// WriteReplay ghi replay.json và replay.md.
+// WriteReplay writes replay.json and replay.md.
 func WriteReplay(dir string, rrs []RepoReplay) error {
 	var per []ReplaySummary
 	for _, r := range rrs {
@@ -482,7 +482,7 @@ func WriteReplay(dir string, rrs []RepoReplay) error {
 	return os.WriteFile(filepath.Join(dir, "replay.md"), []byte(md.String()), 0o644)
 }
 
-// Resummarize đọc replay.json, gán lại vai trò theo manifest và ghi lại báo cáo (không chạy lại gì).
+// Resummarize reads replay.json, reassigns roles from the manifest and rewrites the report (re-runs nothing).
 func Resummarize(dir string, m Manifest) error {
 	b, err := os.ReadFile(filepath.Join(dir, "replay.json"))
 	if err != nil {

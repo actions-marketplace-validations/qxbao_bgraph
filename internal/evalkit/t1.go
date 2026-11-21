@@ -21,21 +21,21 @@ import (
 	"github.com/qxbao/bgraph/internal/scancache"
 )
 
-// T1Config cấu hình lượt chạy T1.
+// T1Config configures a T1 run.
 type T1Config struct {
-	Work       string // thư mục làm việc: repos/, wt/, patches/, state/
-	Out        string // thư mục kết quả
+	Work       string // working directory: repos/, wt/, patches/, state/
+	Out        string // results directory
 	Tasks      []Task
 	Manifest   Manifest
 	Jobs       int
 	MaxPerRepo int
 	Resume     bool
-	Checkout   bool // true: dựng P/C bằng worktree như cũ (mặc định: index tạm, không checkout)
+	Checkout   bool // true: build P/C with a worktree as before (default: temporary index, no checkout)
 	Timeout    time.Duration
 	Log        func(format string, a ...any)
 }
 
-// T1Result là kết quả một nhiệm vụ.
+// T1Result is the result of one task.
 type T1Result struct {
 	ID       string     `json:"instance_id"`
 	Repo     string     `json:"repo"`
@@ -43,31 +43,31 @@ type T1Result struct {
 	Source   string     `json:"source,omitempty"`
 	Base     string     `json:"base_commit"`
 	P        string     `json:"p_commit,omitempty"`
-	Status   string     `json:"status"` // ok | full | violation | skipped:<lý do> | error:<lý do>
+	Status   string     `json:"status"` // ok | full | violation | skipped:<reason> | error:<reason>
 	Detail   string     `json:"detail,omitempty"`
 	F2P      int        `json:"f2p_count"`
 	Required []string   `json:"required,omitempty"`
 	Mapping  []MapEntry `json:"mapping,omitempty"`
 	Unmapped []string   `json:"unmapped_ids,omitempty"`
-	// FixtureReqs: các yêu cầu được xử lý theo quy tắc fixture (xem CheckRequired), kèm đơn vị thoả.
+	// FixtureReqs: requirements handled by the fixture rule (see CheckRequired), with the satisfying unit.
 	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
 
 	Scope     string           `json:"scope,omitempty"`
-	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → số lần
-	WideList  []model.Widening `json:"widening_list,omitempty"` // đầy đủ khi vi phạm, tối đa 12 khi không
+	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → count
+	WideList  []model.Widening `json:"widening_list,omitempty"` // complete on violation, at most 12 otherwise
 	Selected  int              `json:"selected"`
 	Units     int              `json:"units"`
 	Changed   []string         `json:"changed,omitempty"`
 	Missing   []string         `json:"missing,omitempty"`
 	Ms        int64            `json:"ms"`
-	TaskMs    int64            `json:"task_ms,omitempty"` // tổng thời gian task (dựng P/C + oracle + Select x2)
-	Path      string           `json:"path,omitempty"`    // index | worktree: cách dựng P/C
+	TaskMs    int64            `json:"task_ms,omitempty"` // total task time (building P/C + oracle + Select x2)
+	Path      string           `json:"path,omitempty"`    // index | worktree: how P/C was built
 	Fallback  string           `json:"fallback,omitempty"`
 	NonDeterm bool             `json:"nondeterministic,omitempty"`
 	Diag      []FileDiag       `json:"diag,omitempty"`
 }
 
-// FileDiag là chẩn đoán cho một tệp bắt buộc bị thiếu (chỉ để người đọc; không ảnh hưởng phán quyết).
+// FileDiag is a diagnosis for a missing required file (for human readers only; does not affect the verdict).
 type FileDiag struct {
 	File           string            `json:"file"`
 	Role           string            `json:"role"`
@@ -86,7 +86,7 @@ func (c *T1Config) logf(f string, a ...any) {
 	}
 }
 
-// SelectTasks chọn tất định tối đa MaxPerRepo task mỗi repo (xếp theo sha256(instance_id)), bỏ trùng (repo, base, patch).
+// SelectTasks deterministically picks at most MaxPerRepo tasks per repo (ordered by sha256(instance_id)), dropping duplicates (repo, base, patch).
 func SelectTasks(in []Task, maxPer int) []Task {
 	seen := map[string]bool{}
 	byRepo := map[string][]Task{}
@@ -115,7 +115,7 @@ func SelectTasks(in []Task, maxPer int) []Task {
 	return out
 }
 
-// RunT1 chạy mọi task; mỗi repo tuần tự (dùng chung thư mục state), các repo song song tới Jobs.
+// RunT1 runs every task; each repo sequentially (sharing the state directory), repos in parallel up to Jobs.
 func RunT1(ctx context.Context, cfg T1Config) ([]T1Result, error) {
 	if cfg.Jobs <= 0 {
 		cfg.Jobs = 4
@@ -233,7 +233,7 @@ func (rr *repoRunner) ensureMirror(ctx context.Context) error {
 	return rr.mErr
 }
 
-// run chạy một task. Mặc định dựng P/C bằng index tạm (không checkout); lỗi `git apply --cached` hoặc cờ Checkout → lối worktree cũ.
+// run runs one task. By default builds P/C with a temporary index (no checkout); a `git apply --cached` failure or the Checkout flag → the old worktree path.
 func (rr *repoRunner) run(ctx context.Context, t Task) T1Result {
 	t0 := time.Now()
 	var res T1Result
@@ -254,8 +254,8 @@ func (rr *repoRunner) run(ctx context.Context, t Task) T1Result {
 	return res
 }
 
-// runMode chạy một task theo lối index (useWT=false) hoặc worktree. fallback=true (chỉ lối index): không áp được patch bằng index,
-// res.Detail là lý do; người gọi chạy lại bằng worktree.
+// runMode runs one task via the index path (useWT=false) or the worktree path. fallback=true (index path only): the patch cannot be applied with the index,
+// res.Detail is the reason; the caller re-runs with a worktree.
 func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Result, fallback bool) {
 	role, _ := rr.cfg.Manifest.Role(t.Repo)
 	res = T1Result{ID: t.InstanceID, Repo: t.Repo, Role: role, Source: t.Source, Base: t.BaseCommit}
@@ -286,7 +286,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	}
 	rr.seq++
 	tag := fmt.Sprintf("%s_%d", repoDirName(rr.repo), rr.seq)
-	// dir: nơi chạy git đọc/ghi (mirror khi dùng index, worktree khi checkout); root mở bgraph.
+	// dir: where git reads/writes (the mirror when using the index, the worktree when checking out); root is where bgraph opens.
 	dir := rr.mirror
 	var ib *indexBuilder
 	var wt, gp string
@@ -345,7 +345,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.P = p
 	}
 
-	// Oracle (độc lập với bgraph): tệp test_patch đổi và còn tồn tại, chứa test FAIL_TO_PASS (đọc từ P bằng git, không từ cây làm việc).
+	// Oracle (independent of bgraph): files changed by test_patch that still exist and contain FAIL_TO_PASS tests (read from P with git, not from the working tree).
 	ns, err := git(ctx, dir, "diff", "--name-status", "--no-renames", "-z", t.BaseCommit, res.P)
 	if err != nil {
 		return skip("apply", err)
@@ -451,7 +451,7 @@ func fillSel(res *T1Result, sel model.Selection) {
 	}
 }
 
-// diagnose phân tích đồ thị tại P (chỉ để chẩn đoán vi phạm).
+// diagnose analyses the graph at P (only to diagnose violations).
 func diagnose(ctx context.Context, root, p string, missing, changed []string) []FileDiag {
 	r, err := gitx.Open(ctx, root)
 	if err != nil {
@@ -526,9 +526,9 @@ func diagnose(ctx context.Context, root, p string, missing, changed []string) []
 	return out
 }
 
-// ---- Tổng hợp ----
+// ---- Summary ----
 
-// T1Summary là số liệu tổng hợp một nhóm (dev/holdout/all).
+// T1Summary is the aggregate for one group (dev/holdout/all).
 type T1Summary struct {
 	Role        string         `json:"role"`
 	Attempted   int            `json:"attempted"`
@@ -544,15 +544,15 @@ type T1Summary struct {
 	MedianRatio float64        `json:"median_selected_over_units"`
 	P90Ratio    float64        `json:"p90_selected_over_units"`
 	FullReasons map[string]int `json:"full_reasons"`
-	Widenings   map[string]int `json:"widening_tasks"` // số task có lần nới "tier:reason"
+	Widenings   map[string]int `json:"widening_tasks"` // number of tasks with a "tier:reason" widening
 	UpperBound  string         `json:"violation_upper_bound_95,omitempty"`
 
-	FixtureTasks int `json:"fixture_tasks"` // số task có yêu cầu fixture
-	FixtureReqs  int `json:"fixture_reqs"`  // tổng số yêu cầu fixture
+	FixtureTasks int `json:"fixture_tasks"` // number of tasks with fixture requirements
+	FixtureReqs  int `json:"fixture_reqs"`  // total number of fixture requirements
 	FixtureSat   int `json:"fixture_reqs_satisfied"`
 }
 
-// Summarize tổng hợp kết quả theo vai trò ("" = tất cả).
+// Summarize aggregates results by role ("" = all).
 func Summarize(rs []T1Result, role string) T1Summary {
 	s := T1Summary{Role: role, Skipped: map[string]int{}, FullReasons: map[string]int{}, Widenings: map[string]int{}}
 	var ratios []float64
@@ -613,7 +613,7 @@ func Summarize(rs []T1Result, role string) T1Summary {
 	return s
 }
 
-// Percentile: phân vị p (0..100), nội suy gần nhất theo hạng.
+// Percentile: the p-th percentile (0..100), nearest-rank interpolation.
 func Percentile(v []float64, p float64) float64 {
 	if len(v) == 0 {
 		return 0
@@ -627,7 +627,7 @@ func Percentile(v []float64, p float64) float64 {
 	return c[i]
 }
 
-// WriteT1 ghi t1.json và t1.md.
+// WriteT1 writes t1.json and t1.md.
 func WriteT1(dir string, rs []T1Result) error {
 	sums := []T1Summary{Summarize(rs, "dev"), Summarize(rs, "holdout"), Summarize(rs, "")}
 	sums[2].Role = "all"

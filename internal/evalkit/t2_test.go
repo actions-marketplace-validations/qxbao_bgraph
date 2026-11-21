@@ -13,7 +13,7 @@ import (
 )
 
 func TestParseRunJSON(t *testing.T) {
-	// vitest: mục typecheck bị bỏ; tệp lặp ở nhiều project đỏ nếu có lượt đỏ; jest dùng đường dẫn Windows.
+	// vitest: typecheck entries are dropped; a file repeated across projects is red if any run is red; jest uses Windows paths.
 	js := `{"numTotalTests":3,"testResults":[
 	 {"name":"D:/r/src/a.test.ts","status":"passed","assertionResults":[{"meta":{}}]},
 	 {"name":"D:/r/src/a.test.ts","status":"failed","assertionResults":[{"meta":{}}]},
@@ -29,7 +29,7 @@ func TestParseRunJSON(t *testing.T) {
 		t.Fatalf("got %v %d", m, n)
 	}
 	if _, _, err := ParseRunJSON("D:/r", []byte(`{"testResults":[]}`)); err == nil {
-		t.Fatal("báo cáo rỗng phải là lỗi")
+		t.Fatal("an empty report must be an error")
 	}
 }
 
@@ -41,7 +41,7 @@ func TestApplyEdit(t *testing.T) {
 		t.Fatalf("%q %v", out, err)
 	}
 	if _, err := ApplyEdit(blob, T2Mutant{Start: 3, End: 99}); err == nil {
-		t.Fatal("ngoài phạm vi phải lỗi")
+		t.Fatal("out of range must error")
 	}
 }
 
@@ -56,14 +56,14 @@ func TestSelCovers(t *testing.T) {
 		}
 	}
 	if !selCovers(model.Selection{Tests: []model.SelectedTest{{Unit: "w", Project: ".", Whole: true}}}, "any/t.js") {
-		t.Error("Whole ở gốc phải bao mọi tệp")
+		t.Error("Whole at the root must cover every file")
 	}
 }
 
-// TestMutantCommit: M = R + đột biến, dựng bằng index tạm; cây làm việc không bị đụng; mode giữ nguyên; tất định.
+// TestMutantCommit: M = R + mutation, built with a temporary index; working tree untouched; mode preserved; deterministic.
 func TestMutantCommit(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("không có git")
+		t.Skip("git not available")
 	}
 	if err := SetupHermeticEnv(t.TempDir()); err != nil {
 		t.Fatal(err)
@@ -90,21 +90,21 @@ func TestMutantCommit(t *testing.T) {
 		t.Fatalf("blob trong M: %q", got)
 	}
 	if tgit(t, repo, "show", c1+":src/b.js") != "keep" || tgit(t, repo, "rev-parse", c1+"^") != r {
-		t.Fatal("M phải giữ tệp khác và có cha R")
+		t.Fatal("M must keep the other files and have parent R")
 	}
 	if b, _ := os.ReadFile(filepath.Join(repo, "src/a.js")); string(b) != "if (a === b) go()\n" {
-		t.Fatal("cây làm việc bị đụng")
+		t.Fatal("working tree was touched")
 	}
 	if tgit(t, repo, "status", "--porcelain") != "" {
-		t.Fatal("cây làm việc không sạch")
+		t.Fatal("working tree is not clean")
 	}
 	c2, _, err := rep.MutantCommit(context.Background(), repo, idx, m)
 	if err != nil || c2 != c1 {
-		t.Fatalf("không tất định: %s %s %v", c1, c2, err)
+		t.Fatalf("not deterministic: %s %s %v", c1, c2, err)
 	}
 	m.Blob = "deadbeef"
 	if _, _, err := rep.MutantCommit(context.Background(), repo, idx, m); err == nil {
-		t.Fatal("blob lệch phải lỗi (cache cũ)")
+		t.Fatal("a mismatched blob must error (stale cache)")
 	}
 }
 
@@ -124,14 +124,14 @@ func TestOracleStore(t *testing.T) {
 	}
 }
 
-// TestQuickMarkdownT2: vi phạm T2 hiện trong mục Vi phạm và được tính vào quick.
+// TestQuickMarkdownT2: a T2 violation shows up in the Violations section and is counted in quick.
 func TestQuickMarkdownT2(t *testing.T) {
 	c := T2Check{Rec: T2Record{Mutant: T2Mutant{ID: "zod-05", File: "src/a.ts", Line: 3, Op: "swap-op"}}, Scope: "graph", Missed: []string{"t/x.test.ts"}}
 	q := QuickResult{Violations: 1, T2: &T2Result{Violations: 1, Repos: []T2RepoResult{{Repo: T2Repo{Name: "colinhacks/zod"}, Violations: []T2Check{c}, Checks: []T2Check{c}}}}}
 	md := QuickMarkdown(q)
 	for _, want := range []string{"FAIL: 1 violations", "T2 colinhacks/zod zod-05", "## T2 (re-check on cached oracle"} {
 		if !strings.Contains(md, want) {
-			t.Errorf("thiếu %q trong:\n%s", want, md)
+			t.Errorf("missing %q in:\n%s", want, md)
 		}
 	}
 }

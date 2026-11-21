@@ -5,19 +5,19 @@ import (
 	"strings"
 )
 
-// FixtureReq ghi một yêu cầu dạng fixture (dữ liệu do runner test đọc, không phải đơn vị test) để kiểm toán oracle.
+// FixtureReq records a fixture-style requirement (data read by the test runner, not a test unit) for oracle auditing.
 type FixtureReq struct {
 	File        string `json:"file"`
 	Root        string `json:"test_root"`
-	SatisfiedBy string `json:"satisfied_by,omitempty"` // đơn vị test thoả; rỗng = không thoả
+	SatisfiedBy string `json:"satisfied_by,omitempty"` // satisfying test unit; empty = not satisfied
 }
 
-// SelUnit là một đơn vị test được chọn (tách khỏi model để oracle độc lập).
+// SelUnit is one selected test unit (decoupled from model so the oracle stays independent).
 type SelUnit struct {
 	Unit  string
 	Files []string
-	// WholeProject: đơn vị "chạy cả bộ test của dự án" (runner không nhận danh sách tệp) → thoả mọi yêu cầu nằm trong
-	// thư mục dự án. "." là cả repo.
+	// WholeProject: the unit "run the project's whole test suite" (the runner takes no file list) → satisfies every requirement inside
+	// the project directory. "." is the whole repo.
 	WholeProject string
 	Whole        bool
 }
@@ -27,11 +27,11 @@ var (
 	testRootDirs = map[string]bool{"test": true, "tests": true, "__tests__": true, "spec": true}
 )
 
-// fixtureRoot: nếu f nằm dưới thư mục fixture thì trả (thư mục fixtures ngoài cùng, test root, true).
-// Test root = tổ tiên gần nhất của thư mục fixtures tên test/tests/__tests__/spec; không có thì cha của thư mục fixtures.
+// fixtureRoot: if f lies under a fixture directory, returns (outermost fixtures directory, test root, true).
+// Test root = nearest ancestor of the fixtures directory named test/tests/__tests__/spec; if none, the parent of the fixtures directory.
 func fixtureRoot(f string) (fixDir, root string, ok bool) {
 	segs := strings.Split(path.Clean(strings.ReplaceAll(f, "\\", "/")), "/")
-	for i := 0; i < len(segs)-1; i++ { // đoạn cuối là tên tệp, không tính
+	for i := 0; i < len(segs)-1; i++ { // the last segment is the file name, not counted
 		if !fixtureDirs[segs[i]] {
 			continue
 		}
@@ -53,9 +53,9 @@ func under(p, dir string) bool {
 	return strings.HasPrefix(p, dir+"/")
 }
 
-// CheckRequired trả các tệp bắt buộc còn thiếu và danh sách yêu cầu fixture.
-// Yêu cầu thường: phải nằm trong Files (hoặc là ID) của một đơn vị được chọn.
-// Yêu cầu fixture: thoả khi có đơn vị được chọn có tệp trong cây test root (mọi độ sâu, trừ chính thư mục fixtures).
+// CheckRequired returns the required files still missing and the list of fixture requirements.
+// Normal requirement: must be in Files (or be the ID) of a selected unit.
+// Fixture requirement: satisfied when some selected unit has a file in the test root's tree (any depth, except the fixtures directory itself).
 func CheckRequired(req []string, sel []SelUnit) (missing []string, fixtures []FixtureReq) {
 	have := map[string]bool{}
 	for _, u := range sel {

@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// LoadIDList đọc danh sách instance_id (mỗi dòng một id; bỏ dòng trống và chú thích bắt đầu bằng #).
+// LoadIDList reads a list of instance_ids (one id per line; blank lines and comments starting with # are skipped).
 func LoadIDList(path string) ([]string, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -33,8 +33,8 @@ func LoadIDList(path string) ([]string, error) {
 	return out, sc.Err()
 }
 
-// SampleQuick chọn tất định mẫu phân tầng theo repo: mọi task trong regress (tìm trong all) cộng tối đa perRepo task khác mỗi repo
-// (từ capped = SelectTasks(all, cap), xếp theo sha256(instance_id)). Kết quả xếp theo repo rồi sha256(id).
+// SampleQuick deterministically picks a repo-stratified sample: every task in regress (looked up in all) plus at most perRepo other tasks per repo
+// (from capped = SelectTasks(all, cap), ordered by sha256(instance_id)). The result is ordered by repo then sha256(id).
 func SampleQuick(all, capped []Task, regress []string, perRepo int) (out []Task, missing []string) {
 	want := map[string]bool{}
 	for _, id := range regress {
@@ -74,34 +74,34 @@ func SampleQuick(all, capped []Task, regress []string, perRepo int) (out []Task,
 	return out, missing
 }
 
-// QuickConfig cấu hình bộ đánh giá nhanh.
+// QuickConfig configures the quick evaluation.
 type QuickConfig struct {
 	Work, Out string
-	Tasks     []Task // mẫu T1 đã chọn
+	Tasks     []Task // selected T1 sample
 	Manifest  Manifest
 	Replay    []string // repo replay
 	Commits   int
 	Jobs      int
 	Checkout  bool
-	Serial    bool   // chạy T1 rồi replay thay vì song song
-	T2Dir     string // thư mục gốc T2; có oracle.jsonl thì kiểm lại T2 trên oracle cache (rỗng = bỏ qua)
+	Serial    bool   // run T1 then replay instead of in parallel
+	T2Dir     string // T2 root directory; if oracle.jsonl exists, re-checks T2 against the cached oracle (empty = skip)
 	T2        T2Manifest
 	Log       func(format string, a ...any)
 }
 
-// QuickResult là kết quả gộp.
+// QuickResult is the combined result.
 type QuickResult struct {
 	T1         []T1Result
 	Replay     []RepoReplay
 	T1Wall     time.Duration
 	ReplayWall time.Duration
 	Wall       time.Duration
-	Violations int // vi phạm T1 + T2 + bất biến replay
+	Violations int // T1 + T2 violations + replay invariants
 	T2         *T2Result
 	T2Wall     time.Duration
 }
 
-// RunQuick chạy T1 (mẫu) và replay, ghi quick.md cùng t1/ và replay/ trong Out.
+// RunQuick runs T1 (sample) and replay, writing quick.md plus t1/ and replay/ in Out.
 func RunQuick(ctx context.Context, cfg QuickConfig) (QuickResult, error) {
 	start := time.Now()
 	var qr QuickResult
@@ -179,7 +179,7 @@ func RunQuick(ctx context.Context, cfg QuickConfig) (QuickResult, error) {
 	return qr, err
 }
 
-// QuickMarkdown dựng báo cáo gộp: vi phạm trước, rồi trung vị chọn lọc theo repo và thời gian.
+// QuickMarkdown builds the combined report: violations first, then selectivity medians per repo and timing.
 func QuickMarkdown(q QuickResult) string {
 	var b strings.Builder
 	verdict := "PASS (no violations)"

@@ -22,22 +22,22 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// T2 (mục 10.2 của docs/plan.md): oracle đột biến. Gieo MỘT lỗi vào một dòng của tệp nguồn tại R (commit M = R + lỗi, dựng bằng index tạm,
-// không checkout), chạy cả bộ test đơn vị trên cây làm việc có lỗi, lấy tập tệp test ĐỎ (trừ tệp hỏng/flaky sẵn ở R). Mọi tệp đỏ phải nằm
-// trong phần chọn của Select(R→M). Oracle KHÔNG phụ thuộc bgraph; kết quả lưu cache (oracle.jsonl) để lần sau chỉ chạy lại bgraph.
+// T2 (section 10.2 of docs/plan.md): mutation oracle. Seeds ONE bug into one line of a source file at R (commit M = R + bug, built with a temporary index,
+// no checkout), runs the whole unit-test suite on the buggy working tree, and collects the set of RED test files (minus files already broken/flaky at R). Every red file must be
+// in the selection of Select(R→M). The oracle does NOT depend on bgraph; results are cached (oracle.jsonl) so later runs only re-run bgraph.
 
 //go:embed mutate.cjs
 var mutateScript []byte
 
-// T2Repo là một repo trong manifest T2.
+// T2Repo is one repo in the T2 manifest.
 type T2Repo struct {
 	Name       string   `json:"name"`
-	Dir        string   `json:"dir"`    // thư mục checkout, tương đối thư mục gốc T2
-	Remote     string   `json:"remote"` // chỉ để tài liệu/clone
-	R          string   `json:"r"`      // SHA gốc (cây sạch)
+	Dir        string   `json:"dir"`    // checkout directory, relative to the T2 root
+	Remote     string   `json:"remote"` // documentation/clone only
+	R          string   `json:"r"`      // base SHA (clean tree)
 	Runner     string   `json:"runner"` // vitest | jest
-	Bin        string   `json:"bin"`    // script JS của runner, tương đối checkout, chạy bằng node
-	Args       []string `json:"args"`   // đối số chạy toàn bộ bộ test (trước cờ reporter)
+	Bin        string   `json:"bin"`    // the runner's JS script, relative to the checkout, run with node
+	Args       []string `json:"args"`   // arguments to run the whole test suite (before the reporter flag)
 	NativeArgs []string `json:"native_args"`
 	NativeNote string   `json:"native_note,omitempty"`
 	Install    string   `json:"install,omitempty"`
@@ -49,15 +49,15 @@ type T2Repo struct {
 	Env        []string `json:"env,omitempty"`
 }
 
-// T2Manifest là manifest repo T2.
+// T2Manifest is the T2 repo manifest.
 type T2Manifest struct {
 	Version int      `json:"version"`
-	TS      string   `json:"ts"` // thư mục typescript cho bộ sinh đột biến, tương đối thư mục gốc T2
+	TS      string   `json:"ts"` // typescript directory for the mutation generator, relative to the T2 root
 	Notes   string   `json:"notes,omitempty"`
 	Repos   []T2Repo `json:"repos"`
 }
 
-// LoadT2Manifest đọc manifest T2.
+// LoadT2Manifest reads the T2 manifest.
 func LoadT2Manifest(p string) (T2Manifest, error) {
 	var m T2Manifest
 	b, err := os.ReadFile(p)
@@ -67,7 +67,7 @@ func LoadT2Manifest(p string) (T2Manifest, error) {
 	return m, json.Unmarshal(b, &m)
 }
 
-// T2Mutant là một đột biến: thay byte [Start,End) của blob tại R bằng Repl.
+// T2Mutant is one mutation: replaces bytes [Start,End) of the blob at R with Repl.
 type T2Mutant struct {
 	ID     string `json:"id"`
 	File   string `json:"file"`
@@ -78,10 +78,10 @@ type T2Mutant struct {
 	Repl   string `json:"repl"`
 	Before string `json:"before"`
 	After  string `json:"after"`
-	Blob   string `json:"blob"` // OID blob của tệp tại R (phát hiện cache cũ)
+	Blob   string `json:"blob"` // blob OID of the file at R (detects a stale cache)
 }
 
-// T2Record là một dòng của oracle.jsonl.
+// T2Record is one line of oracle.jsonl.
 type T2Record struct {
 	Repo   string   `json:"repo"`
 	R      string   `json:"r"`
@@ -89,11 +89,11 @@ type T2Record struct {
 	Commit string   `json:"commit,omitempty"` // M
 	// Status: killed | survived | timeout | error
 	Status         string   `json:"status"`
-	Red            []string `json:"red,omitempty"`             // tệp test đỏ (đã trừ tệp loại)
-	Confirmed      bool     `json:"confirmed,omitempty"`       // Red đã được xác nhận bằng chạy lại riêng các tệp đỏ
-	RedUnconfirmed []string `json:"red_unconfirmed,omitempty"` // đỏ ở lượt đầy đủ nhưng không tái hiện (flaky do tải)
-	RedExcluded    []string `json:"red_excluded,omitempty"`    // đỏ nhưng thuộc tệp hỏng/flaky sẵn
-	Native         []string `json:"native,omitempty"`          // tập "related" của công cụ gốc
+	Red            []string `json:"red,omitempty"`             // red test files (excluded files already removed)
+	Confirmed      bool     `json:"confirmed,omitempty"`       // Red was confirmed by re-running just the red files
+	RedUnconfirmed []string `json:"red_unconfirmed,omitempty"` // red in the full run but not reproduced (load-induced flakiness)
+	RedExcluded    []string `json:"red_excluded,omitempty"`    // red but belongs to files already broken/flaky
+	Native         []string `json:"native,omitempty"`          // the original tool's "related" set
 	NativeErr      string   `json:"native_err,omitempty"`
 	Detail         string   `json:"detail,omitempty"`
 	TestFiles      int      `json:"test_files,omitempty"`
@@ -102,13 +102,13 @@ type T2Record struct {
 
 func (r T2Record) key() string { return r.Repo + "|" + r.R + "|" + r.Mutant.ID }
 
-// T2Baseline là kết quả 3 lượt chạy ở R.
+// T2Baseline is the result of 3 runs at R.
 type T2Baseline struct {
 	Repo    string   `json:"repo"`
 	R       string   `json:"r"`
 	Files   int      `json:"files"`
-	Failing []string `json:"failing"` // đỏ cả 3 lượt
-	Flaky   []string `json:"flaky"`   // kết quả khác nhau giữa các lượt (hoặc vắng mặt)
+	Failing []string `json:"failing"` // red in all 3 runs
+	Flaky   []string `json:"flaky"`   // results differ between runs (or absent)
 	RunMs   []int64  `json:"run_ms"`
 	Tests   int      `json:"tests,omitempty"`
 }
@@ -124,7 +124,7 @@ func (b T2Baseline) excluded() map[string]bool {
 	return m
 }
 
-// ---- chạy tiến trình ----
+// ---- running processes ----
 
 func killTree(cmd *exec.Cmd) {
 	if cmd.Process == nil {
@@ -137,7 +137,7 @@ func killTree(cmd *exec.Cmd) {
 	cmd.Process.Kill()
 }
 
-// runProc chạy name args trong dir; quá timeout thì giết cả cây tiến trình. Trả stdout, đuôi stderr.
+// runProc runs name args in dir; on timeout kills the whole process tree. Returns stdout and the stderr tail.
 func runProc(ctx context.Context, dir string, env []string, timeout time.Duration, name string, args ...string) (stdout string, tail string, timedOut bool, err error) {
 	cmd := exec.Command(name, args...)
 	cmd.Dir = dir
@@ -169,7 +169,7 @@ func runProc(ctx context.Context, dir string, env []string, timeout time.Duratio
 	return out.String(), tail, timedOut, err
 }
 
-// ---- đọc kết quả runner ----
+// ---- reading runner results ----
 
 type runJSON struct {
 	TestResults []struct {
@@ -184,7 +184,7 @@ type runJSON struct {
 	NumTotalTests int `json:"numTotalTests"`
 }
 
-// relPath chuẩn hoá đường dẫn tuyệt đối của runner về dạng tương đối root, dấu /.
+// relPath normalises an absolute runner path to a root-relative path with / separators.
 func relPath(root, p string) string {
 	p = strings.ReplaceAll(p, "\\", "/")
 	root = strings.TrimSuffix(strings.ReplaceAll(root, "\\", "/"), "/")
@@ -194,8 +194,8 @@ func relPath(root, p string) string {
 	return p
 }
 
-// ParseRunJSON đọc báo cáo JSON của vitest/jest thành map tệp → passed|failed|skipped. Mục typecheck của vitest bị bỏ.
-// Một tệp xuất hiện nhiều lần (nhiều project) thì đỏ nếu có lượt đỏ.
+// ParseRunJSON reads a vitest/jest JSON report into a map file → passed|failed|skipped. vitest's typecheck entries are dropped.
+// A file appearing several times (several projects) is red if any run is red.
 func ParseRunJSON(root string, b []byte) (map[string]string, int, error) {
 	var r runJSON
 	if err := json.Unmarshal(b, &r); err != nil {
@@ -229,7 +229,7 @@ func ParseRunJSON(root string, b []byte) (map[string]string, int, error) {
 	return out, r.NumTotalTests, nil
 }
 
-// runSuite chạy cả bộ test, trả trạng thái từng tệp.
+// runSuite runs the whole test suite and returns each file's status.
 func (r T2Repo) runSuite(ctx context.Context, root, tmp string, timeout time.Duration, only []string) (map[string]string, int, time.Duration, bool, string, error) {
 	os.MkdirAll(tmp, 0o755)
 	of := filepath.Join(tmp, "run.json")
@@ -265,7 +265,7 @@ func (r T2Repo) runSuite(ctx context.Context, root, tmp string, timeout time.Dur
 	return m, n, d, false, "", nil
 }
 
-// runNative tính tập "related" của công cụ gốc cho thay đổi hiện có trên cây làm việc, không chạy test.
+// runNative computes the original tool's "related" set for the current change in the working tree, without running tests.
 func (r T2Repo) runNative(ctx context.Context, root, tmp, file string) ([]string, error) {
 	os.MkdirAll(tmp, 0o755)
 	args := []string{r.Bin}
@@ -325,13 +325,13 @@ func dedup(s []string) []string {
 
 // ---- kho oracle ----
 
-// OracleStore là oracle.jsonl: thêm dòng khi xong từng đột biến; khi đọc, dòng sau thắng.
+// OracleStore is oracle.jsonl: a line is appended as each mutation finishes; on read, later lines win.
 type OracleStore struct {
 	Path string
 	mu   sync.Mutex
 }
 
-// Load đọc mọi bản ghi (dòng sau ghi đè dòng trước cùng khoá), theo thứ tự xuất hiện đầu tiên.
+// Load reads all records (a later line overrides an earlier one with the same key), in order of first appearance.
 func (s *OracleStore) Load() ([]T2Record, error) {
 	f, err := os.Open(s.Path)
 	if err != nil {
@@ -360,7 +360,7 @@ func (s *OracleStore) Load() ([]T2Record, error) {
 	return out, sc.Err()
 }
 
-// Append ghi thêm một bản ghi.
+// Append writes one more record.
 func (s *OracleStore) Append(r T2Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -374,9 +374,9 @@ func (s *OracleStore) Append(r T2Record) error {
 	return err
 }
 
-// ---- dựng đột biến ----
+// ---- building mutations ----
 
-// ApplyEdit áp đột biến lên nội dung blob.
+// ApplyEdit applies a mutation to blob content.
 func ApplyEdit(blob []byte, m T2Mutant) ([]byte, error) {
 	if m.Start < 0 || m.End < m.Start || m.End > len(blob) {
 		return nil, fmt.Errorf("mutant %s is outside the blob range", m.ID)
@@ -398,7 +398,7 @@ func (r T2Repo) blob(ctx context.Context, root, file string) ([]byte, string, er
 	return b, strings.TrimSpace(oid), err
 }
 
-// MutantCommit dựng commit M = R + đột biến bằng index tạm (không checkout). Tất định nhờ môi trường git kín.
+// MutantCommit builds commit M = R + mutation with a temporary index (no checkout). Deterministic thanks to the hermetic git environment.
 func (r T2Repo) MutantCommit(ctx context.Context, root, idxDir string, m T2Mutant) (commit string, mutated []byte, err error) {
 	blob, oid, err := r.blob(ctx, root, m.File)
 	if err != nil {
@@ -418,7 +418,7 @@ func (r T2Repo) MutantCommit(ctx context.Context, root, idxDir string, m T2Mutan
 	return c, mutated, err
 }
 
-// GenMutants chạy bộ sinh đột biến tất định (node + typescript).
+// GenMutants runs the deterministic mutation generator (node + typescript).
 func (r T2Repo) GenMutants(ctx context.Context, t2Dir string, ts string, root string) ([]T2Mutant, error) {
 	sdir := filepath.Join(t2Dir, "scripts")
 	os.MkdirAll(sdir, 0o755)
@@ -446,18 +446,18 @@ func (r T2Repo) GenMutants(ctx context.Context, t2Dir string, ts string, root st
 	return ms, nil
 }
 
-// ---- xây oracle ----
+// ---- building the oracle ----
 
-// T2Config cấu hình chạy T2.
+// T2Config configures a T2 run.
 type T2Config struct {
-	Dir        string // thư mục gốc T2 (checkout, tools, state, oracle.jsonl)
-	Out        string // thư mục báo cáo
+	Dir        string // T2 root directory (checkout, tools, state, oracle.jsonl)
+	Out        string // report directory
 	Manifest   T2Manifest
-	Repos      []string // rỗng = tất cả
-	RunTests   bool     // xây/làm mới oracle (chạy test)
+	Repos      []string // empty = all
+	RunTests   bool     // build/refresh the oracle (run tests)
 	Rebaseline bool
-	Rebuild    bool // bỏ cache oracle của repo, chạy lại mọi đột biến
-	Reconfirm  bool // xác nhận lại các đột biến killed chưa xác nhận (chạy riêng tệp đỏ), không chạy lại bộ đầy đủ
+	Rebuild    bool // drop the repo's oracle cache, re-run every mutation
+	Reconfirm  bool // re-confirm killed mutations not yet confirmed (re-run just the red files), without re-running the full suite
 	Log        func(format string, a ...any)
 }
 
@@ -502,7 +502,7 @@ func (r T2Repo) ensureClean(ctx context.Context, root string) error {
 	if strings.TrimSpace(h) != r.R {
 		return fmt.Errorf("%s: HEAD %s differs from R %s", r.Name, strings.TrimSpace(h), r.R)
 	}
-	// Phục hồi cây (lần chạy trước có thể bị ngắt giữa chừng).
+	// Restore the tree (a previous run may have been interrupted midway).
 	if _, err := git(ctx, root, "checkout", "-q", "--", "."); err != nil {
 		return err
 	}
@@ -516,7 +516,7 @@ func (r T2Repo) ensureClean(ctx context.Context, root string) error {
 	return nil
 }
 
-// Baseline chạy bộ test 3 lần ở R; tệp đỏ cả 3 lượt = hỏng sẵn, kết quả không đồng nhất = flaky.
+// Baseline runs the test suite 3 times at R; a file red in all 3 runs = already broken, inconsistent results = flaky.
 func (r T2Repo) Baseline(ctx context.Context, cfg *T2Config, root string) (T2Baseline, error) {
 	bp := filepath.Join(cfg.Dir, "baseline-"+r.Dir+".json")
 	if !cfg.Rebaseline {
@@ -575,7 +575,7 @@ func (r T2Repo) Baseline(ctx context.Context, cfg *T2Config, root string) (T2Bas
 	return bl, nil
 }
 
-// BuildOracle chạy các đột biến chưa có trong oracle.jsonl (tuần tự trong repo: cây làm việc chỉ có một đột biến tại một thời điểm).
+// BuildOracle runs the mutations not yet in oracle.jsonl (sequential within a repo: the working tree holds only one mutation at a time).
 func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleStore, have map[string]T2Record) error {
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -691,27 +691,27 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 	return r.ensureClean(ctx, root)
 }
 
-// ---- kiểm bgraph ----
+// ---- checking bgraph ----
 
-// T2Check là kết quả kiểm một đột biến với bgraph.
+// T2Check is the result of checking one mutation against bgraph.
 type T2Check struct {
 	Rec        T2Record         `json:"rec"`
 	Scope      string           `json:"scope,omitempty"`
 	Selected   int              `json:"selected"`
 	Units      int              `json:"units"`
-	Missed     []string         `json:"missed,omitempty"`      // tệp đỏ ngoài phần chọn (vi phạm)
-	NativeOnly []string         `json:"native_only,omitempty"` // tệp của công cụ gốc không có trong phần chọn của bgraph
+	Missed     []string         `json:"missed,omitempty"`      // red files outside the selection (violation)
+	NativeOnly []string         `json:"native_only,omitempty"` // original-tool files absent from bgraph's selection
 	Widenings  map[string]int   `json:"widenings,omitempty"`
 	WideList   []model.Widening `json:"widening_list,omitempty"`
-	Diag       []FileDiag       `json:"diag,omitempty"` // chẩn đoán tệp bị thiếu (vi phạm) hoặc native-only
-	Near       []string         `json:"near,omitempty"` // chuỗi lý do của các test gần tệp bị thiếu
+	Diag       []FileDiag       `json:"diag,omitempty"` // diagnosis of missing (violation) or native-only files
+	Near       []string         `json:"near,omitempty"` // reason chains of the tests near the missing file
 	Err        string           `json:"err,omitempty"`
 	Ms         int64            `json:"ms"`
 }
 
 func (c T2Check) Full() bool { return c.Scope == string(model.TierFull) }
 
-// selCovers cho biết phần chọn có chứa tệp test f: là Files/ID của một đơn vị, hoặc một đơn vị Whole bao dự án chứa f.
+// selCovers reports whether the selection contains test file f: it is the Files/ID of a unit, or a Whole unit whose project encloses f.
 func selCovers(sel model.Selection, f string) bool {
 	for _, u := range sel.Tests {
 		if u.Unit == f {
@@ -729,7 +729,7 @@ func selCovers(sel model.Selection, f string) bool {
 	return false
 }
 
-// CheckMutant chạy Select(R→M) và so với oracle.
+// CheckMutant runs Select(R→M) and compares with the oracle.
 func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir string, rec T2Record) T2Check {
 	ck := T2Check{Rec: rec}
 	t0 := time.Now()
@@ -793,7 +793,7 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 	return ck
 }
 
-// T2RepoResult là kết quả một repo.
+// T2RepoResult is the result for one repo.
 type T2RepoResult struct {
 	Repo                 T2Repo     `json:"repo"`
 	Baseline             T2Baseline `json:"baseline"`
@@ -802,7 +802,7 @@ type T2RepoResult struct {
 	Survived             int        `json:"survived"`
 	Timeout              int        `json:"timeout"`
 	Errors               int        `json:"errors"`
-	Full                 int        `json:"full"` // đột biến bị nới full (không tính bằng chứng)
+	Full                 int        `json:"full"` // mutations widened to full (evidence not counted)
 	Violations           []T2Check  `json:"violations"`
 	NativeNotSubset      []T2Check  `json:"native_not_subset"`
 	MedBgraph, MedNative float64
@@ -810,7 +810,7 @@ type T2RepoResult struct {
 	Error                string `json:"error,omitempty"`
 }
 
-// T2Result là kết quả mọi repo.
+// T2Result is the result for all repos.
 type T2Result struct {
 	Repos      []T2RepoResult `json:"repos"`
 	Wall       time.Duration  `json:"wall"`
@@ -818,7 +818,7 @@ type T2Result struct {
 	Violations int            `json:"violations"`
 }
 
-// RunT2 xây oracle (nếu RunTests) rồi kiểm bgraph trên oracle đã cache. Các repo chạy song song.
+// RunT2 builds the oracle (if RunTests) then checks bgraph against the cached oracle. Repos run in parallel.
 func RunT2(ctx context.Context, cfg T2Config) (T2Result, error) {
 	start := time.Now()
 	store := &OracleStore{Path: cfg.oraclePath()}
@@ -930,8 +930,8 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 	rr.MedBgraph, rr.MedNative = Percentile(bg, 50), Percentile(nv, 50)
 }
 
-// confirmRed xác nhận các tệp đỏ ở lượt đầy đủ: chạy lại RIÊNG các tệp đó (2 lượt, trên cây đang có đột biến); chỉ tệp đỏ ở cả hai lượt
-// mới là đỏ. Tệp đỏ một lần rồi xanh (hết thời hạn do tải máy, thứ tự chạy...) vào RedUnconfirmed và không dùng làm oracle.
+// confirmRed confirms the files red in the full run: re-runs JUST those files (2 runs, on the tree with the mutation); only files red in both runs
+// are red. A file red once then green (timeout from machine load, run order...) goes to RedUnconfirmed and is not used as oracle.
 func (r T2Repo) confirmRed(ctx context.Context, root, tmp string, timeout time.Duration, rec *T2Record) error {
 	cand := append(append([]string(nil), rec.Red...), rec.RedUnconfirmed...)
 	sort.Strings(cand)
@@ -968,7 +968,7 @@ func (r T2Repo) confirmRed(ctx context.Context, root, tmp string, timeout time.D
 	return nil
 }
 
-// Reconfirm xác nhận lại các đột biến "killed" chưa xác nhận trong oracle cache (không chạy lại bộ đầy đủ).
+// Reconfirm re-confirms "killed" mutations not yet confirmed in the oracle cache (does not re-run the full suite).
 func (r T2Repo) Reconfirm(ctx context.Context, cfg *T2Config, store *OracleStore, have map[string]T2Record) error {
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {

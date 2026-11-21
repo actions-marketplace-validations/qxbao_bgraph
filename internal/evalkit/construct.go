@@ -7,16 +7,16 @@ import (
 	"strings"
 )
 
-// indexBuilder dựng các commit P (base + test_patch) và C (P + patch vàng) chỉ bằng git plumbing trên một tệp index tạm
-// (GIT_INDEX_FILE): không checkout, không đụng cây làm việc. Commit-tree dùng môi trường git kín của tiến trình
-// (tác giả/ngày cố định) nên P có cùng OID với cách `git commit` cũ trên worktree.
+// indexBuilder builds the P (base + test_patch) and C (P + gold patch) commits purely with git plumbing on a temporary index file
+// (GIT_INDEX_FILE): no checkout, working tree untouched. Commit-tree uses the process's hermetic git environment
+// (fixed author/date), so P has the same OID as the old `git commit` approach on a worktree.
 type indexBuilder struct {
-	repo  string // thư mục repo (kho chứa đối tượng)
-	idx   string // đường dẫn tệp index tạm
+	repo  string // repo directory (object store)
+	idx   string // path of the temporary index file
 	env   []string
 	base  string
-	tree  string // cây hiện tại của index
-	Head  string // commit hiện tại (base, rồi P, rồi C)
+	tree  string // current tree of the index
+	Head  string // current commit (base, then P, then C)
 	ready bool
 }
 
@@ -37,7 +37,7 @@ func (b *indexBuilder) init(ctx context.Context) error {
 	return nil
 }
 
-// SetFile thay nội dung một tệp có sẵn (giữ mode) rồi ghi cây và commit mới có cha là Head hiện tại. Dùng cho T2 (đột biến).
+// SetFile replaces the content of an existing file (keeping its mode), then writes the tree and a new commit whose parent is the current Head. Used by T2 (mutation).
 func (b *indexBuilder) SetFile(ctx context.Context, path string, content []byte, msg string) (string, error) {
 	if err := b.init(ctx); err != nil {
 		return "", err
@@ -75,7 +75,7 @@ func (b *indexBuilder) commit(ctx context.Context, msg string) (string, error) {
 	return b.Head, nil
 }
 
-// Apply áp patch vào index (git apply --cached --binary) rồi ghi cây và commit mới có cha là Head hiện tại.
+// Apply applies a patch to the index (git apply --cached --binary), then writes the tree and a new commit whose parent is the current Head.
 func (b *indexBuilder) Apply(ctx context.Context, patch, msg string) (string, error) {
 	if err := b.init(ctx); err != nil {
 		return "", err

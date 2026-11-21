@@ -1,5 +1,5 @@
-// Package evalkit là bộ đánh giá ngoài của bgraph (mục 10.2 của docs/plan.md): oracle cứng T1 (FAIL_TO_PASS) và phát lại
-// lịch sử commit kèm bất biến RTSCheck. Oracle KHÔNG phụ thuộc bgraph: nó chỉ dùng git và nội dung tệp.
+// Package evalkit is bgraph's external evaluation kit (section 10.2 of docs/plan.md): the hard T1 oracle (FAIL_TO_PASS) and commit-history replay
+// with the RTSCheck invariants. The oracle does NOT depend on bgraph: it only uses git and file contents.
 package evalkit
 
 import (
@@ -12,8 +12,8 @@ import (
 	"strings"
 )
 
-// SetupHermeticEnv đặt môi trường git kín cho cả tiến trình này lẫn mọi git mà bgraph khởi chạy: không đọc cấu hình hệ thống/
-// người dùng, tác giả cố định, core.autocrlf=false, core.longpaths=true, không hỏi mật khẩu. emptyCfgDir chứa tệp cấu hình rỗng.
+// SetupHermeticEnv sets up a hermetic git environment for this process and for every git that bgraph launches: no system/
+// user config, fixed author, core.autocrlf=false, core.longpaths=true, no password prompts. emptyCfgDir holds an empty config file.
 func SetupHermeticEnv(emptyCfgDir string) error {
 	if err := os.MkdirAll(emptyCfgDir, 0o755); err != nil {
 		return err
@@ -48,12 +48,12 @@ func SetupHermeticEnv(emptyCfgDir string) error {
 	return nil
 }
 
-// git chạy git trong dir và trả stdout. Lỗi chứa stderr.
+// git runs git in dir and returns stdout. The error contains stderr.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	return gitIn(ctx, dir, nil, "", args...)
 }
 
-// gitIn như git nhưng thêm biến môi trường env (KEY=VALUE) và đưa stdin vào (nếu khác rỗng).
+// gitIn is like git but adds environment variables env (KEY=VALUE) and feeds stdin (if non-empty).
 func gitIn(ctx context.Context, dir string, env []string, stdin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir

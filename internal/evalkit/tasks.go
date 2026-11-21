@@ -11,7 +11,7 @@ import (
 	"strings"
 )
 
-// Task là một nhiệm vụ T1 đã chuẩn hoá.
+// Task is a normalised T1 task.
 type Task struct {
 	InstanceID string          `json:"instance_id"`
 	Repo       string          `json:"repo"`
@@ -22,7 +22,7 @@ type Task struct {
 	Source     string          `json:"source,omitempty"`
 }
 
-// ParseF2P đọc FAIL_TO_PASS: mảng JSON, chuỗi chứa mảng JSON, hoặc chuỗi kiểu literal list của Python ('a', "b").
+// ParseF2P reads FAIL_TO_PASS: a JSON array, a string containing a JSON array, or a Python list-literal-style string ('a', "b").
 func ParseF2P(raw json.RawMessage) ([]string, error) {
 	var arr []string
 	if err := json.Unmarshal(raw, &arr); err == nil {
@@ -112,7 +112,7 @@ func parsePyList(s string) ([]string, error) {
 	}
 }
 
-// LoadTasks đọc JSONL.
+// LoadTasks reads JSONL.
 func LoadTasks(path string) ([]Task, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -139,7 +139,7 @@ func LoadTasks(path string) ([]Task, error) {
 
 func sha(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:]) }
 
-// Manifest là danh sách repo của một hệ sinh thái với vai trò dev/holdout (mục 10.2: tách theo REPO).
+// Manifest is the list of repos of one ecosystem with dev/holdout roles (section 10.2: split by REPO).
 type Manifest struct {
 	Ecosystem string         `json:"ecosystem"`
 	Version   int            `json:"version"`
@@ -149,7 +149,7 @@ type Manifest struct {
 	Repos     []ManifestRepo `json:"repos"`
 }
 
-// DatasetInfo mô tả nguồn dữ liệu.
+// DatasetInfo describes the data source.
 type DatasetInfo struct {
 	Name     string `json:"name"`
 	URL      string `json:"url"`
@@ -157,7 +157,7 @@ type DatasetInfo struct {
 	Notes    string `json:"notes,omitempty"`
 }
 
-// ManifestRepo là một repo trong manifest.
+// ManifestRepo is one repo in the manifest.
 type ManifestRepo struct {
 	Name    string   `json:"name"`
 	Role    string   `json:"role"` // dev | holdout
@@ -166,10 +166,10 @@ type ManifestRepo struct {
 	Sources []string `json:"sources,omitempty"`
 }
 
-// SplitRule mô tả luật chia dev/holdout.
+// SplitRule describes the dev/holdout split rule.
 const SplitRule = "sort repos (lowercased) by ascending sha256(name); index i%3==2 (every 3rd repo) is holdout, the rest dev"
 
-// BuildManifest dựng manifest tất định từ tập repo (hợp của repo T1 và repo replay).
+// BuildManifest builds a deterministic manifest from a set of repos (union of the T1 repos and the replay repos).
 func BuildManifest(t1 map[string]*ManifestRepo, replay []string, ds []DatasetInfo, capPer int) Manifest {
 	all := map[string]*ManifestRepo{}
 	for k, v := range t1 {
@@ -201,7 +201,7 @@ func BuildManifest(t1 map[string]*ManifestRepo, replay []string, ds []DatasetInf
 	return m
 }
 
-// Role trả vai trò của repo (so khớp không phân biệt hoa thường).
+// Role returns the repo's role (case-insensitive match).
 func (m Manifest) Role(repo string) (string, bool) {
 	for _, r := range m.Repos {
 		if strings.EqualFold(r.Name, repo) {
@@ -211,7 +211,7 @@ func (m Manifest) Role(repo string) (string, bool) {
 	return "", false
 }
 
-// LoadManifest đọc manifest.
+// LoadManifest reads the manifest.
 func LoadManifest(path string) (Manifest, error) {
 	var m Manifest
 	b, err := os.ReadFile(path)

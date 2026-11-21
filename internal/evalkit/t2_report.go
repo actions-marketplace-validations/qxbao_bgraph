@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// T2Markdown dựng báo cáo T2: vi phạm trước, rồi bảng theo repo, rồi chi tiết "native ⊄ bgraph".
+// T2Markdown builds the T2 report: violations first, then a per-repo table, then "native ⊄ bgraph" details.
 func T2Markdown(q T2Result) string {
 	var b strings.Builder
 	verdict := "PASS (0 T2 violations)"
@@ -103,7 +103,7 @@ func short(s string) string {
 	return s
 }
 
-// WriteT2 ghi t2.json và t2.md vào dir.
+// WriteT2 writes t2.json and t2.md into dir.
 func WriteT2(dir string, q T2Result) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
