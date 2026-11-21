@@ -218,7 +218,8 @@ func DotnetAffectedTask(ctx context.Context, cfg DotnetAffectedConfig, mirror st
 	t0 := time.Now()
 	tctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
-	args := []string{"-p", wt, "--from", p, "--uncommitted", "None", "-f", "json", "--dry-run"}
+	base := []string{"-p", wt, "--from", p, "--uncommitted", "None", "-f", "json", "--dry-run"}
+	args := base
 	var out, errOut string
 	var excluded []string
 	for attempt := 0; ; attempt++ {
@@ -233,7 +234,12 @@ func DotnetAffectedTask(ctx context.Context, cfg DotnetAffectedConfig, mirror st
 			break
 		}
 		excluded = append(excluded, m[1])
-		args = append(args[:len(args):len(args)], "--exclude-discovery", "^"+regexp.QuoteMeta(m[1])+"$")
+		quoted := make([]string, len(excluded))
+		for i, e := range excluded {
+			quoted[i] = regexp.QuoteMeta(e)
+		}
+		// One option only: the tool takes a single regular expression.
+		args = append(base[:len(base):len(base)], "--exclude-discovery", "^("+strings.Join(quoted, "|")+")$")
 		row.Excluded = append(row.Excluded, filepath.ToSlash(strings.TrimPrefix(m[1], wt+string(filepath.Separator))))
 	}
 	row.ToolMs = time.Since(t0).Milliseconds()
