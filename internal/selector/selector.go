@@ -9,13 +9,13 @@ import (
 	"slices"
 	"strings"
 
-	"bgraph/internal/classify"
-	"bgraph/internal/eco"
-	"bgraph/internal/glob"
-	"bgraph/internal/graph"
-	"bgraph/internal/model"
-	"bgraph/internal/rules"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/classify"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/glob"
+	"github.com/qxbao/bgraph/internal/graph"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // DefaultMaxChanged là ngưỡng diff quá lớn mặc định (mục 4.3 bước 1).

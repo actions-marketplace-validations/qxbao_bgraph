@@ -12,7 +12,7 @@ import (
 	"strings"
 	"sync"
 
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 var (

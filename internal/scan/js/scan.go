@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // MaxFileSize: tệp lớn hơn ngưỡng này (byte) bị coi là uncertain (không quét).

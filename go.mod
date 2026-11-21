@@ -1,4 +1,4 @@
-module bgraph
+module github.com/qxbao/bgraph
 
 go 1.25.1
 

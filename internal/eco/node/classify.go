@@ -7,9 +7,9 @@ import (
 	"slices"
 	"strings"
 
-	"bgraph/internal/eco"
-	"bgraph/internal/model"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // harmlessPkgKeys là khoá cấp cao của package.json mà đổi chúng chứng minh được không ảnh hưởng test.

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // Class là phân loại kết quả.

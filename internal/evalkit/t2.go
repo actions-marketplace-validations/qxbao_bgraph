@@ -18,8 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"bgraph"
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // T2 (mục 10.2 của docs/plan.md): oracle đột biến. Gieo MỘT lỗi vào một dòng của tệp nguồn tại R (commit M = R + lỗi, dựng bằng index tạm,

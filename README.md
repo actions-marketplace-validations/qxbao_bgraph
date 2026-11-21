@@ -10,7 +10,7 @@ supported yet: changes there widen to `full`.
 ## Usage
 
 ```sh
-go build -o bgraph ./cmd/bgraph
+go install github.com/qxbao/bgraph/cmd/bgraph@latest   # or: go build -o bgraph ./cmd/bgraph
 
 bgraph affected --base origin/main          # tests affected by the working tree relative to base
 bgraph affected --base A --head B --json    # between two commits, JSON output

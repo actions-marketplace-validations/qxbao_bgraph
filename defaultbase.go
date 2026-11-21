@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // DefaultBase chọn base mặc định cho CLI: merge-base của HEAD với origin/HEAD, rồi origin/main, main, master.

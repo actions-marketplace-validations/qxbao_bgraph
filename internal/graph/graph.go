@@ -6,9 +6,9 @@ import (
 	"slices"
 	"strings"
 
-	"bgraph/internal/eco"
-	"bgraph/internal/glob"
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/glob"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 type patternEdge struct {

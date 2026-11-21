@@ -28,13 +28,13 @@ import (
 	"strings"
 	"testing"
 
-	"bgraph/internal/eco"
-	"bgraph/internal/eco/node"
-	"bgraph/internal/model"
-	"bgraph/internal/rules"
-	"bgraph/internal/scancache"
-	"bgraph/internal/selector"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/node"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
+	"github.com/qxbao/bgraph/internal/scancache"
+	"github.com/qxbao/bgraph/internal/selector"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 type fixture struct {

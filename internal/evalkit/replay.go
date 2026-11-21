@@ -13,8 +13,8 @@ import (
 	"sync"
 	"time"
 
-	"bgraph"
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // ReplayConfig cấu hình phát lại.

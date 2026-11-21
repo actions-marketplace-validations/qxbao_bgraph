@@ -14,11 +14,11 @@ import (
 	"sync"
 	"time"
 
-	"bgraph"
-	"bgraph/internal/eco/node"
-	"bgraph/internal/gitx"
-	"bgraph/internal/model"
-	"bgraph/internal/scancache"
+	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/internal/eco/node"
+	"github.com/qxbao/bgraph/internal/gitx"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/scancache"
 )
 
 // T1Config cấu hình lượt chạy T1.

@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"unicode/utf8"
 
-	"bgraph/internal/model"
-	"bgraph/internal/scan/js"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/scan/js"
 )
 
 // ReasonUnsupported là mã lý do cho đuôi tệp không thuộc gói này.

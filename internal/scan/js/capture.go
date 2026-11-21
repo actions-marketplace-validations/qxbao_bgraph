@@ -3,7 +3,7 @@ package js
 import (
 	"strings"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // Kiểu đối số đặc biệt của lời gọi.

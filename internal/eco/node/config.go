@@ -5,9 +5,9 @@ import (
 	"regexp"
 	"strings"
 
-	"bgraph/internal/eco/node/resolve"
-	"bgraph/internal/glob"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/eco/node/resolve"
+	"github.com/qxbao/bgraph/internal/glob"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // testConfig là phần đọc được từ cấu hình runner của một dự án (jest/vitest/vite/playwright...).

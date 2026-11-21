@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 
 	_ "modernc.org/sqlite" // trình điều khiển thuần Go, không cgo
 )

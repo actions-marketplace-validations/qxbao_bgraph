@@ -3,7 +3,7 @@ package classify
 import (
 	"testing"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 func TestGlobal(t *testing.T) {

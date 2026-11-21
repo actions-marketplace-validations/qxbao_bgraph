@@ -18,10 +18,10 @@ import (
 	"strings"
 	"sync"
 
-	"bgraph/internal/model"
-	jsscan "bgraph/internal/scan/js"
-	sfcscan "bgraph/internal/scan/sfc"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/model"
+	jsscan "github.com/qxbao/bgraph/internal/scan/js"
+	sfcscan "github.com/qxbao/bgraph/internal/scan/sfc"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // ScannerVersion: tăng chuỗi này mỗi khi đổi hành vi bộ quét (lexer, luật nhận diện import) để vô hiệu cache bền.

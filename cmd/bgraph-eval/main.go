@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"bgraph/internal/evalkit"
+	"github.com/qxbao/bgraph/internal/evalkit"
 )
 
 type multi []string

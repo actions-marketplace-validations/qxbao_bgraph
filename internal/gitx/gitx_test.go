@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // hermetic dựng môi trường git cô lập (không đọc cấu hình hệ thống/người dùng).

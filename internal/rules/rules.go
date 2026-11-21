@@ -10,7 +10,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"bgraph/internal/glob"
+	"github.com/qxbao/bgraph/internal/glob"
 
 	"github.com/pelletier/go-toml/v2"
 )

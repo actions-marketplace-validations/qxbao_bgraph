@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 type tc struct {

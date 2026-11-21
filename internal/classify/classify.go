@@ -5,8 +5,8 @@
 package classify
 
 import (
-	"bgraph/internal/glob"
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/glob"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 type entry struct {

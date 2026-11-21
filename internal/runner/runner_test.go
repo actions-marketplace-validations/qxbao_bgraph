@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 func sel(runner, project string, files ...string) model.Selection {

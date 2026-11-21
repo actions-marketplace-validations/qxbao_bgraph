@@ -12,11 +12,11 @@ import (
 	"sync"
 	"time"
 
-	"bgraph/internal/eco"
-	"bgraph/internal/gitx"
-	"bgraph/internal/model"
-	"bgraph/internal/scancache"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/gitx"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/scancache"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // memo giữ cây commit và kết quả phân tích của chúng giữa các lần Select (cây commit bất biến theo OID). Cây làm việc

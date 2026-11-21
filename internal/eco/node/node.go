@@ -9,11 +9,11 @@ import (
 	"slices"
 	"strings"
 
-	"bgraph/internal/eco"
-	"bgraph/internal/eco/node/resolve"
-	"bgraph/internal/model"
-	"bgraph/internal/rules"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/node/resolve"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // Name là tên hệ sinh thái.

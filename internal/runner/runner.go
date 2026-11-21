@@ -19,7 +19,7 @@ import (
 	"sort"
 	"strings"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // Options cấu hình adapter.

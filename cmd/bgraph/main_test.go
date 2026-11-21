@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 func gitEnvFor(t *testing.T) {

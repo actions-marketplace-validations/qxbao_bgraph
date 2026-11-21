@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"bgraph/internal/model"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // countTree đếm số lần Read để chứng minh lần chạy ấm không đọc tệp.

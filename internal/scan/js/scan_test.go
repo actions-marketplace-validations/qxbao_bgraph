@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 type ref = model.ImportRef

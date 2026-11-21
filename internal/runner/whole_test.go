@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // Đơn vị Whole (không biết tập tệp test) → lệnh cả dự án, không kèm danh sách; không bao giờ là danh sách rỗng.

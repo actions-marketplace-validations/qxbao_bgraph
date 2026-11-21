@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 
-	"bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/model"
 )
 
 // Mã hoá nhị phân gọn cho ScanResult (đo: nhỏ hơn và giải mã nhanh hơn JSON, xem bench trong store_test.go).

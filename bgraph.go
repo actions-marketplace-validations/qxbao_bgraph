@@ -9,14 +9,14 @@ import (
 	"fmt"
 	"slices"
 
-	"bgraph/internal/eco"
-	"bgraph/internal/eco/node"
-	"bgraph/internal/gitx"
-	"bgraph/internal/model"
-	"bgraph/internal/rules"
-	"bgraph/internal/scancache"
-	"bgraph/internal/selector"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/node"
+	"github.com/qxbao/bgraph/internal/gitx"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
+	"github.com/qxbao/bgraph/internal/scancache"
+	"github.com/qxbao/bgraph/internal/selector"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // Kiểu công khai (bí danh của kiểu nội bộ để giữ một định nghĩa).

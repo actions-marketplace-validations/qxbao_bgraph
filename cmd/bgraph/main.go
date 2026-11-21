@@ -14,9 +14,9 @@ import (
 	"slices"
 	"strings"
 
-	"bgraph"
-	"bgraph/internal/model"
-	"bgraph/internal/runner"
+	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/runner"
 )
 
 const version = "0.1.0-dev"

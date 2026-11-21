@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
-	"bgraph"
-	"bgraph/internal/gitx"
-	"bgraph/internal/model"
-	"bgraph/internal/scancache"
+	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/internal/gitx"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/scancache"
 )
 
 // Đối chứng giai đoạn 0b: chấm các công cụ đồ thị ngoài (codegraph, graphify, gitnexus) bằng đúng oracle T1.

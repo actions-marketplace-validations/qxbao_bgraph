@@ -9,8 +9,8 @@ import (
 	"path"
 	"strings"
 
-	"bgraph/internal/model"
-	"bgraph/internal/tree"
+	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // Project là một dự án của hệ sinh thái (package.json, crate, module...). Dir là thư mục gốc dự án ("." là gốc repo).
