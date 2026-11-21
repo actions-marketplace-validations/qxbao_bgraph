@@ -1,0 +1,19 @@
+An undeclared third-party import is tracked by glob only: an unrelated change selects nothing and widens nothing.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import ghostlib
+-- base/tests/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+nowiden unknown_import
+select tests/test_b.py
+noselect tests/test_a.py

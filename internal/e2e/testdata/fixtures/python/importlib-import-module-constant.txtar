@@ -1,0 +1,19 @@
+importlib.import_module("pkg.plug") with a constant is an import.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/plug.py --
+X = 1
+-- base/tests/test_a.py --
+import importlib
+m = importlib.import_module("pkg.plug")
+-- base/tests/test_b.py --
+import json
+-- head/pkg/plug.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

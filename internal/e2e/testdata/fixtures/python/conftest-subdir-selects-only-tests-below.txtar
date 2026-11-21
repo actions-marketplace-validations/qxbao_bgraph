@@ -1,0 +1,22 @@
+A conftest.py is a dependency of the tests in its directory and below, and of nothing else.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/conftest.py --
+X = 1
+-- base/tests/sub/conftest.py --
+Y = 1
+-- base/tests/test_a.py --
+import json
+-- base/tests/sub/test_b.py --
+import json
+-- base/other/test_c.py --
+import json
+-- head/tests/sub/conftest.py --
+Y = 2
+-- want --
+notfull
+select tests/sub/test_b.py
+noselect tests/test_a.py
+noselect other/test_c.py

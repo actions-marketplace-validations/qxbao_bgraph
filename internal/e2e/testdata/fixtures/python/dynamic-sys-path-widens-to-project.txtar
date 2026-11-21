@@ -1,0 +1,21 @@
+A sys.path change that bgraph cannot evaluate is unresolved at project scope.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/__init__.py --
+-- base/tests/conftest.py --
+import sys
+sys.path.insert(0, compute())
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import json
+-- base/other/test_b.py --
+import json
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+widen dynamic_import
+select tests/test_a.py

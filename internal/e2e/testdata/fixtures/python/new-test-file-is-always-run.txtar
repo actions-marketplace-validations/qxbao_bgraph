@@ -1,0 +1,14 @@
+A newly added test file is selected (always_run) even though nothing imports it.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/tests/test_a.py --
+import json
+-- head/tests/test_new.py --
+import pkg
+-- want --
+notfull
+select tests/test_new.py
+noselect tests/test_a.py

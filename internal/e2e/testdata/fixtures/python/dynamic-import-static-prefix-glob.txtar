@@ -1,0 +1,25 @@
+import_module("pkg.plugins." + name): the importer depends on everything under pkg/plugins, with no widening.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/plugins/__init__.py --
+-- base/pkg/plugins/a.py --
+X = 1
+-- base/pkg/loader.py --
+import importlib
+def load(n):
+    return importlib.import_module("pkg.plugins." + n)
+-- base/pkg/other.py --
+-- base/tests/test_loader.py --
+from pkg.loader import load
+-- base/tests/test_none.py --
+import json
+-- head/pkg/plugins/b.py --
+X = 2
+-- want --
+notfull
+nowiden dynamic_import
+select tests/test_loader.py
+noselect tests/test_none.py

@@ -1,0 +1,16 @@
+A C file in a project without a native build is an unknown file (project widening, fail-closed).
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/ext.c --
+int x;
+-- base/tests/test_a.py --
+import pkg
+-- head/pkg/ext.c --
+int y;
+-- want --
+notfull
+widen unknown_file
+select tests/test_a.py

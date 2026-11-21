@@ -1,0 +1,15 @@
+poetry.lock is a lockfile.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/poetry.lock --
+# a
+-- base/tests/test_a.py --
+import json
+-- head/poetry.lock --
+# b
+-- want --
+notfull
+widen lock_changed
+select tests/test_a.py

@@ -1,0 +1,17 @@
+The repository root conftest.py is a dependency of every test.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/conftest.py --
+X = 1
+-- base/tests/test_a.py --
+import json
+-- base/other/test_c.py --
+import json
+-- head/conftest.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+select other/test_c.py

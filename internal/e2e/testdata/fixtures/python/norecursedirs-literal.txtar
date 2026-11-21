@@ -1,0 +1,17 @@
+A literal norecursedirs replaces the defaults: build/ is collected, legacy/ is not.
+-- base/pytest.ini --
+[pytest]
+norecursedirs = legacy
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/build/test_a.py --
+import pkg.x
+-- base/legacy/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select build/test_a.py
+noselect legacy/test_b.py

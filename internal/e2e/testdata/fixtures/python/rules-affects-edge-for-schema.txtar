@@ -1,0 +1,22 @@
+A bgraph.toml rule still applies next to a Python project.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/bgraph.toml --
+[[rule]]
+paths = ["schema/*.sql"]
+affects = ["tests/test_db.py"]
+reason = "tests load the schema"
+-- base/schema/a.sql --
+--1
+-- base/tests/test_db.py --
+import json
+-- base/tests/test_x.py --
+import json
+-- head/schema/a.sql --
+--2
+-- want --
+notfull
+select tests/test_db.py
+noselect tests/test_x.py

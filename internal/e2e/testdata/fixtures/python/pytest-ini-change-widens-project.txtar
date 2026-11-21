@@ -1,0 +1,18 @@
+A change in pytest.ini widens to the project (test_config_changed).
+-- base/pytest.ini --
+[pytest]
+addopts = -ra
+-- base/pkg/__init__.py --
+-- base/tests/test_a.py --
+import json
+-- base/tests/test_b.py --
+import json
+-- head/pytest.ini --
+[pytest]
+addopts = -ra -x
+-- want --
+notfull
+widen test_config_changed
+select tests/test_a.py
+select tests/test_b.py
+scope module

@@ -1,0 +1,20 @@
+An import under `if TYPE_CHECKING:` counts (superset).
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/types.py --
+T = int
+-- base/tests/test_a.py --
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from pkg.types import T
+-- base/tests/test_b.py --
+import json
+-- head/pkg/types.py --
+T = str
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

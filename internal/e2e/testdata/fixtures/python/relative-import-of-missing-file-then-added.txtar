@@ -1,0 +1,21 @@
+A relative import of a missing file is tracked by an exact path edge: adding the file selects the importer.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/a.py --
+try:
+    from ._version import v
+except ImportError:
+    v = 0
+-- base/tests/test_a.py --
+import pkg.a
+-- base/tests/test_b.py --
+import json
+-- head/pkg/_version.py --
+v = 1
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

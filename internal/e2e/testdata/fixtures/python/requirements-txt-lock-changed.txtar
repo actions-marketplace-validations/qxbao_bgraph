@@ -1,0 +1,15 @@
+requirements*.txt is handled at level L0: widen to the project (lock_changed).
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/requirements.txt --
+requests==2.0
+-- base/tests/test_a.py --
+import json
+-- head/requirements.txt --
+requests==2.1
+-- want --
+notfull
+widen lock_changed
+select tests/test_a.py

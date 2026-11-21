@@ -1,0 +1,20 @@
+`from x import *` depends on the module x.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/mod.py --
+V = 1
+-- base/pkg/lone.py --
+V = 1
+-- base/tests/test_a.py --
+from pkg.mod import *
+-- base/tests/test_b.py --
+from pkg.lone import V
+-- head/pkg/mod.py --
+V = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

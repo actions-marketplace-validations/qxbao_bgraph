@@ -1,0 +1,23 @@
+Strings, comments and f-strings that contain "import x" are not imports.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/ghost.py --
+X = 1
+-- base/tests/test_a.py --
+# import pkg.ghost
+s = "import pkg.ghost"
+t = f"{s} from pkg.ghost import X"
+u = """
+import pkg.ghost
+"""
+-- base/tests/test_g.py --
+import pkg.ghost
+-- head/pkg/ghost.py --
+X = 2
+-- want --
+notfull
+select tests/test_g.py
+noselect tests/test_a.py

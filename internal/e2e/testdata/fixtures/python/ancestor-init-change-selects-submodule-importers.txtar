@@ -1,0 +1,26 @@
+`import a.b.c` runs a/__init__.py and a/b/__init__.py: changing an ancestor __init__ selects the importers of any submodule.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/a/__init__.py --
+-- base/a/b/__init__.py --
+-- base/a/b/c.py --
+X = 1
+-- base/a/b/d.py --
+X = 1
+-- base/z/__init__.py --
+-- base/z/m.py --
+-- base/tests/test_c.py --
+import a.b.c
+-- base/tests/test_d.py --
+import a.b.d
+-- base/tests/test_z.py --
+import z.m
+-- head/a/b/__init__.py --
+import sys
+-- want --
+notfull
+select tests/test_c.py
+select tests/test_d.py
+noselect tests/test_z.py

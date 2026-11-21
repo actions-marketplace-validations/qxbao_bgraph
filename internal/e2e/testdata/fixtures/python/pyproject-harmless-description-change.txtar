@@ -1,0 +1,23 @@
+A change of [project] description and of [tool.black] affects no test.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+description = "a"
+[tool.black]
+line-length = 88
+-- base/pkg/__init__.py --
+-- base/tests/test_a.py --
+import pkg
+-- head/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+description = "b"
+[tool.black]
+line-length = 100
+-- want --
+notfull
+scope none
+nowiden manifest_changed
+noselect tests/test_a.py

@@ -1,0 +1,20 @@
+`from pkg import mod`: the test depends on pkg/__init__.py and on pkg/mod.py; a change in the submodule selects it.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/mod.py --
+V = 1
+-- base/pkg/lone.py --
+V = 1
+-- base/tests/test_a.py --
+from pkg import mod
+-- base/tests/test_b.py --
+from pkg import lone
+-- head/pkg/mod.py --
+V = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

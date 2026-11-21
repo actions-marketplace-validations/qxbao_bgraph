@@ -1,0 +1,19 @@
+`from pkg import mod`: a change in pkg/__init__.py selects every importer of the package.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+A = 1
+-- base/pkg/mod.py --
+V = 1
+-- base/tests/test_a.py --
+from pkg import mod
+-- base/tests/test_b.py --
+import json
+-- head/pkg/__init__.py --
+A = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

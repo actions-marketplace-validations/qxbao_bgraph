@@ -1,0 +1,15 @@
+The version is visible at runtime (importlib.metadata): a change widens.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/test_a.py --
+import json
+-- head/pyproject.toml --
+[project]
+name = "x"
+version = "2"
+-- want --
+notfull
+widen manifest_changed
+select tests/test_a.py

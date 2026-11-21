@@ -1,0 +1,17 @@
+tox.ini decides how tests are launched: widen to the project.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tox.ini --
+[tox]
+envlist = py
+-- base/tests/test_a.py --
+import json
+-- head/tox.ini --
+[tox]
+envlist = py311
+-- want --
+notfull
+widen test_config_changed
+select tests/test_a.py

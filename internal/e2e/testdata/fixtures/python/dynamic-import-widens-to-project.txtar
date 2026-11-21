@@ -1,0 +1,26 @@
+A non-constant importlib.import_module makes the module unresolved at project scope: any change in the project selects its dependents.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/loader.py --
+import importlib
+def load(n):
+    return importlib.import_module(n)
+-- base/pkg/unrelated.py --
+X = 1
+-- base/tests/test_loader.py --
+from pkg.loader import load
+-- base/tests/test_unrelated.py --
+import pkg.unrelated
+-- base/tests/test_none.py --
+import json
+-- head/pkg/unrelated.py --
+X = 2
+-- want --
+notfull
+widen dynamic_import
+select tests/test_loader.py
+select tests/test_unrelated.py
+noselect tests/test_none.py

@@ -1,0 +1,16 @@
+An undeclared import whose module is added to the repo later is caught through the glob edge.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/test_a.py --
+import ghostlib
+-- base/tests/test_b.py --
+import json
+-- head/vendor/ghostlib/__init__.py --
+X = 1
+-- want --
+notfull
+nowiden unknown_import
+select tests/test_a.py
+noselect tests/test_b.py

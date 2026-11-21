@@ -1,0 +1,20 @@
+An import inside a doctest is a dependency of the module that holds it.
+-- base/pytest.ini --
+[pytest]
+addopts = --doctest-modules
+-- base/pkg/__init__.py --
+-- base/pkg/util.py --
+def f():
+    """
+    >>> from pkg.helper import h
+    """
+-- base/pkg/helper.py --
+h = 1
+-- base/pkg/other.py --
+X = 1
+-- head/pkg/helper.py --
+h = 2
+-- want --
+notfull
+select pkg/util.py
+noselect pkg/other.py

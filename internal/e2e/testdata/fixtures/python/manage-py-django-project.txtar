@@ -1,0 +1,18 @@
+A project with manage.py and no pytest configuration is a Django project: test*.py modules in packages are units.
+-- base/manage.py --
+import sys
+-- base/app/__init__.py --
+-- base/app/models.py --
+X = 1
+-- base/app/other.py --
+X = 1
+-- base/app/tests.py --
+from app.models import X
+-- base/app/test_other.py --
+from app.other import X
+-- head/app/models.py --
+X = 2
+-- want --
+notfull
+select app/tests.py
+noselect app/test_other.py

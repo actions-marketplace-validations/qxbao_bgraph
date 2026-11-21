@@ -1,0 +1,21 @@
+A .pyi stub next to the module counts as part of the module.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/mod.py --
+V = 1
+-- base/pkg/mod.pyi --
+V: int
+-- base/pkg/lone.py --
+-- base/tests/test_a.py --
+import pkg.mod
+-- base/tests/test_b.py --
+import pkg.lone
+-- head/pkg/mod.pyi --
+V: str
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

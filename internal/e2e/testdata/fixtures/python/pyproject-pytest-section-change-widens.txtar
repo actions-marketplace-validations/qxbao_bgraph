@@ -1,0 +1,19 @@
+A change in [tool.pytest.ini_options] widens to the project.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+[tool.pytest.ini_options]
+addopts = "-ra"
+-- base/tests/test_a.py --
+import json
+-- head/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+[tool.pytest.ini_options]
+addopts = "-ra -x"
+-- want --
+notfull
+widen test_config_changed
+select tests/test_a.py

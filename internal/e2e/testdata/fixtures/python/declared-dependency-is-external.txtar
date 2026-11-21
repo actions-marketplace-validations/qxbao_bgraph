@@ -1,0 +1,22 @@
+A declared dependency (with an import name different from the distribution name) and the standard library create no edges.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+dependencies = ["PyYAML>=6", "scikit-learn"]
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import yaml
+import sklearn
+import os.path
+from collections import abc
+-- base/tests/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select tests/test_b.py
+noselect tests/test_a.py

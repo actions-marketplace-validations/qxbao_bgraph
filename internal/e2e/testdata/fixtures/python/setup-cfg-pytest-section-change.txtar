@@ -1,0 +1,13 @@
+[tool:pytest] in setup.cfg is the pytest configuration.
+-- base/setup.cfg --
+[tool:pytest]
+addopts = -ra
+-- base/tests/test_a.py --
+import json
+-- head/setup.cfg --
+[tool:pytest]
+addopts = -rA
+-- want --
+notfull
+widen test_config_changed
+select tests/test_a.py

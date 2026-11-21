@@ -1,0 +1,23 @@
+A package location declared in pyproject (setuptools packages.find where) is an import root: only that root resolves the import.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+[tool.setuptools.packages.find]
+where = ["code"]
+-- base/code/mypkg/__init__.py --
+-- base/code/mypkg/core.py --
+X = 1
+-- base/legacy/mypkg/__init__.py --
+-- base/legacy/mypkg/core.py --
+X = 0
+-- base/tests/test_core.py --
+from mypkg.core import X
+-- base/tests/test_none.py --
+import json
+-- head/code/mypkg/core.py --
+X = 2
+-- want --
+notfull
+select tests/test_core.py
+noselect tests/test_none.py

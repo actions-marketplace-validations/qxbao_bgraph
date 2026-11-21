@@ -1,0 +1,19 @@
+PEP 420: directories without __init__.py are packages; the test depends on the module file only.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/ns/sub/mod.py --
+X = 1
+-- base/ns/sub/other.py --
+X = 1
+-- base/tests/test_a.py --
+from ns.sub.mod import X
+-- base/tests/test_b.py --
+import ns.sub.other
+-- head/ns/sub/mod.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

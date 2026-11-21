@@ -1,0 +1,17 @@
+python_files replaces the default patterns.
+-- base/pytest.ini --
+[pytest]
+python_files = check_*.py
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/check_a.py --
+import pkg.x
+-- base/tests/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select tests/check_a.py
+noselect tests/test_b.py

@@ -1,0 +1,17 @@
+testpaths limits which files are tests: a test-named file outside testpaths is not a unit.
+-- base/pytest.ini --
+[pytest]
+testpaths = tests
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import pkg.x
+-- base/scripts/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect scripts/test_b.py

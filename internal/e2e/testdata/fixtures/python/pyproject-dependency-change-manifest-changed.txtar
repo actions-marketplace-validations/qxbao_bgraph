@@ -1,0 +1,17 @@
+A dependency change in pyproject widens to the project (manifest_changed).
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+dependencies = ["requests"]
+-- base/tests/test_a.py --
+import json
+-- head/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+dependencies = ["requests", "rich"]
+-- want --
+notfull
+widen manifest_changed
+select tests/test_a.py

@@ -1,0 +1,13 @@
+A [flake8] change in setup.cfg affects no test.
+-- base/setup.cfg --
+[flake8]
+max-line-length = 80
+-- base/tests/test_a.py --
+import json
+-- head/setup.cfg --
+[flake8]
+max-line-length = 100
+-- want --
+notfull
+scope none
+noselect tests/test_a.py

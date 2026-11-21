@@ -1,0 +1,19 @@
+A Cython source in a project that builds extensions widens to the project.
+-- base/setup.py --
+from setuptools import setup
+from Cython.Build import cythonize
+setup(ext_modules=cythonize("pkg/fast.pyx"))
+-- base/pkg/__init__.py --
+-- base/pkg/fast.pyx --
+def f(): return 1
+-- base/tests/test_a.py --
+import pkg
+-- base/tests/test_b.py --
+import json
+-- head/pkg/fast.pyx --
+def f(): return 2
+-- want --
+notfull
+widen unknown_file
+select tests/test_a.py
+select tests/test_b.py

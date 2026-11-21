@@ -1,0 +1,19 @@
+A test directory without __init__.py is put on sys.path (rootdir insertion): `import helpers` resolves to tests/helpers.py.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/helpers.py --
+H = 1
+-- base/scripts/helpers.py --
+H = 0
+-- base/tests/test_a.py --
+import helpers
+-- base/tests/test_b.py --
+import json
+-- head/tests/helpers.py --
+H = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

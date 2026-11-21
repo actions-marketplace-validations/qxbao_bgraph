@@ -1,0 +1,22 @@
+requirements.txt names (dist) cover imports with another name: no virtual module, no edge.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/requirements.txt --
+Pillow==10
+python-dateutil
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+from PIL import Image
+import dateutil
+-- base/tests/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select tests/test_b.py
+noselect tests/test_a.py

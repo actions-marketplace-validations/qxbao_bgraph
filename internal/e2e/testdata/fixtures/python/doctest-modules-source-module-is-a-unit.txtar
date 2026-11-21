@@ -1,0 +1,25 @@
+With --doctest-modules every module is a test unit of its own.
+-- base/pytest.ini --
+[pytest]
+addopts = --doctest-modules
+-- base/pkg/__init__.py --
+-- base/pkg/util.py --
+def f():
+    """
+    >>> f()
+    1
+    """
+    return 1
+-- base/pkg/other.py --
+X = 1
+-- head/pkg/util.py --
+def f():
+    """
+    >>> f()
+    2
+    """
+    return 2
+-- want --
+notfull
+select pkg/util.py
+noselect pkg/other.py

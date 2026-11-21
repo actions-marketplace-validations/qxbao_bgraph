@@ -1,0 +1,23 @@
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "support")) in a conftest.py makes tests/support an import root.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/__init__.py --
+-- base/tests/conftest.py --
+import os, sys
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "support"))
+-- base/tests/support/helper.py --
+H = 1
+-- base/elsewhere/helper.py --
+H = 0
+-- base/tests/test_a.py --
+import helper
+-- base/tests/test_b.py --
+import json
+-- head/tests/support/helper.py --
+H = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

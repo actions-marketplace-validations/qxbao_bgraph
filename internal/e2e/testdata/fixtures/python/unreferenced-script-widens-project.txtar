@@ -1,0 +1,16 @@
+A Python file that nobody imports (a script a test may run) widens to the project.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/scripts/tool.py --
+print(1)
+-- base/tests/test_a.py --
+import json
+-- head/scripts/tool.py --
+print(2)
+-- want --
+notfull
+widen unreferenced_file
+select tests/test_a.py

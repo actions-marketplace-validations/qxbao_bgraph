@@ -1,0 +1,13 @@
+setup.py is code that runs at build time: widen to the project.
+-- base/setup.py --
+from setuptools import setup
+setup(name="x")
+-- base/tests/test_a.py --
+import json
+-- head/setup.py --
+from setuptools import setup
+setup(name="y")
+-- want --
+notfull
+widen manifest_changed
+select tests/test_a.py

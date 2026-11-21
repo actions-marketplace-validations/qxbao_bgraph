@@ -1,0 +1,21 @@
+Import chain: a change in a leaf module selects the test that reaches it through another module, not an unrelated test.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/leaf.py --
+X = 1
+-- base/pkg/mid.py --
+from pkg.leaf import X
+-- base/tests/test_mid.py --
+from pkg.mid import X
+-- base/tests/test_other.py --
+import json
+-- head/pkg/leaf.py --
+X = 2
+-- want --
+notfull
+scope graph
+select tests/test_mid.py
+noselect tests/test_other.py

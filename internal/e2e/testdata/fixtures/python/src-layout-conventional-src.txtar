@@ -1,0 +1,19 @@
+A src/ directory next to pyproject.toml is an import root.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/src/lib1/__init__.py --
+-- base/src/lib1/core.py --
+X = 1
+-- base/src/lib1/other.py --
+-- base/tests/test_core.py --
+import lib1.core
+-- base/tests/test_other.py --
+import lib1.other
+-- head/src/lib1/core.py --
+X = 2
+-- want --
+notfull
+select tests/test_core.py
+noselect tests/test_other.py

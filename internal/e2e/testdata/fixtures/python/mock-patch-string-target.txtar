@@ -1,0 +1,23 @@
+mock.patch("pkg.helpers.fetch") names a module only as a string: the test still depends on it.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/helpers.py --
+def fetch(): pass
+-- base/pkg/lone.py --
+-- base/tests/test_a.py --
+from unittest import mock
+
+def test_x():
+    with mock.patch("pkg.helpers.fetch"):
+        pass
+-- base/tests/test_b.py --
+import json
+-- head/pkg/helpers.py --
+def fetch(): return 1
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

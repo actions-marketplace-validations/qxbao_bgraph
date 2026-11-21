@@ -1,0 +1,17 @@
+Changing a test file selects only that test.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/tests/test_a.py --
+import pkg
+-- base/tests/test_b.py --
+import pkg
+-- head/tests/test_a.py --
+import pkg
+X = 1
+-- want --
+notfull
+select tests/test_a.py
+noselect tests/test_b.py

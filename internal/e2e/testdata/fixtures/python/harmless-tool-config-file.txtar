@@ -1,0 +1,16 @@
+A linter configuration file affects no test.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/.flake8 --
+[flake8]
+max-line-length=80
+-- base/tests/test_a.py --
+import json
+-- head/.flake8 --
+[flake8]
+max-line-length=100
+-- want --
+notfull
+scope none

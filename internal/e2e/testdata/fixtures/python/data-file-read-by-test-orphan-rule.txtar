@@ -1,0 +1,19 @@
+A data file read by a test is invisible to the import graph: the orphan rule widens to the project.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/test_a.py --
+import json
+data = json.load(open("tests/data/x.json"))
+-- base/tests/test_b.py --
+import json
+-- base/tests/data/x.json --
+{}
+-- head/tests/data/x.json --
+{"a": 1}
+-- want --
+notfull
+widen unknown_file
+select tests/test_a.py
+select tests/test_b.py

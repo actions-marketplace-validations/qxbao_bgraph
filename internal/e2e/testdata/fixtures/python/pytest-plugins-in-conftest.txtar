@@ -1,0 +1,20 @@
+pytest_plugins = ["myplug.core"] in a conftest.py: the plugin module is a dependency of the tests below it.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/conftest.py --
+pytest_plugins = ["myplug.core"]
+-- base/myplug/__init__.py --
+-- base/myplug/core.py --
+X = 1
+-- base/tests/test_a.py --
+import json
+-- base/other/test_b.py --
+import json
+-- head/myplug/core.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect other/test_b.py

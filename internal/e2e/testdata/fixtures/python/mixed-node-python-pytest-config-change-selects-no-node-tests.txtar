@@ -1,0 +1,18 @@
+A pytest config change in api/ widens to api/ and only to Python units.
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^5.0.0"}}
+-- base/web/src/a.test.ts --
+export {}
+-- base/api/pytest.ini --
+[pytest]
+addopts = -ra
+-- base/api/tests/test_x.py --
+import json
+-- head/api/pytest.ini --
+[pytest]
+addopts = -rA
+-- want --
+notfull
+widen test_config_changed
+select api/tests/test_x.py
+noselect web/src/a.test.ts

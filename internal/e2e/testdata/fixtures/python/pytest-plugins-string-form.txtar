@@ -1,0 +1,19 @@
+pytest_plugins = "a" (a plain string) is read like a list.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/conftest.py --
+pytest_plugins = "plug"
+-- base/plug.py --
+X = 1
+-- base/tests/test_a.py --
+import json
+-- base/other/test_b.py --
+import json
+-- head/plug.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect other/test_b.py

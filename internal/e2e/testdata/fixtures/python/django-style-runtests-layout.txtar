@@ -1,0 +1,23 @@
+A Django-style project (tests/runtests.py, no pytest config) keeps one unit per test module.
+-- base/setup.cfg --
+[metadata]
+name = fw
+-- base/fw/__init__.py --
+-- base/fw/db.py --
+X = 1
+-- base/fw/http.py --
+X = 1
+-- base/tests/runtests.py --
+import sys
+-- base/tests/queries/__init__.py --
+-- base/tests/queries/tests.py --
+from fw.db import X
+-- base/tests/http/__init__.py --
+-- base/tests/http/tests.py --
+from fw.http import X
+-- head/fw/db.py --
+X = 2
+-- want --
+notfull
+select tests/queries/tests.py
+noselect tests/http/tests.py

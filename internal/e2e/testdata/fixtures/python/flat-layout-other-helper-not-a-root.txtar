@@ -1,0 +1,19 @@
+scripts/ is not an import root: changing scripts/helpers.py does not select the test that imports tests/helpers.py.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/helpers.py --
+H = 1
+-- base/scripts/helpers.py --
+H = 0
+-- base/tests/test_a.py --
+import helpers
+-- base/tests/test_s.py --
+import scripts.helpers
+-- head/scripts/helpers.py --
+H = 9
+-- want --
+notfull
+select tests/test_s.py
+noselect tests/test_a.py

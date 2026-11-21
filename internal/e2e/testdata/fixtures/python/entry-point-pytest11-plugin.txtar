@@ -1,0 +1,20 @@
+A pytest11 entry point declared in the repo is loaded for every test.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+[project.entry-points.pytest11]
+mine = "myplug.hooks"
+-- base/myplug/__init__.py --
+-- base/myplug/hooks.py --
+X = 1
+-- base/tests/test_a.py --
+import json
+-- base/tests/test_b.py --
+import json
+-- head/myplug/hooks.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+select tests/test_b.py

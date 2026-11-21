@@ -1,0 +1,28 @@
+`from . import b` and `from ..b import V` resolve against the importing file's package.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/a.py --
+from . import b
+-- base/pkg/b.py --
+V = 1
+-- base/pkg/sub/__init__.py --
+-- base/pkg/sub/c.py --
+from ..b import V
+-- base/pkg/sub/d.py --
+V = 0
+-- base/tests/test_a.py --
+import pkg.a
+-- base/tests/test_c.py --
+from pkg.sub import c
+-- base/tests/test_d.py --
+from pkg.sub import d
+-- head/pkg/b.py --
+V = 2
+-- want --
+notfull
+select tests/test_a.py
+select tests/test_c.py
+noselect tests/test_d.py

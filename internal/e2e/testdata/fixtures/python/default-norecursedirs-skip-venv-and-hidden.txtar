@@ -1,0 +1,24 @@
+The default norecursedirs skip venv, build, .hidden and node_modules.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import pkg.x
+-- base/venv/test_v.py --
+import pkg.x
+-- base/.hidden/test_h.py --
+import pkg.x
+-- base/build/test_b.py --
+import pkg.x
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect venv/test_v.py
+noselect .hidden/test_h.py
+noselect build/test_b.py

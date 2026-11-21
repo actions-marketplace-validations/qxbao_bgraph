@@ -1,0 +1,23 @@
+sys.path.insert(0, dirname(__file__)) in a conftest puts that directory on sys.path.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/tests/__init__.py --
+-- base/tests/sub/conftest.py --
+import os, sys
+sys.path.insert(0, os.path.dirname(__file__))
+-- base/tests/sub/shared.py --
+S = 1
+-- base/tests/other/shared.py --
+S = 0
+-- base/tests/sub/test_a.py --
+import shared
+-- base/tests/sub/test_b.py --
+import json
+-- head/tests/sub/shared.py --
+S = 2
+-- want --
+notfull
+select tests/sub/test_a.py
+noselect tests/sub/test_b.py

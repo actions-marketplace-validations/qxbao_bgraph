@@ -1,0 +1,22 @@
+In a mixed repository a change in the Python project selects no Node test.
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^5.0.0"}}
+-- base/web/src/a.ts --
+export const a = 1
+-- base/web/src/a.test.ts --
+import { a } from './a'
+-- base/api/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/api/pkg/__init__.py --
+-- base/api/pkg/x.py --
+X = 1
+-- base/api/tests/test_x.py --
+import pkg.x
+-- head/api/pkg/x.py --
+X = 2
+-- want --
+notfull
+select api/tests/test_x.py
+noselect web/src/a.test.ts

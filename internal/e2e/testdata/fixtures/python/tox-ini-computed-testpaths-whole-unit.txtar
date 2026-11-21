@@ -1,0 +1,14 @@
+A computed python_files/testpaths in tox.ini is unreadable: the project gets a whole-suite unit.
+-- base/tox.ini --
+[pytest]
+testpaths = {posargs}
+-- base/pkg/__init__.py --
+-- base/pkg/x.py --
+X = 1
+-- base/tests/test_a.py --
+import json
+-- head/pkg/x.py --
+X = 2
+-- want --
+notfull
+select <py-all-tests:.>
