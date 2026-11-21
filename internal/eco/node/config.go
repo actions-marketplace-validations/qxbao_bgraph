@@ -131,7 +131,8 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 			rootKnown = false
 		}
 	}
-	tc.readTestPatterns(src, file, roots, rootKnown)
+	// include/testMatch nằm trong các khối này không định nghĩa tập test (coverage.include là tệp đo coverage).
+	tc.readTestPatterns(blankValues(src, "coverage", "optimizeDeps", "build", "server", "preview", "ssr", "deps", "css", "worker"), file, roots, rootKnown)
 	// JSX runtime (oxc/esbuild/swc/tsconfig importSource): mọi test phụ thuộc <importSource>/jsx-runtime và
 	// jsx-dev-runtime, không phải cả thư mục.
 	for _, key := range []string{"importSource", "jsxImportSource"} {

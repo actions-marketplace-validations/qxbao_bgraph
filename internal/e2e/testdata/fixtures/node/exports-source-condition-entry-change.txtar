@@ -1,0 +1,15 @@
+Kiểu zod: đổi entry nguồn src/v4/index.ts chọn test của importer 'zod/v4'.
+-- base/package.json --
+{"name":"root","private":true,"devDependencies":{"vitest":"^5.0.0"}}
+-- base/packages/zod/package.json --
+{"name":"zod","exports":{"./v4":{"@zod/source":"./src/v4/index.ts","types":"./v4/index.d.cts","import":"./v4/index.js"}}}
+-- base/packages/zod/src/v4/index.ts --
+export const z = 1
+-- base/packages/app/package.json --
+{"name":"app","dependencies":{"zod":"workspace:*"}}
+-- base/packages/app/src/use.test.ts --
+import { z } from 'zod/v4'
+-- head/packages/zod/src/v4/index.ts --
+export const z = 2
+-- want --
+select packages/app/src/use.test.ts

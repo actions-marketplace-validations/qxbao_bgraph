@@ -704,7 +704,11 @@ func (a *acc) finish(spec string, fold bool) Result {
 		res.Class, res.Detail = ClassUnknown, a.cfgErr
 	case len(res.Files) > 0:
 		res.Class = ClassInternal
-		if a.gen != nil {
+		// Đầu ra build thiếu bên cạnh đích có thật: nếu đích có thật gồm tệp MÃ (không chỉ .d.ts) — mẫu "điều kiện nguồn"
+		// ("@pkg/source": "./src/index.ts" cạnh "import": "./dist/index.js") — đầu ra được biên dịch từ chính entry đó,
+		// cạnh tới nó đã phủ phụ thuộc. Chỉ có .d.ts (preact: types → src/index.d.ts, main → dist/) thì mã thật nằm
+		// trong đầu ra build: giữ tín hiệu để importer phụ thuộc cả package.
+		if a.gen != nil && !hasCodeFile(res.Files) {
 			res.AlsoGenerated, res.Package, res.PackageDir = true, a.gen.pkg, a.gen.dir
 		}
 	case fold && a.foldMatch(&res):
@@ -847,4 +851,18 @@ func (r *Resolver) ResolvePattern(from, spec, suffix string) Result {
 	}
 	res.Class, res.Detail = ClassUnknown, fmt.Sprintf("dynamic prefix %q does not map to an existing directory", spec)
 	return res
+}
+
+// hasCodeFile: có tệp mã JS/TS (không phải khai báo .d.ts/.d.mts/.d.cts, không phải JSON/asset).
+func hasCodeFile(files []string) bool {
+	for _, f := range files {
+		if strings.HasSuffix(f, ".d.ts") || strings.HasSuffix(f, ".d.mts") || strings.HasSuffix(f, ".d.cts") {
+			continue
+		}
+		switch path.Ext(f) {
+		case ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs":
+			return true
+		}
+	}
+	return false
 }

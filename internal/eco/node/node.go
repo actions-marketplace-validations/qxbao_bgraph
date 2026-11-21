@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-13"
+const AnalyzerVersion = "node-15"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {

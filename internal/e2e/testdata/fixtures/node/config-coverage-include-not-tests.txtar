@@ -1,0 +1,18 @@
+coverage.include ['src/**/*'] không phải mẫu tệp test (TanStack): src/a.ts không thành đơn vị test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vite.config.ts --
+export default { test: { coverage: { include: ['src/**/*'], exclude: ['src/__tests__/**'] } } }
+-- base/src/a.ts --
+export const a = 1
+-- base/src/index.ts --
+export * from './a'
+-- base/src/b.ts --
+export const b = 1
+-- base/src/__tests__/b.test.ts --
+import { b } from '../b'
+-- head/src/a.ts --
+export const a = 2
+-- want --
+noselect src/a.ts
+noselect src/__tests__/b.test.ts
