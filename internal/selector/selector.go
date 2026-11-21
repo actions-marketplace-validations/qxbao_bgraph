@@ -250,7 +250,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	choose := func(u model.TestUnit, reason string) {
 		st, ok := chosen[u.ID]
 		if !ok {
-			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole}
+			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package}
 			chosen[u.ID] = st
 		}
 		if !slices.Contains(st.Reasons, reason) {
@@ -271,6 +271,9 @@ func Select(ctx context.Context, in Input) model.Selection {
 			continue // already handled via a seed: only the dependents of the file containing the import are affected
 		}
 		for _, u := range units {
+			if w.Eco != "" && u.Eco != w.Eco {
+				continue
+			}
 			if unitWithin(u, w.Scope) {
 				choose(u, fmt.Sprintf("widen %s (%s) due to %s", scopeName(w.Scope), w.Reason, w.Path))
 			}
