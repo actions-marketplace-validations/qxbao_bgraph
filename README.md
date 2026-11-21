@@ -22,27 +22,6 @@ bgraph unresolved                           # unresolved imports, with suggested
 Go library: `bgraph.Open(ctx, root, bgraph.Options{})`, then
 `idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})`.
 
-## MCP
-
-`bgraph mcp [--root DIR]` runs an MCP server on stdio (one index per session, so repeated queries are fast). Tools:
-
-- `affected_tests` — `{base?, head?, previously_failed?, limit?}`: the selection (scope, tests with reasons, widening, warnings).
-- `dependents_of` — `{files, rev?, limit?}`: who depends on the files, with the dependency chain and the unresolved imports that may too.
-- `explain_selection` — `{target, base?, head?, limit?}`: why a test is selected / where a file leads.
-
-Results are size-bounded (`limit`, default 200): when a list is cut, `truncated` is true and the `*_total` counts give the real
-size. The `widening`, `warnings` and `unresolved` sections are always present; `scope: full` means run the whole suite.
-
-```json
-{
-  "mcpServers": {
-    "bgraph": { "command": "bgraph", "args": ["mcp", "--root", "/path/to/repo"] }
-  }
-}
-```
-
-With Claude Code: `claude mcp add bgraph -- bgraph mcp --root /path/to/repo`.
-
 Optional `bgraph.toml` at the repository root declares dependencies the tool cannot infer (`[[rule]]`) and generated
 outputs (`[[generated]]`). Caches live in the user cache directory, never inside the repository.
 
@@ -67,6 +46,27 @@ selection on after N clean shadow runs in a row (`--log` appends one JSON line p
 - A run whose scope is `full` (no base, shallow clone, global input changed) is trivially clean.
 
 A ready-to-adapt GitHub Actions workflow is in [`docs/ci/shadow-github-actions.yml`](docs/ci/shadow-github-actions.yml).
+
+## MCP
+
+`bgraph mcp [--root DIR]` runs an MCP server on stdio (one index per session, so repeated queries are fast). Tools:
+
+- `affected_tests` — `{base?, head?, previously_failed?, limit?}`: the selection (scope, tests with reasons, widening, warnings).
+- `dependents_of` — `{files, rev?, limit?}`: who depends on the files, with the dependency chain and the unresolved imports that may too.
+- `explain_selection` — `{target, base?, head?, limit?}`: why a test is selected / where a file leads.
+
+Results are size-bounded (`limit`, default 200): when a list is cut, `truncated` is true and the `*_total` counts give the real
+size. The `widening`, `warnings` and `unresolved` sections are always present; `scope: full` means run the whole suite.
+
+```json
+{
+  "mcpServers": {
+    "bgraph": { "command": "bgraph", "args": ["mcp", "--root", "/path/to/repo"] }
+  }
+}
+```
+
+With Claude Code: `claude mcp add bgraph -- bgraph mcp --root /path/to/repo`.
 
 ## License
 

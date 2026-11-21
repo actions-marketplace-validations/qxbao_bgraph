@@ -245,11 +245,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 			}
 		}
 	}
-	sort := func(ts []model.TestUnit) {
-		slices.SortFunc(ts, func(a, b model.TestUnit) int { return strings.Compare(a.ID, b.ID) })
-	}
-	sort(units)
-	units = slices.CompactFunc(units, func(a, b model.TestUnit) bool { return a.ID == b.ID })
+	units = DedupUnits(units)
 	chosen := map[string]*model.SelectedTest{}
 	choose := func(u model.TestUnit, reason string) {
 		st, ok := chosen[u.ID]
@@ -262,11 +258,8 @@ func Select(ctx context.Context, in Input) model.Selection {
 		}
 	}
 	for _, u := range units {
-		for _, f := range u.Files {
-			if _, ok := reach[f]; ok {
-				choose(u, strings.Join(reach.Chain(f), " ; "))
-				break
-			}
+		if f, ok := ReachedFile(u, reach); ok {
+			choose(u, strings.Join(reach.Chain(f), " ; "))
 		}
 	}
 	// Scope widening (module/package): every test unit in the scope.
@@ -371,6 +364,23 @@ func normalize(in []Changed) []Changed {
 	}
 	slices.SortFunc(out, func(a, b Changed) int { return strings.Compare(a.Path, b.Path) })
 	return slices.CompactFunc(out, func(a, b Changed) bool { return a.Path == b.Path })
+}
+
+// DedupUnits sorts test units by ID and drops duplicates (the same unit reported by the base and the head analysis).
+func DedupUnits(units []model.TestUnit) []model.TestUnit {
+	units = slices.Clone(units)
+	slices.SortFunc(units, func(a, b model.TestUnit) int { return strings.Compare(a.ID, b.ID) })
+	return slices.CompactFunc(units, func(a, b model.TestUnit) bool { return a.ID == b.ID })
+}
+
+// ReachedFile returns the first file of u that the backward walk reached.
+func ReachedFile(u model.TestUnit, reach graph.Reach) (string, bool) {
+	for _, f := range u.Files {
+		if _, ok := reach[f]; ok {
+			return f, true
+		}
+	}
+	return "", false
 }
 
 func unitWithin(u model.TestUnit, dir string) bool {

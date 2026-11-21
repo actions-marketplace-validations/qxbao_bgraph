@@ -15,12 +15,20 @@ When ported or embedded code is added, record it here: source, version, license,
 2. Go modules linked into the binaries (go list -deps ./cmd/bgraph ./cmd/bgraph-eval .)
 --------------------------------------------------------------------------------------
 github.com/dustin/go-humanize        v1.0.1                              MIT
+github.com/google/jsonschema-go      v0.4.3                              MIT
 github.com/mattn/go-isatty           v0.0.20                             MIT
+github.com/modelcontextprotocol/go-sdk v1.8.0                            Apache-2.0 (new contributions) and MIT (existing code); see its LICENSE
 github.com/ncruces/go-strftime       v0.1.9                              MIT
 github.com/pelletier/go-toml/v2      v2.4.3                              MIT
 github.com/remyoudompheng/bigfft     v0.0.0-20230129092748-24d4a6f8daec  BSD-3-Clause
+github.com/segmentio/asm             v1.1.3                              MIT
+github.com/segmentio/encoding        v0.5.4                              MIT
+github.com/yosida95/uritemplate/v3   v3.0.2                              BSD-3-Clause
 golang.org/x/exp                     v0.0.0-20250620022241-b7579e27df2b  BSD-3-Clause
-golang.org/x/sys                     v0.36.0                             BSD-3-Clause
+golang.org/x/oauth2                  v0.35.0                             BSD-3-Clause
+golang.org/x/sync                    v0.20.0                             BSD-3-Clause
+golang.org/x/sys                     v0.41.0                             BSD-3-Clause
+golang.org/x/time                    v0.15.0                             BSD-3-Clause
 modernc.org/libc                     v1.66.10                            BSD-3-Clause (includes code translated from musl libc, MIT)
 modernc.org/mathutil                 v1.7.1                              BSD-3-Clause
 modernc.org/memory                   v1.11.0                             BSD-3-Clause

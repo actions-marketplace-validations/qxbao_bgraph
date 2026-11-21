@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/internal/explain"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/runner"
 )
@@ -33,6 +34,7 @@ Usage:
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
   bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json]
   bgraph index     [--root DIR]
+  bgraph mcp       [--root DIR]        (MCP server on stdio)
   bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict]
   bgraph doctor                (not implemented)
   bgraph version | help
@@ -52,6 +54,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "version", "--version":
 		fmt.Fprintln(stdout, "bgraph", version)
 		return 0
+	case "mcp":
+		return runMCP(rest, stderr)
 	case "audit":
 		return runAudit(rest, stdout, stderr)
 	case "doctor":
@@ -166,7 +170,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		printSelection(stdout, sel)
 	case "explain":
-		explain(stdout, sel, fs.Arg(0))
+		for _, l := range explain.Lines(sel, fs.Arg(0)) {
+			fmt.Fprintln(stdout, l)
+		}
 	case "command":
 		plan, err := runner.Commands(sel, runner.Options{ListDir: listDir})
 		if err != nil {
@@ -238,45 +244,6 @@ func printSelection(w io.Writer, sel model.Selection) {
 			first = t.Reasons[0]
 		}
 		fmt.Fprintf(w, "  %s  (%s)  %s\n", t.Unit, t.Runner, first)
-	}
-}
-
-func explain(w io.Writer, sel model.Selection, target string) {
-	target = strings.TrimPrefix(strings.ReplaceAll(target, "\\", "/"), "./")
-	found := false
-	for _, t := range sel.Tests {
-		if t.Unit == target || slices.Contains(t.Files, target) {
-			found = true
-			fmt.Fprintf(w, "test %s is selected because:\n", t.Unit)
-			for _, r := range t.Reasons {
-				fmt.Fprintf(w, "  - %s\n", r)
-			}
-		}
-	}
-	if found {
-		return
-	}
-	n := 0
-	for _, t := range sel.Tests {
-		for _, r := range t.Reasons {
-			if strings.Contains(r, target) {
-				if n == 0 {
-					fmt.Fprintf(w, "file %s appears in the reasons of:\n", target)
-				}
-				n++
-				fmt.Fprintf(w, "  %s: %s\n", t.Unit, r)
-				break
-			}
-		}
-	}
-	if slices.Contains(sel.Changed, target) {
-		fmt.Fprintf(w, "%s is a changed file", target)
-		if n == 0 {
-			fmt.Fprint(w, " but no test was selected because of it")
-		}
-		fmt.Fprintln(w)
-	} else if n == 0 {
-		fmt.Fprintf(w, "no selected test is related to %s\n", target)
 	}
 }
 
