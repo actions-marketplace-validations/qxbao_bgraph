@@ -60,7 +60,7 @@ func (e *Eco) classifyGradle(p string, base, head tree.Tree) ([]model.Widening, 
 	rootFor := func(dir string) (string, bool) {
 		for _, m := range models {
 			if gb := m.rootAbove(dir); gb != nil {
-				return gb.dir, true
+				return gb.scope(), true
 			}
 		}
 		return "", false
@@ -78,7 +78,7 @@ func (e *Eco) classifyGradle(p string, base, head tree.Tree) ([]model.Widening, 
 			if !isGradleScript(b) {
 				what = "settings script"
 			}
-			return []model.Widening{scopeWiden(model.ReasonManifestChanged, p, gb.dir, what+" changed: the structure and shared configuration of the build may differ")}, true
+			return []model.Widening{scopeWiden(model.ReasonManifestChanged, p, gb.scope(), what+" changed: the structure and shared configuration of the build may differ")}, true
 		}
 	}
 	if isGradleScript(b) {
@@ -88,7 +88,7 @@ func (e *Eco) classifyGradle(p string, base, head tree.Tree) ([]model.Widening, 
 				continue
 			}
 			if gb := m.rootAbove(path.Dir(p)); gb != nil {
-				return []model.Widening{scopeWiden(model.ReasonManifestChanged, p, gb.dir, "build script configures other projects ("+why+")")}, true
+				return []model.Widening{scopeWiden(model.ReasonManifestChanged, p, gb.scope(), "build script configures other projects ("+why+")")}, true
 			}
 		}
 		for _, m := range models {

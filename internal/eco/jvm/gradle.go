@@ -265,7 +265,17 @@ func (m *gradleModel) buildProjects(b *gbuild, si settingsInfo) {
 	}
 }
 
-// root returns the build whose directory is the deepest at or above dir (nil when none).
+// scope is the directory that contains the build directory and every project directory of the build (a projectDir or includeFlat
+// project may lie outside the settings directory): the scope of a widening that concerns the whole build.
+func (gb *gbuild) scope() string {
+	dirs := []string{gb.dir}
+	for _, pr := range gb.order {
+		dirs = append(dirs, pr.dir)
+	}
+	return commonDir(dirs)
+}
+
+// rootAbove returns the build whose directory is the deepest at or above dir (nil when none).
 func (m *gradleModel) rootAbove(dir string) *gbuild {
 	var best *gbuild
 	for _, b := range m.builds {
@@ -394,7 +404,7 @@ func (m *gradleModel) analyze(b *builder) []*unit {
 				continue
 			}
 			b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: gb.settings, Spec: d, Class: model.UnresolvedDynamic,
-				ScopeTier: model.TierFull, ScopeDir: gb.dir, Detail: "the project list of this build cannot be determined: " + d})
+				ScopeTier: model.TierFull, ScopeDir: gb.scope(), Detail: "the project list of this build cannot be determined: " + d})
 		}
 	}
 	for _, gb := range m.builds {
