@@ -230,7 +230,7 @@ func (a *acc) probeDir(p string) bool {
 		}
 	}
 	if pj != nil {
-		for _, f := range []string{pj.Main, pj.Module, pj.Types, pj.Typings, pj.BrowserString} {
+		for _, f := range []string{pj.Main, pj.Module, pj.Types, pj.Typings, pj.BrowserString, pj.Source} {
 			if f != "" && a.probePkgTarget(p, pj.Name, f) {
 				found = true
 			}
@@ -621,6 +621,10 @@ func (r *Resolver) resolve(from, spec string, depth int) Result {
 		}
 	case strings.HasPrefix(spec, "#"):
 		fold = true
+		// tsconfig paths may map "#x" keys too (svelte: "#compiler"); union with package.json "imports".
+		for _, c := range a.tsCandidates(from, spec) {
+			a.probePath(c)
+		}
 		a.imports(from, spec, depth)
 	default:
 		a.bare(from, spec)

@@ -1,0 +1,22 @@
+Svelte style: "#compiler" mapped by tsconfig paths (package.json has no "imports"): resolved, no unknown_import widening.
+-- base/package.json --
+{"name":"svelte","devDependencies":{"vitest":"^5.0.0"}}
+-- base/tsconfig.json --
+{"compilerOptions":{"paths":{"#compiler":["./src/compiler/types/index.d.ts"]}}}
+-- base/src/compiler/types/index.d.ts --
+export type X = number
+-- base/src/compiler/a.ts --
+import type { X } from '#compiler'
+export const a: X = 1
+-- base/src/compiler/a.test.ts --
+import { a } from './a'
+-- base/src/b.ts --
+export const b = 1
+-- base/src/b.test.ts --
+import { b } from './b'
+-- head/src/compiler/types/index.d.ts --
+export type X = string | number
+-- want --
+select src/compiler/a.test.ts
+noselect src/b.test.ts
+nowiden unknown_import

@@ -1,0 +1,17 @@
+Preact style: changing a file behind the "source" entry selects tests that import the package by name.
+-- base/package.json --
+{"name":"preact","main":"dist/preact.js","source":"src/index.js","types":"src/index.d.ts","devDependencies":{"mocha":"^10.0.0"}}
+-- base/jsconfig.json --
+{"compilerOptions":{"baseUrl":".","paths":{"preact":["."]}}}
+-- base/src/index.js --
+export { h } from './h'
+-- base/src/h.js --
+export function h() {}
+-- base/src/index.d.ts --
+export function h(): void
+-- base/test/h.test.js --
+import { h } from 'preact'
+-- head/src/h.js --
+export function h() { return 1 }
+-- want --
+select test/h.test.js

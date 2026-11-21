@@ -1,0 +1,24 @@
+Preact style: "source": "src/index.js" is the build entry of main/module (dist/, not in the tree). A self-import through jsconfig paths resolves to the source entry; a change elsewhere does not widen to the whole repo.
+-- base/package.json --
+{"name":"preact","main":"dist/preact.js","module":"dist/preact.module.js","source":"src/index.js","types":"src/index.d.ts","devDependencies":{"mocha":"^10.0.0"}}
+-- base/jsconfig.json --
+{"compilerOptions":{"baseUrl":".","paths":{"preact":["."]}}}
+-- base/src/index.js --
+export { h } from './h'
+-- base/src/h.js --
+export function h() {}
+-- base/src/index.d.ts --
+export function h(): void
+-- base/src/other.js --
+export const o = 1
+-- base/src/uses-other.js --
+export { o } from './other'
+-- base/test/h.test.js --
+import { h } from 'preact'
+-- base/test/other.test.js --
+import { o } from '../src/uses-other'
+-- head/src/other.js --
+export const o = 2
+-- want --
+select test/other.test.js
+noselect test/h.test.js

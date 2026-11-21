@@ -14,6 +14,9 @@ type PackageJSON struct {
 	Type string
 
 	Main, Module, Types, Typings string
+	// Source is the build entry by microbundle/parcel convention ("source": "src/index.js"): outputs in main/module
+	// are compiled from it.
+	Source string
 	BrowserString                string     // browser khi là chuỗi
 	Browser                      *JSONValue // browser thô (chuỗi hoặc object)
 	Exports, Imports             *JSONValue // thô, có thứ tự khoá; nil nếu vắng hoặc null
@@ -110,6 +113,7 @@ func (r *Resolver) parsePkg(p, dir string) (*PackageJSON, error) {
 	str := func(k string) string { s, _ := v.Get(k).AsString(); return s }
 	pj.Name, pj.Type = str("name"), str("type")
 	pj.Main, pj.Module, pj.Types, pj.Typings = str("main"), str("module"), str("types"), str("typings")
+	pj.Source = str("source")
 	if b := v.Get("browser"); b != nil {
 		pj.Browser = b
 		pj.BrowserString, _ = b.AsString()

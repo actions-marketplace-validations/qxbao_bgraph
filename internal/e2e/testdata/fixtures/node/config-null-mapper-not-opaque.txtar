@@ -1,0 +1,19 @@
+moduleNameMapper: null (babel) means "not set": no config_is_code widening; a change selects only the tests that reach it.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+module.exports = { testEnvironment: 'node', moduleNameMapper: null }
+-- base/src/a.js --
+module.exports = 1
+-- base/src/b.js --
+module.exports = 2
+-- base/test/a.test.js --
+require('../src/a')
+-- base/test/b.test.js --
+require('../src/b')
+-- head/src/a.js --
+module.exports = 3
+-- want --
+select test/a.test.js
+noselect test/b.test.js
+nowiden unknown_import
