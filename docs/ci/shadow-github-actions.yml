@@ -61,14 +61,22 @@ jobs:
       - name: Install bgraph
         run: go install github.com/qxbao/bgraph/cmd/bgraph@latest # pin a version once you adopt it
 
-      # 2. Audit. The base is the PR target on pull_request, the previous commit on push.
+      # 2. Audit. The base is the PR target on pull_request; on push, the commit before the push (all of its commits,
+      #    not only the last one), falling back to HEAD~1 for a new branch.
       #    Several --results files may be given (e.g. one per shard or per runner); --format defaults to auto-detection.
+      #    Event values go through env, never straight into the script (script-injection hygiene).
       - name: bgraph audit (shadow, never blocks)
         id: audit
         continue-on-error: true
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_REF: ${{ github.base_ref }}
+          BEFORE: ${{ github.event.before }}
         run: |
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            BASE="origin/${{ github.base_ref }}"
+          if [ "$EVENT" = "pull_request" ]; then
+            BASE="origin/$BASE_REF"
+          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
+            BASE="$BEFORE"
           else
             BASE="HEAD~1"
           fi
