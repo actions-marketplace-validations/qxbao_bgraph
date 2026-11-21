@@ -91,3 +91,19 @@ func (b *indexBuilder) Apply(ctx context.Context, patch, msg string) (string, er
 	}
 	return b.commit(ctx, msg)
 }
+
+// AddFile adds (or replaces) a regular file in the index, then writes the tree and a new commit whose parent is the current Head.
+// Used for the rules overlay: bgraph.toml is injected into P, so P and C carry the identical file.
+func (b *indexBuilder) AddFile(ctx context.Context, path string, content []byte, msg string) (string, error) {
+	if err := b.init(ctx); err != nil {
+		return "", err
+	}
+	oid, err := gitIn(ctx, b.repo, nil, string(content), "hash-object", "-w", "--stdin")
+	if err != nil {
+		return "", err
+	}
+	if _, err := gitIn(ctx, b.repo, b.env, "", "update-index", "--add", "--cacheinfo", "100644,"+strings.TrimSpace(oid)+","+path); err != nil {
+		return "", err
+	}
+	return b.commit(ctx, msg)
+}

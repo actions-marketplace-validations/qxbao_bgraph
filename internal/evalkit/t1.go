@@ -31,9 +31,12 @@ type T1Config struct {
 	MaxPerRepo int
 	Resume     bool
 	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go); "python": test-file oracle (pyt1.go)
-	Checkout   bool   // true: build P/C with a worktree as before (default: temporary index, no checkout)
-	Timeout    time.Duration
-	Log        func(format string, a ...any)
+	// RulesDir: when DIR/<owner>__<name>.toml exists it is injected as bgraph.toml at the repo root of both P and C (identical content, so
+	// the bgraph.toml change itself is not part of the diff). Empty: no overlay.
+	RulesDir string
+	Checkout bool // true: build P/C with a worktree as before (default: temporary index, no checkout)
+	Timeout  time.Duration
+	Log      func(format string, a ...any)
 }
 
 // T1Result is the result of one task.
@@ -53,10 +56,11 @@ type T1Result struct {
 	// FixtureReqs: requirements handled by the fixture rule (see CheckRequired), with the satisfying unit.
 	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
 
-	Rust *RustT1Info `json:"rust,omitempty"` // Rust oracle details (ecosystem rust only)
-	Py   *PyT1Info   `json:"python,omitempty"`  // Python oracle details (ecosystem python only)
-	PyW  *PyWide     `json:"py_wide,omitempty"` // why the Python selection is as big as it is (ecosystem python only)
-	Kind string      `json:"kind,omitempty"`    // manifest repo kind (library | framework | application), when the manifest has one
+	Rust    *RustT1Info `json:"rust,omitempty"`          // Rust oracle details (ecosystem rust only)
+	Py      *PyT1Info   `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
+	PyW     *PyWide     `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
+	Overlay string      `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
+	Kind    string      `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
 
 	Scope     string           `json:"scope,omitempty"`
 	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → count
@@ -290,6 +294,13 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			return skip("nobase", err)
 		}
 	}
+	var ov []byte
+	if rr.cfg.RulesDir != "" {
+		if b, err := os.ReadFile(filepath.Join(rr.cfg.RulesDir, repoDirName(t.Repo)+".toml")); err == nil {
+			ov = b
+			res.Overlay = repoDirName(t.Repo) + ".toml"
+		}
+	}
 	rr.seq++
 	tag := fmt.Sprintf("%s_%d", repoDirName(rr.repo), rr.seq)
 	// dir: where git reads/writes (the mirror when using the index, the worktree when checking out); root is where bgraph opens.
@@ -330,6 +341,11 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", tp); err != nil {
 			return skip("apply", fmt.Errorf("test_patch: %w", err))
 		}
+		if ov != nil {
+			if err := os.WriteFile(filepath.Join(wt, "bgraph.toml"), ov, 0o644); err != nil {
+				return skip("apply", err)
+			}
+		}
 		if _, err := git(ctx, wt, "add", "-A"); err != nil {
 			return skip("apply", err)
 		}
@@ -349,6 +365,11 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			return res, true
 		}
 		res.P = p
+		if ov != nil {
+			if res.P, err = ib.AddFile(ctx, "bgraph.toml", ov, "eval: rules overlay"); err != nil {
+				return skip("apply", err)
+			}
+		}
 	}
 
 	// Oracle (independent of bgraph): files changed by test_patch that still exist and contain FAIL_TO_PASS tests (read from P with git, not from the working tree).

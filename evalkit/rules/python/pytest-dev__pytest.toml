@@ -1,0 +1,24 @@
+# [[dynamic]] declarations for pytest, written from the code only.
+# Left undeclared on purpose: pathlib.py:import_path and assertion/rewrite.py (import any module by path/name), config/__init__.py
+# (import_plugin / -p names, filterwarnings categories), monkeypatch.py:resolve (setattr by dotted name), outcomes.py:importorskip,
+# debugging.py (--pdbcls), freeze_support.py: all take names from users or tests and can load any repo module.
+
+[[dynamic]]
+file = "src/_pytest/monkeypatch.py"
+sys_path_only = true
+reason = "monkeypatch.py:MonkeyPatch.syspath_prepend / undo: insert a directory into sys.path (and invalidate import caches) and restore it; only changes where imports are looked up (resolve()'s __import__ is a separate site)"
+
+[[dynamic]]
+file = "src/_pytest/python_path.py"
+sys_path_only = true
+reason = "python_path.py:pytest_load_initial_conftests: sys.path.insert(0, p) for each pythonpath ini entry; only changes where imports are looked up"
+
+[[dynamic]]
+file = "src/_pytest/pytester.py"
+sys_path_only = true
+reason = "pytester.py:SysPathsSnapshot.restore: sys.path[:], sys.meta_path[:] = saved; only restores where imports are looked up"
+
+[[dynamic]]
+file = "src/_pytest/pathlib.py"
+sys_path_only = true
+reason = "pathlib.py:import_path: sys.path.insert(0, pkg_root) for the 'prepend' import mode; only the sys.path edit is declared, the importlib calls of this file stay undeclared"

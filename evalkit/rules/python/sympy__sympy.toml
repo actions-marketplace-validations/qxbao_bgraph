@@ -1,0 +1,23 @@
+# [[dynamic]] declarations for sympy, written from the code only.
+# Left undeclared on purpose: core/cache.py:lazy_function (import_module(module) of whatever module the caller names),
+# utilities/source.py:get_class, stats/*.py (import_module(library): scipy/numpy/pymc), utilities/_compilation/util.py.
+
+[[dynamic]]
+file = "sympy/testing/runtests.py"
+none = true
+reason = "testing/runtests.py: sys.path.insert(0, dirname) in the doctest runner puts an examples directory on the path (lookup only); the dependency check calls import_module(module) over the names of @doctest_depends_on(modules=...) / test requirements, which are third-party packages only"
+
+[[dynamic]]
+file = "sympy/utilities/runtests.py"
+none = true
+reason = "utilities/runtests.py (older location of testing/runtests.py): sys.path.insert(0, dirname) for examples (lookup only) and import_module(extmod) over the third-party names given as module dependencies"
+
+[[dynamic]]
+file = "sympy/utilities/autowrap.py"
+none = true
+reason = "utilities/autowrap.py:CodeWrapper.wrap_code / UfuncifyCodeWrapper.wrap_code: sys.path.append(workdir) with a tempfile.mkdtemp directory and __import__(self.module_name), the module 'wrapper_module_<n>' it has just generated there; nothing from the repo"
+
+[[dynamic]]
+file = "sympy/external/importtools.py"
+loads = ["sympy/parsing/**/_antlr/*.py"]
+reason = "external/importtools.py:import_module: __import__(module) of the name given by callers; every caller in the repo passes a third-party package or sympy.parsing.<x>._antlr.<generated module> (parsing/autolev, parsing/latex)"

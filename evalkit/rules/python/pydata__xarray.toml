@@ -1,0 +1,21 @@
+# [[dynamic]] declarations for xarray, written from the code only.
+
+[[dynamic]]
+file = "xarray/core/duck_array_ops.py"
+none = true
+reason = "core/duck_array_ops.py:_dask_or_eager_func: import_module(dask_module) with dask_module 'dask.array' (the default) or 'dask.array.ma', the only values passed in the file: third-party dask"
+
+[[dynamic]]
+file = "xarray/core/pycompat.py"
+none = true
+reason = "core/pycompat.py:DuckArrayModule.__init__: import_module(mod) with mod: ModType = Literal['dask', 'pint', 'cupy', 'sparse']: third-party packages"
+
+[[dynamic]]
+file = "xarray/tests/__init__.py"
+none = true
+reason = "tests/__init__.py:_importorskip: import_module(modname) called only with literal names of optional third-party packages (matplotlib, scipy, netCDF4, h5netcdf, Nio, zarr, cftime, dask, ...)"
+
+[[dynamic]]
+file = "xarray/util/print_versions.py"
+loads = ["xarray/__init__.py"]
+reason = "util/print_versions.py:show_versions: importlib.import_module(modname) over the literal deps list: 'xarray' (the package __init__) and third-party packages"

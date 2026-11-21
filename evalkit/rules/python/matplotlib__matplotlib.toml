@@ -1,0 +1,9 @@
+# [[dynamic]] declarations for matplotlib, written from the code only.
+# Left undeclared on purpose: backend_bases.py (register_backend lets callers register any module), pyplot.py:switch_backend and
+# backend_bases.py:_get_output_canvas ("module://x" backends name any module), pyplot.py figure.hooks (rcParams value), colors.py
+# (import_module(cls.__module__) of any class being pickled).
+
+[[dynamic]]
+file = "lib/matplotlib/__init__.py"
+none = true
+reason = "matplotlib/__init__.py:_check_versions: importlib.import_module(modname) over the literal list (cycler, dateutil, kiwisolver, numpy, pyparsing): third-party packages"

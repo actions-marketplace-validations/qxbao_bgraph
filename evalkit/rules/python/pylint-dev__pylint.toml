@@ -1,0 +1,26 @@
+# [[dynamic]] declarations for pylint, written from the code only.
+
+[[dynamic]]
+file = "pylint/lint/utils.py"
+sys_path_only = true
+reason = "lint/utils.py:_augment_sys_path / augmented_sys_path: prepend the given directories to sys.path and restore it; only changes where imports are looked up"
+
+[[dynamic]]
+file = "pylint/lint/pylinter.py"
+sys_path_only = true
+reason = "lint/pylinter.py:check: saves sys.path[:] and restores it after the parallel check; only changes where imports are looked up"
+
+[[dynamic]]
+file = "pylint/testutils/utils.py"
+sys_path_only = true
+reason = "testutils/utils.py:_test_sys_path / _test_cwd: temporarily replace sys.path with a copy and restore it; only changes where imports are looked up"
+
+[[dynamic]]
+file = "pylint/pyreverse/main.py"
+sys_path_only = true
+reason = "pyreverse/main.py:Run.run: sys.path.insert(0, os.getcwd()); only changes where imports are looked up"
+
+[[dynamic]]
+file = "pylint/testutils/lint_module_test.py"
+none = true
+reason = "testutils/lint_module_test.py:LintModuleTest.setUp: __import__(requirement) over the 'requires' entries of the functional-test .rc files, which name third-party packages only (six)"

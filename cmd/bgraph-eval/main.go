@@ -111,6 +111,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
 	eco := fs.String("ecosystem", "", "node (default) | rust | python; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
+	rulesDir := fs.String("rules-dir", "", "inject DIR/<owner>__<name>.toml as bgraph.toml into P and C of that repo's tasks (python [[dynamic]] declarations)")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/rust.json"
@@ -151,7 +152,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	lg := logger(*out)
 	lg("T1: %d task", len(keep))
-	rs, err := evalkit.RunT1(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: keep, Manifest: man, Jobs: *jobs, MaxPerRepo: *maxPer, Resume: *resume, Checkout: *checkout, Ecosystem: *eco, Log: lg})
+	rs, err := evalkit.RunT1(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: keep, Manifest: man, Jobs: *jobs, MaxPerRepo: *maxPer, Resume: *resume, Checkout: *checkout, Ecosystem: *eco, RulesDir: *rulesDir, Log: lg})
 	if werr := evalkit.WriteT1(*out, rs); werr != nil {
 		return werr
 	}

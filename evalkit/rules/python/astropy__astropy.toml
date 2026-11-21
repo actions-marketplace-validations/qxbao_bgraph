@@ -1,0 +1,31 @@
+# [[dynamic]] declarations for astropy, written from the code only (see docs/bgraph.example.toml, NARROWING).
+
+[[dynamic]]
+file = "astropy/constants/config.py"
+loads = ["astropy/constants/codata*.py", "astropy/constants/iau*.py"]
+reason = "constants/config.py: importlib.import_module('.constants.' + version) where version is astropy.physical_constants / astronomical_constants, ConfigurationItem values restricted by their _versions tables to codata2010/2014/2018 and iau2012/2015, i.e. the sibling modules constants/codata*.py and constants/iau*.py"
+
+[[dynamic]]
+file = "astropy/table/serialize.py"
+loads = ["astropy/time/**/*.py", "astropy/units/**/*.py", "astropy/coordinates/**/*.py", "astropy/table/**/*.py", "astropy/utils/masked/**/*.py"]
+reason = "table/serialize.py: import_module(mod_name) in the construct-mixin function is reached only after cls_full_name passed the check against the literal tuple __construct_mixin_classes, whose entries are classes of astropy.time, units, coordinates, table and utils.masked (older revisions list classes of time, units, coordinates and table only)"
+
+[[dynamic]]
+file = "astropy/utils/compat/optional_deps.py"
+none = true
+reason = "utils/compat/optional_deps.py:__getattr__: import_module(_deps[name]) with _deps built from the literal list of optional third-party packages plus matplotlib.pyplot; no module of the repo"
+
+[[dynamic]]
+file = "astropy/units/quantity_helper/converters.py"
+none = true
+reason = "units/quantity_helper/converters.py has no importlib/__import__ call: UfuncHelpers.import_module(module) calls the importer callable registered by register_module (erfa and scipy.special helpers) whose own imports are static"
+
+[[dynamic]]
+file = "astropy/tests/runner.py"
+sys_path_only = true
+reason = "tests/runner.py: sys.path.insert of the .eggs/*.egg directories (third-party test dependencies); only changes where imports are looked up"
+
+[[dynamic]]
+file = "astropy/tests/helper.py"
+none = true
+reason = "tests/helper.py:enable_deprecations_as_exceptions: __import__(m) for m in _modules_to_ignore_on_import = {compiler, scipy, pygments, ipykernel, IPython, setuptools} plus the names astropy/conftest.py adds (requests): third-party modules"

@@ -1,0 +1,8 @@
+# [[dynamic]] declarations for flask, written from the code only.
+# Left undeclared on purpose: cli.py:locate_app (__import__ of the user-given app module), helpers.py:get_root_path and
+# scaffold.py (import the application's own import_name): they can load any module.
+
+[[dynamic]]
+file = "src/flask/cli.py"
+sys_path_only = true
+reason = "cli.py:prepare_import: sys.path.insert(0, path) with the directory of the app file/package; only changes where imports are looked up"

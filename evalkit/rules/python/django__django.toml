@@ -1,0 +1,24 @@
+# [[dynamic]] declarations for django, written from the code only.
+# Left undeclared on purpose: apps/config.py, utils/module_loading.py (import_string/autodiscover), db/utils.py, db/migrations/loader.py,
+# urls/*, template/*, test/client.py, test/runner.py, test/utils.py:get_runner, contrib/*: they import dotted paths taken from settings
+# (INSTALLED_APPS, MIDDLEWARE, ENGINE, SESSION_ENGINE, TEST_RUNNER, MIGRATION_MODULES...) that the tests set to arbitrary repo modules.
+
+[[dynamic]]
+file = "django/conf/__init__.py"
+loads = ["tests/test_*.py", "tests/*settings*.py", "tests/**/settings.py", "tests/**/*_settings.py"]
+reason = "conf/__init__.py:Settings.__init__: importlib.import_module(SETTINGS_MODULE) imports only the settings module named by DJANGO_SETTINGS_MODULE / --settings. The suite driver tests/runtests.py defaults it to test_sqlite (tests/test_<db>.py); other settings modules are per-test settings files. global_settings is a static import"
+
+[[dynamic]]
+file = "django/core/management/__init__.py"
+loads = ["django/**/management/commands/*.py", "tests/**/management/commands/*.py"]
+reason = "core/management/__init__.py: find_commands lists <app>/management/commands/*.py with pkgutil.iter_modules and load_command_class imports '<app>.management.commands.<name>': only management command modules"
+
+[[dynamic]]
+file = "django/core/management/base.py"
+sys_path_only = true
+reason = "core/management/base.py:handle_default_options: sys.path.insert(0, options.pythonpath) puts the --pythonpath directory on the path; only changes where imports are looked up"
+
+[[dynamic]]
+file = "django/test/utils.py"
+sys_path_only = true
+reason = "test/utils.py:extend_sys_path: context manager that extends sys.path with the given directories and restores it; only changes where imports are looked up (get_runner's __import__ stays undeclared)"

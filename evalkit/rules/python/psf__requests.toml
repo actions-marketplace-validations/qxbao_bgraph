@@ -1,0 +1,2 @@
+# No declarations: the only dynamic site of requests is the vendored six (requests/packages/urllib3/packages/six.py, older
+# revisions); seaborn has none.

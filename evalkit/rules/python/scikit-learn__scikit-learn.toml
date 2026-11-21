@@ -1,0 +1,16 @@
+# [[dynamic]] declarations for scikit-learn, written from the code only.
+
+[[dynamic]]
+file = "sklearn/utils/discovery.py"
+loads = ["sklearn/**/*.py"]
+reason = "utils/discovery.py:all_estimators/all_displays/all_functions: pkgutil.walk_packages(path=[sklearn root], prefix='sklearn.') then import_module(module_name): only modules of the sklearn package"
+
+[[dynamic]]
+file = "sklearn/utils/testing.py"
+loads = ["sklearn/**/*.py"]
+reason = "utils/testing.py:all_estimators (older revisions): pkgutil.walk_packages(path=sklearn.__path__, prefix='sklearn.') then __import__(modname): only modules of the sklearn package"
+
+[[dynamic]]
+file = "sklearn/utils/_show_versions.py"
+loads = ["sklearn/__init__.py"]
+reason = "utils/_show_versions.py:_get_deps_info: importlib.import_module(modname) over the literal deps list (pip, setuptools, sklearn, numpy, scipy, Cython, pandas, matplotlib): the sklearn package __init__ and third-party packages"

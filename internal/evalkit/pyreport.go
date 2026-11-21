@@ -49,6 +49,21 @@ func WritePyReport(dir string, rs []T1Result) error {
 	})
 	group("role", func(r T1Result) string { return r.Role })
 
+	// Rules overlay.
+	ov := map[string]int{}
+	nov := 0
+	for _, r := range rs {
+		if r.Overlay != "" {
+			ov[r.Overlay]++
+			nov++
+		}
+	}
+	if nov > 0 {
+		fmt.Fprintf(&md, "## Rules overlay\n\n%d of %d tasks ran with a bgraph.toml injected into P and C (evalkit/rules/python): %s\n\n", nov, len(rs), mapStr(ov))
+	} else {
+		fmt.Fprintf(&md, "## Rules overlay\n\nnone (no bgraph.toml injected)\n\n")
+	}
+
 	// Oracle accounting.
 	var names, kept, nf, noown, amb, tasks int
 	for _, r := range rs {

@@ -1,0 +1,19 @@
+# [[dynamic]] declarations for sphinx, written from the code only.
+# Left undeclared on purpose: ext/autodoc/*, ext/autosummary/*, ext/coverage.py, ext/viewcode.py, ext/inheritance_diagram.py,
+# ext/napoleon, pycode, registry.py:load_extension, util/__init__.py:import_object, util/inspect.py, highlighting.py, search/__init__.py:
+# they import module names that come from documents, conf.py settings or extension lists, i.e. any module.
+
+[[dynamic]]
+file = "sphinx/testing/util.py"
+sys_path_only = true
+reason = "testing/util.py:SphinxTestApp.cleanup: sys.path[:] = saved path (restores it); only changes where imports are looked up"
+
+[[dynamic]]
+file = "sphinx/testing/fixtures.py"
+sys_path_only = true
+reason = "testing/fixtures.py:make_app: sys.path[:] = syspath (restores it); only changes where imports are looked up"
+
+[[dynamic]]
+file = "sphinx/ext/doctest.py"
+sys_path_only = true
+reason = "ext/doctest.py: sys.path[0:0] = config.doctest_path puts the configured directories on the path; only changes where imports are looked up"
