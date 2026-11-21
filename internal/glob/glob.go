@@ -1,10 +1,10 @@
-// Package glob là bộ so khớp glob đường dẫn, không dùng cú pháp gitignore.
+// Package glob is a path glob matcher that does not use gitignore syntax.
 //
-// Cú pháp: `*`, `?`, `**` (nguyên một đoạn), `[abc]`, `[a-z]`, `[!a]`/`[^a]`, `{a,b}` (lồng được, chứa được `/`),
-// `\` thoát ký tự kế. Phân biệt hoa thường. Theo quy ước minimatch matchBase=false: mẫu không có `/` chỉ khớp ở gốc.
+// Syntax: `*`, `?`, `**` (a whole segment), `[abc]`, `[a-z]`, `[!a]`/`[^a]`, `{a,b}` (nestable, may contain `/`),
+// `\` escapes the next character. Case-sensitive. Follows the minimatch matchBase=false convention: a pattern without `/` matches only at the root.
 //
-// Cài đặt: `{}` được khai triển lúc biên dịch thành nhiều biến thể; mỗi biến thể là danh sách đoạn. So khớp đoạn và
-// so khớp `**` đều dùng thuật toán hai con trỏ (quay lui một sao gần nhất) nên thời gian đa thức, không bùng nổ.
+// Implementation: `{}` is expanded at compile time into multiple variants; each variant is a list of segments. Segment matching and
+// `**` matching both use a two-pointer algorithm (backtracking to the nearest star), so time is polynomial with no blowup.
 package glob
 
 import (
@@ -14,7 +14,7 @@ import (
 	"unicode/utf8"
 )
 
-// maxAlternatives giới hạn số biến thể sau khai triển `{}` để tránh bùng nổ tổ hợp.
+// maxAlternatives caps the number of variants after `{}` expansion to avoid combinatorial explosion.
 const maxAlternatives = 1024
 
 type tokKind uint8
@@ -38,27 +38,27 @@ type token struct {
 type segment struct {
 	doubleStar bool
 	toks       []token
-	literal    string // hợp lệ khi isLit
+	literal    string // valid when isLit
 	isLit      bool
 }
 
 type variant struct{ segs []segment }
 
-// Pattern là mẫu đã biên dịch; an toàn dùng đồng thời.
+// Pattern is a compiled pattern; safe for concurrent use.
 type Pattern struct {
 	raw      string
 	variants []variant
 	prefix   string
 }
 
-// Compile biên dịch mẫu.
+// Compile compiles a pattern.
 func Compile(pat string) (*Pattern, error) {
 	orig := pat
 	for strings.HasPrefix(pat, "./") {
 		pat = pat[2:]
 	}
 	if pat == "" {
-		return nil, errors.New("glob: mẫu rỗng")
+		return nil, errors.New("glob: empty pattern")
 	}
 	alts, err := expandBraces(pat)
 	if err != nil {
@@ -76,7 +76,7 @@ func Compile(pat string) (*Pattern, error) {
 	return p, nil
 }
 
-// MustCompile như Compile nhưng panic khi lỗi (dùng cho bảng hằng).
+// MustCompile is like Compile but panics on error (for constant tables).
 func MustCompile(pat string) *Pattern {
 	p, err := Compile(pat)
 	if err != nil {
@@ -85,14 +85,14 @@ func MustCompile(pat string) *Pattern {
 	return p
 }
 
-// String trả mẫu gốc.
+// String returns the original pattern.
 func (p *Pattern) String() string { return p.raw }
 
-// StaticPrefix trả tiền tố thư mục chữ nghĩa dài nhất chung cho mọi biến thể ("src/a/**/*.ts" → "src/a").
-// Rỗng nghĩa là không thu hẹp được.
+// StaticPrefix returns the longest literal directory prefix common to all variants ("src/a/**/*.ts" → "src/a").
+// Empty means it cannot be narrowed.
 func (p *Pattern) StaticPrefix() string { return p.prefix }
 
-// Match so khớp đường dẫn (gạch xuôi, tương đối, không "./" đầu).
+// Match matches a path (forward slashes, relative, no leading "./").
 func (p *Pattern) Match(path string) bool {
 	if path == "" {
 		return false
@@ -106,7 +106,7 @@ func (p *Pattern) Match(path string) bool {
 	return false
 }
 
-// Match tiện dụng; mẫu sai → false.
+// Match is a convenience; an invalid pattern → false.
 func Match(pat, path string) bool {
 	p, err := Compile(pat)
 	if err != nil {
@@ -115,7 +115,7 @@ func Match(pat, path string) bool {
 	return p.Match(path)
 }
 
-// expandBraces khai triển `{a,b}` (lồng được) thành danh sách chuỗi; giữ nguyên `\x` và `[...]`.
+// expandBraces expands `{a,b}` (nestable) into a list of strings; leaves `\x` and `[...]` unchanged.
 func expandBraces(s string) ([]string, error) {
 	open := -1
 scan:
@@ -160,7 +160,7 @@ scan:
 		}
 	}
 	if closeIdx < 0 {
-		return nil, errors.New("thiếu '}'")
+		return nil, errors.New("missing '}'")
 	}
 	pre, post := s[:open], s[closeIdx+1:]
 	var parts []string
@@ -184,7 +184,7 @@ scan:
 			for _, po := range postAlts {
 				out = append(out, pre+pa+po)
 				if len(out) > maxAlternatives {
-					return nil, errors.New("quá nhiều biến thể {}")
+					return nil, errors.New("too many {} variants")
 				}
 			}
 		}
@@ -192,13 +192,13 @@ scan:
 	return out, nil
 }
 
-// classEnd trả chỉ số `]` đóng lớp bắt đầu ở s[i]=='[', hoặc -1 nếu không có.
+// classEnd returns the index of the `]` closing the class that starts at s[i]=='[', or -1 if there is none.
 func classEnd(s string, i int) int {
 	j := i + 1
 	if j < len(s) && (s[j] == '!' || s[j] == '^') {
 		j++
 	}
-	if j < len(s) && s[j] == ']' { // ']' đầu tiên là ký tự thường
+	if j < len(s) && s[j] == ']' { // a leading ']' is an ordinary character
 		j++
 	}
 	for ; j < len(s); j++ {
@@ -233,11 +233,11 @@ func compileVariant(s string) (variant, error) {
 	var v variant
 	for _, part := range parts {
 		if part == "" {
-			continue // "a//b" ≡ "a/b"; "/" đầu/cuối bỏ qua
+			continue // "a//b" ≡ "a/b"; leading/trailing "/" ignored
 		}
 		if part == "**" {
 			if n := len(v.segs); n > 0 && v.segs[n-1].doubleStar {
-				continue // gộp ** liên tiếp
+				continue // merge consecutive **
 			}
 			v.segs = append(v.segs, segment{doubleStar: true})
 			continue
@@ -249,7 +249,7 @@ func compileVariant(s string) (variant, error) {
 		v.segs = append(v.segs, seg)
 	}
 	if len(v.segs) == 0 {
-		return v, errors.New("mẫu rỗng")
+		return v, errors.New("empty pattern")
 	}
 	return v, nil
 }
@@ -263,7 +263,7 @@ func compileSegment(s string) (segment, error) {
 		switch c {
 		case '\\':
 			if i+1 >= len(s) {
-				return seg, errors.New("'\\' ở cuối mẫu")
+				return seg, errors.New("'\\' at end of pattern")
 			}
 			r, n := utf8.DecodeRuneInString(s[i+1:])
 			seg.toks = append(seg.toks, token{kind: tLit, r: r})
@@ -282,7 +282,7 @@ func compileSegment(s string) (segment, error) {
 		case '[':
 			end := classEnd(s, i)
 			if end < 0 {
-				return seg, errors.New("thiếu ']'")
+				return seg, errors.New("missing ']'")
 			}
 			t, err := parseClass(s[i+1 : end])
 			if err != nil {
@@ -305,7 +305,7 @@ func compileSegment(s string) (segment, error) {
 	return seg, nil
 }
 
-// parseClass phân tích thân lớp ký tự (không gồm dấu ngoặc).
+// parseClass parses the body of a character class (excluding the brackets).
 func parseClass(body string) (token, error) {
 	t := token{kind: tClass}
 	if body != "" && (body[0] == '!' || body[0] == '^') {
@@ -333,7 +333,7 @@ func parseClass(body string) (token, error) {
 		if i+2 < len(items) && items[i+1].r == '-' && !items[i+1].escaped {
 			hi := items[i+2].r
 			if hi < lo {
-				return t, fmt.Errorf("khoảng ngược [%c-%c]", lo, hi)
+				return t, fmt.Errorf("reversed range [%c-%c]", lo, hi)
 			}
 			t.ranges = append(t.ranges, rng{lo, hi})
 			i += 2
@@ -342,7 +342,7 @@ func parseClass(body string) (token, error) {
 		t.ranges = append(t.ranges, rng{lo, lo})
 	}
 	if len(t.ranges) == 0 {
-		return t, errors.New("lớp ký tự rỗng")
+		return t, errors.New("empty character class")
 	}
 	return t, nil
 }
@@ -358,8 +358,8 @@ func (t *token) classMatch(r rune) bool {
 	return in != t.neg
 }
 
-// matchSegs: so khớp danh sách đoạn mẫu với đoạn đường dẫn; `**` dùng hai con trỏ.
-// `**` cuối mẫu đòi hỏi ít nhất một đoạn còn lại ("a/**" không khớp "a").
+// matchSegs: matches the list of pattern segments against path segments; `**` uses two pointers.
+// A trailing `**` requires at least one remaining segment ("a/**" does not match "a").
 func matchSegs(pat []segment, path []string) bool {
 	pi, si := 0, 0
 	starP, starS := -1, 0
@@ -386,7 +386,7 @@ func matchSegs(pat []segment, path []string) bool {
 		return false
 	}
 	if pi == len(pat)-1 && pat[pi].doubleStar {
-		return false // `**` cuối phải nuốt ≥1 đoạn
+		return false // a trailing `**` must swallow ≥1 segment
 	}
 	return pi == len(pat)
 }
@@ -447,7 +447,7 @@ func staticPrefix(vs []variant) string {
 	for i, v := range vs {
 		var lits []string
 		for j, s := range v.segs {
-			if !s.isLit || j == len(v.segs)-1 { // đoạn cuối là tệp, không tính
+			if !s.isLit || j == len(v.segs)-1 { // the last segment is the file, not counted
 				break
 			}
 			lits = append(lits, s.literal)

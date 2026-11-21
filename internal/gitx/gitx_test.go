@@ -16,7 +16,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// hermetic dựng môi trường git cô lập (không đọc cấu hình hệ thống/người dùng).
+// hermetic builds an isolated git environment (reads no system/user config).
 func hermetic(t testing.TB) {
 	t.Helper()
 	home := t.TempDir()
@@ -93,7 +93,7 @@ func snap(t testing.TB, r *Repo, base string) (Change, *WorkTree) {
 	return ch, wt
 }
 
-// summary: "A:path M:path ..." theo thứ tự đã sắp xếp.
+// summary: "A:path M:path ..." in sorted order.
 func summary(ch Change) []string {
 	var s []string
 	for _, f := range ch.Files {
@@ -119,7 +119,7 @@ func TestOpen(t *testing.T) {
 		t.Fatalf("Root = %q, want %q", r.Root, dir)
 	}
 	if _, err := Open(context.Background(), t.TempDir()); err == nil {
-		t.Fatal("Open ngoài repo phải lỗi")
+		t.Fatal("Open outside a repo must fail")
 	}
 }
 
@@ -154,13 +154,13 @@ func TestSnapshotBasic(t *testing.T) {
 	eq(t, wt.Files(), []string{".gitignore", "added_staged.ts", "keep.ts", "mod.ts", "staged_mod.ts", "unstaged_mod.ts", "untracked.ts"})
 	for _, p := range []string{"del.ts", "wtdel.ts", "ignored.log"} {
 		if wt.Has(p) {
-			t.Errorf("%s không được có trong WorkTree", p)
+			t.Errorf("%s must not be in WorkTree", p)
 		}
 		if _, err := wt.Read(p); !errors.Is(err, fs.ErrNotExist) {
 			t.Errorf("Read(%s) err=%v, want ErrNotExist", p, err)
 		}
 	}
-	// Key: keep.ts không đổi → OID của index; các tệp khác theo nội dung đĩa.
+	// Key: keep.ts unchanged → the index OID; other files by on-disk content.
 	if got, want := wt.Key("keep.ts"), tree.BlobKey([]byte("keep")); got != want {
 		t.Errorf("Key(keep)=%s want %s", got, want)
 	}
@@ -184,18 +184,18 @@ func TestStagedThenReverted(t *testing.T) {
 	base := commitAll(t, dir, "base")
 	write(t, dir, "a.ts", "X")
 	git(t, dir, "add", "a.ts")
-	write(t, dir, "a.ts", "base") // hoàn nguyên trên đĩa; index vẫn giữ X
+	write(t, dir, "a.ts", "base") // reverted on disk; the index still holds X
 
 	r := open(t, dir)
 	ch, wt := snap(t, r, base)
 	if len(ch.Files) != 0 {
-		t.Fatalf("không được có thay đổi so với base: %v", summary(ch))
+		t.Fatalf("expected no changes against base: %v", summary(ch))
 	}
 	if got, want := wt.Key("a.ts"), tree.BlobKey([]byte("base")); got != want {
-		t.Fatalf("Key phải lấy từ đĩa: got %s want %s", got, want)
+		t.Fatalf("Key must come from disk: got %s want %s", got, want)
 	}
 	if idxOID := git(t, dir, "rev-parse", ":a.ts"); wt.Key("a.ts") == idxOID {
-		t.Fatal("Key trùng OID index (sai)")
+		t.Fatal("Key equals the index OID (wrong)")
 	}
 }
 
@@ -223,7 +223,7 @@ func TestSpacesUnicodeDash(t *testing.T) {
 	for _, n := range names {
 		write(t, dir, n, "c:"+n)
 	}
-	// Một nửa staged, một nửa untracked.
+	// Half staged, half untracked.
 	git(t, dir, "add", "--", "tiếng việt.ts", "-dash.ts")
 	r := open(t, dir)
 	ch, wt := snap(t, r, base)
@@ -263,7 +263,7 @@ func TestSpacesUnicodeDash(t *testing.T) {
 		t.Fatalf("%q %v", b, err)
 	}
 	if _, err := r.RevParse(context.Background(), "-dash"); err == nil {
-		t.Fatal("rev bắt đầu bằng - phải lỗi, không bị hiểu là cờ")
+		t.Fatal("rev starting with - must fail, not be treated as a flag")
 	}
 }
 
@@ -273,19 +273,19 @@ func TestTypeChangeAndGitlinkAndSymlink(t *testing.T) {
 	write(t, dir, "t.ts", "file")
 	base := commitAll(t, dir, "base")
 	blob := git(t, dir, "rev-parse", "HEAD:target.txt")
-	// symlink 120000 trỏ tới "target.txt" (blob chứa văn bản "target.txt")
+	// symlink 120000 pointing to "target.txt" (blob contains the text "target.txt")
 	lnk := hashObject(t, dir, "target.txt")
 	_ = blob
 	git(t, dir, "update-index", "--add", "--cacheinfo", "120000,"+lnk+",link")
 	// gitlink
 	git(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+base+",sub")
-	// type change: t.ts thành symlink trong index
+	// type change: t.ts becomes a symlink in the index
 	git(t, dir, "update-index", "--cacheinfo", "120000,"+lnk+",t.ts")
-	write(t, dir, "link", "target.txt") // core.symlinks=false: symlink là tệp thường trên đĩa
+	write(t, dir, "link", "target.txt") // core.symlinks=false: the symlink is a regular file on disk
 	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	write(t, dir, "t.ts", "target.txt") // khớp nội dung đã stage (core.symlinks=false → tệp thường)
+	write(t, dir, "t.ts", "target.txt") // matches the staged content (core.symlinks=false → regular file)
 
 	r := open(t, dir)
 	ch, wt := snap(t, r, base)
@@ -303,14 +303,14 @@ func TestTypeChangeAndGitlinkAndSymlink(t *testing.T) {
 		t.Errorf("t.ts: %+v (all %v)", f, summary(ch))
 	}
 	if wt.Has("sub") {
-		t.Error("gitlink không được nằm trong Files")
+		t.Error("gitlink must not be in Files")
 	}
 	eq(t, wt.Submodules(), []string{"sub"})
 	if wt.Mode("link") != "120000" || wt.Mode("target.txt") != "100644" {
 		t.Error("Mode")
 	}
 
-	// Commit tree có symlink + gitlink.
+	// Commit tree with symlink + gitlink.
 	git(t, dir, "commit", "-q", "-m", "special")
 	ct, err := r.CommitTree(context.Background(), "HEAD")
 	if err != nil {
@@ -363,9 +363,9 @@ func TestMergeCommitAsBase(t *testing.T) {
 	ch, wt := snap(t, r, merge)
 	eq(t, summary(ch), []string{"A:after.ts"})
 	if !wt.Has("f.ts") || !wt.Has("m.ts") {
-		t.Fatal("thiếu tệp merge")
+		t.Fatal("missing merge file")
 	}
-	// Snapshot chấp nhận rev không phải OID (tự phân giải).
+	// Snapshot accepts a non-OID rev (resolves it itself).
 	ch2, _ := snap(t, r, "HEAD~1")
 	if ch2.Base == merge || len(ch2.Base) != 40 {
 		t.Fatalf("Base=%s", ch2.Base)
@@ -375,17 +375,17 @@ func TestMergeCommitAsBase(t *testing.T) {
 		t.Fatalf("MergeBase %q %v", mb, err)
 	}
 	if mb != git(t, dir, "merge-base", "feat", "main") {
-		t.Fatal("merge-base khác git")
+		t.Fatal("merge-base differs from git")
 	}
 	_ = root
-	// Hai nhánh không liên quan → lỗi "không có merge-base".
+	// Two unrelated branches → "no merge-base" error.
 	git(t, dir, "checkout", "-q", "--orphan", "orph")
 	git(t, dir, "rm", "-rfq", ".")
 	write(t, dir, "o.txt", "o")
 	git(t, dir, "add", "o.txt")
 	git(t, dir, "commit", "-q", "-m", "orphan")
 	if _, err := r.MergeBase(ctx, "orph", "main"); err == nil {
-		t.Fatal("kỳ vọng lỗi không có merge-base")
+		t.Fatal("expected a no-merge-base error")
 	}
 }
 
@@ -395,9 +395,9 @@ func TestRevParseUnknownAndShallow(t *testing.T) {
 	commitAll(t, dir, "c")
 	r := open(t, dir)
 	if _, err := r.RevParse(context.Background(), "does-not-exist"); err == nil {
-		t.Fatal("kỳ vọng lỗi")
+		t.Fatal("expected an error")
 	} else if !strings.Contains(err.Error(), "rev-parse") {
-		t.Fatalf("lỗi thiếu tên lệnh: %v", err)
+		t.Fatalf("error lacks the command name: %v", err)
 	}
 	if sh, err := r.IsShallow(context.Background()); err != nil || sh {
 		t.Fatalf("IsShallow=%v,%v", sh, err)
@@ -411,7 +411,7 @@ func TestCommitTreeAndCatFile(t *testing.T) {
 	write(t, dir, "bin.dat", bin)
 	write(t, dir, "src/Main.ts", "main")
 	write(t, dir, "big.txt", strings.Repeat("0123456789abcdef\n", 100000)) // ~1.7 MB
-	// Win/mac không có hai tệp chỉ khác hoa thường trên đĩa: chèn thẳng vào index.
+	// Win/mac cannot have two files differing only by case on disk: insert straight into the index.
 	git(t, dir, "add", "-A")
 	git(t, dir, "update-index", "--add", "--cacheinfo", "100644,"+hashObject(t, dir, "lower")+",src/main.ts")
 	git(t, dir, "commit", "-q", "-m", "c")
@@ -442,7 +442,7 @@ func TestCommitTreeAndCatFile(t *testing.T) {
 	if _, err := ct.Read("nope"); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("err=%v", err)
 	}
-	// blob không tồn tại: lỗi nhưng tiến trình dùng tiếp được.
+	// missing blob: error, but the process stays usable.
 	if _, err := r.cat.get(ctx, strings.Repeat("ab", 20)); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("missing err=%v", err)
 	}
@@ -450,9 +450,9 @@ func TestCommitTreeAndCatFile(t *testing.T) {
 		t.Errorf("sau missing: %q %v", b, err)
 	}
 	if _, err := r.CommitTree(ctx, "nope-rev"); err == nil {
-		t.Error("kỳ vọng lỗi")
+		t.Error("expected an error")
 	}
-	// Đồng thời.
+	// Concurrent.
 	done := make(chan error, 8)
 	for i := 0; i < 8; i++ {
 		go func() {
@@ -471,7 +471,7 @@ func TestCommitTreeAndCatFile(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	// Open(1) + CommitTree(1) + cat-file(1) + CommitTree lỗi(1) = 4
+	// Open(1) + CommitTree(1) + cat-file(1) + failing CommitTree(1) = 4
 	if n := r.Spawns(); n != 4 {
 		t.Errorf("Spawns=%d, want 4", n)
 	}
@@ -498,7 +498,7 @@ func TestCloseIdempotentAndReadAfterClose(t *testing.T) {
 	if _, err := ct.Read("a.txt"); !errors.Is(err, ErrClosed) {
 		t.Fatalf("err=%v, want ErrClosed", err)
 	}
-	// Close khi chưa từng khởi động cat-file.
+	// Close before cat-file was ever started.
 	r2 := open(t, dir)
 	if err := r2.Close(); err != nil || r2.Close() != nil {
 		t.Fatal("Close")
@@ -514,17 +514,17 @@ func TestCatFileProcessDeathAndCancel(t *testing.T) {
 	if _, err := ct.Read("a.txt"); err != nil {
 		t.Fatal(err)
 	}
-	// Giết tiến trình từ bên ngoài: lần đọc kế tiếp lỗi (không treo), lần sau nữa tự khởi động lại.
+	// Kill the process externally: the next read errors (no hang), the one after restarts it.
 	r.cat.smu.Lock()
 	p := r.cat.p
 	r.cat.smu.Unlock()
 	p.kill()
 	<-p.done
 	if _, err := ct.Read("a.txt"); err == nil {
-		t.Fatal("kỳ vọng lỗi khi tiến trình chết")
+		t.Fatal("expected an error when the process is dead")
 	}
 	if b, err := ct.Read("a.txt"); err != nil || string(b) != "a" {
-		t.Fatalf("khởi động lại: %q %v", b, err)
+		t.Fatalf("restart: %q %v", b, err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -543,7 +543,7 @@ func TestSnapshotSpawns(t *testing.T) {
 	before := r.Spawns()
 	snap(t, r, base)
 	if d := r.Spawns() - before; d != 3 {
-		t.Fatalf("Snapshot spawn %d tiến trình, want 3", d)
+		t.Fatalf("Snapshot spawned %d processes, want 3", d)
 	}
 }
 
@@ -553,10 +553,10 @@ func TestSnapshotBadBase(t *testing.T) {
 	commitAll(t, dir, "c")
 	r := open(t, dir)
 	if _, _, err := r.Snapshot(context.Background(), "nope"); err == nil {
-		t.Fatal("kỳ vọng lỗi")
+		t.Fatal("expected an error")
 	}
 	if _, _, err := r.Snapshot(context.Background(), strings.Repeat("0", 40)); err == nil {
-		t.Fatal("kỳ vọng lỗi với OID không tồn tại")
+		t.Fatal("expected an error for a nonexistent OID")
 	}
 }
 
@@ -570,12 +570,12 @@ func TestDeletedStagedAddedThenRemovedFromDisk(t *testing.T) {
 	r := open(t, dir)
 	ch, wt := snap(t, r, base)
 	if wt.Has("new.ts") {
-		t.Fatal("new.ts đã xoá khỏi đĩa không được nằm trong cây")
+		t.Fatal("new.ts deleted from disk must not be in the tree")
 	}
-	// Index có new.ts (A) nhưng đĩa không có: diff vs worktree báo D? Chấp nhận mọi kết quả không báo 'A' cho tệp không tồn tại.
+	// The index has new.ts (A) but the disk does not: diff vs worktree reports D? Accept any result that does not report 'A' for a nonexistent file.
 	for _, f := range ch.Files {
 		if f.Path == "new.ts" && f.Status == 'A' {
-			t.Logf("ghi chú: diff báo A cho tệp chỉ có trong index: %+v", f)
+			t.Logf("note: diff reports A for a file only in the index: %+v", f)
 		}
 	}
 }
@@ -587,10 +587,10 @@ func TestRmCachedStillOnDisk(t *testing.T) {
 	git(t, dir, "rm", "-q", "--cached", "a.ts")
 	r := open(t, dir)
 	ch, wt := snap(t, r, base)
-	// a.ts: 'D' (có trong base, không còn trong index) gộp với untracked 'A' → 'M'.
+	// a.ts: 'D' (in base, no longer in index) merged with untracked 'A' → 'M'.
 	eq(t, summary(ch), []string{"M:a.ts"})
 	if !wt.Has("a.ts") || wt.Key("a.ts") != tree.BlobKey([]byte("a")) {
-		t.Fatal("a.ts phải còn trong cây làm việc")
+		t.Fatal("a.ts must remain in the working tree")
 	}
 }
 
@@ -606,7 +606,7 @@ func TestConflict(t *testing.T) {
 	commitAll(t, dir, "main")
 	cmd := exec.Command("git", "merge", "other")
 	cmd.Dir = dir
-	_ = cmd.Run() // xung đột là mong đợi
+	_ = cmd.Run() // conflict is expected
 	r := open(t, dir)
 	ch, wt := snap(t, r, base)
 	n := 0
@@ -616,11 +616,11 @@ func TestConflict(t *testing.T) {
 		}
 	}
 	if n != 1 {
-		t.Fatalf("c.ts xuất hiện %d lần", n)
+		t.Fatalf("c.ts appears %d times", n)
 	}
 	b, _ := os.ReadFile(filepath.Join(dir, "c.ts"))
 	if wt.Key("c.ts") != tree.BlobKey(b) {
-		t.Fatal("tệp xung đột phải lấy khoá từ đĩa")
+		t.Fatal("conflicted file must take its key from disk")
 	}
 	found := false
 	for _, f := range ch.Files {
@@ -629,7 +629,7 @@ func TestConflict(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("c.ts phải nằm trong tập thay đổi: %v", summary(ch))
+		t.Fatalf("c.ts must be in the change set: %v", summary(ch))
 	}
 }
 
@@ -648,7 +648,7 @@ func TestNestedRepoUntracked(t *testing.T) {
 	t.Logf("changes=%v subs=%v files=%v", summary(ch), wt.Submodules(), wt.Files())
 	for _, f := range wt.Files() {
 		if strings.HasPrefix(f, "vendor/") {
-			t.Errorf("không được liệt kê tệp trong repo lồng: %s", f)
+			t.Errorf("must not list files inside a nested repo: %s", f)
 		}
 	}
 }
@@ -670,10 +670,10 @@ func TestParseRaw(t *testing.T) {
 	}
 	eq(t, s, []string{"A:new file", "D:gone", "T:t", "D:old", "A:newname", "M:conf"})
 	if _, err := parseRaw([]byte(":100644 100644 a b X\x00p\x00")); err == nil {
-		t.Fatal("trạng thái lạ phải lỗi")
+		t.Fatal("unknown status must fail")
 	}
 	if _, err := parseRaw([]byte(":100644 100644 a b M\x00")); err == nil {
-		t.Fatal("thiếu đường dẫn phải lỗi")
+		t.Fatal("missing path must fail")
 	}
 }
 
@@ -706,7 +706,7 @@ func TestParseStatusV2(t *testing.T) {
 	eq(t, r.untracked, []string{"untracked dir/x.ts", "nested/"})
 	for _, bad := range []string{"Z foo", "1 .M N... 1 2", "?x", "2 R. N... a b c d e R1 p"} {
 		if _, err := parseStatusV2([]byte(bad + "\x00")); err == nil {
-			t.Errorf("%q phải lỗi", bad)
+			t.Errorf("%q must fail", bad)
 		}
 	}
 }

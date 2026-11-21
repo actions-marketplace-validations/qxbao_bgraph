@@ -91,7 +91,7 @@ func TestCompileErrors(t *testing.T) {
 		}
 	}
 	if !Match("a}b", "a}b") {
-		t.Error("'}' lẻ phải là ký tự thường")
+		t.Error("a lone '}' must be an ordinary character")
 	}
 }
 
@@ -119,11 +119,11 @@ func TestStaticPrefix(t *testing.T) {
 func TestNoCatastrophicBacktracking(t *testing.T) {
 	long := strings.Repeat("a", 5000)
 	if MustCompile("a*a*a*a*a*a*a*a*b").Match(long) {
-		t.Error("không được khớp")
+		t.Error("must not match")
 	}
 	segs := strings.Repeat("aa/", 500) + "c"
 	if MustCompile("**/a*/**/a*/**/a*/**/b").Match(segs) {
-		t.Error("không được khớp")
+		t.Error("must not match")
 	}
 }
 

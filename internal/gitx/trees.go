@@ -22,14 +22,14 @@ var (
 
 func joinRoot(root, p string) string { return filepath.Join(root, filepath.FromSlash(p)) }
 
-// pathSet giữ phần dùng chung: danh sách tệp đã sắp xếp, tập thư mục tổ tiên, bảng tra không phân biệt hoa thường.
+// pathSet holds the shared part: the sorted file list, the set of ancestor directories, and a case-insensitive lookup table.
 type pathSet struct {
 	files []string
 	dirs  map[string]bool
 	fold  map[string][]string
 }
 
-// newPathSet nhận danh sách (sẽ bị sắp xếp tại chỗ) các tệp không trùng.
+// newPathSet takes a list (sorted in place) of distinct files.
 func newPathSet(files []string) pathSet {
 	slices.Sort(files)
 	ps := pathSet{files: files, dirs: map[string]bool{}, fold: make(map[string][]string, len(files))}
@@ -41,7 +41,7 @@ func newPathSet(files []string) pathSet {
 			ps.dirs[d] = true
 		}
 		k := strings.ToLower(p)
-		ps.fold[k] = append(ps.fold[k], p) // files đã sắp xếp nên mỗi danh sách cũng sắp xếp
+		ps.fold[k] = append(ps.fold[k], p) // files is sorted, so each list is sorted too
 	}
 	return ps
 }
@@ -57,13 +57,13 @@ func notExist(op, p string) error { return &fs.PathError{Op: op, Path: p, Err: f
 
 type wtEntry struct {
 	mode, oid string
-	dirty     bool // khoá phải lấy từ đĩa, không dùng oid của index
+	dirty     bool // key must come from disk, not the index oid
 	once      sync.Once
 	key       string
 }
 
-// WorkTree là cây làm việc: mục index (stage 0; đường dẫn xung đột gồm một lần) ∪ untracked không bị ignore, trừ tệp đã
-// xoá khỏi đĩa. Gitlink không nằm trong Files mà ở Submodules().
+// WorkTree is the working tree: index entries (stage 0; a conflicted path counts once) ∪ untracked non-ignored files, minus files
+// deleted from disk. Gitlinks are not in Files but in Submodules().
 type WorkTree struct {
 	pathSet
 	root string
@@ -80,7 +80,7 @@ func buildWorkTree(root string, idx []indexEntry, ls lsFiles, diff []ChangedFile
 			conflicted[e.path] = true
 		}
 		if cur, ok := ents[e.path]; ok {
-			// Stage 0 thắng; nếu không thì giữ mục đầu tiên (stage thấp nhất).
+			// Stage 0 wins; otherwise keep the first entry (lowest stage).
 			if e.stage == 0 {
 				cur.mode, cur.oid = e.mode, e.oid
 			}
@@ -102,7 +102,7 @@ func buildWorkTree(root string, idx []indexEntry, ls lsFiles, diff []ChangedFile
 	for p := range ls.removed {
 		delete(ents, p)
 	}
-	// Phòng thủ: diff báo 'D' nhưng ls-files không báo 'R' → kiểm tra đĩa.
+	// Defensive: diff reports 'D' but ls-files does not report 'R' → check the disk.
 	for _, f := range diff {
 		if f.Status == 'D' {
 			if _, ok := ents[f.Path]; ok && lstatMissing(root, f.Path) {
@@ -135,7 +135,7 @@ func buildWorkTree(root string, idx []indexEntry, ls lsFiles, diff []ChangedFile
 
 func (t *WorkTree) Has(p string) bool { _, ok := t.ents[p]; return ok }
 
-// Mode trả mode git của tệp ("100644", "100755", "120000"); untracked luôn "100644"; "" nếu không có.
+// Mode returns the file's git mode ("100644", "100755", "120000"); untracked is always "100644"; "" if absent.
 func (t *WorkTree) Mode(p string) string {
 	if e, ok := t.ents[p]; ok {
 		return e.mode
@@ -143,10 +143,10 @@ func (t *WorkTree) Mode(p string) string {
 	return ""
 }
 
-// Submodules trả đường dẫn gitlink (mode 160000) và thư mục untracked là repo git lồng; đã sắp xếp.
+// Submodules returns gitlink paths (mode 160000) and untracked directories that are nested git repos; sorted.
 func (t *WorkTree) Submodules() []string { return t.subs }
 
-// Read đọc tệp từ đĩa. Với tệp "dirty" cũng tính và nhớ khoá luôn.
+// Read reads a file from disk. For a "dirty" file it also computes and caches the key.
 func (t *WorkTree) Read(p string) ([]byte, error) {
 	e, ok := t.ents[p]
 	if !ok {
@@ -162,8 +162,8 @@ func (t *WorkTree) Read(p string) ([]byte, error) {
 	return b, nil
 }
 
-// Key: tệp tracked không đổi so với index → blob OID của index; tệp bị sửa (kể cả staged-rồi-hoàn-nguyên), chưa merge hay
-// untracked → BlobKey của byte trên đĩa (tính lười, nhớ lại). "" nếu không có tệp hoặc không đọc được đĩa.
+// Key: a tracked file unchanged versus the index → the index blob OID; a modified file (including staged-then-reverted), unmerged or
+// untracked → the BlobKey of the on-disk bytes (computed lazily, cached). "" if the file is absent or the disk cannot be read.
 func (t *WorkTree) Key(p string) string {
 	e, ok := t.ents[p]
 	if !ok {
@@ -185,7 +185,7 @@ func (t *WorkTree) Key(p string) string {
 
 type ctEntry struct{ mode, oid string }
 
-// CommitTree là cây của một commit, đọc blob qua cat-file --batch của Repo.
+// CommitTree is the tree of a commit, reading blobs via the Repo's cat-file --batch.
 type CommitTree struct {
 	pathSet
 	r    *Repo
@@ -193,7 +193,7 @@ type CommitTree struct {
 	subs []string
 }
 
-// CommitTree dựng cây của rev bằng `git ls-tree -r -z --full-tree`.
+// CommitTree builds the tree of rev with `git ls-tree -r -z --full-tree`.
 func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) {
 	out, err := r.run(ctx, "ls-tree", "-r", "-z", "--full-tree", "--end-of-options", rev)
 	if err != nil {
@@ -207,11 +207,11 @@ func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) 
 		}
 		tab := bytes.IndexByte(rec, '\t')
 		if tab < 0 {
-			return nil, fmt.Errorf("gitx: ls-tree: bản ghi sai dạng %q", rec)
+			return nil, fmt.Errorf("gitx: ls-tree: malformed record %q", rec)
 		}
 		f := strings.Fields(string(rec[:tab]))
 		if len(f) != 3 {
-			return nil, fmt.Errorf("gitx: ls-tree: siêu dữ liệu sai dạng %q", rec[:tab])
+			return nil, fmt.Errorf("gitx: ls-tree: malformed metadata %q", rec[:tab])
 		}
 		p := string(rec[tab+1:])
 		if f[0] == "160000" || f[1] == "commit" {
@@ -228,16 +228,16 @@ func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) 
 
 func (t *CommitTree) Has(p string) bool { _, ok := t.ents[p]; return ok }
 
-// Mode trả mode git của tệp trong commit; "" nếu không có.
+// Mode returns the file's git mode in the commit; "" if absent.
 func (t *CommitTree) Mode(p string) string { return t.ents[p].mode }
 
-// Submodules trả đường dẫn gitlink của commit; đã sắp xếp.
+// Submodules returns the commit's gitlink paths; sorted.
 func (t *CommitTree) Submodules() []string { return t.subs }
 
-// Key là blob OID.
+// Key is the blob OID.
 func (t *CommitTree) Key(p string) string { return t.ents[p].oid }
 
-// Read đọc blob (symlink: văn bản đích của liên kết). Không có ctx trong tree.Tree; Repo.Close ngắt được yêu cầu treo.
+// Read reads a blob (symlink: the link's target text). tree.Tree has no ctx; Repo.Close can interrupt a hung request.
 func (t *CommitTree) Read(p string) ([]byte, error) {
 	e, ok := t.ents[p]
 	if !ok {
@@ -246,7 +246,7 @@ func (t *CommitTree) Read(p string) ([]byte, error) {
 	return t.r.cat.get(context.Background(), e.oid)
 }
 
-// ReadContext như Read nhưng tôn trọng ctx (huỷ ctx giết tiến trình cat-file; lần đọc sau khởi động lại).
+// ReadContext is like Read but honors ctx (cancelling ctx kills the cat-file process; the next read restarts it).
 func (t *CommitTree) ReadContext(ctx context.Context, p string) ([]byte, error) {
 	e, ok := t.ents[p]
 	if !ok {

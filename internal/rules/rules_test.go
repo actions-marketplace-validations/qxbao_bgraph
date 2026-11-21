@@ -108,9 +108,9 @@ func TestMatchOrdering(t *testing.T) {
 	if len(f.Match("src/a.ts")) != 0 {
 		t.Error("want none")
 	}
-	// *.md chỉ ở gốc
+	// *.md only at the root
 	if len(f.Match("sub/README.md")) != 0 {
-		t.Error("*.md không được khớp ở thư mục con")
+		t.Error("*.md must not match in subdirectories")
 	}
 }
 

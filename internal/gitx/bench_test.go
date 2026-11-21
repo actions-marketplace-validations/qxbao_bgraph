@@ -23,12 +23,12 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// benchRepo sinh repo ~10.000 tệp (100 thư mục x 100 tệp) đúng một lần cho cả lần chạy benchmark (testing gọi lại hàm
-// benchmark nhiều lần khi hiệu chỉnh N), commit, rồi sửa 5 tệp và thêm 1 tệp untracked.
+// benchRepo generates a repo of ~10,000 files (100 directories x 100 files) exactly once for the whole benchmark run (testing calls the
+// benchmark function repeatedly while tuning N), commits, then modifies 5 files and adds 1 untracked file.
 func benchRepo(b *testing.B) (*Repo, string) {
 	b.Helper()
 	benchOnce.Do(func() {
-		hermetic(b) // t.Setenv sẽ bị gỡ khi benchmark đầu kết thúc; đặt lại bằng os.Setenv bên dưới
+		hermetic(b) // t.Setenv is undone when the first benchmark ends; set again with os.Setenv below
 		for _, k := range []string{"GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_GLOBAL", "HOME", "USERPROFILE", "GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"} {
 			benchEnv = append(benchEnv, k+"="+os.Getenv(k))
 		}

@@ -5,8 +5,8 @@ import (
 	"testing"
 )
 
-// TestStaticPrefixSound: Match(p) ⇒ StaticPrefix rỗng hoặc là thư mục tổ tiên của p. graph dựa vào bất biến này để
-// chỉ xét pattern theo tiền tố; vi phạm là sót im lặng.
+// TestStaticPrefixSound: Match(p) ⇒ StaticPrefix is empty or an ancestor directory of p. graph relies on this invariant to
+// consider patterns by prefix only; a violation is a silent miss.
 func TestStaticPrefixSound(t *testing.T) {
 	pats := []string{
 		"a/b/c.ts", "a/**", "a/b/**/x.ts", "**/x.ts", "*.md", "a/*/c", `src/\[id\]/**`, `src/\{x\}/a.ts`,
@@ -28,7 +28,7 @@ func TestStaticPrefixSound(t *testing.T) {
 				continue
 			}
 			if pre != "" && !strings.HasPrefix(path, pre+"/") {
-				t.Errorf("pattern %q khớp %q nhưng tiền tố tĩnh %q không phải tổ tiên", ps, path, pre)
+				t.Errorf("pattern %q matches %q but static prefix %q is not an ancestor", ps, path, pre)
 			}
 		}
 	}
@@ -43,7 +43,7 @@ func FuzzStaticPrefixSound(f *testing.F) {
 			return
 		}
 		if pre := p.StaticPrefix(); pre != "" && !strings.HasPrefix(path, pre+"/") {
-			t.Fatalf("pattern %q khớp %q nhưng tiền tố %q", ps, path, pre)
+			t.Fatalf("pattern %q matches %q but prefix %q", ps, path, pre)
 		}
 	})
 }

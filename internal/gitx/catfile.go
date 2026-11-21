@@ -14,18 +14,18 @@ import (
 	"sync"
 )
 
-// ErrClosed: Repo đã Close, không đọc blob được nữa.
-var ErrClosed = errors.New("gitx: repo đã đóng")
+// ErrClosed: the Repo has been closed; blobs can no longer be read.
+var ErrClosed = errors.New("gitx: repo is closed")
 
-// catFile quản lý một tiến trình `git cat-file --batch` sống lâu, khởi động lười. Mọi yêu cầu được tuần tự hoá bằng rmu.
-// Nếu tiến trình chết hoặc đồng bộ giao thức bị hỏng (ctx bị huỷ giữa chừng), yêu cầu hiện tại trả lỗi và lần gọi sau
-// khởi động tiến trình mới; không bao giờ treo vô hạn vì Close/ctx đều giết tiến trình.
+// catFile manages one long-lived, lazily started `git cat-file --batch` process. All requests are serialized by rmu.
+// If the process dies or protocol sync is broken (ctx cancelled midway), the current request returns an error and the next call
+// starts a new process; it never hangs forever because both Close and ctx kill the process.
 type catFile struct {
 	r *Repo
 
-	rmu sync.Mutex // tuần tự hoá yêu cầu
+	rmu sync.Mutex // serializes requests
 
-	smu    sync.Mutex // bảo vệ p và closed (không giữ khi chờ I/O, để Close ngắt được yêu cầu đang treo)
+	smu    sync.Mutex // protects p and closed (not held while waiting on I/O, so Close can interrupt a hung request)
 	p      *catProc
 	closed bool
 }
@@ -67,7 +67,7 @@ func (p *catProc) kill() {
 	})
 }
 
-// start giả định đã giữ smu.
+// start assumes smu is already held.
 func (c *catFile) start() (*catProc, error) {
 	cmd := exec.Command("git", baseArgs([]string{"cat-file", "--batch"})...)
 	cmd.Dir = c.r.Root
@@ -128,10 +128,10 @@ func (c *catFile) close() error {
 	return nil
 }
 
-// get đọc nội dung blob theo OID. Blob không tồn tại → lỗi bọc fs.ErrNotExist (tiến trình vẫn dùng tiếp được).
+// get reads blob content by OID. A missing blob → error wrapping fs.ErrNotExist (the process stays usable).
 func (c *catFile) get(ctx context.Context, oid string) ([]byte, error) {
 	if oid == "" || strings.ContainsAny(oid, " \t\r\n\x00") {
-		return nil, fmt.Errorf("gitx: OID không hợp lệ %q", oid)
+		return nil, fmt.Errorf("gitx: invalid OID %q", oid)
 	}
 	c.rmu.Lock()
 	defer c.rmu.Unlock()
@@ -170,33 +170,33 @@ func (c *catFile) get(ctx context.Context, oid string) ([]byte, error) {
 
 func (c *catFile) exchange(p *catProc, oid string) ([]byte, error) {
 	if _, err := io.WriteString(p.in, oid+"\n"); err != nil {
-		return nil, fmt.Errorf("gitx: cat-file ghi yêu cầu: %w", err)
+		return nil, fmt.Errorf("gitx: cat-file write request: %w", err)
 	}
 	line, err := p.out.ReadString('\n')
 	if err != nil {
-		return nil, fmt.Errorf("gitx: cat-file đọc tiêu đề (tiến trình đã chết?): %w", err)
+		return nil, fmt.Errorf("gitx: cat-file read header (process died?): %w", err)
 	}
 	f := strings.Split(strings.TrimRight(line, "\r\n"), " ")
 	if len(f) == 2 && f[1] == "missing" {
 		return nil, fmt.Errorf("gitx: blob %s: %w", oid, fs.ErrNotExist)
 	}
 	if len(f) != 3 {
-		return nil, fmt.Errorf("gitx: tiêu đề cat-file không hiểu được: %q", line)
+		return nil, fmt.Errorf("gitx: unparseable cat-file header: %q", line)
 	}
 	if f[1] != "blob" {
-		// Đã đọc hết tiêu đề; phải nuốt thân để giữ đồng bộ — đơn giản hơn là báo hỏng và để drop() khởi động lại.
-		return nil, fmt.Errorf("gitx: %s là %s, không phải blob", oid, f[1])
+		// Header fully read; the body would have to be swallowed to stay in sync — simpler to report failure and let drop() restart.
+		return nil, fmt.Errorf("gitx: %s is %s, not a blob", oid, f[1])
 	}
 	n, err := strconv.Atoi(f[2])
 	if err != nil || n < 0 {
-		return nil, fmt.Errorf("gitx: kích thước cat-file không hợp lệ: %q", line)
+		return nil, fmt.Errorf("gitx: invalid cat-file size: %q", line)
 	}
 	buf := make([]byte, n)
 	if _, err := io.ReadFull(p.out, buf); err != nil {
-		return nil, fmt.Errorf("gitx: cat-file đọc thân blob: %w", err)
+		return nil, fmt.Errorf("gitx: cat-file read blob body: %w", err)
 	}
 	if b, err := p.out.ReadByte(); err != nil || b != '\n' {
-		return nil, fmt.Errorf("gitx: cat-file thiếu LF kết thúc (%v)", err)
+		return nil, fmt.Errorf("gitx: cat-file missing trailing LF (%v)", err)
 	}
 	return buf, nil
 }

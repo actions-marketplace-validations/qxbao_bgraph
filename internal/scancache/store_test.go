@@ -17,7 +17,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// countTree đếm số lần Read để chứng minh lần chạy ấm không đọc tệp.
+// countTree counts Read calls to prove a warm run does not read files.
 type countTree struct {
 	tree.Tree
 	reads atomic.Int64
@@ -30,7 +30,7 @@ func (c *countTree) Read(p string) ([]byte, error) {
 
 func synthFile(i int) string {
 	var sb strings.Builder
-	fmt.Fprintf(&sb, "// tệp %d\nimport React from 'react';\nimport type { T } from './types%d';\n", i, i%7)
+	fmt.Fprintf(&sb, "// file %d\nimport React from 'react';\nimport type { T } from './types%d';\n", i, i%7)
 	for j := 0; j < 12; j++ {
 		fmt.Fprintf(&sb, "import { f%d } from './mod/m%d_%d';\n", j, i, j)
 	}
@@ -54,7 +54,7 @@ func synthTree(n int) (*tree.MapTree, []string) {
 	return tree.NewMapTree(m), append(paths, "README.md")
 }
 
-// norm: nil và rỗng coi như nhau khi so sánh.
+// norm: nil and empty are treated as equal when comparing.
 func norm(r model.ScanResult) model.ScanResult {
 	if len(r.Imports) == 0 {
 		r.Imports = nil
@@ -63,20 +63,20 @@ func norm(r model.ScanResult) model.ScanResult {
 }
 
 func TestCodecRoundTrip(t *testing.T) {
-	r := model.ScanResult{Uncertain: true, UncertainReason: "vì sao", Imports: []model.ImportRef{
+	r := model.ScanResult{Uncertain: true, UncertainReason: "why", Imports: []model.ImportRef{
 		{Spec: "./a", Kind: model.ImportStatic, Line: 3},
 		{Spec: "./l/", Suffix: ".json", Kind: model.ImportDynamic, Line: 99999, Dynamic: true},
-		{Spec: "x", Kind: "kind_lạ", Line: 1},
+		{Spec: "x", Kind: "kind_odd", Line: 1},
 	}}
 	got, err := decode(encode(r))
 	if err != nil || !reflect.DeepEqual(got, r) {
 		t.Fatalf("got %+v err %v", got, err)
 	}
 	if _, err := decode([]byte{1, 0}); err == nil {
-		t.Fatal("cần lỗi với dữ liệu cụt")
+		t.Fatal("expected an error for truncated data")
 	}
 	if _, err := decode(nil); err == nil {
-		t.Fatal("cần lỗi với dữ liệu rỗng")
+		t.Fatal("expected an error for empty data")
 	}
 }
 
@@ -102,7 +102,7 @@ func TestRoundTripPersistent(t *testing.T) {
 		t.Fatal(err)
 	}
 	if w := c.Warnings(); len(w) != 0 {
-		t.Fatalf("cảnh báo: %v", w)
+		t.Fatalf("warnings: %v", w)
 	}
 
 	c2, _ := Open(dir)
@@ -111,11 +111,11 @@ func TestRoundTripPersistent(t *testing.T) {
 	for p, w := range want {
 		r, err := c2.Scan(ct, p)
 		if err != nil || !reflect.DeepEqual(norm(r), norm(w)) {
-			t.Fatalf("%s: lệch kết quả (err %v)", p, err)
+			t.Fatalf("%s: result mismatch (err %v)", p, err)
 		}
 	}
 	if ct.reads.Load() != 0 || c2.Misses != 0 || c2.Hits != len(want) {
-		t.Fatalf("lần ấm phải không đọc tệp: reads=%d misses=%d hits=%d", ct.reads.Load(), c2.Misses, c2.Hits)
+		t.Fatalf("warm run must not read files: reads=%d misses=%d hits=%d", ct.reads.Load(), c2.Misses, c2.Hits)
 	}
 }
 
@@ -126,7 +126,7 @@ func TestVersionBumpInvalidates(t *testing.T) {
 	_ = c.Prefetch(context.Background(), tr, paths, 4)
 	c.Close()
 
-	// Giả lập bộ quét phiên bản cũ bằng cách sửa meta.
+	// Simulate an old-version scanner by editing the meta.
 	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(filepath.Join(dir, dbName)))
 	if err != nil {
 		t.Fatal(err)
@@ -142,16 +142,16 @@ func TestVersionBumpInvalidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	if ct.reads.Load() != 1 {
-		t.Fatal("lệch phiên bản phải vô hiệu cache")
+		t.Fatal("version mismatch must invalidate the cache")
 	}
 	var n int
 	if err := c2.db.QueryRow(`SELECT count(*) FROM scan`).Scan(&n); err != nil || n != 0 {
-		t.Fatalf("bảng scan phải được dựng lại rỗng: n=%d err=%v", n, err)
+		t.Fatalf("scan table must be rebuilt empty: n=%d err=%v", n, err)
 	}
 	var v string
 	_ = c2.db.QueryRow(`SELECT v FROM meta WHERE k='scanner_version'`).Scan(&v)
 	if v != ScannerVersion {
-		t.Fatalf("meta chưa cập nhật: %q", v)
+		t.Fatalf("meta not updated: %q", v)
 	}
 	c2.Close()
 }
@@ -184,7 +184,7 @@ func TestConcurrentScan(t *testing.T) {
 		t.Fatal(err)
 	}
 	if w := c.Warnings(); len(w) != 0 {
-		t.Fatalf("cảnh báo: %v", w)
+		t.Fatalf("warnings: %v", w)
 	}
 	c2, _ := Open(dir)
 	defer c2.Close()
@@ -197,7 +197,7 @@ func TestConcurrentScan(t *testing.T) {
 		}
 	}
 	if ct.reads.Load() != 0 {
-		t.Fatalf("đọc %d tệp dù đã cache", ct.reads.Load())
+		t.Fatalf("read %d files despite the cache", ct.reads.Load())
 	}
 }
 
@@ -214,7 +214,7 @@ func TestTwoInstancesSameFile(t *testing.T) {
 	trB := tree.NewMapTree(m)
 
 	a, _ := Open(dir)
-	b, _ := Open(dir) // "tiến trình thứ hai"
+	b, _ := Open(dir) // "second process"
 	var wg sync.WaitGroup
 	wg.Add(2)
 	go func() { defer wg.Done(); _ = a.Prefetch(context.Background(), trA, pa, 4); _ = a.Flush() }()
@@ -223,7 +223,7 @@ func TestTwoInstancesSameFile(t *testing.T) {
 	a.Close()
 	b.Close()
 	if w := append(a.Warnings(), b.Warnings()...); len(w) != 0 {
-		t.Fatalf("cảnh báo: %v", w)
+		t.Fatalf("warnings: %v", w)
 	}
 	c, _ := Open(dir)
 	defer c.Close()
@@ -238,13 +238,13 @@ func TestTwoInstancesSameFile(t *testing.T) {
 		_, _ = c.Scan(cb, p)
 	}
 	if ct.reads.Load()+cb.reads.Load() != 0 {
-		t.Fatalf("kết quả của cả hai tiến trình phải có trong DB: %d + %d lần đọc", ct.reads.Load(), cb.reads.Load())
+		t.Fatalf("results of both processes must be in the DB: %d + %d reads", ct.reads.Load(), cb.reads.Load())
 	}
 }
 
 func TestCorruptRecovery(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, dbName), []byte(strings.Repeat("không phải sqlite ", 500)), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, dbName), []byte(strings.Repeat("not sqlite ", 500)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	tr, paths := synthTree(5)
@@ -253,13 +253,13 @@ func TestCorruptRecovery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if c.db == nil {
-		t.Fatalf("phải tạo lại kho; cảnh báo: %v", c.Warnings())
+		t.Fatalf("the store must be recreated; warnings: %v", c.Warnings())
 	}
 	if len(c.Warnings()) == 0 {
-		t.Fatal("phải có cảnh báo về tệp hỏng")
+		t.Fatal("expected a warning about the corrupt file")
 	}
 	if m, _ := filepath.Glob(filepath.Join(dir, dbName+".corrupt-*")); len(m) != 1 {
-		t.Fatalf("tệp hỏng phải được đổi tên: %v", m)
+		t.Fatalf("the corrupt file must be renamed: %v", m)
 	}
 	if _, err := c.Scan(tr, paths[0]); err != nil {
 		t.Fatal(err)
@@ -272,14 +272,14 @@ func TestCorruptRecovery(t *testing.T) {
 	ct := &countTree{Tree: tr}
 	_, _ = c2.Scan(ct, paths[0])
 	if ct.reads.Load() != 0 {
-		t.Fatal("kho tạo lại phải bền")
+		t.Fatal("the recreated store must be durable")
 	}
 }
 
 func TestOpenUnusableDirFallsBack(t *testing.T) {
-	f := filepath.Join(t.TempDir(), "tệp")
+	f := filepath.Join(t.TempDir(), "file")
 	_ = os.WriteFile(f, []byte("x"), 0o644)
-	c, err := Open(filepath.Join(f, "con")) // dir nằm dưới một tệp thường
+	c, err := Open(filepath.Join(f, "child")) // dir lies under a regular file
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,7 +288,7 @@ func TestOpenUnusableDirFallsBack(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(c.Warnings()) == 0 {
-		t.Fatal("phải có cảnh báo")
+		t.Fatal("expected a warning")
 	}
 	c.Close()
 }
@@ -301,13 +301,13 @@ func TestPrefetchMatchesSequential(t *testing.T) {
 		t.Fatal(err)
 	}
 	if par.Misses != 200 {
-		t.Fatalf("misses=%d, muốn 200 (README bị bỏ qua)", par.Misses)
+		t.Fatalf("misses=%d, want 200 (README skipped)", par.Misses)
 	}
 	ct := &countTree{Tree: tr}
 	for _, p := range paths {
 		if lang(p) == "" {
 			if _, err := par.Scan(ct, p); err == nil {
-				t.Fatal("tệp không có bộ quét phải lỗi")
+				t.Fatal("a file with no scanner must error")
 			}
 			continue
 		}
@@ -317,21 +317,21 @@ func TestPrefetchMatchesSequential(t *testing.T) {
 		}
 		g, err := par.Scan(ct, p)
 		if err != nil || !reflect.DeepEqual(g, w) {
-			t.Fatalf("%s lệch", p)
+			t.Fatalf("%s mismatch", p)
 		}
 	}
 	if ct.reads.Load() != 0 {
-		t.Fatal("sau Prefetch, Scan không được đọc tệp")
+		t.Fatal("after Prefetch, Scan must not read files")
 	}
 	par.Close()
-	// Đường dẫn không tồn tại: không nghiêm trọng.
+	// Nonexistent path: non-fatal.
 	if err := New().Prefetch(context.Background(), tr, []string{"khong/co.ts"}, 0); err != nil {
 		t.Fatal(err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	if err := New().Prefetch(ctx, tr, paths, 4); err == nil {
-		t.Fatal("ctx huỷ phải trả lỗi")
+		t.Fatal("cancelled ctx must return an error")
 	}
 }
 
@@ -346,7 +346,7 @@ func TestDefaultDir(t *testing.T) {
 	}
 }
 
-// ---- Đo đạc ----
+// ---- Measurements ----
 
 func benchResults(n int) (map[string]model.ScanResult, []string) {
 	m := map[string]model.ScanResult{}
@@ -371,7 +371,7 @@ func BenchmarkCodec(b *testing.B) {
 	}
 	jb, _ := json.Marshal(r)
 	bb := encode(r)
-	b.Logf("kích thước: nhị phân %d B, JSON %d B", len(bb), len(jb))
+	b.Logf("size: binary %d B, JSON %d B", len(bb), len(jb))
 	b.Run("bin-enc", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_ = encode(r)
@@ -395,7 +395,7 @@ func BenchmarkCodec(b *testing.B) {
 	})
 }
 
-// populate ghi n dòng tổng hợp vào kho trong dir.
+// populate writes n synthetic rows into the store in dir.
 func populate(b *testing.B, dir string, n int) []string {
 	c, _ := Open(dir)
 	rs, keys := benchResults(n)
@@ -411,7 +411,7 @@ func populate(b *testing.B, dir string, n int) []string {
 	return keys
 }
 
-// BenchmarkLoadStrategy so nạp-hết-vào-map với tra từng khoá (mở mới + tra mọi khoá, như lần chạy ấm).
+// BenchmarkLoadStrategy compares load-everything-into-map with per-key lookup (fresh open + look up every key, like a warm run).
 func BenchmarkLoadStrategy(b *testing.B) {
 	for _, n := range []int{10_000, 100_000} {
 		dir := b.TempDir()
@@ -424,7 +424,7 @@ func BenchmarkLoadStrategy(b *testing.B) {
 				}
 				for _, k := range keys {
 					if _, ok := c.lookup(k); !ok {
-						b.Fatal("trượt")
+						b.Fatal("miss")
 					}
 				}
 				c.Close()
@@ -435,13 +435,13 @@ func BenchmarkLoadStrategy(b *testing.B) {
 				c, _ := Open(dir)
 				for _, k := range keys {
 					if _, ok := c.lookup(k); !ok {
-						b.Fatal("trượt")
+						b.Fatal("miss")
 					}
 				}
 				c.Close()
 			}
 		})
-		// Trường hợp thực tế: repo 2000 tệp trong kho 100k dòng (kho tích luỹ nhiều nhánh).
+		// Realistic case: a 2000-file repo in a 100k-row store (a store accumulated across many branches).
 		if n == 100_000 {
 			sub := keys[:2000]
 			b.Run("bulk-100000-use2000", func(b *testing.B) {
@@ -491,13 +491,13 @@ func BenchmarkPrefetchWarm(b *testing.B) {
 	ct := &countTree{Tree: tr}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		c, _ := Open(dir) // thể hiện Cache mới: mọi khoá chỉ có trong DB
+		c, _ := Open(dir) // fresh Cache instance: every key exists only in the DB
 		if err := c.Prefetch(context.Background(), ct, paths, 16); err != nil {
 			b.Fatal(err)
 		}
 		_ = c.Close()
 	}
 	if ct.reads.Load() != 0 {
-		b.Fatalf("lần ấm đọc %d tệp", ct.reads.Load())
+		b.Fatalf("warm run read %d files", ct.reads.Load())
 	}
 }

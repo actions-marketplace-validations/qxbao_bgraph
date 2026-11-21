@@ -1,8 +1,8 @@
-// Package scancache quét import có cache theo khoá nội dung (mục 4.4: đơn vị cache không phụ thuộc commit).
+// Package scancache scans imports with a cache keyed by content (docs/plan.md §4.4: the cache unit does not depend on the commit).
 //
-// Cache giữ map trong bộ nhớ và, nếu mở bằng Open, một kho SQLite bền (<dir>/scan.sqlite) để lần chạy sau không phải
-// đọc lại tệp không đổi. Kho chỉ là tăng tốc: mọi lỗi kho (khoá, hỏng, đĩa đầy) hạ về chỉ-bộ-nhớ kèm cảnh báo, không
-// bao giờ làm hỏng một lần chọn.
+// Cache keeps an in-memory map and, if opened with Open, a durable SQLite store (<dir>/scan.sqlite) so later runs need not
+// re-read unchanged files. The store is only an accelerator: any store error (lock, corruption, full disk) degrades to memory-only with a warning and
+// never breaks a selection.
 package scancache
 
 import (
@@ -24,26 +24,26 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// ScannerVersion: tăng chuỗi này mỗi khi đổi hành vi bộ quét (lexer, luật nhận diện import) để vô hiệu cache bền.
+// ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
 const ScannerVersion = "js-1+sfc-1"
 
-// Cache là eco.Scanner có cache, an toàn khi dùng đồng thời.
+// Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
 	mu       sync.Mutex
 	m        map[string]model.ScanResult
-	dirty    map[string]struct{} // khoá trong m chưa ghi xuống kho
-	db       *sql.DB             // nil: chỉ-bộ-nhớ
+	dirty    map[string]struct{} // keys in m not yet written to the store
+	db       *sql.DB             // nil: memory-only
 	get      *sql.Stmt
 	warnings []string
 	Hits     int
 	Misses   int
 }
 
-// New tạo cache rỗng, chỉ trong bộ nhớ.
+// New creates an empty, memory-only cache.
 func New() *Cache { return &Cache{m: map[string]model.ScanResult{}, dirty: map[string]struct{}{}} }
 
-// DefaultDir trả thư mục cache của repo: os.UserCacheDir()/bgraph/<16 hex đầu của sha256(đường dẫn tuyệt đối)>.
-// Không bao giờ nằm trong repo.
+// DefaultDir returns the repo's cache directory: os.UserCacheDir()/bgraph/<first 16 hex of sha256(absolute path)>.
+// Never inside the repo.
 func DefaultDir(repoRoot string) (string, error) {
 	abs, err := filepath.Abs(repoRoot)
 	if err != nil {
@@ -61,19 +61,19 @@ func DefaultDir(repoRoot string) (string, error) {
 	return dir, nil
 }
 
-// Warnings trả bản sao các cảnh báo về kho bền (đã hạ về bộ nhớ, DB hỏng được đổi tên...).
+// Warnings returns a copy of the warnings about the durable store (degraded to memory, corrupt DB renamed, ...).
 func (c *Cache) Warnings() []string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return append([]string(nil), c.warnings...)
 }
 
-// warn ghi cảnh báo; gọi khi đang giữ c.mu (hoặc khi chưa chia sẻ c).
+// warn records a warning; call while holding c.mu (or before c is shared).
 func (c *Cache) warn(format string, a ...any) {
 	c.warnings = append(c.warnings, fmt.Sprintf(format, a...))
 }
 
-// lang chọn bộ quét theo đuôi tệp.
+// lang picks the scanner by file extension.
 func lang(p string) string {
 	switch path.Ext(p) {
 	case ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts":
@@ -84,12 +84,12 @@ func lang(p string) string {
 	return ""
 }
 
-// cacheKey: khoá gồm phiên bản bộ quét, ngôn ngữ, đuôi tệp (đuôi đổi cách lex: JSX trong .tsx/.ts) và khoá nội dung.
+// cacheKey: the key combines scanner version, language, file extension (the extension changes how lexing works: JSX in .tsx/.ts) and the content key.
 func cacheKey(l, p, key string) string {
 	return ScannerVersion + ":" + l + ":" + strings.ToLower(path.Ext(p)) + ":" + key
 }
 
-// lookup tìm trong bộ nhớ rồi kho bền. Không đụng tới Hits/Misses.
+// lookup searches memory, then the durable store. Does not touch Hits/Misses.
 func (c *Cache) lookup(ck string) (model.ScanResult, bool) {
 	c.mu.Lock()
 	if r, ok := c.m[ck]; ok {
@@ -107,8 +107,8 @@ func (c *Cache) lookup(ck string) (model.ScanResult, bool) {
 		r, derr := decode(blob)
 		c.mu.Lock()
 		defer c.mu.Unlock()
-		if derr != nil { // dòng hỏng: coi như trượt, Flush sẽ ghi đè
-			c.warn("scancache: bỏ qua dòng cache hỏng: %v", derr)
+		if derr != nil { // corrupt row: treat as a miss, Flush will overwrite it
+			c.warn("scancache: skipping corrupt cache row: %v", derr)
 			return model.ScanResult{}, false
 		}
 		c.m[ck] = r
@@ -122,11 +122,11 @@ func (c *Cache) lookup(ck string) (model.ScanResult, bool) {
 	return model.ScanResult{}, false
 }
 
-// Scan quét tệp p của cây t.
+// Scan scans file p of tree t.
 func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 	l := lang(p)
 	if l == "" {
-		return model.ScanResult{}, fmt.Errorf("không có bộ quét cho %s", p)
+		return model.ScanResult{}, fmt.Errorf("no scanner for %s", p)
 	}
 	key := t.Key(p)
 	ck := ""
@@ -159,9 +159,9 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 	return r, nil
 }
 
-// Prefetch quét song song (workers goroutine, mặc định 16) mọi tệp trong paths mà khoá chưa có trong cache (bộ nhớ hay
-// kho), để lần Scan sau đều trúng. Tệp không có bộ quét bị bỏ qua; lỗi đọc tệp không nghiêm trọng (Scan sẽ trả lại sau).
-// Chỉ trả lỗi khi ctx bị huỷ.
+// Prefetch scans in parallel (workers goroutines, default 16) every file in paths whose key is not yet in the cache (memory or
+// store), so later Scan calls all hit. Files with no scanner are skipped; file read errors are non-fatal (Scan will return them later).
+// Returns an error only when ctx is cancelled.
 func (c *Cache) Prefetch(ctx context.Context, t tree.Tree, paths []string, workers int) error {
 	if workers <= 0 {
 		workers = 16
@@ -176,7 +176,7 @@ func (c *Cache) Prefetch(ctx context.Context, t tree.Tree, paths []string, worke
 				if ctx.Err() != nil {
 					continue
 				}
-				_, _ = c.Scan(t, p) // Scan tự bỏ qua việc đọc khi trúng cache; lỗi đọc để Scan sau báo
+				_, _ = c.Scan(t, p) // Scan skips the read itself on a cache hit; read errors are left for a later Scan to report
 			}
 		}()
 	}

@@ -1,6 +1,6 @@
-// Package gitx là lớp vỏ mỏng, nhanh quanh git CLI. Mỗi lần spawn git.exe trên Windows tốn ~20–25 ms nên đường nóng
-// (Snapshot) chỉ dùng 3 tiến trình chạy song song, cộng một `git cat-file --batch` sống lâu để đọc blob của commit mốc.
-// Không dùng shell, không dùng go-git, không cgo.
+// Package gitx is a thin, fast wrapper around the git CLI. Each git.exe spawn on Windows costs ~20–25 ms, so the hot path
+// (Snapshot) uses only 3 parallel processes, plus one long-lived `git cat-file --batch` to read blobs of the base commit.
+// No shell, no go-git, no cgo.
 package gitx
 
 import (
@@ -15,16 +15,16 @@ import (
 	"sync/atomic"
 )
 
-// Repo là một kho git đã mở. An toàn khi dùng đồng thời từ nhiều goroutine.
+// Repo is an open git repository. Safe for concurrent use from multiple goroutines.
 type Repo struct {
-	// Root là thư mục gốc làm việc, tuyệt đối, dạng của hệ điều hành.
+	// Root is the absolute working directory root, in OS-native form.
 	Root string
 
 	spawns atomic.Int64
 	cat    catFile
 }
 
-// Open tìm gốc làm việc của repo chứa dir (git rev-parse --show-toplevel).
+// Open finds the working root of the repo containing dir (git rev-parse --show-toplevel).
 func Open(ctx context.Context, dir string) (*Repo, error) {
 	abs, err := filepath.Abs(dir)
 	if err != nil {
@@ -38,20 +38,20 @@ func Open(ctx context.Context, dir string) (*Repo, error) {
 	}
 	top := strings.TrimRight(string(out), "\r\n")
 	if top == "" {
-		return nil, fmt.Errorf("gitx: %s không có thư mục làm việc (repo bare?)", dir)
+		return nil, fmt.Errorf("gitx: %s has no working directory (bare repo?)", dir)
 	}
 	r.Root = filepath.Clean(filepath.FromSlash(top))
 	return r, nil
 }
 
-// Close dừng tiến trình cat-file nếu có. Gọi nhiều lần được.
+// Close stops the cat-file process if any. Safe to call multiple times.
 func (r *Repo) Close() error { return r.cat.close() }
 
-// Spawns trả số tiến trình git đã khởi chạy qua Repo này (dùng cho test hiệu năng).
+// Spawns returns the number of git processes launched through this Repo (used by performance tests).
 func (r *Repo) Spawns() int64 { return r.spawns.Load() }
 
-// gitEnv: kế thừa môi trường, tắt khoá tuỳ chọn (không ghi lại index khi chỉ đọc) và không hỏi mật khẩu.
-// Không đổi locale: việc parse không phụ thuộc thông điệp.
+// gitEnv: inherits the environment, disables optional locks (no index rewrite on read-only use) and never prompts for passwords.
+// Locale is not changed: parsing does not depend on messages.
 func gitEnv() []string {
 	return append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_TERMINAL_PROMPT=0")
 }
@@ -68,13 +68,13 @@ func describe(args []string) string {
 	return s
 }
 
-// run chạy một lệnh git và trả stdout. Lỗi kèm lệnh và stderr đã cắt khoảng trắng.
+// run executes a git command and returns stdout. Errors include the command and trimmed stderr.
 func (r *Repo) run(ctx context.Context, args ...string) ([]byte, error) {
 	out, _, err := r.runRaw(ctx, args...)
 	return out, err
 }
 
-// runRaw như run nhưng trả thêm stderr (để người gọi phân biệt mã thoát 1 "không có kết quả").
+// runRaw is like run but also returns stderr (so callers can distinguish exit code 1 "no result").
 func (r *Repo) runRaw(ctx context.Context, args ...string) (stdout, stderr []byte, err error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
@@ -94,7 +94,7 @@ func (r *Repo) runRaw(ctx context.Context, args ...string) (stdout, stderr []byt
 	return so.Bytes(), se.Bytes(), nil
 }
 
-// RevParse phân giải rev thành OID commit đầy đủ.
+// RevParse resolves rev to a full commit OID.
 func (r *Repo) RevParse(ctx context.Context, rev string) (string, error) {
 	out, err := r.run(ctx, "rev-parse", "--verify", "--end-of-options", rev+"^{commit}")
 	if err != nil {
@@ -103,24 +103,24 @@ func (r *Repo) RevParse(ctx context.Context, rev string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// MergeBase trả merge-base của a và b; lỗi nếu không có.
+// MergeBase returns the merge-base of a and b; an error if there is none.
 func (r *Repo) MergeBase(ctx context.Context, a, b string) (string, error) {
 	out, se, err := r.runRaw(ctx, "merge-base", "--end-of-options", a, b)
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) && ee.ExitCode() == 1 && len(bytes.TrimSpace(se)) == 0 {
-			return "", fmt.Errorf("gitx: không có merge-base giữa %q và %q", a, b)
+			return "", fmt.Errorf("gitx: no merge-base between %q and %q", a, b)
 		}
 		return "", err
 	}
 	s := strings.TrimSpace(string(out))
 	if s == "" {
-		return "", fmt.Errorf("gitx: không có merge-base giữa %q và %q", a, b)
+		return "", fmt.Errorf("gitx: no merge-base between %q and %q", a, b)
 	}
 	return s, nil
 }
 
-// IsShallow cho biết repo là clone nông (lịch sử bị cắt).
+// IsShallow reports whether the repo is a shallow clone (history truncated).
 func (r *Repo) IsShallow(ctx context.Context) (bool, error) {
 	out, err := r.run(ctx, "rev-parse", "--is-shallow-repository")
 	if err != nil {
@@ -132,10 +132,10 @@ func (r *Repo) IsShallow(ctx context.Context) (bool, error) {
 	case "false":
 		return false, nil
 	}
-	return false, fmt.Errorf("gitx: đầu ra --is-shallow-repository không hiểu được: %q", out)
+	return false, fmt.Errorf("gitx: unparseable --is-shallow-repository output: %q", out)
 }
 
-// isHexOID: chuỗi là OID đầy đủ (sha1 40 hoặc sha256 64 ký tự hex thường).
+// isHexOID: the string is a full OID (40 lowercase hex chars for sha1 or 64 for sha256).
 func isHexOID(s string) bool {
 	if len(s) != 40 && len(s) != 64 {
 		return false

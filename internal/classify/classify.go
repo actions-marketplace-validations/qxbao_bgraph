@@ -1,7 +1,7 @@
-// Package classify chứa bảng nới toàn cục dựng sẵn và danh sách tệp vô hại (mục 6.7 của docs/plan.md).
+// Package classify holds the built-in global widening table and the list of harmless files (docs/plan.md §6.7).
 //
-// Bảng là dữ liệu (slice {pattern, category}) để dễ kiểm. Luật trong bgraph.toml có thể ghi đè bảng này ở tầng
-// gọi (classify không đọc bgraph.toml): bên gọi kiểm luật trước, chỉ gọi Global khi không có luật khớp.
+// The table is data (a slice of {pattern, category}) so it is easy to inspect. Rules in bgraph.toml can override this table at the
+// caller level (classify does not read bgraph.toml): the caller checks rules first and calls Global only when no rule matches.
 package classify
 
 import (
@@ -14,7 +14,7 @@ type entry struct {
 	category string
 }
 
-// globalTable: mẫu "**/x" khớp ở mọi độ sâu; mẫu không có "**/" đầu chỉ khớp ở gốc (quy ước của gói glob).
+// globalTable: a pattern "**/x" matches at any depth; a pattern without a leading "**/" matches only at the root (convention of the glob package).
 var globalTable = []entry{
 	// CI
 	{".github/workflows/**", "ci"},
@@ -42,7 +42,7 @@ var globalTable = []entry{
 	{"**/Justfile", "build_script"},
 	{"**/.justfile", "build_script"},
 	{"**/Taskfile.y*ml", "build_script"},
-	// môi trường
+	// environment
 	{"**/.env", "env"},
 	{"**/.env.*", "env"},
 	{"**/.envrc", "env"},
@@ -61,16 +61,16 @@ var globalTable = []entry{
 	{"**/.ruby-version", "toolchain_pin"},
 	{"**/go.work", "toolchain_pin"},
 	{"**/go.work.sum", "toolchain_pin"},
-	// định nghĩa workspace
+	// workspace definitions
 	{"**/pnpm-workspace.yaml", "workspace_def"},
 	{"**/lerna.json", "workspace_def"},
 	{"**/nx.json", "workspace_def"},
 	{"**/turbo.json", "workspace_def"},
 	{"rush.json", "workspace_def"},
 	{".gitmodules", "workspace_def"},
-	// thuộc tính git
+	// git attributes
 	{"**/.gitattributes", "git_attributes"},
-	// cấu hình trình quản lý gói
+	// package manager configuration
 	{"**/.npmrc", "package_manager_config"},
 	{"**/.yarnrc", "package_manager_config"},
 	{"**/.yarnrc.yml", "package_manager_config"},
@@ -115,7 +115,7 @@ func init() {
 	}
 }
 
-// Global trả phần nới (Tier full) nếu path là đầu vào toàn repo.
+// Global returns the widening (Tier full) if path is a whole-repo input.
 func Global(p string) (model.Widening, bool) {
 	for _, c := range globalC {
 		if c.p.Match(p) {
@@ -130,7 +130,7 @@ func Global(p string) (model.Widening, bool) {
 	return model.Widening{}, false
 }
 
-// Harmless: tệp chứng minh được không ảnh hưởng test.
+// Harmless: files provably not affecting tests.
 func Harmless(p string) bool {
 	for _, h := range harmlessC {
 		if h.Match(p) {
@@ -140,7 +140,7 @@ func Harmless(p string) bool {
 	return false
 }
 
-// Doc: tài liệu (.md/.markdown/.rst/.adoc, mọi độ sâu). Bên gọi chỉ được bỏ qua khi tệp không là nút đồ thị.
+// Doc: documentation (.md/.markdown/.rst/.adoc, any depth). The caller may skip it only when the file is not a graph node.
 func Doc(p string) bool {
 	for _, d := range docC {
 		if d.Match(p) {

@@ -11,10 +11,10 @@ import (
 	"sync"
 )
 
-// Status là trạng thái một tệp đổi so với base: 'A' thêm, 'M' sửa, 'D' xoá, 'T' đổi kiểu (tệp ↔ symlink ↔ gitlink).
+// Status is a file's state relative to base: 'A' added, 'M' modified, 'D' deleted, 'T' type change (file ↔ symlink ↔ gitlink).
 type Status byte
 
-// ChangedFile là một tệp đổi. Mode ở dạng git ("100644", "100755", "120000", "160000", "000000" = không có).
+// ChangedFile is one changed file. Mode is in git form ("100644", "100755", "120000", "160000", "000000" = absent).
 type ChangedFile struct {
 	Path    string
 	Status  Status
@@ -22,17 +22,17 @@ type ChangedFile struct {
 	NewMode string
 }
 
-// Change là tập thay đổi giữa base và cây làm việc.
+// Change is the set of changes between base and the working tree.
 //
-// Gitlink (submodule, mode 160000) xuất hiện trong Files với mode để người gọi nới rộng. Thư mục untracked là repo git
-// lồng nhau (ls-files báo "dir/") xuất hiện với Path đã bỏ dấu "/" cuối, Status 'A' và NewMode "160000".
+// A gitlink (submodule, mode 160000) appears in Files with its mode so callers can widen. An untracked directory that is a nested
+// git repo (ls-files reports "dir/") appears with Path stripped of the trailing "/", Status 'A' and NewMode "160000".
 type Change struct {
-	Base  string // OID commit đã phân giải
+	Base  string // resolved commit OID
 	Files []ChangedFile
 }
 
-// Snapshot chụp tập thay đổi của cây làm việc so với base và trả cây làm việc. Chạy song song đúng 3 tiến trình git.
-// base nên là OID đầy đủ (từ RevParse); nếu không phải thì Snapshot tự phân giải (thêm một spawn).
+// Snapshot captures the working tree's change set against base and returns the working tree. Runs exactly 3 git processes in parallel.
+// base should be a full OID (from RevParse); otherwise Snapshot resolves it itself (one extra spawn).
 func (r *Repo) Snapshot(ctx context.Context, base string) (Change, *WorkTree, error) {
 	if !isHexOID(base) {
 		oid, err := r.RevParse(ctx, base)
@@ -59,7 +59,7 @@ func (r *Repo) Snapshot(ctx context.Context, base string) (Change, *WorkTree, er
 	go run(1, &lsOut, "status", "--porcelain=v2", "-z", "--untracked-files=all", "--ignore-submodules=none", "--no-renames")
 	go run(2, &idxOut, "ls-files", "-z", "-s")
 	wg.Wait()
-	// Báo lỗi gốc, không phải "context canceled" do cancel() dây chuyền.
+	// Report the root-cause error, not the "context canceled" caused by the chained cancel().
 	for _, e := range errs {
 		if e != nil && !errors.Is(e, context.Canceled) {
 			return Change{}, nil, e
@@ -105,8 +105,8 @@ func (r *Repo) Snapshot(ctx context.Context, base string) (Change, *WorkTree, er
 	return ch, wt, nil
 }
 
-// addChange gộp bản ghi trùng đường dẫn (ví dụ 'U' + 'M' của tệp xung đột, hoặc 'D' do `git rm --cached` + untracked
-// vẫn còn trên đĩa): mode cũ lấy từ phía có, mode mới lấy từ phía có, trạng thái suy lại.
+// addChange merges records with the same path (e.g. 'U' + 'M' for a conflicted file, or 'D' from `git rm --cached` + an untracked file
+// still on disk): the old mode comes from whichever side has it, the new mode likewise, and the status is re-derived.
 func addChange(m map[string]ChangedFile, f ChangedFile) {
 	old, ok := m[f.Path]
 	if !ok {
@@ -136,12 +136,12 @@ func isZeroMode(m string) bool { return m == "" || m == "000000" }
 
 func modeType(m string) string {
 	if len(m) >= 3 {
-		return m[:3] // 100 = tệp, 120 = symlink, 160 = gitlink
+		return m[:3] // 100 = file, 120 = symlink, 160 = gitlink
 	}
 	return m
 }
 
-// parseRaw parse đầu ra `git diff --raw -z`: ":<om> <nm> <ooid> <noid> <status>\0<path>\0" (rename/copy có hai đường dẫn).
+// parseRaw parses the output of `git diff --raw -z`: ":<om> <nm> <ooid> <noid> <status>\0<path>\0" (rename/copy have two paths).
 func parseRaw(b []byte) ([]ChangedFile, error) {
 	var out []ChangedFile
 	toks := bytes.Split(b, []byte{0})
@@ -152,11 +152,11 @@ func parseRaw(b []byte) ([]ChangedFile, error) {
 		meta := string(toks[i])
 		i++
 		if !strings.HasPrefix(meta, ":") {
-			return nil, fmt.Errorf("gitx: diff --raw: bản ghi không hiểu được %q", meta)
+			return nil, fmt.Errorf("gitx: diff --raw: unparseable record %q", meta)
 		}
 		f := strings.Fields(meta[1:])
 		if len(f) != 5 || f[4] == "" {
-			return nil, fmt.Errorf("gitx: diff --raw: siêu dữ liệu sai dạng %q", meta)
+			return nil, fmt.Errorf("gitx: diff --raw: malformed metadata %q", meta)
 		}
 		st := f[4][0]
 		npaths := 1
@@ -164,7 +164,7 @@ func parseRaw(b []byte) ([]ChangedFile, error) {
 			npaths = 2
 		}
 		if i+npaths > len(toks) {
-			return nil, fmt.Errorf("gitx: diff --raw: thiếu đường dẫn sau %q", meta)
+			return nil, fmt.Errorf("gitx: diff --raw: missing path after %q", meta)
 		}
 		paths := make([]string, npaths)
 		for k := range paths {
@@ -176,35 +176,35 @@ func parseRaw(b []byte) ([]ChangedFile, error) {
 		case 'A', 'M', 'D', 'T':
 			out = append(out, ChangedFile{Path: paths[0], Status: Status(st), OldMode: om, NewMode: nm})
 		case 'U':
-			// Chưa merge: coi là sửa; addChange gộp với bản ghi khác của cùng đường dẫn nếu có.
+			// Unmerged: treat as modified; addChange merges with other records of the same path if any.
 			out = append(out, ChangedFile{Path: paths[0], Status: 'M', OldMode: om, NewMode: nm})
-		case 'R': // phòng thủ: --no-renames đáng lẽ không bao giờ sinh ra
+		case 'R': // defensive: --no-renames should never produce this
 			out = append(out,
 				ChangedFile{Path: paths[0], Status: 'D', OldMode: om, NewMode: "000000"},
 				ChangedFile{Path: paths[1], Status: 'A', OldMode: "000000", NewMode: nm})
 		case 'C':
 			out = append(out, ChangedFile{Path: paths[1], Status: 'A', OldMode: "000000", NewMode: nm})
 		default:
-			return nil, fmt.Errorf("gitx: diff --raw: trạng thái không biết %q cho %q", f[4], paths[0])
+			return nil, fmt.Errorf("gitx: diff --raw: unknown status %q for %q", f[4], paths[0])
 		}
 	}
 	return out, nil
 }
 
 type lsFiles struct {
-	modified  map[string]bool // Y != '.' (cây làm việc khác index) hoặc chưa merge
-	removed   map[string]bool // Y == 'D' (xoá khỏi cây làm việc)
-	untracked []string        // '?' (thư mục repo lồng có "/" cuối)
+	modified  map[string]bool // Y != '.' (working tree differs from index) or unmerged
+	removed   map[string]bool // Y == 'D' (deleted from the working tree)
+	untracked []string        // '?' (nested repo directories have a trailing "/")
 }
 
-// parseStatusV2 parse `git status --porcelain=v2 -z`. Bản ghi (đường dẫn có thể chứa dấu cách nên cắt có giới hạn):
+// parseStatusV2 parses `git status --porcelain=v2 -z`. Records (paths may contain spaces, so splitting is bounded):
 //
 //	1 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <path>
 //	2 <XY> <sub> <mH> <mI> <mW> <hH> <hI> <Xscore> <path>\0<origPath>
 //	u <XY> <sub> <m1> <m2> <m3> <mW> <h1> <h2> <h3> <path>
 //	? <path>   |   ! <path>   |   # <header>
 //
-// Bản ghi loại 2 (rename/copy trong index) được xử lý thận trọng: cả path và origPath đều bị coi là đã sửa.
+// Type 2 records (rename/copy in the index) are handled conservatively: both path and origPath are treated as modified.
 func parseStatusV2(b []byte) (lsFiles, error) {
 	res := lsFiles{modified: map[string]bool{}, removed: map[string]bool{}}
 	toks := bytes.Split(b, []byte{0})
@@ -217,11 +217,11 @@ func parseStatusV2(b []byte) (lsFiles, error) {
 			continue
 		}
 		bad := func() (lsFiles, error) {
-			return res, fmt.Errorf("gitx: status v2: bản ghi không hiểu được %q", t)
+			return res, fmt.Errorf("gitx: status v2: unparseable record %q", t)
 		}
 		switch t[0] {
 		case '#', '!':
-			// tiêu đề nhánh / tệp bị ignore: không ảnh hưởng
+			// branch headers / ignored files: no effect
 		case '?':
 			if len(t) < 3 || t[1] != ' ' {
 				return bad()
@@ -275,18 +275,18 @@ func parseIndex(b []byte) ([]indexEntry, error) {
 		}
 		tab := bytes.IndexByte(t, '\t')
 		if tab < 0 {
-			return nil, fmt.Errorf("gitx: ls-files -s: thiếu tab %q", t)
+			return nil, fmt.Errorf("gitx: ls-files -s: missing tab %q", t)
 		}
 		f := strings.Fields(string(t[:tab]))
 		if len(f) != 3 || len(f[2]) != 1 || f[2][0] < '0' || f[2][0] > '3' {
-			return nil, fmt.Errorf("gitx: ls-files -s: siêu dữ liệu sai dạng %q", t[:tab])
+			return nil, fmt.Errorf("gitx: ls-files -s: malformed metadata %q", t[:tab])
 		}
 		out = append(out, indexEntry{mode: f[0], oid: f[1], stage: int(f[2][0] - '0'), path: string(t[tab+1:])})
 	}
 	return out, nil
 }
 
-// lstatMissing: đường dẫn (tương đối gốc) không còn trên đĩa.
+// lstatMissing: the path (relative to the root) is no longer on disk.
 func lstatMissing(root, p string) bool {
 	_, err := os.Lstat(joinRoot(root, p))
 	return err != nil && os.IsNotExist(err)

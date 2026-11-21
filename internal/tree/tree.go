@@ -1,5 +1,5 @@
-// Package tree định nghĩa cây tệp mà bộ phân giải và bộ dựng đồ thị đọc: cây làm việc hoặc cây của một commit.
-// Cài đặt dựa trên git nằm ở internal/gitx; cài đặt trong bộ nhớ (MapTree) dùng cho test.
+// Package tree defines the file tree that the resolver and graph builder read: the working tree or a commit's tree.
+// The git-backed implementation lives in internal/gitx; the in-memory implementation (MapTree) is used for tests.
 package tree
 
 import (
@@ -9,24 +9,24 @@ import (
 	"strings"
 )
 
-// Tree là ảnh chụp chỉ đọc của tập tệp của repo (tracked + untracked không bị ignore). Đường dẫn theo quy ước của
-// model: tương đối gốc, gạch xuôi, phân biệt hoa thường theo index của git.
+// Tree is a read-only snapshot of the repo's file set (tracked + untracked non-ignored). Paths follow the
+// model convention: root-relative, forward slashes, case-sensitive per git's index.
 type Tree interface {
-	// Files trả mọi tệp, đã sắp xếp. Không chứa thư mục.
+	// Files returns every file, sorted. Contains no directories.
 	Files() []string
-	// Has: p là một tệp trong cây (so chính xác, phân biệt hoa thường).
+	// Has: p is a file in the tree (exact match, case-sensitive).
 	Has(p string) bool
-	// IsDir: có ít nhất một tệp dưới p/.
+	// IsDir: there is at least one file under p/.
 	IsDir(p string) bool
-	// Read đọc nội dung (cây commit: blob; cây làm việc: đĩa). Lỗi fs.ErrNotExist nếu không có.
+	// Read reads the content (commit tree: blob; working tree: disk). fs.ErrNotExist error if absent.
 	Read(p string) ([]byte, error)
-	// Key là khoá nội dung ổn định (blob OID của git hoặc băm kiểu blob) để cache kết quả quét.
+	// Key is a stable content key (git blob OID or blob-style hash) for caching scan results.
 	Key(p string) string
-	// FoldLookup trả các tệp khớp p khi bỏ qua hoa thường (để báo case_mismatch).
+	// FoldLookup returns files matching p ignoring case (for reporting case_mismatch).
 	FoldLookup(p string) []string
 }
 
-// MapTree là Tree trong bộ nhớ, dùng cho test và fixture.
+// MapTree is an in-memory Tree, used for tests and fixtures.
 type MapTree struct {
 	files map[string]string
 	list  []string
@@ -34,7 +34,7 @@ type MapTree struct {
 	fold  map[string][]string
 }
 
-// NewMapTree dựng cây từ map đường dẫn → nội dung.
+// NewMapTree builds a tree from a map of path → content.
 func NewMapTree(files map[string]string) *MapTree {
 	t := &MapTree{files: map[string]string{}, dirs: map[string]bool{}, fold: map[string][]string{}}
 	for p, c := range files {

@@ -7,11 +7,11 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Mã hoá nhị phân gọn cho ScanResult (đo: nhỏ hơn và giải mã nhanh hơn JSON, xem bench trong store_test.go).
+// Compact binary encoding for ScanResult (measured: smaller and faster to decode than JSON, see the benchmark in store_test.go).
 //
-// Bố cục: [ver=1][cờ: bit0 uncertain][uvarint len+bytes UncertainReason][uvarint số import]
-// mỗi import: [kind byte][cờ: bit0 dynamic][uvarint line][str spec][str suffix]; str = uvarint len + bytes.
-// Kind là chỉ số trong bảng kinds; 255 = chuỗi lạ theo sau (tương thích tiến khi thêm kind mới).
+// Layout: [ver=1][flags: bit0 uncertain][uvarint len+bytes UncertainReason][uvarint import count]
+// per import: [kind byte][flags: bit0 dynamic][uvarint line][str spec][str suffix]; str = uvarint len + bytes.
+// Kind is an index into the kinds table; 255 = an unknown string follows (forward compatibility when new kinds are added).
 
 const codecVersion = 1
 
@@ -62,7 +62,7 @@ func encode(r model.ScanResult) []byte {
 	return b
 }
 
-var errCodec = errors.New("scancache: dữ liệu mã hoá hỏng")
+var errCodec = errors.New("scancache: corrupt encoded data")
 
 type reader struct {
 	b   []byte
@@ -109,7 +109,7 @@ func decode(b []byte) (model.ScanResult, error) {
 	out.Uncertain = r.byte()&1 != 0
 	out.UncertainReason = r.str()
 	n := r.uvarint()
-	if r.err != nil || n > uint64(len(b)) { // mỗi import chiếm ≥ 5 byte nên n > len là hỏng
+	if r.err != nil || n > uint64(len(b)) { // each import takes ≥ 5 bytes, so n > len means corruption
 		return model.ScanResult{}, errCodec
 	}
 	if n > 0 {

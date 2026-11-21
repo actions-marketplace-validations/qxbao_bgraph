@@ -1,6 +1,6 @@
-// Package rules đọc bgraph.toml (mục 6.7 của docs/plan.md): luật do người dùng khai và khai báo đầu ra sinh mã.
+// Package rules reads bgraph.toml (docs/plan.md §6.7): user-declared rules and declarations of generated-code outputs.
 //
-// Giải mã nghiêm ngặt: khoá lạ là lỗi. Lỗi bgraph.toml KHÔNG bao giờ được bỏ qua; bên gọi nới tới full (user_rule).
+// Strict decoding: unknown keys are an error. A bgraph.toml error is NEVER ignored; callers widen to full (user_rule).
 package rules
 
 import (
@@ -15,41 +15,41 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-// FileName là tên tệp luật ở gốc repo.
+// FileName is the name of the rules file at the repo root.
 const FileName = "bgraph.toml"
 
-// DefaultMaxChanged là ngưỡng mặc định số tệp đổi; vượt thì chạy full.
+// DefaultMaxChanged is the default threshold on the number of changed files; beyond it a full run is used.
 const DefaultMaxChanged = 5000
 
-// Rule là một [[rule]]. AffectsAll/AffectsNone/Affects loại trừ nhau.
+// Rule is a [[rule]]. AffectsAll/AffectsNone/Affects are mutually exclusive.
 type Rule struct {
-	Index       int // thứ tự trong tệp, từ 0
+	Index       int // order in the file, from 0
 	Paths       []*glob.Pattern
 	RawPaths    []string
 	AffectsAll  bool
 	AffectsNone bool
-	Affects     []string // thư mục dự án hoặc glob test
+	Affects     []string // project directory or test glob
 	Reason      string
 }
 
-// Generated là một [[generated]]: đầu ra bị ignore mà mã import.
+// Generated is a [[generated]]: an ignored output that code imports.
 type Generated struct {
 	Outputs, Sources       []*glob.Pattern
 	RawOutputs, RawSources []string
 	Owner                  string
 }
 
-// Options là các núm tuỳ chọn.
+// Options holds the optional knobs.
 type Options struct {
 	MaxChanged int
 }
 
-// File là nội dung bgraph.toml đã kiểm tra.
+// File is the validated content of bgraph.toml.
 type File struct {
 	Rules     []Rule
 	Generated []Generated
 	Options   Options
-	Path      string // đường dẫn tệp đã đọc; rỗng nếu không có tệp
+	Path      string // path of the file read; empty if there is no file
 }
 
 type rawFile struct {
@@ -68,7 +68,7 @@ type rawFile struct {
 	} `toml:"options"`
 }
 
-// Load đọc <root>/bgraph.toml. Không có tệp → File rỗng với mặc định, không lỗi.
+// Load reads <root>/bgraph.toml. No file → an empty File with defaults, no error.
 func Load(root string) (*File, error) {
 	p := filepath.Join(root, FileName)
 	data, err := os.ReadFile(p)
@@ -81,7 +81,7 @@ func Load(root string) (*File, error) {
 	return Parse(p, data)
 }
 
-// Parse giải mã và kiểm tra nội dung; name dùng trong thông báo lỗi và gán vào File.Path.
+// Parse decodes and validates the content; name is used in error messages and assigned to File.Path.
 func Parse(name string, data []byte) (*File, error) {
 	var raw rawFile
 	dec := toml.NewDecoder(bytes.NewReader(data))
@@ -89,7 +89,7 @@ func Parse(name string, data []byte) (*File, error) {
 	if err := dec.Decode(&raw); err != nil {
 		var se *toml.StrictMissingError
 		if errors.As(err, &se) {
-			return nil, fmt.Errorf("%s: khoá không hợp lệ:\n%s", name, se.String())
+			return nil, fmt.Errorf("%s: invalid key:\n%s", name, se.String())
 		}
 		var de *toml.DecodeError
 		if errors.As(err, &de) {
@@ -102,7 +102,7 @@ func Parse(name string, data []byte) (*File, error) {
 	for i, r := range raw.Rule {
 		out := Rule{Index: i, RawPaths: r.Paths, Reason: r.Reason}
 		if len(r.Paths) == 0 {
-			return nil, fmt.Errorf("%s: rule[%d]: 'paths' bắt buộc và không được rỗng", name, i)
+			return nil, fmt.Errorf("%s: rule[%d]: 'paths' is required and must not be empty", name, i)
 		}
 		for _, s := range r.Paths {
 			p, err := glob.Compile(s)
@@ -113,7 +113,7 @@ func Parse(name string, data []byte) (*File, error) {
 		}
 		switch v := r.Affects.(type) {
 		case nil:
-			return nil, fmt.Errorf("%s: rule[%d]: 'affects' bắt buộc", name, i)
+			return nil, fmt.Errorf("%s: rule[%d]: 'affects' is required", name, i)
 		case string:
 			switch v {
 			case "all":
@@ -121,16 +121,16 @@ func Parse(name string, data []byte) (*File, error) {
 			case "none":
 				out.AffectsNone = true
 			default:
-				return nil, fmt.Errorf("%s: rule[%d].affects: chuỗi phải là \"all\" hoặc \"none\" (nhận %q); dùng mảng cho thư mục/glob", name, i, v)
+				return nil, fmt.Errorf("%s: rule[%d].affects: a string must be \"all\" or \"none\" (got %q); use an array for directories/globs", name, i, v)
 			}
 		case []any:
 			if len(v) == 0 {
-				return nil, fmt.Errorf("%s: rule[%d].affects: mảng rỗng", name, i)
+				return nil, fmt.Errorf("%s: rule[%d].affects: empty array", name, i)
 			}
 			for _, e := range v {
 				s, ok := e.(string)
 				if !ok || s == "" {
-					return nil, fmt.Errorf("%s: rule[%d].affects: phần tử phải là chuỗi không rỗng", name, i)
+					return nil, fmt.Errorf("%s: rule[%d].affects: elements must be non-empty strings", name, i)
 				}
 				if _, err := glob.Compile(s); err != nil {
 					return nil, fmt.Errorf("%s: rule[%d].affects: %w", name, i, err)
@@ -138,7 +138,7 @@ func Parse(name string, data []byte) (*File, error) {
 				out.Affects = append(out.Affects, s)
 			}
 		default:
-			return nil, fmt.Errorf("%s: rule[%d].affects: phải là \"all\", \"none\" hoặc mảng chuỗi", name, i)
+			return nil, fmt.Errorf("%s: rule[%d].affects: must be \"all\", \"none\" or an array of strings", name, i)
 		}
 		f.Rules = append(f.Rules, out)
 	}
@@ -146,10 +146,10 @@ func Parse(name string, data []byte) (*File, error) {
 	for i, g := range raw.Generated {
 		out := Generated{RawOutputs: g.Outputs, RawSources: g.Sources, Owner: g.Owner}
 		if len(g.Outputs) == 0 {
-			return nil, fmt.Errorf("%s: generated[%d]: 'outputs' bắt buộc và không được rỗng", name, i)
+			return nil, fmt.Errorf("%s: generated[%d]: 'outputs' is required and must not be empty", name, i)
 		}
 		if g.Owner == "" {
-			return nil, fmt.Errorf("%s: generated[%d]: 'owner' bắt buộc", name, i)
+			return nil, fmt.Errorf("%s: generated[%d]: 'owner' is required", name, i)
 		}
 		for _, s := range g.Outputs {
 			p, err := glob.Compile(s)
@@ -170,14 +170,14 @@ func Parse(name string, data []byte) (*File, error) {
 
 	if m := raw.Options.MaxChanged; m != nil {
 		if *m < 1 {
-			return nil, fmt.Errorf("%s: options.max_changed: phải ≥ 1 (nhận %d)", name, *m)
+			return nil, fmt.Errorf("%s: options.max_changed: must be ≥ 1 (got %d)", name, *m)
 		}
 		f.Options.MaxChanged = int(*m)
 	}
 	return f, nil
 }
 
-// Match trả các luật có paths khớp path, theo thứ tự trong tệp.
+// Match returns the rules whose paths match path, in file order.
 func (f *File) Match(path string) []Rule {
 	var out []Rule
 	for _, r := range f.Rules {
@@ -191,7 +191,7 @@ func (f *File) Match(path string) []Rule {
 	return out
 }
 
-// GeneratedFor trả [[generated]] đầu tiên có outputs khớp path, hoặc nil.
+// GeneratedFor returns the first [[generated]] whose outputs match path, or nil.
 func (f *File) GeneratedFor(path string) *Generated {
 	for i := range f.Generated {
 		for _, p := range f.Generated[i].Outputs {

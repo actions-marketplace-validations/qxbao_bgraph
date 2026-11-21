@@ -126,19 +126,19 @@ func TestHarmless(t *testing.T) {
 	}
 	for _, p := range no {
 		if p == "LICENSES/x" {
-			continue // LICENSE* chỉ khớp một đoạn, "LICENSES/x" có hai đoạn: kiểm riêng ở dưới
+			continue // LICENSE* matches only one segment, "LICENSES/x" has two: checked separately below
 		}
 		if Harmless(p) {
 			t.Errorf("Harmless(%q): want false", p)
 		}
 	}
 	if Harmless("LICENSES/x") {
-		t.Error("LICENSES/x không phải vô hại")
+		t.Error("LICENSES/x is not harmless")
 	}
-	// vô hại và toàn cục không giao nhau
+	// harmless and global do not intersect
 	for _, p := range yes {
 		if _, ok := Global(p); ok {
-			t.Errorf("%q vừa vô hại vừa toàn cục", p)
+			t.Errorf("%q is both harmless and global", p)
 		}
 	}
 }
