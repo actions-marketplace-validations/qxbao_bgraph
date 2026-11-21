@@ -30,6 +30,7 @@ type T1Config struct {
 	Jobs       int
 	MaxPerRepo int
 	Resume     bool
+	Checkout   bool // true: dựng P/C bằng worktree như cũ (mặc định: index tạm, không checkout)
 	Timeout    time.Duration
 	Log        func(format string, a ...any)
 }
@@ -59,6 +60,9 @@ type T1Result struct {
 	Changed   []string         `json:"changed,omitempty"`
 	Missing   []string         `json:"missing,omitempty"`
 	Ms        int64            `json:"ms"`
+	TaskMs    int64            `json:"task_ms,omitempty"` // tổng thời gian task (dựng P/C + oracle + Select x2)
+	Path      string           `json:"path,omitempty"`    // index | worktree: cách dựng P/C
+	Fallback  string           `json:"fallback,omitempty"`
 	NonDeterm bool             `json:"nondeterministic,omitempty"`
 	Diag      []FileDiag       `json:"diag,omitempty"`
 }
@@ -229,7 +233,30 @@ func (rr *repoRunner) ensureMirror(ctx context.Context) error {
 	return rr.mErr
 }
 
-func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
+// run chạy một task. Mặc định dựng P/C bằng index tạm (không checkout); lỗi `git apply --cached` hoặc cờ Checkout → lối worktree cũ.
+func (rr *repoRunner) run(ctx context.Context, t Task) T1Result {
+	t0 := time.Now()
+	var res T1Result
+	if rr.cfg.Checkout {
+		res, _ = rr.runMode(ctx, t, true)
+		res.Path = "worktree"
+	} else {
+		var fb bool
+		res, fb = rr.runMode(ctx, t, false)
+		res.Path = "index"
+		if fb {
+			fbWhy := res.Detail
+			res, _ = rr.runMode(ctx, t, true)
+			res.Path, res.Fallback = "worktree", fbWhy
+		}
+	}
+	res.TaskMs = time.Since(t0).Milliseconds()
+	return res
+}
+
+// runMode chạy một task theo lối index (useWT=false) hoặc worktree. fallback=true (chỉ lối index): không áp được patch bằng index,
+// res.Detail là lý do; người gọi chạy lại bằng worktree.
+func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Result, fallback bool) {
 	role, _ := rr.cfg.Manifest.Role(t.Repo)
 	res = T1Result{ID: t.InstanceID, Repo: t.Repo, Role: role, Source: t.Source, Base: t.BaseCommit}
 	defer func() {
@@ -237,12 +264,12 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 			res.Status, res.Detail = "error:panic", fmt.Sprint(p)
 		}
 	}()
-	skip := func(why string, err error) T1Result {
+	skip := func(why string, err error) (T1Result, bool) {
 		res.Status = "skipped:" + why
 		if err != nil {
 			res.Detail = err.Error()
 		}
-		return res
+		return res, false
 	}
 	ids, err := ParseF2P(t.F2P)
 	if err != nil || len(ids) == 0 {
@@ -258,46 +285,68 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 		}
 	}
 	rr.seq++
-	wt := filepath.Join(rr.cfg.Work, "wt", fmt.Sprintf("%s_%d", repoDirName(rr.repo), rr.seq))
-	os.RemoveAll(wt)
-	git(ctx, rr.mirror, "worktree", "prune")
-	if err := os.MkdirAll(filepath.Dir(wt), 0o755); err != nil {
-		return skip("checkout", err)
-	}
-	defer func() {
-		git(context.Background(), rr.mirror, "worktree", "remove", "--force", wt)
+	tag := fmt.Sprintf("%s_%d", repoDirName(rr.repo), rr.seq)
+	// dir: nơi chạy git đọc/ghi (mirror khi dùng index, worktree khi checkout); root mở bgraph.
+	dir := rr.mirror
+	var ib *indexBuilder
+	var wt, gp string
+	if !useWT {
+		idir := filepath.Join(rr.cfg.Work, "idx")
+		if err := os.MkdirAll(idir, 0o755); err != nil {
+			return skip("checkout", err)
+		}
+		ib = newIndexBuilder(rr.mirror, filepath.Join(idir, tag+".index"), t.BaseCommit)
+		defer ib.Close()
+	} else {
+		wt = filepath.Join(rr.cfg.Work, "wt", tag)
 		os.RemoveAll(wt)
-		git(context.Background(), rr.mirror, "worktree", "prune")
-	}()
-	if _, err := git(ctx, rr.mirror, "worktree", "add", "--detach", wt, t.BaseCommit); err != nil {
-		return skip("checkout", err)
+		git(ctx, rr.mirror, "worktree", "prune")
+		if err := os.MkdirAll(filepath.Dir(wt), 0o755); err != nil {
+			return skip("checkout", err)
+		}
+		defer func() {
+			git(context.Background(), rr.mirror, "worktree", "remove", "--force", wt)
+			os.RemoveAll(wt)
+			git(context.Background(), rr.mirror, "worktree", "prune")
+		}()
+		if _, err := git(ctx, rr.mirror, "worktree", "add", "--detach", wt, t.BaseCommit); err != nil {
+			return skip("checkout", err)
+		}
+		dir = wt
+		pdir := filepath.Join(rr.cfg.Work, "patches")
+		os.MkdirAll(pdir, 0o755)
+		tp := filepath.Join(pdir, tag+".test.patch")
+		gp = filepath.Join(pdir, tag+".gold.patch")
+		os.WriteFile(tp, []byte(t.TestPatch), 0o644)
+		os.WriteFile(gp, []byte(t.Patch), 0o644)
+		defer os.Remove(tp)
+		defer os.Remove(gp)
+		if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", tp); err != nil {
+			return skip("apply", fmt.Errorf("test_patch: %w", err))
+		}
+		if _, err := git(ctx, wt, "add", "-A"); err != nil {
+			return skip("apply", err)
+		}
+		if _, err := git(ctx, wt, "commit", "-q", "--no-verify", "--allow-empty", "-m", "eval: test patch"); err != nil {
+			return skip("apply", err)
+		}
+		p, err := git(ctx, wt, "rev-parse", "HEAD")
+		if err != nil {
+			return skip("apply", err)
+		}
+		res.P = strings.TrimSpace(p)
 	}
-	pdir := filepath.Join(rr.cfg.Work, "patches")
-	os.MkdirAll(pdir, 0o755)
-	tp := filepath.Join(pdir, fmt.Sprintf("%s_%d.test.patch", repoDirName(rr.repo), rr.seq))
-	gp := filepath.Join(pdir, fmt.Sprintf("%s_%d.gold.patch", repoDirName(rr.repo), rr.seq))
-	os.WriteFile(tp, []byte(t.TestPatch), 0o644)
-	os.WriteFile(gp, []byte(t.Patch), 0o644)
-	defer os.Remove(tp)
-	defer os.Remove(gp)
+	if !useWT {
+		p, err := ib.Apply(ctx, t.TestPatch, "eval: test patch")
+		if err != nil {
+			res.Detail = "test_patch: " + err.Error()
+			return res, true
+		}
+		res.P = p
+	}
 
-	if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", tp); err != nil {
-		return skip("apply", fmt.Errorf("test_patch: %w", err))
-	}
-	if _, err := git(ctx, wt, "add", "-A"); err != nil {
-		return skip("apply", err)
-	}
-	if _, err := git(ctx, wt, "commit", "-q", "--no-verify", "--allow-empty", "-m", "eval: test patch"); err != nil {
-		return skip("apply", err)
-	}
-	p, err := git(ctx, wt, "rev-parse", "HEAD")
-	if err != nil {
-		return skip("apply", err)
-	}
-	res.P = strings.TrimSpace(p)
-
-	// Oracle (độc lập với bgraph): tệp test_patch đổi và còn tồn tại, chứa test FAIL_TO_PASS.
-	ns, err := git(ctx, wt, "diff", "--name-status", "--no-renames", "-z", t.BaseCommit, res.P)
+	// Oracle (độc lập với bgraph): tệp test_patch đổi và còn tồn tại, chứa test FAIL_TO_PASS (đọc từ P bằng git, không từ cây làm việc).
+	ns, err := git(ctx, dir, "diff", "--name-status", "--no-renames", "-z", t.BaseCommit, res.P)
 	if err != nil {
 		return skip("apply", err)
 	}
@@ -307,14 +356,14 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 		if parts[i] == "D" {
 			continue
 		}
-		content, err := git(ctx, wt, "show", res.P+":"+parts[i+1])
+		content, err := git(ctx, dir, "show", res.P+":"+parts[i+1])
 		if err != nil {
 			continue
 		}
 		files[parts[i+1]] = content
 	}
 	existsInP := func(p string) bool {
-		_, err := git(ctx, wt, "cat-file", "-e", res.P+":"+p)
+		_, err := git(ctx, dir, "cat-file", "-e", res.P+":"+p)
 		return err == nil
 	}
 	req, mapping, unmapped := MapF2P(ids, files, existsInP)
@@ -323,28 +372,38 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 		return skip("unmapped", nil)
 	}
 
-	if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", gp); err != nil {
-		return skip("apply", fmt.Errorf("patch: %w", err))
+	chg := bgraph.Change{Base: res.P, Worktree: true}
+	if useWT {
+		if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", gp); err != nil {
+			return skip("apply", fmt.Errorf("patch: %w", err))
+		}
+	} else {
+		c, err := ib.Apply(ctx, t.Patch, "eval: gold patch")
+		if err != nil {
+			res.Detail = "patch: " + err.Error()
+			return res, true
+		}
+		chg = bgraph.Change{Base: res.P, Head: c}
 	}
 
 	state := filepath.Join(rr.cfg.Work, "state", repoDirName(rr.repo))
-	ix, err := bgraph.Open(ctx, wt, bgraph.Options{StateDir: state})
+	ix, err := bgraph.Open(ctx, dir, bgraph.Options{StateDir: state})
 	if err != nil {
 		res.Status, res.Detail = "error:open", err.Error()
-		return res
+		return res, false
 	}
 	defer ix.Close()
 	t0 := time.Now()
-	sel, err := ix.Select(ctx, bgraph.Change{Base: res.P, Worktree: true})
+	sel, err := ix.Select(ctx, chg)
 	res.Ms = time.Since(t0).Milliseconds()
 	if err != nil {
 		res.Status, res.Detail = "error:select", err.Error()
-		return res
+		return res, false
 	}
-	sel2, err := ix.Select(ctx, bgraph.Change{Base: res.P, Worktree: true})
+	sel2, err := ix.Select(ctx, chg)
 	if err != nil {
 		res.Status, res.Detail = "error:select2", err.Error()
-		return res
+		return res, false
 	}
 	res.NonDeterm = !reflect.DeepEqual(canon(sel), canon(sel2))
 	fillSel(&res, sel)
@@ -364,7 +423,7 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 		res.WideList = sel.Widening
 		res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
 	}
-	return res
+	return res, false
 }
 
 func canon(s model.Selection) any {

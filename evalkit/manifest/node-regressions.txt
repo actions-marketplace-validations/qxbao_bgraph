@@ -1,0 +1,18 @@
+# instance_id từng là vi phạm T1: luôn nằm trong bộ đánh giá nhanh (bgraph-eval quick).
+axios__axios-5661
+babel__babel-13928
+babel__babel-14532
+babel__babel-15445
+babel__babel-15649
+babel__babel-16130
+darkreader__darkreader-6747
+darkreader__darkreader-7241
+preactjs__preact-2757
+preactjs__preact-2927
+preactjs__preact-3062
+preactjs__preact-3345
+preactjs__preact-3562
+preactjs__preact-3567
+preactjs__preact-3739
+preactjs__preact-4245
+sveltejs__svelte-10656

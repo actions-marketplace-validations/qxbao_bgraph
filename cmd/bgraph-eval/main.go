@@ -2,6 +2,7 @@
 //
 //	bgraph-eval manifest --tasks tasks.jsonl [--meta meta.json] --replay zod,hono --out evalkit/manifest/node.json
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
+//	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
 
@@ -16,6 +17,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"bgraph/internal/evalkit"
 )
@@ -35,6 +37,13 @@ func main() {
 	switch os.Args[1] {
 	case "t1":
 		err = cmdT1(ctx, os.Args[2:])
+	case "quick":
+		var code int
+		code, err = cmdQuick(ctx, os.Args[2:])
+		if err == nil && code != 0 {
+			stop()
+			os.Exit(code)
+		}
 	case "replay":
 		err = cmdReplay(ctx, os.Args[2:])
 	case "manifest":
@@ -80,6 +89,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	ids := fs.String("ids", "", "chỉ các instance_id này")
 	limit := fs.Int("limit", 0, "tối đa tổng số task (0 = không)")
 	resume := fs.Bool("resume", false, "bỏ qua task đã có trong t1.jsonl")
+	checkout := fs.Bool("checkout", false, "dựng P/C bằng git worktree (lối cũ) thay vì index tạm; lỗi git apply --cached cũng tự rơi về lối này")
 	fs.Parse(args)
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return fmt.Errorf("cần --tasks, --work, --out")
@@ -114,11 +124,74 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	lg := logger(*out)
 	lg("T1: %d task", len(keep))
-	rs, err := evalkit.RunT1(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: keep, Manifest: man, Jobs: *jobs, MaxPerRepo: *maxPer, Resume: *resume, Log: lg})
+	rs, err := evalkit.RunT1(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: keep, Manifest: man, Jobs: *jobs, MaxPerRepo: *maxPer, Resume: *resume, Checkout: *checkout, Log: lg})
 	if werr := evalkit.WriteT1(*out, rs); werr != nil {
 		return werr
 	}
 	return err
+}
+
+// cmdQuick chạy bộ đánh giá nhanh: T1 trên mẫu phân tầng + replay; trả mã thoát 1 nếu có vi phạm T1 hoặc bất biến.
+func cmdQuick(ctx context.Context, args []string) (int, error) {
+	start := time.Now()
+	fs := flag.NewFlagSet("quick", flag.ExitOnError)
+	tasksPath := fs.String("tasks", "", "JSONL nhiệm vụ (đã chuẩn hoá)")
+	manPath := fs.String("manifest", "evalkit/manifest/node.json", "manifest repo dev/holdout")
+	regPath := fs.String("regressions", "evalkit/manifest/node-regressions.txt", "danh sách instance_id từng vi phạm (luôn chạy)")
+	work := fs.String("work", "", "thư mục làm việc (clone, state)")
+	out := fs.String("out", "", "thư mục kết quả")
+	jobs := fs.Int("jobs", 4, "số repo chạy song song")
+	perRepo := fs.Int("per-repo", 4, "số task khác mỗi repo, chọn theo sha256(instance_id)")
+	maxPer := fs.Int("max-per-repo", 40, "giới hạn mỗi repo của tập T1 đầy đủ (tập mà mẫu rút ra)")
+	commits := fs.Int("commits", 20, "số commit replay mỗi repo")
+	checkout := fs.Bool("checkout", false, "dựng P/C bằng git worktree (lối cũ)")
+	serial := fs.Bool("serial", false, "chạy T1 rồi replay tuần tự (mặc định song song)")
+	fs.Parse(args)
+	if *tasksPath == "" || *work == "" || *out == "" {
+		return 2, fmt.Errorf("cần --tasks, --work, --out")
+	}
+	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
+		return 2, err
+	}
+	man, err := evalkit.LoadManifest(*manPath)
+	if err != nil {
+		return 2, err
+	}
+	all, err := evalkit.LoadTasks(*tasksPath)
+	if err != nil {
+		return 2, err
+	}
+	reg, err := evalkit.LoadIDList(*regPath)
+	if err != nil {
+		return 2, err
+	}
+	sample, missing := evalkit.SampleQuick(all, evalkit.SelectTasks(all, *maxPer), reg, *perRepo)
+	var keep []evalkit.Task
+	for _, t := range sample {
+		if _, ok := man.Role(t.Repo); !ok {
+			return 2, fmt.Errorf("repo %s không có trong manifest", t.Repo)
+		}
+		keep = append(keep, t)
+	}
+	var rep []string
+	for _, r := range man.Repos {
+		if r.Replay {
+			rep = append(rep, r.Name)
+		}
+	}
+	lg := logger(*out)
+	lg("quick: %d task T1 (%d regression, %d id regression không có trong dữ liệu: %v), replay %d repo x %d commit", len(keep), len(reg)-len(missing), len(missing), missing, len(rep), *commits)
+	qr, err := evalkit.RunQuick(ctx, evalkit.QuickConfig{Work: *work, Out: *out, Tasks: keep, Manifest: man, Replay: rep, Commits: *commits, Jobs: *jobs, Checkout: *checkout, Serial: *serial, Log: lg})
+	if err != nil {
+		return 2, err
+	}
+	b, _ := os.ReadFile(filepath.Join(*out, "quick.md"))
+	fmt.Println(string(b))
+	fmt.Printf("Tổng thời gian: %s\n", time.Since(start).Round(time.Second))
+	if qr.Violations > 0 {
+		return 1, nil
+	}
+	return 0, nil
 }
 
 func contains(list, v string) bool {

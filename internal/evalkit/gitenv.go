@@ -50,8 +50,19 @@ func SetupHermeticEnv(emptyCfgDir string) error {
 
 // git chạy git trong dir và trả stdout. Lỗi chứa stderr.
 func git(ctx context.Context, dir string, args ...string) (string, error) {
+	return gitIn(ctx, dir, nil, "", args...)
+}
+
+// gitIn như git nhưng thêm biến môi trường env (KEY=VALUE) và đưa stdin vào (nếu khác rỗng).
+func gitIn(ctx context.Context, dir string, env []string, stdin string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	if stdin != "" {
+		cmd.Stdin = strings.NewReader(stdin)
+	}
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
