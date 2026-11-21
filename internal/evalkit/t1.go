@@ -48,6 +48,8 @@ type T1Result struct {
 	Required []string   `json:"required,omitempty"`
 	Mapping  []MapEntry `json:"mapping,omitempty"`
 	Unmapped []string   `json:"unmapped_ids,omitempty"`
+	// FixtureReqs: các yêu cầu được xử lý theo quy tắc fixture (xem CheckRequired), kèm đơn vị thoả.
+	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
 
 	Scope     string           `json:"scope,omitempty"`
 	Widenings map[string]int   `json:"widenings,omitempty"`     // "tier:reason" → số lần
@@ -347,18 +349,11 @@ func (rr *repoRunner) run(ctx context.Context, t Task) (res T1Result) {
 	res.NonDeterm = !reflect.DeepEqual(canon(sel), canon(sel2))
 	fillSel(&res, sel)
 
-	have := map[string]bool{}
+	su := make([]SelUnit, 0, len(sel.Tests))
 	for _, st := range sel.Tests {
-		have[st.Unit] = true
-		for _, f := range st.Files {
-			have[f] = true
-		}
+		su = append(su, SelUnit{Unit: st.Unit, Files: st.Files})
 	}
-	for _, f := range req {
-		if !have[f] {
-			res.Missing = append(res.Missing, f)
-		}
-	}
+	res.Missing, res.FixtureReqs = CheckRequired(req, su)
 	switch {
 	case sel.Scope == model.TierFull:
 		res.Status = "full"
@@ -492,6 +487,10 @@ type T1Summary struct {
 	FullReasons map[string]int `json:"full_reasons"`
 	Widenings   map[string]int `json:"widening_tasks"` // số task có lần nới "tier:reason"
 	UpperBound  string         `json:"violation_upper_bound_95,omitempty"`
+
+	FixtureTasks int `json:"fixture_tasks"` // số task có yêu cầu fixture
+	FixtureReqs  int `json:"fixture_reqs"`  // tổng số yêu cầu fixture
+	FixtureSat   int `json:"fixture_reqs_satisfied"`
 }
 
 // Summarize tổng hợp kết quả theo vai trò ("" = tất cả).
@@ -512,6 +511,15 @@ func Summarize(rs []T1Result, role string) T1Summary {
 			continue
 		}
 		s.Evaluated++
+		if len(r.FixtureReqs) > 0 {
+			s.FixtureTasks++
+		}
+		for _, fr := range r.FixtureReqs {
+			s.FixtureReqs++
+			if fr.SatisfiedBy != "" {
+				s.FixtureSat++
+			}
+		}
 		if r.NonDeterm {
 			s.NonDeterm++
 		}
@@ -576,7 +584,7 @@ func WriteT1(dir string, rs []T1Result) error {
 			s.Evaluated, s.OK, s.Full, s.Violations, s.NonDeterm, s.FullRate*100, s.MedianRatio, s.P90Ratio)
 	}
 	for _, s := range sums {
-		fmt.Fprintf(&md, "\n## %s\n\nLý do full (số task): %s\n\nNới (số task): %s\n", s.Role, mapStr(s.FullReasons), mapStr(s.Widenings))
+		fmt.Fprintf(&md, "\n## %s\n\nLý do full (số task): %s\n\nNới (số task): %s\n\nYêu cầu fixture: %d task, %d yêu cầu, %d thoả\n", s.Role, mapStr(s.FullReasons), mapStr(s.Widenings), s.FixtureTasks, s.FixtureReqs, s.FixtureSat)
 		if s.UpperBound != "" {
 			fmt.Fprintf(&md, "\nCận trên 95%% của tỷ lệ vi phạm: %s\n", s.UpperBound)
 		}
