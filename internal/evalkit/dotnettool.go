@@ -126,6 +126,7 @@ type DotnetAffectedRow struct {
 	Extra    int      `json:"extra"` // selected by bgraph, not reported by dotnet-affected
 	Changed  []string `json:"changed,omitempty"`
 	Patched  []string `json:"global_json_patched,omitempty"`
+	Excluded []string `json:"excluded_from_discovery,omitempty"` // projects the tool could not load (a reference to a missing project file)
 	ToolMs   int64    `json:"tool_ms,omitempty"`
 }
 
@@ -137,6 +138,8 @@ type DotnetAffectedConfig struct {
 	Timeout     time.Duration
 	Log         func(string, ...any)
 }
+
+var brokenRefRe = regexp.MustCompile(`could not be loaded when referenced by ([^\r\n]+?\.\w+proj)`)
 
 var affectedPathRe = regexp.MustCompile(`"FilePath":\s*"((?:[^"\\]|\\.)*)"`)
 
@@ -214,15 +217,38 @@ func DotnetAffectedTask(ctx context.Context, cfg DotnetAffectedConfig, mirror st
 	t0 := time.Now()
 	tctx, cancel := context.WithTimeout(ctx, cfg.Timeout)
 	defer cancel()
-	out, errOut, err := cfg.Tools.run(tctx, wt, cfg.Tools.Affected, "-p", wt, "--from", p, "--uncommitted", "None", "-f", "json", "--dry-run")
+	args := []string{"-p", wt, "--from", p, "--uncommitted", "None", "-f", "json", "--dry-run"}
+	var out, errOut string
+	var excluded []string
+	for attempt := 0; ; attempt++ {
+		out, errOut, err = cfg.Tools.run(tctx, wt, cfg.Tools.Affected, args...)
+		if err == nil || attempt >= 4 {
+			break
+		}
+		// A project that references a project file the repository itself lacks cannot be loaded; leave the referencing project out of the
+		// discovery (nothing can depend on it) and retry, so the rest of the repository is still compared.
+		m := brokenRefRe.FindStringSubmatch(errOut + out)
+		if m == nil || strings.Contains(strings.Join(excluded, "|"), m[1]) {
+			break
+		}
+		excluded = append(excluded, m[1])
+		args = append(args[:len(args):len(args)], "--exclude-discovery", "^"+regexp.QuoteMeta(m[1])+"$")
+		row.Excluded = append(row.Excluded, filepath.ToSlash(strings.TrimPrefix(m[1], wt+string(filepath.Separator))))
+	}
 	row.ToolMs = time.Since(t0).Milliseconds()
+	if err != nil && strings.Contains(errOut+out, "No affected projects") {
+		err, out = nil, "" // an empty affected set is a result, not a failure
+	}
 	if err != nil {
 		row.Status = "tool_failed"
 		msg := strings.TrimSpace(errOut + "\n" + out)
 		if i := strings.Index(msg, "Unhandled exception"); i >= 0 {
 			msg = msg[i:]
 		}
-		row.Detail = tail(msg, 500)
+		if len(msg) > 700 {
+			msg = msg[:700]
+		}
+		row.Detail = msg
 		return row
 	}
 	aff := map[string]bool{}
