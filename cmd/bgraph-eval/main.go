@@ -2,7 +2,9 @@
 //
 //	bgraph-eval manifest --tasks tasks.jsonl [--meta meta.json] --replay zod,hono --out evalkit/manifest/node.json
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
-//	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
+//	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (kiểm T2 trên oracle cache nếu có)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
+//	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (đối chứng 0b)
+//	bgraph-eval t2       [--run-tests] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
 
@@ -44,6 +46,15 @@ func main() {
 			stop()
 			os.Exit(code)
 		}
+	case "baseline":
+		err = cmdBaseline(ctx, os.Args[2:])
+	case "t2":
+		var code int
+		code, err = cmdT2(ctx, os.Args[2:])
+		if err == nil && code != 0 {
+			stop()
+			os.Exit(code)
+		}
 	case "replay":
 		err = cmdReplay(ctx, os.Args[2:])
 	case "manifest":
@@ -58,7 +69,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "dùng: bgraph-eval t1|replay|manifest [cờ]  (xem -h của từng lệnh)")
+	fmt.Fprintln(os.Stderr, "dùng: bgraph-eval t1|t2|quick|replay|manifest [cờ]  (xem -h của từng lệnh)")
 	os.Exit(2)
 }
 
@@ -146,6 +157,8 @@ func cmdQuick(ctx context.Context, args []string) (int, error) {
 	commits := fs.Int("commits", 20, "số commit replay mỗi repo")
 	checkout := fs.Bool("checkout", false, "dựng P/C bằng git worktree (lối cũ)")
 	serial := fs.Bool("serial", false, "chạy T1 rồi replay tuần tự (mặc định song song)")
+	t2Dir := fs.String("t2-dir", "", "thư mục gốc T2 (mặc định: <work>/../t2); chỉ kiểm lại T2 khi có oracle.jsonl trong đó")
+	t2Man := fs.String("t2-manifest", "evalkit/manifest/t2.json", "manifest repo T2")
 	fs.Parse(args)
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return 2, fmt.Errorf("cần --tasks, --work, --out")
@@ -179,9 +192,13 @@ func cmdQuick(ctx context.Context, args []string) (int, error) {
 			rep = append(rep, r.Name)
 		}
 	}
+	if *t2Dir == "" {
+		*t2Dir = filepath.Join(filepath.Dir(filepath.Clean(*work)), "t2")
+	}
+	t2m, _ := evalkit.LoadT2Manifest(*t2Man) // thiếu manifest → bỏ qua T2
 	lg := logger(*out)
 	lg("quick: %d task T1 (%d regression, %d id regression không có trong dữ liệu: %v), replay %d repo x %d commit", len(keep), len(reg)-len(missing), len(missing), missing, len(rep), *commits)
-	qr, err := evalkit.RunQuick(ctx, evalkit.QuickConfig{Work: *work, Out: *out, Tasks: keep, Manifest: man, Replay: rep, Commits: *commits, Jobs: *jobs, Checkout: *checkout, Serial: *serial, Log: lg})
+	qr, err := evalkit.RunQuick(ctx, evalkit.QuickConfig{Work: *work, Out: *out, Tasks: keep, Manifest: man, Replay: rep, Commits: *commits, Jobs: *jobs, Checkout: *checkout, Serial: *serial, T2Dir: *t2Dir, T2: t2m, Log: lg})
 	if err != nil {
 		return 2, err
 	}
@@ -296,4 +313,112 @@ func cmdManifest(args []string) error {
 		fmt.Printf("%-8s t1=%-3d replay=%-5v %s\n", r.Role, r.T1, r.Replay, r.Name)
 	}
 	return nil
+}
+
+// cmdBaseline: đối chứng các công cụ đồ thị ngoài trên mẫu T1 của `quick`.
+//
+//	prep:  dựng P/C, oracle, đơn vị test và phần chọn của bgraph cho từng task → <out>/tasks.json
+//	score: đọc <out>/runs/<tool>/<id>.json (script research/baseline-*/run_tools.py ghi), chấm bằng CheckRequired → scores.json + baseline.md
+func cmdBaseline(ctx context.Context, args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("dùng: baseline prep|score")
+	}
+	sub := args[0]
+	fs := flag.NewFlagSet("baseline", flag.ExitOnError)
+	tasksPath := fs.String("tasks", "", "JSONL nhiệm vụ (đã chuẩn hoá)")
+	manPath := fs.String("manifest", "evalkit/manifest/node.json", "manifest")
+	regPath := fs.String("regressions", "evalkit/manifest/node-regressions.txt", "danh sách id regression")
+	work := fs.String("work", "", "thư mục làm việc (mirror các repo)")
+	out := fs.String("out", "", "thư mục kết quả")
+	jobs := fs.Int("jobs", 3, "repo song song")
+	perRepo := fs.Int("per-repo", 4, "")
+	maxPer := fs.Int("max-per-repo", 40, "")
+	tools := fs.String("tools", "codegraph,graphify,gitnexus", "")
+	fs.Parse(args[1:])
+	if *out == "" {
+		return fmt.Errorf("cần --out")
+	}
+	switch sub {
+	case "prep":
+		if *tasksPath == "" || *work == "" {
+			return fmt.Errorf("cần --tasks, --work")
+		}
+		if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
+			return err
+		}
+		man, err := evalkit.LoadManifest(*manPath)
+		if err != nil {
+			return err
+		}
+		all, err := evalkit.LoadTasks(*tasksPath)
+		if err != nil {
+			return err
+		}
+		reg, err := evalkit.LoadIDList(*regPath)
+		if err != nil {
+			return err
+		}
+		sample, missing := evalkit.SampleQuick(all, evalkit.SelectTasks(all, *maxPer), reg, *perRepo)
+		lg := logger(*out)
+		lg("baseline prep: %d task (id regression thiếu: %v)", len(sample), missing)
+		_, err = evalkit.BaselinePrep(ctx, evalkit.T1Config{Work: *work, Out: *out, Tasks: sample, Manifest: man, Jobs: *jobs, Log: lg})
+		return err
+	case "score":
+		tasks, err := evalkit.LoadBTasks(filepath.Join(*out, "tasks.json"))
+		if err != nil {
+			return err
+		}
+		tl := strings.Split(*tools, ",")
+		ss, err := evalkit.BaselineScoreAll(*out, tasks, tl)
+		if err != nil {
+			return err
+		}
+		for _, t := range tl {
+			s := evalkit.SummarizeScores(ss, t)
+			fmt.Printf("%-10s tasks=%d ok=%d violation=%d timeout=%d error=%d missing=%d median=%.3f p90=%.3f idx_med=%.1fs\n", t, s.Tasks, s.OK, s.Violations, s.Timeouts, s.Errors, s.Missing, s.MedRatio, s.P90Ratio, s.MedIndexS)
+		}
+		return nil
+	}
+	return fmt.Errorf("lệnh con không rõ: %s", sub)
+}
+
+// cmdT2 chạy oracle đột biến (mục 10.2): --run-tests xây/làm mới oracle.jsonl; mặc định chỉ kiểm lại bgraph trên oracle đã cache.
+func cmdT2(ctx context.Context, args []string) (int, error) {
+	fs := flag.NewFlagSet("t2", flag.ExitOnError)
+	dir := fs.String("dir", "D:/bench/bgraph-eval/t2", "thư mục gốc T2 (checkout, tools, state, oracle.jsonl)")
+	manPath := fs.String("manifest", "evalkit/manifest/t2.json", "manifest repo T2")
+	out := fs.String("out", "", "thư mục báo cáo (mặc định <dir>/out)")
+	repos := fs.String("repos", "", "chỉ các repo này (tên hoặc thư mục, phân tách bằng dấu phẩy)")
+	run := fs.Bool("run-tests", false, "chạy test để xây/làm mới oracle (chậm); mặc định kiểm lại bgraph trên oracle cache")
+	rebase := fs.Bool("rebaseline", false, "chạy lại baseline 3 lượt")
+	rebuild := fs.Bool("rebuild", false, "chạy lại mọi đột biến kể cả đã có trong oracle")
+	fs.Parse(args)
+	if *out == "" {
+		*out = filepath.Join(*dir, "out")
+	}
+	if err := evalkit.SetupHermeticEnv(filepath.Join(*dir, "gitcfg")); err != nil {
+		return 2, err
+	}
+	man, err := evalkit.LoadT2Manifest(*manPath)
+	if err != nil {
+		return 2, err
+	}
+	var sel []string
+	if *repos != "" {
+		sel = strings.Split(*repos, ",")
+	}
+	lg := logger(*out)
+	qr, err := evalkit.RunT2(ctx, evalkit.T2Config{Dir: *dir, Out: *out, Manifest: man, Repos: sel, RunTests: *run, Rebaseline: *rebase, Rebuild: *rebuild, Log: lg})
+	if err != nil {
+		return 2, err
+	}
+	if err := evalkit.WriteT2(*out, qr); err != nil {
+		return 2, err
+	}
+	b, _ := os.ReadFile(filepath.Join(*out, "t2.md"))
+	fmt.Println(string(b))
+	if qr.Violations > 0 {
+		return 1, nil
+	}
+	return 0, nil
 }
