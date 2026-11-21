@@ -69,7 +69,8 @@ func patchGlobalJSON(wt string) []string {
 		if sdk == nil {
 			return nil
 		}
-		sdk["rollForward"], sdk["allowPrerelease"] = "latestMajor", true
+		// The pinned version may be newer than the installed SDK (a preview), which no roll-forward policy resolves: pin the installed band.
+		sdk["version"], sdk["rollForward"], sdk["allowPrerelease"] = "10.0.100", "latestMajor", true
 		g["sdk"] = sdk
 		out, _ := json.MarshalIndent(g, "", " ")
 		if os.WriteFile(p, out, 0o644) == nil {
