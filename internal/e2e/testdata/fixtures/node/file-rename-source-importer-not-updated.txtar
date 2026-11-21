@@ -1,0 +1,15 @@
+Đổi tên tệp nguồn mà importer KHÔNG được sửa (hỏng import): test importer vẫn phải được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/old.ts --
+export const v = 1
+-- base/src/a.test.ts --
+import { v } from './old'
+-- base/src/b.test.ts --
+export {}
+-- delete/src/old.ts --
+-- head/src/new.ts --
+export const v = 1
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

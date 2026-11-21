@@ -1,0 +1,27 @@
+[[generated]] với đầu ra build/ và nguồn source/ lạ: luật tạo cạnh tới nguồn, test của b được chọn, không nới unknown_import.
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"]}
+-- base/bgraph.toml --
+[[generated]]
+outputs = ["packages/a/build/**"]
+sources = ["packages/a/source/**"]
+owner = "packages/a"
+-- base/packages/a/package.json --
+{"name":"@org/a","exports":{".":"./build/index.js"}}
+-- base/packages/a/source/index.ts --
+export const a = 1
+-- base/packages/b/package.json --
+{"name":"@org/b","dependencies":{"@org/a":"*"}}
+-- base/packages/b/b.test.ts --
+import { a } from '@org/a'
+-- base/packages/c/package.json --
+{"name":"@org/c"}
+-- base/packages/c/c.test.ts --
+export {}
+-- head/packages/a/source/index.ts --
+export const a = 2
+-- want --
+select packages/b/b.test.ts
+noselect packages/c/c.test.ts
+nowiden unknown_import
+notfull

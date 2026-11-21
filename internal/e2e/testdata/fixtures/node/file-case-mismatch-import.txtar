@@ -1,0 +1,15 @@
+import './Util' với tệp thật util.ts (Windows/macOS chạy được, Linux hỏng): vẫn chọn test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/util.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './Util'
+-- base/src/b.test.ts --
+export {}
+-- head/src/util.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+warn case_mismatch

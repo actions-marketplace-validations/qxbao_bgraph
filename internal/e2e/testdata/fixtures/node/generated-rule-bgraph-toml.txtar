@@ -1,0 +1,27 @@
+[[generated]] khai đầu ra dist bị ignore và nguồn của nó: đổi nguồn chọn test của b mà không cần nới unknown_import.
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"]}
+-- base/bgraph.toml --
+[[generated]]
+outputs = ["packages/a/dist/**"]
+sources = ["packages/a/src/**"]
+owner = "packages/a"
+-- base/packages/a/package.json --
+{"name":"@org/a","exports":{".":"./dist/index.js"}}
+-- base/packages/a/src/index.ts --
+export const a = 1
+-- base/packages/b/package.json --
+{"name":"@org/b","dependencies":{"@org/a":"*"}}
+-- base/packages/b/b.test.ts --
+import { a } from '@org/a'
+-- base/packages/c/package.json --
+{"name":"@org/c"}
+-- base/packages/c/c.test.ts --
+export {}
+-- head/packages/a/src/index.ts --
+export const a = 2
+-- want --
+select packages/b/b.test.ts
+noselect packages/c/c.test.ts
+nowiden unknown_import
+notfull

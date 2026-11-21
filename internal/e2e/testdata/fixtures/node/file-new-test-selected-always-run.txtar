@@ -1,0 +1,10 @@
+Thêm tệp test mới: được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.test.ts --
+export {}
+-- head/src/new.test.ts --
+test('n', () => {})
+-- want --
+select src/new.test.ts
+noselect src/a.test.ts

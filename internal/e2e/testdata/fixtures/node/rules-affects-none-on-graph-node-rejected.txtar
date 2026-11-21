@@ -1,0 +1,19 @@
+affects="none" trên tệp là nút đồ thị (json được import): bị từ chối, cảnh báo rule_rejected, test vẫn được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/bgraph.toml --
+[[rule]]
+paths = ["src/data.json"]
+affects = "none"
+-- base/src/data.json --
+{"a":1}
+-- base/src/a.test.ts --
+import d from './data.json'
+-- base/src/b.test.ts --
+export {}
+-- head/src/data.json --
+{"a":2}
+-- want --
+warn rule_rejected
+select src/a.test.ts
+noselect src/b.test.ts

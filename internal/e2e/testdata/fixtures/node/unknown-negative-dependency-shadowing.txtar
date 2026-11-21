@@ -1,0 +1,14 @@
+Tệp mới gen.ts che gen/index.ts trong thứ tự dò: importer './gen' phải được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/gen/index.ts --
+export const g = 1
+-- base/src/a.test.ts --
+import { g } from './gen'
+-- base/src/b.test.ts --
+export {}
+-- head/src/gen.ts --
+export const g = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

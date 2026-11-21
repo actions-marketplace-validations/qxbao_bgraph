@@ -1,0 +1,14 @@
+Tệp lạ src/data.bin không ai tham chiếu: nới unknown_file tới dự án (module), không full.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/data.bin --
+AAAA
+-- base/src/a.test.ts --
+export {}
+-- head/src/data.bin --
+BBBB
+-- want --
+widen unknown_file
+select src/a.test.ts
+notfull
+scope module

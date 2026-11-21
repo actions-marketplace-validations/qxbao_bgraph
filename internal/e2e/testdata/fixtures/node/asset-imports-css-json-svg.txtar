@@ -1,0 +1,22 @@
+Import tài sản css/json/svg là cạnh; đổi svg chỉ chọn test import nó.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/s.css --
+a{}
+-- base/src/d.json --
+{}
+-- base/src/i.svg --
+<svg/>
+-- base/src/a.test.ts --
+import './s.css'
+import d from './d.json'
+-- base/src/b.test.ts --
+import i from './i.svg'
+-- base/src/c.test.ts --
+export {}
+-- head/src/i.svg --
+<svg width="2"/>
+-- want --
+select src/b.test.ts
+noselect src/a.test.ts
+noselect src/c.test.ts

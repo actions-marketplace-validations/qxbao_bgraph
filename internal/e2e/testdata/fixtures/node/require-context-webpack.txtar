@@ -1,0 +1,16 @@
+require.context('./cases', true, /\.js$/): thêm tệp trong thư mục chọn test.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/src/all.js --
+module.exports = require.context('./cases', true, /\.js$/)
+-- base/src/cases/one.js --
+module.exports = 1
+-- base/src/a.test.js --
+require('./all')
+-- base/src/b.test.js --
+module.exports = 0
+-- head/src/cases/two.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js

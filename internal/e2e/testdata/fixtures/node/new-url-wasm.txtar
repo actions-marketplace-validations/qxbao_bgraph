@@ -1,0 +1,16 @@
+new URL('./w.wasm', import.meta.url) là tham chiếu tệp: đổi wasm chọn test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/w.wasm --
+AAA
+-- base/src/load.ts --
+export const u = new URL('./w.wasm', import.meta.url)
+-- base/src/a.test.ts --
+import { u } from './load'
+-- base/src/b.test.ts --
+export {}
+-- head/src/w.wasm --
+BBB
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

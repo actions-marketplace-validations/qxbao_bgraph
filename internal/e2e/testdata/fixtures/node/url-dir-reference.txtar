@@ -1,0 +1,18 @@
+new URL('.', import.meta.url) là tham chiếu thư mục: không nới unknown_import; đổi tệp trong thư mục chọn test đi qua tệp đó.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/paths.ts --
+import { fileURLToPath } from 'node:url'
+export const here = fileURLToPath(new URL('.', import.meta.url))
+-- base/src/data.json --
+{"a":1}
+-- base/src/a.test.ts --
+import { here } from './paths'
+-- base/test/b.test.ts --
+export {}
+-- head/src/data.json --
+{"a":2}
+-- want --
+select src/a.test.ts
+noselect test/b.test.ts
+nowiden unknown_import

@@ -1,0 +1,14 @@
+ESM TypeScript viết import './util.js' nhưng tệp thật là util.ts (thay thế đuôi).
+-- base/package.json --
+{"name":"app","type":"module","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/util.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './util.js'
+-- base/src/b.test.ts --
+export {}
+-- head/src/util.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

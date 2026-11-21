@@ -1,0 +1,12 @@
+.github/workflows/ci.yml đổi: full global_input.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/.github/workflows/ci.yml --
+name: ci
+-- base/src/a.test.ts --
+export {}
+-- head/.github/workflows/ci.yml --
+name: ci2
+-- want --
+full
+widen global_input

@@ -1,0 +1,13 @@
+README.md không ai tham chiếu: scope none, không full.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/README.md --
+hello
+-- base/src/a.test.ts --
+export {}
+-- head/README.md --
+hello world
+-- want --
+scope none
+notfull
+noselect src/a.test.ts

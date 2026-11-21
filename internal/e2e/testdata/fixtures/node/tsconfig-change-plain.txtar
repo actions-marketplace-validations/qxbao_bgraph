@@ -1,0 +1,12 @@
+Đổi tsconfig.json của dự án nới test_config_changed và chọn test dự án đó.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/tsconfig.json --
+{"compilerOptions":{"strict":false}}
+-- base/src/a.test.ts --
+export {}
+-- head/tsconfig.json --
+{"compilerOptions":{"strict":true}}
+-- want --
+widen test_config_changed
+select src/a.test.ts

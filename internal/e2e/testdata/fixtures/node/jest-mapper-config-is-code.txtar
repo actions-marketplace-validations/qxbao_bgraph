@@ -1,0 +1,17 @@
+moduleNameMapper: buildMapper() là mã: không đọc được thì nới (config_is_code qua unknown_import) và chọn test của dự án.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/jest.config.js --
+const buildMapper = () => ({ '^@x/(.*)$': '<rootDir>/lib/$1' })
+module.exports = { moduleNameMapper: buildMapper() }
+-- base/lib/thing.js --
+module.exports = 1
+-- base/src/a.test.js --
+const t = require('@x/thing')
+-- base/src/b.test.js --
+module.exports = 0
+-- head/lib/thing.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+widen unknown_import

@@ -1,0 +1,13 @@
+LICENSE đổi: vô hại, scope none.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/LICENSE --
+MIT 2020
+-- base/src/a.test.ts --
+export {}
+-- head/LICENSE --
+MIT 2026
+-- want --
+scope none
+notfull
+noselect src/a.test.ts

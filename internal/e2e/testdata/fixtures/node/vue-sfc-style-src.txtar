@@ -1,0 +1,20 @@
+<style src="theme.css"> (không có ./) là tương đối: đổi theme.css chọn test import App.vue.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/App.vue --
+<script setup lang="ts">
+const y = 1
+</script>
+<style src="theme.css"></style>
+-- base/src/theme.css --
+a { color: red }
+-- base/src/a.test.ts --
+import App from './App.vue'
+-- base/src/b.test.ts --
+export {}
+-- head/src/theme.css --
+a { color: blue }
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+nowiden unknown_import

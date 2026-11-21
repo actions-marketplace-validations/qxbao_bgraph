@@ -1,0 +1,17 @@
+require(variable) không có tiền tố tĩnh: bất kỳ thay đổi nào trong repo chọn test chạm tệp đó.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/src/loader.js --
+module.exports = (n) => require(n)
+-- base/src/a.test.js --
+const l = require('./loader')
+-- base/src/b.test.js --
+module.exports = 0
+-- base/src/unrelated.js --
+module.exports = 1
+-- head/src/unrelated.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js
+widen dynamic_import

@@ -1,0 +1,12 @@
+.env.test đổi: full global_input.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/.env.test --
+A=1
+-- base/src/a.test.ts --
+export {}
+-- head/.env.test --
+A=2
+-- want --
+full
+widen global_input

@@ -1,0 +1,20 @@
+Vitest resolve.alias { '@': path.resolve(__dirname, 'src') } phân giải import '@/util'.
+-- base/package.json --
+{"name":"app","type":"module","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+import path from 'node:path'
+export default {
+  resolve: { alias: { '@': path.resolve(__dirname, 'src') } },
+}
+-- base/src/util.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from '@/util'
+-- base/src/b.test.ts --
+export {}
+-- head/src/util.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+notfull

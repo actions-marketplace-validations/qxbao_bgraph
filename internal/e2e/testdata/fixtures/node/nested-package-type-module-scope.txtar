@@ -1,0 +1,16 @@
+package.json lồng {"type":"module"} tạo dự án con; test ở gốc import tệp trong phạm vi đó vẫn được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/esm/package.json --
+{"type":"module"}
+-- base/esm/m.js --
+export const m = 1
+-- base/src/a.test.ts --
+import { m } from '../esm/m.js'
+-- base/src/b.test.ts --
+export {}
+-- head/esm/m.js --
+export const m = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

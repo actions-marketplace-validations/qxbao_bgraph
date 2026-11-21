@@ -1,0 +1,12 @@
+Xoá tệp test: nó không còn tồn tại nên không được chọn; test khác không bị ảnh hưởng.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/gone.test.ts --
+export {}
+-- base/src/b.test.ts --
+export {}
+-- delete/src/gone.test.ts --
+-- want --
+noselect src/gone.test.ts
+noselect src/b.test.ts
+notfull

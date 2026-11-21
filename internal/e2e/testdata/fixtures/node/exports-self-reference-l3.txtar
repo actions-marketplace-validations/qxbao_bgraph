@@ -1,0 +1,16 @@
+Bẫy L3 (plan 1.2): package tự tham chiếu mình bằng import('my-pkg/public') qua exports.
+-- base/package.json --
+{"name":"my-pkg","devDependencies":{"vitest":"^5.0.0"},"exports":{"./public":"./src/public.ts"}}
+-- base/src/public.ts --
+export const p = 1
+-- base/src/main.ts --
+export const load = () => import('my-pkg/public')
+-- base/src/a.test.ts --
+import { load } from './main'
+-- base/src/b.test.ts --
+export {}
+-- head/src/public.ts --
+export const p = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

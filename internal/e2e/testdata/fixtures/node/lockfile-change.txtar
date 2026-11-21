@@ -1,0 +1,12 @@
+Đổi lockfile nới lock_changed (mức L0).
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/pnpm-lock.yaml --
+lockfileVersion: 9
+-- base/src/a.test.ts --
+export {}
+-- head/pnpm-lock.yaml --
+lockfileVersion: 9.1
+-- want --
+widen lock_changed
+select src/a.test.ts

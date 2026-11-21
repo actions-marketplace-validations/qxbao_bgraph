@@ -1,0 +1,21 @@
+packages/a được packages/b import theo tên: đổi a chọn test của b, không chọn test của c.
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"]}
+-- base/packages/a/package.json --
+{"name":"@org/a","main":"src/index.ts"}
+-- base/packages/a/src/index.ts --
+export const a = 1
+-- base/packages/b/package.json --
+{"name":"@org/b","dependencies":{"@org/a":"*"}}
+-- base/packages/b/b.test.ts --
+import { a } from '@org/a'
+-- base/packages/c/package.json --
+{"name":"@org/c"}
+-- base/packages/c/c.test.ts --
+export {}
+-- head/packages/a/src/index.ts --
+export const a = 2
+-- want --
+select packages/b/b.test.ts
+noselect packages/c/c.test.ts
+notfull

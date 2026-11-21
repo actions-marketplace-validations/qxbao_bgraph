@@ -1,0 +1,18 @@
+paths định nghĩa ở tsconfig.base.json, tsconfig.json chỉ extends: alias vẫn phân giải theo thư mục của config định nghĩa paths.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/tsconfig.base.json --
+{"compilerOptions":{"baseUrl":".","paths":{"@lib/*":["src/lib/*"]}}}
+-- base/tsconfig.json --
+{"extends":"./tsconfig.base.json"}
+-- base/src/lib/u.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from '@lib/u'
+-- base/src/b.test.ts --
+export {}
+-- head/src/lib/u.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

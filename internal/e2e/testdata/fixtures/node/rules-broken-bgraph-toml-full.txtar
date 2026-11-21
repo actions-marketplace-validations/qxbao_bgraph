@@ -1,0 +1,13 @@
+bgraph.toml hỏng (khoá lạ) luôn dẫn tới full user_rule.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.test.ts --
+export {}
+-- head/bgraph.toml --
+[[rule]]
+paths = ["x"]
+affects = "none"
+bogus_key = 1
+-- want --
+full
+widen user_rule

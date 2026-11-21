@@ -1,0 +1,18 @@
+affects="none" cho docs/**: tệp lạ trong docs không nới.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/bgraph.toml --
+[[rule]]
+paths = ["docs/**"]
+affects = "none"
+-- base/docs/diagram.drawio --
+<x/>
+-- base/src/a.test.ts --
+export {}
+-- head/docs/diagram.drawio --
+<y/>
+-- want --
+scope none
+nowiden unknown_file
+notfull
+noselect src/a.test.ts

@@ -1,0 +1,14 @@
+import('./x') với chuỗi hằng là cạnh bình thường.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/x.ts --
+export const x = 1
+-- base/src/a.test.ts --
+test('x', async () => { await import('./x') })
+-- base/src/b.test.ts --
+export {}
+-- head/src/x.ts --
+export const x = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

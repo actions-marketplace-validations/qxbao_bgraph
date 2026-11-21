@@ -1,0 +1,14 @@
+Tệp __mocks__ đổi: test của dự án được chọn (Jest tự nạp mock kề module).
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/src/__mocks__/api.js --
+module.exports = { get: () => 1 }
+-- base/src/api.js --
+module.exports = { get: () => 0 }
+-- base/src/a.test.js --
+jest.mock('./api')
+-- head/src/__mocks__/api.js --
+module.exports = { get: () => 2 }
+-- want --
+select src/a.test.js
+notfull

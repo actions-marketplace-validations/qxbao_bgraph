@@ -1,0 +1,20 @@
+exports subpath pattern "./features/*": import 'lib/features/foo' phân giải tới tệp theo mẫu.
+-- base/package.json --
+{"name":"root","private":true}
+-- base/packages/lib/package.json --
+{"name":"lib","exports":{"./features/*":"./src/features/*.js"}}
+-- base/packages/lib/src/features/foo.js --
+export const foo = 1
+-- base/packages/lib/src/features/bar.js --
+export const bar = 1
+-- base/packages/app/package.json --
+{"name":"app","dependencies":{"lib":"*"}}
+-- base/packages/app/a.test.js --
+import { foo } from 'lib/features/foo'
+-- base/packages/app/b.test.js --
+import { bar } from 'lib/features/bar'
+-- head/packages/lib/src/features/foo.js --
+export const foo = 2
+-- want --
+select packages/app/a.test.js
+noselect packages/app/b.test.js

@@ -1,0 +1,21 @@
+Chuỗi import ba tầng: đổi tệp lá chọn test đi qua nó, không chọn test không liên quan.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/util.ts --
+export const add = (a: number, b: number) => a + b
+-- base/src/math.ts --
+import { add } from './util'
+export const sum = (xs: number[]) => xs.reduce(add, 0)
+-- base/src/math.test.ts --
+import { sum } from './math'
+import { test, expect } from 'vitest'
+test('sum', () => expect(sum([1, 2])).toBe(3))
+-- base/src/other.test.ts --
+import { test } from 'vitest'
+test('x', () => {})
+-- head/src/util.ts --
+export const add = (a: number, b: number) => b + a
+-- want --
+select src/math.test.ts
+noselect src/other.test.ts
+scope graph

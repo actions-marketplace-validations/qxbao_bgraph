@@ -1,0 +1,24 @@
+package.json exports với điều kiện import/require/types: đổi đích của bất kỳ điều kiện nào đều chọn test (hợp mọi điều kiện).
+-- base/package.json --
+{"name":"root","private":true,"devDependencies":{"vitest":"^5.0.0"}}
+-- base/packages/lib/package.json --
+{"name":"lib","exports":{".":{"types":"./src/i.d.ts","import":"./src/esm.js","require":"./src/cjs.cjs","default":"./src/esm.js"}}}
+-- base/packages/lib/src/i.d.ts --
+export declare const x: number
+-- base/packages/lib/src/esm.js --
+export const x = 1
+-- base/packages/lib/src/cjs.cjs --
+exports.x = 1
+-- base/packages/app/package.json --
+{"name":"app","dependencies":{"lib":"*"}}
+-- base/packages/app/a.test.js --
+import { x } from 'lib'
+-- base/packages/other/package.json --
+{"name":"other"}
+-- base/packages/other/b.test.js --
+export {}
+-- head/packages/lib/src/cjs.cjs --
+exports.x = 2
+-- want --
+select packages/app/a.test.js
+noselect packages/other/b.test.js

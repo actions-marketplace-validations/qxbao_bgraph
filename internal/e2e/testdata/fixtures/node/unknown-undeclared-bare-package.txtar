@@ -1,0 +1,14 @@
+Import gói trần không khai báo: nới unknown_import và chọn test của tệp import khi có đổi trong dự án.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.test.ts --
+import x from 'ghost-package'
+-- base/src/b.test.ts --
+export {}
+-- base/src/other.ts --
+export const o = 1
+-- head/src/other.ts --
+export const o = 2
+-- want --
+widen unknown_import
+select src/a.test.ts

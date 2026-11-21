@@ -1,0 +1,17 @@
+Import tương đối không đuôi và có đuôi đều phân giải; chỉ test import tệp đổi được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/util.ts --
+export const a = 1
+-- base/src/lib.ts --
+export const b = 1
+-- base/src/a.test.ts --
+import { a } from './util'
+-- base/src/b.test.ts --
+import { b } from './lib.ts'
+-- head/src/util.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+scope graph

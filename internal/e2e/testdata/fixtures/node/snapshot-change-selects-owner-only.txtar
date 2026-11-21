@@ -1,0 +1,17 @@
+__snapshots__/a.test.ts.snap đổi chỉ chọn test sở hữu nó.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.test.ts --
+export {}
+-- base/src/b.test.ts --
+export {}
+-- base/src/__snapshots__/a.test.ts.snap --
+exports[`a 1`] = `1`;
+-- base/src/__snapshots__/b.test.ts.snap --
+exports[`b 1`] = `1`;
+-- head/src/__snapshots__/a.test.ts.snap --
+exports[`a 1`] = `2`;
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+notfull

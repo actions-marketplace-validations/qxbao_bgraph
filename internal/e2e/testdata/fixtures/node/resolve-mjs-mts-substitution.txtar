@@ -1,0 +1,19 @@
+Import './u.mjs' phân giải tới u.mts, và './c.cjs' tới c.cts.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/u.mts --
+export const a = 1
+-- base/src/c.cts --
+export const c = 1
+-- base/src/a.test.mts --
+import { a } from './u.mjs'
+-- base/src/c.test.ts --
+import { c } from './c.cjs'
+-- base/src/z.test.ts --
+export {}
+-- head/src/u.mts --
+export const a = 2
+-- want --
+select src/a.test.mts
+noselect src/c.test.ts
+noselect src/z.test.ts

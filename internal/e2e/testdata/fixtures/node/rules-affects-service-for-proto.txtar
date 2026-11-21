@@ -1,0 +1,24 @@
+Luật bgraph.toml affects=["services/api"] cho proto/*.proto: chọn test services/api, không chọn services/web, và luật "claim" tệp (không nới unknown_file).
+-- base/package.json --
+{"name":"root","private":true}
+-- base/bgraph.toml --
+[[rule]]
+paths = ["proto/*.proto"]
+affects = ["services/api"]
+-- base/proto/a.proto --
+syntax = "proto3";
+-- base/services/api/package.json --
+{"name":"api","devDependencies":{"vitest":"^5.0.0"}}
+-- base/services/api/a.test.ts --
+export {}
+-- base/services/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^5.0.0"}}
+-- base/services/web/w.test.ts --
+export {}
+-- head/proto/a.proto --
+syntax = "proto3"; // v2
+-- want --
+select services/api/a.test.ts
+noselect services/web/w.test.ts
+nowiden unknown_file
+notfull

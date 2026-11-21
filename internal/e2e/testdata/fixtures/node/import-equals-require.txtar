@@ -1,0 +1,14 @@
+Cú pháp TS `import x = require('./cjs')` tạo cạnh.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/cjs.ts --
+export = 1
+-- base/src/a.test.ts --
+import x = require('./cjs')
+-- base/src/b.test.ts --
+export {}
+-- head/src/cjs.ts --
+export = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

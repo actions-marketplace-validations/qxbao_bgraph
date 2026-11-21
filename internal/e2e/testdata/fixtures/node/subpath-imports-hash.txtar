@@ -1,0 +1,14 @@
+imports "#internal/*" trong package.json phân giải tới tệp nội bộ.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"},"imports":{"#internal/*":"./src/internal/*.js"}}
+-- base/src/internal/x.js --
+export const x = 1
+-- base/src/a.test.js --
+import { x } from '#internal/x'
+-- base/src/b.test.js --
+export {}
+-- head/src/internal/x.js --
+export const x = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js

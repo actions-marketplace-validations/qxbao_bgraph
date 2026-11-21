@@ -1,0 +1,13 @@
+Xoá tệp nguồn chọn test từng import nó.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/gone.ts --
+export const g = 1
+-- base/src/a.test.ts --
+import { g } from './gone'
+-- base/src/b.test.ts --
+export {}
+-- delete/src/gone.ts --
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

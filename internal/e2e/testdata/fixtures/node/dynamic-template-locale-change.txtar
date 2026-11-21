@@ -1,0 +1,16 @@
+import(`./locales/${l}.json`): đổi một tệp locale chọn test đi qua tệp chứa import động.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/i18n.ts --
+export const load = (l: string) => import(`./locales/${l}.json`)
+-- base/src/locales/en.json --
+{"hi":"hello"}
+-- base/src/a.test.ts --
+import { load } from './i18n'
+-- base/src/b.test.ts --
+export {}
+-- head/src/locales/en.json --
+{"hi":"hello!"}
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

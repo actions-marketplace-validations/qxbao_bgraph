@@ -1,0 +1,16 @@
+tsconfig baseUrl "src": import 'lib/x' (không có paths) phân giải qua baseUrl.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/tsconfig.json --
+{"compilerOptions":{"baseUrl":"src"}}
+-- base/src/lib/x.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from 'lib/x'
+-- base/src/b.test.ts --
+export {}
+-- head/src/lib/x.ts --
+export const a = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

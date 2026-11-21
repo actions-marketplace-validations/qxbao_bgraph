@@ -1,0 +1,20 @@
+Đổi tsconfig.base.json ở gốc nới test_config_changed tới dự án con có tsconfig extends nó.
+-- base/package.json --
+{"name":"root","private":true}
+-- base/tsconfig.base.json --
+{"compilerOptions":{"strict":false}}
+-- base/packages/a/package.json --
+{"name":"a","devDependencies":{"vitest":"^5.0.0"}}
+-- base/packages/a/tsconfig.json --
+{"extends":"../../tsconfig.base.json"}
+-- base/packages/a/a.test.ts --
+export {}
+-- base/packages/z/package.json --
+{"name":"z"}
+-- base/packages/z/z.test.ts --
+export {}
+-- head/tsconfig.base.json --
+{"compilerOptions":{"strict":true}}
+-- want --
+widen test_config_changed
+select packages/a/a.test.ts

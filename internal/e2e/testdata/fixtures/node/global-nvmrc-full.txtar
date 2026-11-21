@@ -1,0 +1,12 @@
+.nvmrc đổi: full global_input (ghim toolchain).
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/.nvmrc --
+20
+-- base/src/a.test.ts --
+export {}
+-- head/.nvmrc --
+22
+-- want --
+full
+widen global_input

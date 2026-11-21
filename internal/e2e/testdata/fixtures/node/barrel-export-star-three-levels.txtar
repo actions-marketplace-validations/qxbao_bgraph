@@ -1,0 +1,20 @@
+Chuỗi barrel export * ba tầng: đổi tệp lá chọn test chỉ import barrel trên cùng.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/index.ts --
+export * from './l1'
+-- base/src/l1/index.ts --
+export * from './l2'
+-- base/src/l1/l2/index.ts --
+export * from './leaf'
+-- base/src/l1/l2/leaf.ts --
+export const leaf = 1
+-- base/src/a.test.ts --
+import { leaf } from './index'
+-- base/src/b.test.ts --
+export {}
+-- head/src/l1/l2/leaf.ts --
+export const leaf = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

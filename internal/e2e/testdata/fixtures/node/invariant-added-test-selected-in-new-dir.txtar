@@ -1,0 +1,10 @@
+RTSCheck: thêm test ở thư mục mới (không ai import) thì test đó được chọn, test cũ thì không.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.test.ts --
+export {}
+-- head/tests/brand-new.test.ts --
+test('x', () => {})
+-- want --
+select tests/brand-new.test.ts
+noselect src/a.test.ts

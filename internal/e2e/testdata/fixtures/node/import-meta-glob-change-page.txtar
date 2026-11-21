@@ -1,0 +1,16 @@
+import.meta.glob: đổi trang sẵn có chọn test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/routes.ts --
+export const pages = import.meta.glob('./pages/*.ts', { eager: true })
+-- base/src/pages/home.ts --
+export default 1
+-- base/src/a.test.ts --
+import { pages } from './routes'
+-- base/src/b.test.ts --
+export {}
+-- head/src/pages/home.ts --
+export default 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

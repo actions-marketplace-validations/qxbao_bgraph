@@ -1,0 +1,14 @@
+globalSetup đổi: mọi test của dự án được chọn.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/jest.config.js --
+module.exports = { globalSetup: './test/global-setup.js' }
+-- base/test/global-setup.js --
+module.exports = async () => {}
+-- base/src/a.test.js --
+module.exports = 0
+-- head/test/global-setup.js --
+module.exports = async () => { process.env.X = '1' }
+-- want --
+select src/a.test.js
+notfull

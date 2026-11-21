@@ -1,0 +1,12 @@
+Đổi vite.config.ts nới test_config_changed.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vite.config.ts --
+export default { define: { X: 1 } }
+-- base/src/a.test.ts --
+export {}
+-- head/vite.config.ts --
+export default { define: { X: 2 } }
+-- want --
+widen test_config_changed
+select src/a.test.ts

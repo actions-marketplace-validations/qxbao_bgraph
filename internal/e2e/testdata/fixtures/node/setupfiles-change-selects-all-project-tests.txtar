@@ -1,0 +1,17 @@
+setupFiles đổi: mọi test của dự án được chọn, kể cả test không import gì.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/jest.config.js --
+module.exports = { setupFiles: ['<rootDir>/setup.js'] }
+-- base/setup.js --
+global.x = 1
+-- base/src/a.test.js --
+module.exports = 0
+-- base/src/b.test.js --
+module.exports = 0
+-- head/setup.js --
+global.x = 2
+-- want --
+select src/a.test.js
+select src/b.test.js
+notfull

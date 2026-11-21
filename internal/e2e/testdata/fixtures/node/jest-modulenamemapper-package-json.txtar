@@ -1,0 +1,15 @@
+Jest #10222: moduleNameMapper nằm trong khoá "jest" của package.json.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"},"jest":{"moduleNameMapper":{"^@app/(.*)$":"<rootDir>/src/$1"}}}
+-- base/src/util.js --
+module.exports = 1
+-- base/src/a.test.js --
+const u = require('@app/util')
+-- base/src/b.test.js --
+module.exports = 0
+-- head/src/util.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js
+notfull

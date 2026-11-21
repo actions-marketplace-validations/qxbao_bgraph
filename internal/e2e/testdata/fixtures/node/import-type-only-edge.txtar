@@ -1,0 +1,15 @@
+Cạnh import type vẫn chọn test (đổi kiểu làm hỏng typecheck).
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/types.ts --
+export interface T { a: number }
+-- base/src/a.test.ts --
+import type { T } from './types'
+const x: T = { a: 1 }
+-- base/src/b.test.ts --
+export {}
+-- head/src/types.ts --
+export interface T { a: string }
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

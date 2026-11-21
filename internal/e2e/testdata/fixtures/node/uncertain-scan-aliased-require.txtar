@@ -1,0 +1,17 @@
+const r = require; r('x'): không tin được danh sách import: nới uncertain_scan.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/src/weird.js --
+const r = require
+module.exports = r('./thing')
+-- base/src/thing.js --
+module.exports = 1
+-- base/src/a.test.js --
+require('./weird')
+-- base/src/b.test.js --
+module.exports = 0
+-- head/src/thing.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+widen uncertain_scan

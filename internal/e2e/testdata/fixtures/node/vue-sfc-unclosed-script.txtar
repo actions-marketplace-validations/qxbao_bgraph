@@ -1,0 +1,17 @@
+Khối <script> không đóng trong .vue: uncertain_scan, test phụ thuộc App.vue vẫn được chọn khi có đổi ở nơi khác.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/App.vue --
+<script setup>
+import { x } from './helper'
+-- base/src/helper.ts --
+export const x = 1
+-- base/src/other.ts --
+export const o = 1
+-- base/src/a.test.ts --
+import App from './App.vue'
+-- head/src/other.ts --
+export const o = 2
+-- want --
+select src/a.test.ts
+widen uncertain_scan

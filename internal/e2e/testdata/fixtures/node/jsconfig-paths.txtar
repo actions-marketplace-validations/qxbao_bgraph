@@ -1,0 +1,16 @@
+jsconfig.json cũng cung cấp paths cho dự án JS.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/jsconfig.json --
+{"compilerOptions":{"baseUrl":".","paths":{"~/*":["src/*"]}}}
+-- base/src/u.js --
+module.exports = 1
+-- base/src/a.test.js --
+const u = require('~/u')
+-- base/src/b.test.js --
+module.exports = 0
+-- head/src/u.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js

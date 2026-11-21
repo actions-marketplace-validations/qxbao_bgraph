@@ -1,0 +1,23 @@
+exports trỏ ./dist/index.js (không có trong cây) và tsconfig outDir/rootDir ánh xạ về src: đổi src chọn test của b.
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"]}
+-- base/packages/a/package.json --
+{"name":"@org/a","exports":{".":"./dist/index.js"}}
+-- base/packages/a/tsconfig.json --
+{"compilerOptions":{"outDir":"dist","rootDir":"src"}}
+-- base/packages/a/src/index.ts --
+export const a = 1
+-- base/packages/b/package.json --
+{"name":"@org/b","dependencies":{"@org/a":"*"}}
+-- base/packages/b/b.test.ts --
+import { a } from '@org/a'
+-- base/packages/c/package.json --
+{"name":"@org/c"}
+-- base/packages/c/c.test.ts --
+export {}
+-- head/packages/a/src/index.ts --
+export const a = 2
+-- want --
+select packages/b/b.test.ts
+noselect packages/c/c.test.ts
+notfull

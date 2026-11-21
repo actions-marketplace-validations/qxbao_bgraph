@@ -1,0 +1,16 @@
+Import thư mục có package.json với "main" phân giải tới tệp main.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vendor/lib/package.json --
+{"name":"lib-local","main":"./entry.js"}
+-- base/vendor/lib/entry.js --
+module.exports = 1
+-- base/src/a.test.ts --
+import lib from '../vendor/lib'
+-- base/src/b.test.ts --
+export {}
+-- head/vendor/lib/entry.js --
+module.exports = 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts

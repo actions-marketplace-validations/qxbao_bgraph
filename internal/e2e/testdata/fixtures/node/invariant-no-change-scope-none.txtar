@@ -1,0 +1,9 @@
+RTSCheck: hai cây giống nhau thì phần chọn rỗng, scope none.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/a.test.ts --
+export {}
+-- want --
+scope none
+notfull
+noselect src/a.test.ts

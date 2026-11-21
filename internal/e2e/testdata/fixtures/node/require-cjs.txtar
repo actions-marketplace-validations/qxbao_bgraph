@@ -1,0 +1,14 @@
+require() CJS với đường dẫn tương đối tạo cạnh.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^30.0.0"}}
+-- base/src/lib.js --
+module.exports = 1
+-- base/src/a.test.js --
+const lib = require('./lib')
+-- base/src/b.test.js --
+module.exports = 0
+-- head/src/lib.js --
+module.exports = 2
+-- want --
+select src/a.test.js
+noselect src/b.test.js

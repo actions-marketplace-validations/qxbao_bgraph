@@ -1,0 +1,14 @@
+Vitest #11917: import x from './x.sql?raw' — đổi tệp raw phải chọn test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/query.sql --
+select 1
+-- base/src/a.test.ts --
+import q from './query.sql?raw'
+-- base/src/b.test.ts --
+export {}
+-- head/src/query.sql --
+select 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
