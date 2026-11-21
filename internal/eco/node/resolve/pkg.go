@@ -16,15 +16,15 @@ type PackageJSON struct {
 	Main, Module, Types, Typings string
 	// Source is the build entry by microbundle/parcel convention ("source": "src/index.js"): outputs in main/module
 	// are compiled from it.
-	Source string
-	BrowserString                string     // browser khi là chuỗi
-	Browser                      *JSONValue // browser thô (chuỗi hoặc object)
-	Exports, Imports             *JSONValue // thô, có thứ tự khoá; nil nếu vắng hoặc null
-	Dependencies                 map[string]string
-	DevDependencies              map[string]string
-	PeerDependencies             map[string]string
-	OptionalDependencies         map[string]string
-	Workspaces                   []string
+	Source               string
+	BrowserString        string     // browser khi là chuỗi
+	Browser              *JSONValue // browser thô (chuỗi hoặc object)
+	Exports, Imports     *JSONValue // thô, có thứ tự khoá; nil nếu vắng hoặc null
+	Dependencies         map[string]string
+	DevDependencies      map[string]string
+	PeerDependencies     map[string]string
+	OptionalDependencies map[string]string
+	Workspaces           []string
 }
 
 // HasDep: tên có trong một trong bốn nhóm phụ thuộc.
