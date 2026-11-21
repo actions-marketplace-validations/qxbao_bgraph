@@ -1,0 +1,174 @@
+{
+ "ecosystem": "node",
+ "version": 1,
+ "split_rule": "sắp repo (chữ thường) theo sha256(tên) tăng dần; chỉ số i%3==2 (mỗi repo thứ 3) là holdout, còn lại dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "SWE-bench/SWE-bench_Multilingual",
+   "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual",
+   "revision": "846e647b9f33c0b51b739d005d13d85493c9af09",
+   "notes": "split test; giữ repo JS/TS"
+  },
+  {
+   "name": "ByteDance-Seed/Multi-SWE-bench",
+   "url": "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench",
+   "revision": "56ff018c04a38e27ada1e9d0a6d5839a51f88f0d",
+   "notes": "thư mục js/ và ts/ (JSONL); FAIL_TO_PASS = khoá f2p_tests"
+  }
+ ],
+ "repos": [
+  {
+   "name": "vuejs/core",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": true,
+   "sources": [
+    "Multi-SWE-bench",
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "sveltejs/svelte",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "expressjs/express",
+   "role": "holdout",
+   "t1_tasks": 4,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "mui/material-ui",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "prettier/prettier",
+   "role": "dev",
+   "t1_tasks": 0,
+   "replay": true
+  },
+  {
+   "name": "honojs/hono",
+   "role": "holdout",
+   "t1_tasks": 0,
+   "replay": true
+  },
+  {
+   "name": "TanStack/query",
+   "role": "dev",
+   "t1_tasks": 0,
+   "replay": true
+  },
+  {
+   "name": "facebook/docusaurus",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "mrdoob/three.js",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "axios/axios",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench",
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "immutable-js/immutable-js",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "iamkun/dayjs",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "babel/babel",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "darkreader/darkreader",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "Kong/insomnia",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "preactjs/preact",
+   "role": "dev",
+   "t1_tasks": 17,
+   "replay": false,
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "anuraghazra/github-readme-stats",
+   "role": "dev",
+   "t1_tasks": 19,
+   "replay": false,
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "colinhacks/zod",
+   "role": "holdout",
+   "t1_tasks": 0,
+   "replay": true
+  }
+ ]
+}
