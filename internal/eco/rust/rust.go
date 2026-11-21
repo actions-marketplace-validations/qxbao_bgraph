@@ -26,8 +26,8 @@
 //     tests, benches and examples also depend on every bin of the package (Cargo builds them, CARGO_BIN_EXE_*);
 //   - every target of package P depends on the library of each workspace/path dependency of P (normal, dev and build alike);
 //   - package-level files (build.rs and what it reads, files under the package directory that no target owns) are dependencies
-//     of every target of the package, except unowned files under tests/ (benches/, examples/), which only the integration tests
-//     (benches, examples) depend on;
+//     of every target of the package, except unowned .rs files under tests/ (benches/, examples/), which only the
+//     integration tests (benches, examples) depend on;
 //   - a target whose module tree cannot be determined lexically depends on every file of the package.
 //
 // The package directory excludes nested packages and target/.
@@ -55,7 +55,7 @@ const Name = "rust"
 const Runner = "cargo"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "rust-1"
+const AnalyzerVersion = "rust-2"
 
 // Eco is the Rust ecosystem.
 type Eco struct{}
@@ -470,8 +470,11 @@ func (b *builder) analyzePackage(p *pkg) error {
 			rel = strings.TrimPrefix(f, p.dir+"/")
 		}
 		group := "pkg"
+		// Only unowned .rs files under tests/ (benches/, examples/) are confined to that group: they can only be compiled
+		// by those targets (a src/ module reaching them needs #[path], which makes it owned). Data files there (fixtures,
+		// snapshots) may also be read at runtime by unit tests in src/, so they stay package-level.
 		for _, g := range []string{"tests", "benches", "examples"} {
-			if strings.HasPrefix(rel, g+"/") && len(groupTargets[g]) > 0 {
+			if strings.HasSuffix(f, ".rs") && strings.HasPrefix(rel, g+"/") && len(groupTargets[g]) > 0 {
 				group = g
 			}
 		}

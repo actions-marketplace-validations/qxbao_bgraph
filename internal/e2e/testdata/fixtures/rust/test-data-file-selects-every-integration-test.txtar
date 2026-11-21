@@ -1,4 +1,5 @@
-Unowned data under tests/ is an input of every integration test of the package.
+Unowned data under tests/ is package-level: integration tests read it, and unit tests in src/ may read it at runtime too
+(std::fs::read("tests/data/...")), so every target of the package is selected.
 -- base/Cargo.toml --
 [package]
 name = "p"
@@ -20,4 +21,4 @@ fn t() {}
 notfull
 select .::test:a
 select .::test:b
-noselect .::lib
+select .::lib
