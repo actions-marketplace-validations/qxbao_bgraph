@@ -1,0 +1,18 @@
+include: ['src/hooks/dom.test.tsx'] chỉ định nghĩa tập test, không phải phụ thuộc: đổi thứ dom.test.tsx import không chọn mọi test (hono).
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.config.ts --
+export default { test: { projects: [{ test: { include: ['src/dom/**/*.test.ts', 'src/hooks/dom.test.tsx'] } }] } }
+-- base/src/dom/c.ts --
+export const c = 1
+-- base/src/hooks/dom.test.tsx --
+import { c } from '../dom/c'
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- head/src/dom/c.ts --
+export const c = 2
+-- want --
+select src/hooks/dom.test.tsx
+noselect src/a.test.ts

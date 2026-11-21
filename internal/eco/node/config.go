@@ -121,14 +121,14 @@ func (tc *testConfig) readOne(t tree.Tree, dir, file, src string) {
 					base = "**/" + escapeGlob(base)
 				}
 				for _, rt := range []string{"jsx-runtime", "jsx-dev-runtime"} {
-					tc.implicitGlobs = append(tc.implicitGlobs, base+"/"+rt+"{,.*,/**}")
+					tc.implicitGlobs = append(tc.implicitGlobs, base+"/"+rt+"{,.js,.jsx,.ts,.tsx,.mjs,.cjs,.mts,.cts,.d.ts,/**}")
 				}
 			}
 		}
 	}
 	// Giá trị của các khoá chỉ LOẠI TRỪ (exclude, coverage) hoặc đã xử lý riêng (importSource) không bao giờ tạo phụ
 	// thuộc: xoá trắng trước khi gom đường dẫn.
-	scan := blankValues(src, "exclude", "coverage", "importSource", "jsxImportSource", "testPathIgnorePatterns",
+	scan := blankValues(src, "exclude", "coverage", "importSource", "jsxImportSource", "testPathIgnorePatterns", "include", "testMatch", "testRegex",
 		"coveragePathIgnorePatterns", "watchPathIgnorePatterns")
 	for _, m := range strLit.FindAllStringSubmatch(scan, -1) {
 		s := m[1] + m[2] + m[3]
