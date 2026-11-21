@@ -41,28 +41,12 @@ type AnalysisStats struct {
 func (ix *Index) Analyze(ctx context.Context) (AnalysisStats, error) {
 	start := time.Now()
 	var st AnalysisStats
-	head, err := ix.repo.RevParse(ctx, "HEAD")
+	an, err := ix.analyzeRev(ctx, "")
 	if err != nil {
 		return st, err
 	}
-	_, wt, err := ix.repo.Snapshot(ctx, head)
-	if err != nil {
-		return st, err
-	}
-	st.Files = len(wt.Files())
-	if err := ix.cache.Prefetch(ctx, wt, wt.Files(), 0); err != nil {
-		return st, err
-	}
-	defer ix.cache.Flush()
-	rf, rerr := loadRules(wt)
-	if rerr != nil {
-		return st, rerr
-	}
-	for _, e := range Ecosystems(rf) {
-		a, err := e.Analyze(ctx, wt, ix.cache)
-		if err != nil {
-			return st, err
-		}
+	st.Files = len(an.Tree.Files())
+	for _, a := range an.Analyses {
 		st.Edges += len(a.Edges)
 		st.Units += len(a.Tests)
 		st.Unresolved = append(st.Unresolved, a.Unresolved...)
