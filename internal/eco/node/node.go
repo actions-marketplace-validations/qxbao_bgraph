@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: tăng mỗi khi đổi luật phân tích/phân giải để vô hiệu snapshot phân tích đã lưu.
-const AnalyzerVersion = "node-10"
+const AnalyzerVersion = "node-11"
 
 // Eco là hệ sinh thái Node.
 type Eco struct {
@@ -186,6 +186,13 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	for _, tf := range tests {
 		dir := projectOf(tf)
 		a.Tests = append(a.Tests, model.TestUnit{Eco: Name, ID: tf, Project: dir, Files: []string{tf}, Runner: detectRunner(pkgs, dir)})
+	}
+	// Mẫu tệp test do code tính (template/biến): không biết tệp nào là test → đơn vị "cả dự án" (runner chạy cả dự án).
+	// Không có nó, test chưa nhận ra sẽ không bao giờ được chọn (babel: testRegex là template có biểu thức).
+	for dir, tc := range configs {
+		if tc.testsOpaque {
+			a.Tests = append(a.Tests, model.TestUnit{Eco: Name, ID: wholeUnitID(dir), Project: dir, Runner: detectRunner(pkgs, dir), Whole: true})
+		}
 	}
 	for dir, tc := range configs {
 		var projTests []string
@@ -477,3 +484,6 @@ func (e *Eco) addGenerated(a *eco.Analysis, from string, imp model.ImportRef, re
 	a.Unresolved = append(a.Unresolved, model.Unresolved{File: from, Spec: imp.Spec, Class: model.UnresolvedUnknown, Line: imp.Line,
 		ScopeTier: model.TierModule, ScopeDir: res.PackageDir, Detail: model.ReasonGeneratedOutput + ": " + detail})
 }
+
+// wholeUnitID là định danh của đơn vị "cả bộ test của dự án dir".
+func wholeUnitID(dir string) string { return "<all-tests:" + dir + ">" }

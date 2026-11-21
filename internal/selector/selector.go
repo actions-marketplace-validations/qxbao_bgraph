@@ -254,7 +254,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	choose := func(u model.TestUnit, reason string) {
 		st, ok := chosen[u.ID]
 		if !ok {
-			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files}
+			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole}
 			chosen[u.ID] = st
 		}
 		if !slices.Contains(st.Reasons, reason) {
@@ -301,6 +301,14 @@ func Select(ctx context.Context, in Input) model.Selection {
 						break
 					}
 				}
+			}
+		}
+	}
+	// Đơn vị "cả dự án" (không biết tập tệp test): mọi thay đổi có nghĩa đều có thể chạm một test chưa biết của dự án.
+	if len(seeds) > 0 || len(s.sel.Widening) > 0 {
+		for _, u := range units {
+			if u.Whole {
+				choose(u, model.ReasonConfigIsCode+": không biết tập tệp test của dự án "+scopeName(u.Project)+" (mẫu test do code tính)")
 			}
 		}
 	}

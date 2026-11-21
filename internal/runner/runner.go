@@ -91,7 +91,9 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 			keys = append(keys, k)
 		}
 		files := t.Files
-		if len(files) == 0 {
+		if t.Whole {
+			files = []string{outsideMark} // không biết tệp test: chạy cả dự án
+		} else if len(files) == 0 {
 			files = []string{t.Unit}
 		}
 		for _, f := range files {

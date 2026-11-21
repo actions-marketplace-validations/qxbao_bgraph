@@ -1,0 +1,23 @@
+Kiểu babel: testRegex là template có ${cond ? "" : "|eslint"} → khai triển hai nhánh; packages/a/test/scope.js là test và được chọn khi nguồn đổi; không cần đơn vị cả dự án.
+-- base/package.json --
+{"name":"mono","devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+const semver = require("semver");
+module.exports = {
+  testRegex: `./(packages|codemods${
+    semver.satisfies(process.versions.node, "<12") ? "" : "|eslint"
+  })/[^/]+/test/.+\.m?js$`,
+};
+-- base/packages/a/src/index.js --
+export const a = 1
+-- base/packages/a/test/scope.js --
+import { a } from '../src/index.js'
+test('s', () => { a })
+-- base/eslint/b/test/b.js --
+test('b', () => {})
+-- head/packages/a/src/index.js --
+export const a = 2
+-- want --
+select packages/a/test/scope.js
+noselect eslint/b/test/b.js
+noselect <all-tests:.>

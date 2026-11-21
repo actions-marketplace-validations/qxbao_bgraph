@@ -193,6 +193,9 @@ type TestUnit struct {
 	Project string   `json:"project"` // thư mục dự án chứa đơn vị
 	Files   []string `json:"files"`
 	Runner  string   `json:"runner,omitempty"` // jest, vitest, node-test, pytest, cargo...
+	// Whole: đơn vị "cả bộ test của dự án" khi không biết tập tệp test (mẫu test do code tính). Files rỗng; runner chạy
+	// cả dự án, không kèm danh sách.
+	Whole bool `json:"whole,omitempty"`
 }
 
 // SelectedTest là một đơn vị test được chọn kèm chuỗi lý do.
@@ -202,6 +205,7 @@ type SelectedTest struct {
 	Runner  string   `json:"runner,omitempty"`
 	Files   []string `json:"files"`
 	Reasons []string `json:"reasons"`
+	Whole   bool     `json:"whole,omitempty"` // chạy cả bộ test của dự án (xem TestUnit.Whole)
 }
 
 // Selection là kết quả chọn (tương thích về ý nghĩa với bint/internal/affected.Selection).

@@ -25,6 +25,8 @@ type testConfig struct {
 	// mẫu cấu hình HOẶC mẫu mặc định (hợp: không bao giờ thu hẹp tập test).
 	testGlobs []*glob.Pattern
 	testRegex []*regexp.Regexp
+	// testsOpaque: mẫu tệp test không đọc được → tập test của dự án không biết (đơn vị Whole).
+	testsOpaque bool
 }
 
 // isTest: p khớp mẫu tệp test của cấu hình.
@@ -648,20 +650,27 @@ func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKno
 		}
 		return true
 	}
+	opaqueTest := func(msg string) {
+		tc.opaque = append(tc.opaque, msg)
+		tc.testsOpaque = true
+	}
 	for _, key := range []string{"testMatch", "include"} {
 		for _, i := range keyIndexes(src, key) {
+			var vals []string
 			if arr, ok := stringArray(src[i:]); ok {
-				for _, g := range arr {
-					if !addGlob(g) {
-						tc.opaque = append(tc.opaque, file+": "+key+" "+g)
-					}
-				}
+				vals = arr
 			} else if v, ok := literalValue(src[i:]); ok && quoteLen(src[i:]) != "" {
-				if !addGlob(v) {
-					tc.opaque = append(tc.opaque, file+": "+key+" "+v)
-				}
+				vals = []string{v}
+			} else if alts, ok := templateAlternatives(src[i:]); ok {
+				vals = alts
 			} else {
-				tc.opaque = append(tc.opaque, file+": "+key)
+				opaqueTest(file + ": " + key)
+				continue
+			}
+			for _, g := range vals {
+				if !addGlob(g) {
+					opaqueTest(file + ": " + key + " " + g)
+				}
 			}
 		}
 	}
@@ -673,19 +682,122 @@ func (tc *testConfig) readTestPatterns(src, file string, roots []string, rootKno
 			pats = []string{v}
 		} else if re, ok := regexLiteral(src[i:]); ok {
 			pats = []string{re}
+		} else if alts, ok := templateAlternatives(src[i:]); ok {
+			pats = alts // hợp mọi tổ hợp nhánh: tập cha của regex thật
 		} else {
-			tc.opaque = append(tc.opaque, file+": testRegex")
+			opaqueTest(file + ": testRegex")
 			continue
 		}
 		for _, p := range pats {
 			re, err := regexp.Compile(p)
 			if err != nil {
-				tc.opaque = append(tc.opaque, file+": testRegex "+p)
+				opaqueTest(file + ": testRegex " + p)
 				continue
 			}
 			tc.testRegex = append(tc.testRegex, re)
 		}
 	}
+}
+
+// templateAlternatives khai triển template literal `a${x}b` ngay sau vị trí s khi mỗi biểu thức là chuỗi hằng hoặc
+// toán tử ba ngôi có hai nhánh chuỗi hằng (`${cond ? "" : "|eslint"}`): trả mọi tổ hợp (tối đa 64). Giá trị thật là một
+// trong các tổ hợp nên hợp của chúng là tập cha. Biểu thức khác → false.
+func templateAlternatives(s string) ([]string, bool) {
+	s = strings.TrimLeft(s, " \t\r\n")
+	if !strings.HasPrefix(s, "`") {
+		return nil, false
+	}
+	out := []string{""}
+	var lit strings.Builder
+	flush := func() {
+		t := unescapeJS(lit.String())
+		for i := range out {
+			out[i] += t
+		}
+		lit.Reset()
+	}
+	for i := 1; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case c == '\\' && i+1 < len(s):
+			lit.WriteByte(c)
+			lit.WriteByte(s[i+1])
+			i++
+		case c == '`':
+			flush()
+			return out, true
+		case c == '$' && i+1 < len(s) && s[i+1] == '{':
+			body, ok := balanced(s[i+1:], '{', '}')
+			if !ok {
+				return nil, false
+			}
+			alts, ok := exprAlternatives(body)
+			if !ok || len(out)*len(alts) > 64 {
+				return nil, false
+			}
+			flush()
+			var next []string
+			for _, o := range out {
+				for _, a := range alts {
+					next = append(next, o+a)
+				}
+			}
+			out = next
+			i += 1 + len(body) + 1
+		default:
+			lit.WriteByte(c)
+		}
+	}
+	return nil, false
+}
+
+// exprAlternatives: chuỗi hằng → [v]; `cond ? A : B` với A, B là chuỗi hằng (hoặc ba ngôi lồng như vậy) → các nhánh.
+func exprAlternatives(e string) ([]string, bool) {
+	e = strings.TrimSpace(e)
+	if q := quoteLen(e); q != "" && q == e {
+		v, _ := literalValue(e)
+		return []string{v}, true
+	}
+	// tách "?" và ":" ở mức ngoài cùng (bỏ qua trong chuỗi/ngoặc)
+	q, colon := -1, -1
+	depth := 0
+	var quote byte
+	for i := 0; i < len(e); i++ {
+		c := e[i]
+		if quote != 0 {
+			if c == '\\' {
+				i++
+			} else if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch c {
+		case '"', '\'', '`':
+			quote = c
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			depth--
+		case '?':
+			if depth == 0 && q < 0 && !(i+1 < len(e) && (e[i+1] == '?' || e[i+1] == '.')) {
+				q = i
+			}
+		case ':':
+			if depth == 0 && q >= 0 && colon < 0 {
+				colon = i
+			}
+		}
+	}
+	if q < 0 || colon < 0 {
+		return nil, false
+	}
+	a, ok1 := exprAlternatives(e[q+1 : colon])
+	b, ok2 := exprAlternatives(e[colon+1:])
+	if !ok1 || !ok2 {
+		return nil, false
+	}
+	return append(a, b...), true
 }
 
 // regexLiteral đọc /.../flags ngay sau vị trí s (nội dung trả nguyên văn, đã là cú pháp regex).

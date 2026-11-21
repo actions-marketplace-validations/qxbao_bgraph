@@ -1,0 +1,16 @@
+testRegex tính bằng hàm (không đọc được): tập test không biết → đơn vị "cả dự án" được chọn khi có thay đổi; tệp check.js (khớp regex thật, không khớp mẫu mặc định) không bị sót.
+-- base/package.json --
+{"name":"app","devDependencies":{"jest":"^29.0.0"}}
+-- base/jest.config.js --
+const pats = require('./pats')
+module.exports = { testRegex: pats.build() }
+-- base/pats.js --
+module.exports = { build: () => '\.check\.js$' }
+-- base/src/a.js --
+module.exports = 1
+-- base/src/a.check.js --
+require('./a')
+-- head/src/a.js --
+module.exports = 2
+-- want --
+select <all-tests:.>
