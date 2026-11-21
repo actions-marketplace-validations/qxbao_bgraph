@@ -1,0 +1,15 @@
+Tệp cấu hình tên có đoạn giữa (vitest.unit.config.ts) được nhận là cấu hình runner: setupFiles của nó là phụ thuộc của mọi test.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/vitest.unit.config.ts --
+export default { test: { setupFiles: ['./test/setup.ts'] } }
+-- base/test/setup.ts --
+(globalThis as any).x = 1
+-- base/src/a.test.ts --
+import { test } from 'vitest'
+test('a', () => {})
+-- head/test/setup.ts --
+(globalThis as any).x = 2
+-- want --
+select src/a.test.ts
+nowiden unreferenced_file

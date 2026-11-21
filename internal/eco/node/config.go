@@ -70,9 +70,15 @@ func fakeAbs(p string) string {
 // tests/unit/jest.config.mjs chạy bằng --config).
 var configBases = []string{"jest.config", "vitest.config", "vite.config", "playwright.config", "vitest.workspace", "jest.preset", "jest-preset"}
 
+var runnerConfigName = regexp.MustCompile(`^(vitest|vite|jest|playwright)(\.[\w-]+)*\.(config|workspace)(\.[\w-]+)*\.(js|ts|mjs|cjs|mts|cts|json)$`)
+
 // isRunnerConfig: p là tệp cấu hình runner (jest.config.ts, vitest.config.e2e.mts, ...).
 func isRunnerConfig(p string) bool {
 	base := path.Base(p)
+	// Tên có đoạn giữa: vitest.compile.config.ts, vitest.unit.config.mts, jest.e2e.config.js (zod, nhiều monorepo).
+	if runnerConfigName.MatchString(base) {
+		return true
+	}
 	for _, b := range configBases {
 		if strings.HasPrefix(base, b+".") {
 			switch path.Ext(base) {
@@ -96,14 +102,25 @@ var strLit = regexp.MustCompile(`'((?:[^'\\\n]|\\.)*)'|"((?:[^"\\\n]|\\.)*)"|` +
 // readTestConfig đọc các tệp cấu hình runner cfgFiles của dự án dir (và khoá "jest" trong package.json).
 func readTestConfig(t tree.Tree, dir string, pkgJest []byte, cfgFiles []string) testConfig {
 	var tc testConfig
-	for _, p := range cfgFiles {
+	// Hàng đợi: tệp cấu hình mà projects/workspace khai bằng đường dẫn (tên tuỳ ý) cũng được đọc như cấu hình runner.
+	seen := map[string]bool{}
+	queue := append([]string(nil), cfgFiles...)
+	for len(queue) > 0 {
+		p := queue[0]
+		queue = queue[1:]
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
 		b, err := t.Read(p)
 		if err != nil {
 			tc.opaque = append(tc.opaque, p+": "+err.Error())
 			continue
 		}
 		tc.files = append(tc.files, p)
-		tc.readOne(t, dir, p, string(b))
+		src := string(b)
+		tc.readOne(t, dir, p, src)
+		queue = append(queue, projectConfigFiles(t, p, src)...)
 	}
 	if len(pkgJest) > 0 {
 		tc.readOne(t, dir, path.Join(dir, "package.json"), string(pkgJest))
@@ -979,4 +996,48 @@ func literalElements(s string) []string {
 		}
 	}
 	return out
+}
+
+// projectConfigFiles: tệp cấu hình con mà projects/workspace của cấu hình file khai bằng chuỗi (đường dẫn hoặc glob tới
+// tệp JS/TS/JSON). Thư mục ("packages/*") không cần: cấu hình runner trong đó được tìm ở mọi thư mục.
+func projectConfigFiles(t tree.Tree, file, src string) []string {
+	src = stripJSComments(src)
+	var out []string
+	for _, key := range []string{"projects", "workspace"} {
+		for _, i := range keyIndexes(src, key) {
+			for _, v := range literalElements(src[i:]) {
+				if strings.HasPrefix(v, "!") {
+					continue
+				}
+				rel := path.Join(path.Dir(file), v)
+				if rel == ".." || strings.HasPrefix(rel, "../") {
+					continue
+				}
+				if !strings.ContainsAny(v, "*?[{") {
+					if t.Has(rel) && hasCfgExt(rel) {
+						out = append(out, rel)
+					}
+					continue
+				}
+				g, err := glob.Compile(rel)
+				if err != nil {
+					continue
+				}
+				for _, f := range t.Files() {
+					if hasCfgExt(f) && !inNodeModules(f) && g.Match(f) {
+						out = append(out, f)
+					}
+				}
+			}
+		}
+	}
+	return out
+}
+
+func hasCfgExt(p string) bool {
+	switch path.Ext(p) {
+	case ".js", ".ts", ".mjs", ".cjs", ".mts", ".cts", ".json":
+		return true
+	}
+	return false
 }
