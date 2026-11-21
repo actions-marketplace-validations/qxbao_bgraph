@@ -1,0 +1,41 @@
+A build script reading a path outside the repository cannot be tracked: any change widens to full.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/gen/Cargo.toml --
+[package]
+name = "gen"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/gen/build.rs --
+fn main() {
+    let _ = std::fs::read_to_string("../../../../outside/x.txt");
+}
+-- base/crates/gen/src/lib.rs --
+pub fn f() {}
+-- base/crates/gen/tests/t.rs --
+#[test]
+fn t() {}
+-- base/crates/unrelated/Cargo.toml --
+[package]
+name = "unrelated"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/unrelated/src/lib.rs --
+pub fn f() {}
+-- base/crates/user/Cargo.toml --
+[package]
+name = "user"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gen = { path = "../gen" }
+-- base/crates/user/src/lib.rs --
+pub fn f() {}
+-- head/crates/unrelated/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+full
+widen unknown_import

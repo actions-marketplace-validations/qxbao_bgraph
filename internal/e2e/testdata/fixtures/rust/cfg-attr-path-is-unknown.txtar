@@ -1,0 +1,25 @@
+#[cfg_attr(.., path = ..)] cannot be resolved lexically: the target depends on the whole package.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/bin_only.rs --
+pub fn b() {}
+-- base/src/lib.rs --
+#[cfg_attr(windows, path = "win.rs")]
+#[cfg_attr(not(windows), path = "unix.rs")]
+mod sys;
+-- base/src/main.rs --
+mod bin_only;
+fn main() {}
+-- base/src/unix.rs --
+pub fn s() {}
+-- base/src/win.rs --
+pub fn s() {}
+-- head/src/bin_only.rs --
+pub fn b() { /* changed */ }
+-- want --
+notfull
+select .::bin:p
+select .::lib

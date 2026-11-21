@@ -1,0 +1,42 @@
+An excluded directory is not part of the workspace: it does not inherit workspace dependencies, so it does not depend on the member.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+exclude = ["crates/skip"]
+
+[workspace.dependencies]
+a = { path = "crates/a" }
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/b/Cargo.toml --
+[package]
+name = "b"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+a = { workspace = true }
+-- base/crates/b/src/lib.rs --
+pub fn f() {}
+-- base/crates/skip/Cargo.toml --
+[package]
+name = "skip"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+a = { workspace = true }
+-- base/crates/skip/src/lib.rs --
+pub fn f() {}
+-- head/crates/a/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/a::lib
+select crates/b::lib
+noselect crates/skip::lib

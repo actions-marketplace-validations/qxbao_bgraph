@@ -1,0 +1,56 @@
+A change to the target layout ([[test]], autotests, build) selects the package and its reverse dependencies, not the rest of the workspace.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/a/tests/t.rs --
+#[test]
+fn t() {}
+-- base/crates/b/Cargo.toml --
+[package]
+name = "b"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/b/src/lib.rs --
+pub fn f() {}
+-- base/crates/c/Cargo.toml --
+[package]
+name = "c"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+a = { path = "../a" }
+-- base/crates/c/src/lib.rs --
+pub fn f() {}
+-- base/crates/d/Cargo.toml --
+[package]
+name = "d"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+c = { path = "../c" }
+-- base/crates/d/src/lib.rs --
+pub fn f() {}
+-- head/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+autotests = false
+-- want --
+notfull
+widen manifest_changed
+select crates/a::lib
+select crates/a::doc
+select crates/c::lib
+select crates/d::lib
+noselect crates/b::lib

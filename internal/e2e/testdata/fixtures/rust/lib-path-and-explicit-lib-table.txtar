@@ -1,0 +1,22 @@
+[lib] path outside src/: the lib owns that module tree.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "core/lib.rs"
+-- base/core/inner.rs --
+pub fn i() {}
+-- base/core/lib.rs --
+mod inner;
+-- base/src/main.rs --
+fn main() {}
+-- head/core/inner.rs --
+pub fn i() { /* changed */ }
+-- want --
+notfull
+select .::lib
+select .::doc
+select .::bin:p

@@ -1,0 +1,29 @@
+A build-dependency is also a dependency of every target (superset).
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/gen/Cargo.toml --
+[package]
+name = "gen"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/gen/src/lib.rs --
+pub fn f() {}
+-- base/crates/user/Cargo.toml --
+[package]
+name = "user"
+version = "0.1.0"
+edition = "2021"
+
+[build-dependencies]
+gen = { path = "../gen" }
+-- base/crates/user/build.rs --
+fn main() {}
+-- base/crates/user/src/lib.rs --
+pub fn f() {}
+-- head/crates/gen/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/user::lib

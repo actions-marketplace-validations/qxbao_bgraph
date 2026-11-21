@@ -4,8 +4,15 @@ Affected-test selection across languages, **fail-closed**: for every change, the
 that could be affected, or widens the scope (project, full suite) with a machine-readable reason. It never silently
 drops a test.
 
-Status: the Node ecosystem (JS/TS, CJS/ESM; Jest, Vitest, Mocha, node:test, Playwright). Other ecosystems are not
-supported yet: changes there widen to `full`.
+Status: two ecosystems.
+
+- **Node** (JS/TS, CJS/ESM; Jest, Vitest, Mocha, node:test, Playwright), at test-file granularity.
+- **Rust** (Cargo workspaces and standalone crates; `cargo test`), at Cargo-target granularity: one unit per library
+  (`<pkgdir>::lib`), doc-tests (`::doc`), binary (`::bin:<name>`), integration test (`::test:<name>`), bench and example.
+  Inside a crate the `mod`/`use` graph is not a sound dependency relation, so the module tree only decides which target owns a
+  file. `bgraph command` emits `cargo test -p <package> --lib --test <name> ...` (plus a separate `--doc` command).
+
+Other ecosystems are not supported yet: changes there widen to `full`.
 
 ## Usage
 

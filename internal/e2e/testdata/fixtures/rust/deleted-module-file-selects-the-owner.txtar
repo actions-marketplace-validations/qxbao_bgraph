@@ -1,0 +1,20 @@
+Deleting a module file selects the target that owned it (the base tree's module tree is in the union graph).
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/gone.rs --
+pub fn g() {}
+-- base/src/lib.rs --
+mod gone;
+-- base/src/main.rs --
+mod only_bin;
+fn main() {}
+-- base/src/only_bin.rs --
+pub fn b() {}
+-- delete/src/only_bin.rs --
+-- want --
+notfull
+select .::bin:p
+noselect .::lib

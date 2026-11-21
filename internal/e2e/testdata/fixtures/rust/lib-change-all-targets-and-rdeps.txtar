@@ -1,0 +1,66 @@
+A lib change selects every target of the package and every dependent package, including one that only has a dev-dependency.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/app/Cargo.toml --
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core = { path = "../core" }
+-- base/crates/app/src/lib.rs --
+pub fn f() {}
+-- base/crates/core/Cargo.toml --
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/core/src/lib.rs --
+mod util;
+pub fn f() {}
+-- base/crates/core/src/main.rs --
+fn main() {}
+-- base/crates/core/src/util.rs --
+pub fn u() {}
+-- base/crates/core/tests/it.rs --
+#[test]
+fn t() {}
+-- base/crates/devonly/Cargo.toml --
+[package]
+name = "devonly"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+core = { path = "../core" }
+-- base/crates/devonly/src/lib.rs --
+pub fn f() {}
+-- base/crates/devonly/tests/t.rs --
+#[test]
+fn t() {}
+-- base/crates/other/Cargo.toml --
+[package]
+name = "other"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/other/src/lib.rs --
+pub fn f() {}
+-- head/crates/core/src/util.rs --
+pub fn u() { /* changed */ }
+-- want --
+notfull
+scope graph
+select crates/core::lib
+select crates/core::doc
+select crates/core::bin:core
+select crates/core::test:it
+select crates/app::lib
+select crates/app::doc
+select crates/devonly::lib
+select crates/devonly::doc
+select crates/devonly::test:t
+noselect crates/other::lib
+noselect crates/other::doc

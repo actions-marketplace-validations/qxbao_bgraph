@@ -1,0 +1,31 @@
+Changing [workspace] members/dependencies at the root widens to the whole workspace.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/b/Cargo.toml --
+[package]
+name = "b"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/b/src/lib.rs --
+pub fn f() {}
+-- head/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = "1"
+-- want --
+notfull
+widen manifest_changed
+select crates/a::lib
+select crates/b::lib

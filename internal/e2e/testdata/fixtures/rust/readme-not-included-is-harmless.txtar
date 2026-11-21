@@ -1,0 +1,17 @@
+A README no code includes is documentation: no test is affected.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/README.md --
+# p
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/README.md --
+# p v2
+-- want --
+scope none
+notfull
+noselect .::lib
+noselect .::doc

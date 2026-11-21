@@ -1,0 +1,19 @@
+A .rs file that belongs to no package and that nobody references is not silently skipped.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/scripts/gen.rs --
+fn main() {}
+-- head/scripts/gen.rs --
+fn main() { /* changed */ }
+-- want --
+full
+widen unknown_file

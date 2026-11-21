@@ -1,0 +1,33 @@
+[[bin]]/[[test]] with explicit paths and autotests = false.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+autotests = false
+
+[[bin]]
+name = "tool"
+path = "tools/tool.rs"
+
+[[test]]
+name = "x"
+path = "it/x.rs"
+-- base/it/x.rs --
+#[test]
+fn t() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/y.rs --
+#[test]
+fn t() {}
+-- base/tools/tool.rs --
+fn main() {}
+-- head/tools/tool.rs --
+fn main() { /* changed */ }
+-- want --
+notfull
+select .::bin:tool
+select .::test:x
+noselect .::lib
+noselect .::test:y

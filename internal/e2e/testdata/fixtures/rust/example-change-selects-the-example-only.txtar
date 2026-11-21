@@ -1,0 +1,23 @@
+An example is built from the lib and the bins; nothing depends on it.
+-- base/Cargo.toml --
+[package]
+name = "solo"
+version = "0.1.0"
+edition = "2021"
+-- base/examples/demo.rs --
+fn main() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/main.rs --
+fn main() {}
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/examples/demo.rs --
+fn main() { /* changed */ }
+-- want --
+notfull
+select .::example:demo
+noselect .::lib
+noselect .::bin:solo
+noselect .::test:t

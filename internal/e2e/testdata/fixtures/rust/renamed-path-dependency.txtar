@@ -1,0 +1,27 @@
+A path dependency under another key resolves by directory.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/app/Cargo.toml --
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+foo = { path = "../real", package = "real" }
+-- base/crates/app/src/lib.rs --
+pub fn f() {}
+-- base/crates/real/Cargo.toml --
+[package]
+name = "real"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/real/src/lib.rs --
+pub fn f() {}
+-- head/crates/real/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/app::lib

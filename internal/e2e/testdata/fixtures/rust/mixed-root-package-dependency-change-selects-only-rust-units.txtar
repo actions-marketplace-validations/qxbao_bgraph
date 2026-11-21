@@ -1,0 +1,40 @@
+Even when the Rust package sits at the repo root (scope "."), a workspace-wide widening is limited to Rust units.
+-- base/Cargo.lock --
+version = 4
+-- base/Cargo.toml --
+[package]
+name = "rootpkg"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/lib/Cargo.toml --
+[package]
+name = "lib"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/lib/src/lib.rs --
+pub fn f() {}
+-- base/crates/lib/tests/t.rs --
+#[test]
+fn t() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/Cargo.toml --
+[package]
+name = "rootpkg"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1"
+-- want --
+notfull
+widen manifest_changed
+select .::lib
+noselect web/src/a.test.ts

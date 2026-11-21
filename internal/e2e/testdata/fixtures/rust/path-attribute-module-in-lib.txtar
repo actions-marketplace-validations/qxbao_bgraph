@@ -1,0 +1,21 @@
+#[path] module of the lib is owned by the lib.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/impl/real.rs --
+pub fn r() {}
+-- base/src/lib.rs --
+#[path = "impl/real.rs"]
+mod real;
+-- base/tests/a.rs --
+#[test]
+fn t() {}
+-- head/src/impl/real.rs --
+pub fn r() { /* changed */ }
+-- want --
+notfull
+select .::lib
+select .::doc
+select .::test:a

@@ -1,0 +1,17 @@
+rust-toolchain.toml is a repo-wide input handled by the global table.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/rust-toolchain.toml --
+[toolchain]
+channel = "1.80"
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/rust-toolchain.toml --
+[toolchain]
+channel = "1.81"
+-- want --
+full
+widen global_input

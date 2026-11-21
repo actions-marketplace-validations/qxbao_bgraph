@@ -1,0 +1,19 @@
+Snapshot files next to the sources (insta) are package-owned.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/snapshots/p__t.snap --
+a
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/src/snapshots/p__t.snap --
+b
+-- want --
+notfull
+select .::lib
+select .::test:t

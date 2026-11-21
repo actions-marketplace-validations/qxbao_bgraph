@@ -1,0 +1,22 @@
+Control for the previous fixture: with a lexically known module tree the lib does not depend on the bin's private module.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/bin_only.rs --
+pub fn b() {}
+-- base/src/generated.rs --
+pub fn g() {}
+-- base/src/lib.rs --
+mod generated;
+-- base/src/main.rs --
+mod bin_only;
+fn main() {}
+-- head/src/bin_only.rs --
+pub fn b() { /* changed */ }
+-- want --
+notfull
+select .::bin:p
+noselect .::lib
+noselect .::doc

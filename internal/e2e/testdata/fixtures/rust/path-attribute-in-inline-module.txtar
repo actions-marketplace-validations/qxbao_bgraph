@@ -1,0 +1,25 @@
+#[path] inside an inline module is relative to the directory named after the inline module(s).
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/main.rs --
+mod outer {
+    #[path = "deep.rs"]
+    mod deep;
+}
+fn main() {}
+-- base/src/outer/deep.rs --
+pub fn d() {}
+-- base/tests/a.rs --
+#[test]
+fn t() {}
+-- head/src/outer/deep.rs --
+pub fn d() { /* changed */ }
+-- want --
+notfull
+select .::bin:p
+noselect .::lib

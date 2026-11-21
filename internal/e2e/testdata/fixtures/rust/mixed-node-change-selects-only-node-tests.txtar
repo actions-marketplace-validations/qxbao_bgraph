@@ -1,0 +1,31 @@
+In a Node+Rust repo a Node change selects Node tests only.
+-- base/Cargo.lock --
+version = 4
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/lib/Cargo.toml --
+[package]
+name = "lib"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/lib/src/lib.rs --
+pub fn f() {}
+-- base/crates/lib/tests/t.rs --
+#[test]
+fn t() {}
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/web/src/a.ts --
+export const a = 2
+-- want --
+notfull
+select web/src/a.test.ts
+noselect crates/lib::lib
+noselect crates/lib::test:t

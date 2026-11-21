@@ -28,8 +28,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/qxbao/bgraph/internal/eco"
-	"github.com/qxbao/bgraph/internal/eco/node"
+	"github.com/qxbao/bgraph"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
 	"github.com/qxbao/bgraph/internal/scancache"
@@ -86,7 +85,7 @@ func parseFixture(data string) (fixture, error) {
 	return f, nil
 }
 
-// run builds the two trees, computes the change set and calls the selector with every supported ecosystem.
+// run builds the two trees, computes the change set and calls the selector with every supported ecosystem (bgraph.Ecosystems).
 func run(t *testing.T, f fixture) model.Selection {
 	t.Helper()
 	headFiles := map[string]string{}
@@ -121,7 +120,7 @@ func run(t *testing.T, f fixture) model.Selection {
 	}
 	return selector.Select(context.Background(), selector.Input{
 		Base: "base", Head: "head", Changed: changed, BaseTree: baseT, HeadTree: headT,
-		Ecos: []eco.Ecosystem{node.New(rf)}, Scanner: scancache.New(), Rules: rf, RulesErr: rerr,
+		Ecos: bgraph.Ecosystems(rf), Scanner: scancache.New(), Rules: rf, RulesErr: rerr,
 	})
 }
 

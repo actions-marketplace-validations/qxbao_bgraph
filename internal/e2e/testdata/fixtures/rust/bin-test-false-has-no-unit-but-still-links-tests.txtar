@@ -1,0 +1,25 @@
+[[bin]] test = false: the bin is built for integration tests but has no unit of its own.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "p"
+path = "src/main.rs"
+test = false
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/main.rs --
+fn main() {}
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/src/main.rs --
+fn main() { /* changed */ }
+-- want --
+notfull
+select .::test:t
+noselect .::bin:p
+noselect .::lib

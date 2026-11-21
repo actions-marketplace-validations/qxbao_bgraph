@@ -1,0 +1,25 @@
+A file in one integration test's module tree selects only that test.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/a/helper.rs --
+pub fn h() {}
+-- base/tests/a/main.rs --
+mod helper;
+#[test]
+fn t() {}
+-- base/tests/b.rs --
+#[test]
+fn t() {}
+-- head/tests/a/helper.rs --
+pub fn h() { /* changed */ }
+-- want --
+notfull
+select .::test:a
+noselect .::test:b
+noselect .::lib
+noselect .::doc

@@ -1,0 +1,26 @@
+A lib that generates modules from a macro_rules! body has an unknowable module tree: it depends on every file of the package, including the bin's private module.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/bin_only.rs --
+pub fn b() {}
+-- base/src/generated.rs --
+pub fn g() {}
+-- base/src/lib.rs --
+macro_rules! m { ($n:ident) => { mod $n; }; }
+m!(generated);
+-- base/src/main.rs --
+mod bin_only;
+fn main() {}
+-- base/tests/a.rs --
+#[test]
+fn t() {}
+-- head/src/bin_only.rs --
+pub fn b() { /* changed */ }
+-- want --
+notfull
+select .::bin:p
+select .::lib
+select .::doc

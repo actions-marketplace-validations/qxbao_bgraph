@@ -1,0 +1,24 @@
+automod::dir! generates a module per file of a directory: those files are owned by the invoking test, not shared by every integration test.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/a/main.rs --
+automod::dir!("tests/a");
+#[test]
+fn t() {}
+-- base/tests/a/one.rs --
+pub fn one() {}
+-- base/tests/b.rs --
+#[test]
+fn t() {}
+-- head/tests/a/one.rs --
+pub fn one() { /* changed */ }
+-- want --
+notfull
+select .::test:a
+noselect .::test:b
+noselect .::lib

@@ -1,0 +1,31 @@
+Cargo.lock is handled at level L0: every Rust unit under its directory.
+-- base/Cargo.lock --
+version = 4
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/b/Cargo.toml --
+[package]
+name = "b"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/b/src/lib.rs --
+pub fn f() {}
+-- head/Cargo.lock --
+version = 4
+
+[[package]]
+name = "x"
+-- want --
+notfull
+widen lock_changed
+select crates/a::lib
+select crates/b::lib

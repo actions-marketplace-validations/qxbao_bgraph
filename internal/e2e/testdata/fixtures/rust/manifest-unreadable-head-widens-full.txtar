@@ -1,0 +1,13 @@
+A Cargo.toml that no longer parses cannot be reasoned about: fail closed.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/Cargo.toml --
+[package
+name = "p"
+-- want --
+full

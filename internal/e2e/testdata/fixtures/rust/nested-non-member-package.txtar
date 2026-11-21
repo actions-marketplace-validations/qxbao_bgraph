@@ -1,0 +1,25 @@
+A package nested in another package's directory is a package of its own; the outer package does not depend on its files.
+-- base/Cargo.toml --
+[package]
+name = "outer"
+version = "0.1.0"
+edition = "2021"
+-- base/fixtures/inner/Cargo.toml --
+[package]
+name = "inner"
+version = "0.1.0"
+edition = "2021"
+-- base/fixtures/inner/src/lib.rs --
+pub fn f() {}
+-- base/fixtures/inner/tests/t.rs --
+#[test]
+fn t() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/fixtures/inner/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select fixtures/inner::lib
+select fixtures/inner::test:t
+noselect .::lib

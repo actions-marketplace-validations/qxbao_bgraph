@@ -1,0 +1,43 @@
+A proc-macro crate is a library node like any other: its users are affected.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/derive/Cargo.toml --
+[package]
+name = "derive"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+-- base/crates/derive/src/lib.rs --
+// proc macro
+-- base/crates/lone/Cargo.toml --
+[package]
+name = "lone"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/lone/src/lib.rs --
+pub fn f() {}
+-- base/crates/user/Cargo.toml --
+[package]
+name = "user"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+derive = { path = "../derive" }
+-- base/crates/user/src/lib.rs --
+pub fn f() {}
+-- base/crates/user/tests/t.rs --
+#[test]
+fn t() {}
+-- head/crates/derive/src/lib.rs --
+// proc macro changed
+-- want --
+notfull
+select crates/derive::lib
+select crates/user::lib
+select crates/user::test:t
+noselect crates/lone::lib

@@ -1,0 +1,17 @@
+.cargo/config.toml at the repo root can change anything cargo does.
+-- base/.cargo/config.toml --
+[build]
+jobs = 2
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/.cargo/config.toml --
+[build]
+jobs = 4
+-- want --
+full
+widen global_input

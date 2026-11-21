@@ -1,0 +1,34 @@
+foo.rs owns the directory foo/ and mod.rs owns its own directory: both layouts resolve to the bin, not the lib.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/baz/mod.rs --
+mod qux;
+-- base/src/baz/qux.rs --
+pub fn q() {}
+-- base/src/foo.rs --
+mod bar;
+-- base/src/foo/bar.rs --
+pub fn b() {}
+-- base/src/inline/deep.rs --
+pub fn d() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/main.rs --
+mod foo;
+mod baz;
+mod inline { mod deep; }
+fn main() {}
+-- head/src/baz/qux.rs --
+pub fn q() { /* 2 */ }
+-- head/src/foo/bar.rs --
+pub fn b() { /* 1 */ }
+-- head/src/inline/deep.rs --
+pub fn d() { /* 3 */ }
+-- want --
+notfull
+select .::bin:p
+noselect .::lib
+noselect .::doc

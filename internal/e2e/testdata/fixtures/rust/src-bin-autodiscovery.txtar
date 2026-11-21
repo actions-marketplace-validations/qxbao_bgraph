@@ -1,0 +1,22 @@
+src/bin/*.rs and src/bin/*/main.rs are bins named after the file or directory.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/bin/one.rs --
+fn main() {}
+-- base/src/bin/two/main.rs --
+mod util;
+fn main() {}
+-- base/src/bin/two/util.rs --
+pub fn u() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/src/bin/two/util.rs --
+pub fn u() { /* changed */ }
+-- want --
+notfull
+select .::bin:two
+noselect .::bin:one
+noselect .::lib

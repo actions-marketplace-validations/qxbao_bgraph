@@ -1,0 +1,20 @@
+A literal include_str! makes the data file an input of the including target (here the lib).
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/data/d.txt --
+one
+-- base/src/lib.rs --
+pub const D: &str = include_str!("../data/d.txt");
+-- base/tests/a.rs --
+#[test]
+fn t() {}
+-- head/data/d.txt --
+two
+-- want --
+notfull
+select .::lib
+select .::doc
+select .::test:a

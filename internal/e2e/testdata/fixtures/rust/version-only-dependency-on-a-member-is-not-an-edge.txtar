@@ -1,0 +1,28 @@
+A registry (version-only) dependency on a name that happens to be a workspace member is not the member: no edge.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/app/Cargo.toml --
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+real = "1"
+-- base/crates/app/src/lib.rs --
+pub fn f() {}
+-- base/crates/real/Cargo.toml --
+[package]
+name = "real"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/real/src/lib.rs --
+pub fn f() {}
+-- head/crates/real/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/real::lib
+noselect crates/app::lib

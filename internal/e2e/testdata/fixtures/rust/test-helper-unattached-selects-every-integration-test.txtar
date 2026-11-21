@@ -1,0 +1,26 @@
+A file under tests/ that no test's module tree reaches (shared helper, data) selects every integration test, but not the lib.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/a.rs --
+#[test]
+fn t() {}
+-- base/tests/b.rs --
+#[test]
+fn t() {}
+-- base/tests/common/mod.rs --
+pub fn c() {}
+-- base/tests/data/x.json --
+{}
+-- head/tests/common/mod.rs --
+pub fn c() { /* changed */ }
+-- want --
+notfull
+select .::test:a
+select .::test:b
+noselect .::lib
+noselect .::doc

@@ -1,0 +1,23 @@
+A .rs file no module tree reaches is a package-level input: every target of the package depends on it.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/main.rs --
+fn main() {}
+-- base/src/orphan.rs --
+pub fn o() {}
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/src/orphan.rs --
+pub fn o() { /* changed */ }
+-- want --
+notfull
+select .::lib
+select .::bin:p
+select .::test:t
+nowiden unreferenced_file

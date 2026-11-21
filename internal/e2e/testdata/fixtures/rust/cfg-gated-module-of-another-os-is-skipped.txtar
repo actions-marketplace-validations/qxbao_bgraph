@@ -1,0 +1,20 @@
+A `mod x;` whose file does not exist (cfg'd out) owns nothing and is not an error.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/common.rs --
+pub fn c() {}
+-- base/src/lib.rs --
+#[cfg(windows)]
+mod win;
+mod common;
+-- base/src/main.rs --
+fn main() {}
+-- head/src/main.rs --
+fn main() { /* changed */ }
+-- want --
+notfull
+select .::bin:p
+noselect .::lib

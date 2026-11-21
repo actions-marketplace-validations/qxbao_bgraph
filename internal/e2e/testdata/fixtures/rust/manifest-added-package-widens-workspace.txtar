@@ -1,0 +1,24 @@
+A new member manifest (files already present) widens to the workspace.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/new/src/lib.rs --
+pub fn f() {}
+-- head/crates/new/Cargo.toml --
+[package]
+name = "new"
+version = "0.1.0"
+edition = "2021"
+-- want --
+notfull
+widen manifest_changed
+select crates/new::lib
+select crates/a::lib

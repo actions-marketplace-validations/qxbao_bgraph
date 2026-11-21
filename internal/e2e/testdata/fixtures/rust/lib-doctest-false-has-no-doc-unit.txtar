@@ -1,0 +1,21 @@
+[lib] doctest = false: no doc-test unit.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+doctest = false
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select .::lib
+select .::test:t
+noselect .::doc

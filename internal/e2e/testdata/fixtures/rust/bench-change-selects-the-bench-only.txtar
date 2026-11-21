@@ -1,0 +1,20 @@
+A benchmark target depends on the lib and the bins; nothing depends on it.
+-- base/Cargo.toml --
+[package]
+name = "solo"
+version = "0.1.0"
+edition = "2021"
+-- base/benches/fast.rs --
+fn main() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/benches/fast.rs --
+fn main() { /* changed */ }
+-- want --
+notfull
+select .::bench:fast
+noselect .::test:t
+noselect .::lib

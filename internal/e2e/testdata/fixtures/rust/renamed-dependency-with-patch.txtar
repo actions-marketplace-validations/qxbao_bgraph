@@ -1,0 +1,38 @@
+A renamed dependency (package = "real") resolved through a [patch] path entry.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+
+[patch.crates-io]
+real = { path = "crates/real" }
+-- base/crates/app/Cargo.toml --
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+foo = { version = "1", package = "real" }
+-- base/crates/app/src/lib.rs --
+pub fn f() {}
+-- base/crates/lone/Cargo.toml --
+[package]
+name = "lone"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/lone/src/lib.rs --
+pub fn f() {}
+-- base/crates/real/Cargo.toml --
+[package]
+name = "real"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/real/src/lib.rs --
+pub fn f() {}
+-- head/crates/real/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/real::lib
+select crates/app::lib
+noselect crates/lone::lib

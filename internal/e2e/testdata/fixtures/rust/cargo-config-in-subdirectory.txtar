@@ -1,0 +1,29 @@
+.cargo/config.toml below the repo root widens to that directory's Rust units.
+-- base/other/Cargo.toml --
+[package]
+name = "other"
+version = "0.1.0"
+edition = "2021"
+-- base/other/src/lib.rs --
+pub fn f() {}
+-- base/rs/.cargo/config.toml --
+[build]
+jobs = 2
+-- base/rs/Cargo.toml --
+[workspace]
+members = ["a"]
+-- base/rs/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/rs/a/src/lib.rs --
+pub fn f() {}
+-- head/rs/.cargo/config.toml --
+[build]
+jobs = 4
+-- want --
+notfull
+widen test_config_changed
+select rs/a::lib
+noselect other::lib

@@ -1,0 +1,24 @@
+Lint/format/audit configuration cannot change a test result.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/clippy.toml --
+msrv = "1.70"
+-- base/deny.toml --
+[advisories]
+-- base/rustfmt.toml --
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/clippy.toml --
+msrv = "1.80"
+-- head/deny.toml --
+[advisories]
+yanked = "deny"
+-- head/rustfmt.toml --
+edition = "2024"
+-- want --
+scope none
+notfull

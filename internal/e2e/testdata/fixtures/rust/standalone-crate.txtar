@@ -1,0 +1,27 @@
+A crate outside any workspace at the repo root: units are named with pkgdir ".".
+-- base/Cargo.toml --
+[package]
+name = "solo"
+version = "0.1.0"
+edition = "2021"
+-- base/benches/fast.rs --
+fn main() {}
+-- base/examples/demo.rs --
+fn main() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/src/main.rs --
+fn main() {}
+-- base/tests/t.rs --
+#[test]
+fn t() {}
+-- head/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select .::lib
+select .::doc
+select .::bin:solo
+select .::test:t
+select .::example:demo
+select .::bench:fast

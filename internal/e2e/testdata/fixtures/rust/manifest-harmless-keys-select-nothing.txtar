@@ -1,0 +1,34 @@
+Changing only description/keywords/license/metadata in a member manifest affects no test.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+description = "old"
+keywords = ["x"]
+
+[package.metadata.docs.rs]
+all-features = false
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- head/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+description = "new"
+keywords = ["y"]
+license = "MIT"
+repository = "https://example.invalid"
+
+[package.metadata.docs.rs]
+all-features = true
+-- want --
+scope none
+notfull
+nowiden manifest_changed
+noselect crates/a::lib

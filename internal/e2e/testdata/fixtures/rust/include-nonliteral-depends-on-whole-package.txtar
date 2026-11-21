@@ -1,0 +1,29 @@
+A non-literal include path makes the target depend on every file of the package, including another test's private module.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/src/lib.rs --
+pub fn f() {}
+-- base/tests/a.rs --
+const D: &str = include_str!(concat!(env!("FOO"), "/x.txt"));
+#[test]
+fn t() {}
+-- base/tests/b/h.rs --
+pub fn h() {}
+-- base/tests/b/main.rs --
+mod h;
+#[test]
+fn t() {}
+-- base/tests/c.rs --
+#[test]
+fn t() {}
+-- head/tests/b/h.rs --
+pub fn h() { /* changed */ }
+-- want --
+notfull
+select .::test:b
+select .::test:a
+noselect .::test:c
+noselect .::lib

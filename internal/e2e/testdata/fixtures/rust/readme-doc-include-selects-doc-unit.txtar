@@ -1,0 +1,24 @@
+README used through #![doc = include_str!] is owned by the lib; its change selects the doc-tests.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+-- base/README.md --
+# p
+-- base/src/lib.rs --
+#![doc = include_str!("../README.md")]
+pub fn f() {}
+-- base/src/main.rs --
+fn main() {}
+-- head/README.md --
+# p
+
+```
+assert!(true);
+```
+-- want --
+notfull
+scope graph
+select .::doc
+select .::lib

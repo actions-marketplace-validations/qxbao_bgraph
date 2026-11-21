@@ -1,0 +1,43 @@
+build.rs is an input of every target of its package and, through the lib, of the dependent packages.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/gen/Cargo.toml --
+[package]
+name = "gen"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/gen/build.rs --
+fn main() {}
+-- base/crates/gen/src/lib.rs --
+pub fn f() {}
+-- base/crates/gen/tests/t.rs --
+#[test]
+fn t() {}
+-- base/crates/unrelated/Cargo.toml --
+[package]
+name = "unrelated"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/unrelated/src/lib.rs --
+pub fn f() {}
+-- base/crates/user/Cargo.toml --
+[package]
+name = "user"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+gen = { path = "../gen" }
+-- base/crates/user/src/lib.rs --
+pub fn f() {}
+-- head/crates/gen/build.rs --
+fn main() { /* changed */ }
+-- want --
+notfull
+select crates/gen::lib
+select crates/gen::doc
+select crates/gen::test:t
+select crates/user::lib
+noselect crates/unrelated::lib

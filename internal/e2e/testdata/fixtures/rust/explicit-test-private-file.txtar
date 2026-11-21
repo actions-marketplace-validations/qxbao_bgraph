@@ -1,0 +1,25 @@
+With autotests = false the explicit test owns its module tree; tests/y.rs is not a target.
+-- base/Cargo.toml --
+[package]
+name = "p"
+version = "0.1.0"
+edition = "2021"
+autotests = false
+
+[[test]]
+name = "x"
+path = "it/x.rs"
+-- base/it/h.rs --
+pub fn h() {}
+-- base/it/x.rs --
+mod h;
+#[test]
+fn t() {}
+-- base/src/lib.rs --
+pub fn f() {}
+-- head/it/h.rs --
+pub fn h() { /* changed */ }
+-- want --
+notfull
+select .::test:x
+noselect .::lib

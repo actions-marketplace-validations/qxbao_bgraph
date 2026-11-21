@@ -1,0 +1,49 @@
+`dep = { workspace = true }` resolves the path through [workspace.dependencies], for normal and dev dependencies.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+
+[workspace.dependencies]
+core = { path = "crates/core" }
+-- base/crates/app/Cargo.toml --
+[package]
+name = "app"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+core = { workspace = true }
+-- base/crates/app/src/lib.rs --
+pub fn f() {}
+-- base/crates/core/Cargo.toml --
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/core/src/lib.rs --
+pub fn f() {}
+-- base/crates/dev/Cargo.toml --
+[package]
+name = "dev"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+core.workspace = true
+-- base/crates/dev/src/lib.rs --
+pub fn f() {}
+-- base/crates/lone/Cargo.toml --
+[package]
+name = "lone"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/lone/src/lib.rs --
+pub fn f() {}
+-- head/crates/core/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/core::lib
+select crates/app::lib
+select crates/dev::lib
+noselect crates/lone::lib

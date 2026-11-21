@@ -1,0 +1,31 @@
+a dev-depends on b while b depends on a: cycles terminate and select both.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+
+[dev-dependencies]
+b = { path = "../b" }
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/b/Cargo.toml --
+[package]
+name = "b"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+a = { path = "../a" }
+-- base/crates/b/src/lib.rs --
+pub fn f() {}
+-- head/crates/a/src/lib.rs --
+pub fn f() { /* changed */ }
+-- want --
+notfull
+select crates/a::lib
+select crates/b::lib

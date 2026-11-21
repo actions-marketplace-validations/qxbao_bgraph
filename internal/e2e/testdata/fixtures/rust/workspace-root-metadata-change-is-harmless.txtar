@@ -1,0 +1,31 @@
+[workspace.metadata] and [workspace.package] description are harmless.
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.metadata]
+x = 1
+
+[workspace.package]
+description = "a"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- head/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.metadata]
+x = 2
+
+[workspace.package]
+description = "b"
+-- want --
+scope none
+nowiden manifest_changed
