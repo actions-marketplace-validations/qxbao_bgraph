@@ -4,13 +4,22 @@ Affected-test selection across languages, **fail-closed**: for every change, the
 that could be affected, or widens the scope (project, full suite) with a machine-readable reason. It never silently
 drops a test.
 
-Status: two ecosystems.
+Status: three ecosystems.
 
 - **Node** (JS/TS, CJS/ESM; Jest, Vitest, Mocha, node:test, Playwright), at test-file granularity.
 - **Rust** (Cargo workspaces and standalone crates; `cargo test`), at Cargo-target granularity: one unit per library
   (`<pkgdir>::lib`), doc-tests (`::doc`), binary (`::bin:<name>`), integration test (`::test:<name>`), bench and example.
   Inside a crate the `mod`/`use` graph is not a sound dependency relation, so the module tree only decides which target owns a
   file. `bgraph command` emits `cargo test -p <package> --lib --test <name> ...` (plus a separate `--doc` command).
+
+- **Python** (pytest; Django's own runner), at test-file granularity. A test file is a unit (`python_files`, `testpaths`,
+  `norecursedirs` and `--doctest-modules` are read from pytest.ini / pyproject.toml / tox.ini / setup.cfg in pytest's order).
+  Imports are resolved against the union of every plausible import root (repo root, project dirs, `src/`, pyproject/setup.cfg
+  package locations, pytest `pythonpath`, rootdir-insertion dirs of tests and conftests, literal `sys.path` edits), including
+  ancestor `__init__.py`, namespace packages and `.pyi` stubs; every conftest above a test, `-p` plugins and `pytest11` entry points
+  are dependencies. Non-constant `importlib`/`__import__`/`sys.path` use is unresolved at project scope. `bgraph command` emits
+  `python -m pytest --rootdir R -c CFG <files>` (an `@argfile` for long lists needs pytest >= 8.2) or
+  `python tests/runtests.py <labels>` / `python manage.py test <labels>`.
 
 Other ecosystems are not supported yet: changes there widen to `full`.
 

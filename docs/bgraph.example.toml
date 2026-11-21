@@ -46,6 +46,13 @@ affects = ["tests/format/**/*.test.js"]
 reason = "format tests load every fixture by directory listing"
 
 [[rule]]
+# Python: a Cython/C source compiled into a module that tests import, in a project bgraph cannot see building it.
+# (Without a rule, such a file widens to its whole Python project.)
+paths = ["src/pkg/_fast.pyx"]
+affects = ["tests/unit/**/test_fast*.py"]
+reason = "only the fast-path tests import the compiled module"
+
+[[rule]]
 # Editor and repo-maintenance files that no test can observe.
 paths = [".vscode/**", "CODEOWNERS"]
 affects = "none"

@@ -5,7 +5,7 @@ import "strings"
 // stdlibNames is the union of sys.stdlib_module_names of CPython 3.8 to 3.14 (modules removed in a later version stay: an import of one
 // is still an import of the standard library for the versions that have it).
 const stdlibNames = `
-__future__ __main__ _abc _aix_support _android_support _apple_support _ast _asyncio _bisect _blake2
+__future__ __main__ _typeshed _abc _aix_support _android_support _apple_support _ast _asyncio _bisect _blake2
 _bootlocale _bz2 _codecs _codecs_cn _codecs_hk _codecs_iso2022 _codecs_jp _codecs_kr _codecs_tw _collections
 _collections_abc _colorize _compat_pickle _compression _contextvars _csv _ctypes _curses _curses_panel
 _datetime _dbm _decimal _dummy_thread _elementtree _frozen_importlib _frozen_importlib_external _functools

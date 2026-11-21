@@ -51,6 +51,9 @@ type scanner struct {
 	toks []token
 	src  []byte
 	res  []model.ImportRef
+	// loopVars: names bound once, by `for NAME in ("a", "b"):` over literal strings, and never assigned otherwise. An import of such a
+	// name is an import of each literal.
+	loopVars map[string][]string
 }
 
 func (s *scanner) text(i int) string { return string(s.src[s.toks[i].start:s.toks[i].end]) }
@@ -74,6 +77,7 @@ func (s *scanner) add(r model.ImportRef) {
 
 func (s *scanner) run() {
 	n := len(s.toks)
+	s.findLoopVars()
 	for i := 0; i < n; i++ {
 		t := s.toks[i]
 		switch t.kind {
@@ -211,6 +215,14 @@ func (s *scanner) call(i int, name string) {
 		if a == nil {
 			s.add(model.ImportRef{Kind: kind, Line: line, Dynamic: true})
 			return
+		}
+		if a.hi == a.lo+1 && s.toks[a.lo].kind == tName {
+			if vals, ok := s.loopVars[s.text(a.lo)]; ok && !(name == "import_module" && len(args) > 1) {
+				for _, v := range vals {
+					s.add(model.ImportRef{Spec: v, Kind: kind, Line: line})
+				}
+				return
+			}
 		}
 		k, v := s.strExpr(a.lo, a.hi)
 		if k != exConst {
@@ -594,3 +606,51 @@ func (s *scanner) sysPath(lo, hi, line int) {
 	}
 	s.add(model.ImportRef{Spec: spec, Kind: model.ImportSysPath, Line: line})
 }
+
+// findLoopVars records `for NAME in ("a", "b"):` loops over string literals whose variable is not assigned anywhere else.
+func (s *scanner) findLoopVars() {
+	forCount := map[string]int{}
+	assigned := map[string]bool{}
+	cand := map[string][]string{}
+	for i := 0; i < len(s.toks); i++ {
+		t := s.toks[i]
+		if t.kind != tName {
+			continue
+		}
+		if s.text(i) == "for" && t.sstart && s.toks[min(i+1, len(s.toks)-1)].kind == tName && s.name(i+2, "in") && (s.punct(i+3, "(") || s.punct(i+3, "[")) {
+			v := s.text(i + 1)
+			forCount[v]++
+			var vals []string
+			j := i + 4
+			ok := true
+			for ; j < len(s.toks) && !s.punct(j, ")") && !s.punct(j, "]"); j++ {
+				switch {
+				case s.punct(j, ","):
+				case s.toks[j].kind == tStr && !s.lx.strs[s.toks[j].aux].field && !s.lx.strs[s.toks[j].aux].cut:
+					vals = append(vals, s.lx.strs[s.toks[j].aux].val)
+				default:
+					ok = false
+				}
+			}
+			if ok && len(vals) > 0 && s.punct(j+1, ":") {
+				cand[v] = vals
+			} else {
+				forCount[v]++ // not a literal loop: poison the name
+			}
+			continue
+		}
+		if s.punct(i+1, "=") || s.punct(i+1, "+=") || s.punct(i+1, ":=") || s.punct(i+1, ",") && s.sstart(i) {
+			assigned[s.text(i)] = true
+		}
+	}
+	for v, vals := range cand {
+		if forCount[v] == 1 && !assigned[v] {
+			if s.loopVars == nil {
+				s.loopVars = map[string][]string{}
+			}
+			s.loopVars[v] = vals
+		}
+	}
+}
+
+func (s *scanner) sstart(i int) bool { return s.toks[i].sstart }
