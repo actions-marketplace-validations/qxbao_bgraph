@@ -112,10 +112,16 @@ Clarifications (implementation, `internal/dynamic/pydyn`):
   incomplete ("reads untracked file").
 - `sqlite3.connect` counts as an open. ctypes usage is the audit events `ctypes.dlopen`, `ctypes.dlsym*`, `ctypes.call_function`,
   `ctypes.cdata*`, `ctypes.string_at`, `ctypes.wstring_at`, `ctypes.seh_exception`; the reason names the first non-standard-library
-  frame. With `trust_native_env = true`, ctypes usage with no repository frame on the stack is environment native code like an
-  installed extension module and does not make the record incomplete; with a repository frame it always does. Finding: on Windows
-  pytest's terminal setup imports colorama, which calls kernel32 through ctypes, so with the strict default every Windows record is
-  incomplete.
+  frame. CPython audits only library loads and first symbol lookups, never the foreign calls themselves (`ctypes.call_function` is
+  raised only by the private `_ctypes.call_function` helper), so who calls a foreign function cannot be observed. The strict
+  default (`trust_native_env = false`) applies the rule as written: any of these events, or ctypes already imported when the plugin
+  loads (symbols resolved earlier can be called silently), makes the record incomplete. With `trust_native_env = true` the
+  native code of the system and the environment is trusted whoever calls it, as installed extension modules are (which already
+  accepts that native code given a path by repository code, `lxml.etree.parse(path)`-style, may read it unobserved); only
+  `ctypes.dlopen` of a library that is a file of the repository still makes the record incomplete. Finding (Windows): pytest's
+  terminal setup imports colorama, which loads kernel32 through ctypes, and click's `_winconsole` does the same at import; with the
+  strict default every record of the three T2 repositories is incomplete. Whether trust mode should be the recommended setting on
+  Windows is an open question for the evaluation.
 - Extension modules are seen through `importlib.machinery.ExtensionFileLoader.create_module` (wrapped when the plugin loads) and
   the final `sys.modules` sweep; CPython's own are those under the base installation outside any `site-packages`.
 - A run whose collector output is missing or unreadable, or that timed out, is recorded with `Complete=false, Pass=false`; exit 5

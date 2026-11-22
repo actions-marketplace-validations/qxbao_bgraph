@@ -140,6 +140,27 @@ def _origin(f):
     return "?"
 
 
+def _repo_library(name):
+    """The repository-relative path of the library a ctypes.dlopen(name) may load from the repository, or None."""
+    p = _abs(name)
+    if not p:
+        return None
+    cands = [p]
+    try:
+        name = os.fsdecode(os.fspath(name))
+    except TypeError:
+        return None
+    if os.sep not in name and "/" not in name:
+        # a bare name is searched in system directories, but be conservative about the current directory
+        cands += [p + ".dll", p + ".so", p + ".dylib"]
+    for c in cands:
+        if os.path.exists(c):
+            r = _rel(c)
+            if r:
+                return r
+    return None
+
+
 def _listing_counts(f):
     """A directory listing is a dependency unless the import system or pytest's own collection made it: those only decide which
     modules and test files exist, and the set of names changes only through additions, deletions and renames, which the
@@ -205,10 +226,16 @@ def _hook(event, args):
         elif event.startswith(_CTYPES):
             if _final[0]:
                 return
+            name = event.split("/")[0]
             if not _TRUST_NATIVE:
-                _mark("ctypes: %s from %s" % (event.split("/")[0], _origin(sys._getframe(1))))
-            elif _frame_in_repo(sys._getframe(1)):
-                _mark("ctypes from repository code: %s from %s" % (event.split("/")[0], _origin(sys._getframe(1))))
+                _mark("ctypes: %s from %s" % (name, _origin(sys._getframe(1))))
+            elif name == "ctypes.dlopen":
+                # CPython does not audit foreign function calls (only loads and first symbol lookups), so who calls what cannot
+                # be known. trust_native_env trusts the native code of the system and the environment, whoever calls it (as
+                # for installed extension modules), never a library of the repository.
+                lib = _repo_library(args[0] if args else None)
+                if lib:
+                    _mark("ctypes loads a library of the repository: " + lib)
         elif event in ("sys.settrace", "sys.setprofile", "threading.settrace", "threading.setprofile"):
             if not _final[0]:
                 _mark("tracing: " + event)
@@ -219,6 +246,10 @@ def _hook(event, args):
 
 
 sys.addaudithook(_hook)
+
+# Foreign functions resolved before the hook existed can be called later without any event.
+if "ctypes" in sys.modules and not _TRUST_NATIVE:
+    _mark("ctypes: imported before the collector started")
 
 # Extension modules: every one loaded from now on goes through ExtensionFileLoader.create_module.
 _native = set()

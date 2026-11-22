@@ -46,6 +46,7 @@ func TestRecordIntegration(t *testing.T) {
 		"tests/test_other.py":   "from pkg.loader import load\ndef test_y():\n    assert load('pkg.b').Y == 1\n",
 		"tests/test_reads.py":   "import os\nfrom pkg.loader import load\nHERE = os.path.dirname(__file__)\ndef test_r():\n    load('pkg.b')\n    with open(os.path.join(HERE, '..', 'pkg', 'data.txt')) as f:\n        assert f.read() == 'hello\\n'\n",
 		"tests/test_sub.py":     "import subprocess, sys\nfrom pkg.loader import load\ndef test_s():\n    load('pkg.b')\n    subprocess.run([sys.executable, '-c', 'pass'], check=True)\n",
+		"tests/test_ctypes.py":  "import ctypes\nfrom pkg.loader import load\ndef test_c():\n    load('pkg.b')\n    ctypes.pythonapi.Py_GetVersion()\n",
 		"tests/test_failing.py": "from pkg.loader import load\ndef test_f():\n    load('pkg.b')\n    assert False\n",
 	})
 	state := t.TempDir()
@@ -61,11 +62,11 @@ func TestRecordIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if sum.Units != 5 || sum.Recorded != 5 || sum.Failed != 1 {
+	if sum.Units != 6 || sum.Recorded != 6 || sum.Failed != 1 {
 		t.Fatalf("summary %+v", sum)
 	}
 	recs, warn := dynamic.Load(dynamic.StorePath(state, "python"))
-	if len(warn) > 0 || len(recs) != 5 {
+	if len(warn) > 0 || len(recs) != 6 {
 		t.Fatalf("store: %d records, %v", len(recs), warn)
 	}
 	by := map[string]dynamic.Record{}
@@ -88,6 +89,10 @@ func TestRecordIntegration(t *testing.T) {
 	}
 	if r := by["tests/test_sub.py"]; r.Complete || !strings.Contains(r.Incomplete, "subprocess") || !r.Pass {
 		t.Errorf("test_sub: complete=%v pass=%v (%s)", r.Complete, r.Pass, r.Incomplete)
+	}
+	// trust_native_env trusts native code outside the repository, called through ctypes too.
+	if r := by["tests/test_ctypes.py"]; !r.Complete {
+		t.Errorf("test_ctypes (trusting): incomplete (%s)", r.Incomplete)
 	}
 	if r := by["tests/test_failing.py"]; r.Pass {
 		t.Error("failing test recorded as passing")
@@ -123,7 +128,7 @@ func TestRecordIntegration(t *testing.T) {
 	write("pkg/a.py", "X = 2\n")
 	kept, narrowed := units(sel())
 	if !slices.Equal(kept, []string{"tests/test_failing.py", "tests/test_loader.py", "tests/test_sub.py"}) ||
-		!slices.Equal(narrowed, []string{"tests/test_other.py", "tests/test_reads.py"}) {
+		!slices.Equal(narrowed, []string{"tests/test_ctypes.py", "tests/test_other.py", "tests/test_reads.py"}) {
 		t.Fatalf("pkg/a.py: kept %v narrowed %v", kept, narrowed)
 	}
 	write("pkg/a.py", "X = 1\n")
@@ -131,7 +136,7 @@ func TestRecordIntegration(t *testing.T) {
 	// pkg/b.py changes: only test_loader never loaded it.
 	write("pkg/b.py", "Y = 1\n# edit\n")
 	kept, narrowed = units(sel())
-	if !slices.Equal(kept, []string{"tests/test_failing.py", "tests/test_other.py", "tests/test_reads.py", "tests/test_sub.py"}) ||
+	if !slices.Equal(kept, []string{"tests/test_ctypes.py", "tests/test_failing.py", "tests/test_other.py", "tests/test_reads.py", "tests/test_sub.py"}) ||
 		!slices.Equal(narrowed, []string{"tests/test_loader.py"}) {
 		t.Fatalf("pkg/b.py: kept %v narrowed %v", kept, narrowed)
 	}
@@ -142,5 +147,30 @@ func TestRecordIntegration(t *testing.T) {
 	s := sel()
 	if len(s.Narrowed) != 0 || len(s.Warnings) == 0 || !strings.Contains(s.Warnings[len(s.Warnings)-1].Detail, "pkg/data.txt") {
 		t.Fatalf("pkg/data.txt: narrowed %v warnings %+v", s.Narrowed, s.Warnings)
+	}
+	write("pkg/data.txt", "hello\n")
+
+	// The strict default: any ctypes use makes the record incomplete, and records of the trusting collector are not used.
+	strict, err := Open(ctx, root, Options{MemoryOnly: true, StateDir: state, Python: py})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer strict.Close()
+	if _, err := strict.Record(ctx, RecordOptions{Units: "tests/test_{ctypes,other}.py", Jobs: 2, Timeout: 5 * time.Minute}); err != nil {
+		t.Fatal(err)
+	}
+	recs, _ = dynamic.Load(dynamic.StorePath(state, "python"))
+	for _, r := range recs {
+		if r.Unit == "tests/test_ctypes.py" && r.Collector == "python-audit-1" && (r.Complete || !strings.Contains(r.Incomplete, "ctypes")) {
+			t.Errorf("strict test_ctypes: complete=%v (%s)", r.Complete, r.Incomplete)
+		}
+	}
+	write("pkg/a.py", "X = 2\n")
+	s, err = strict.Select(ctx, Change{Base: "HEAD", Worktree: true, Dynamic: DynamicOn})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, narrowed = units(s); slices.Contains(narrowed, "tests/test_ctypes.py") || slices.Contains(narrowed, "tests/test_reads.py") {
+		t.Errorf("strict: narrowed %v", narrowed)
 	}
 }
