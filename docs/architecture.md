@@ -296,3 +296,22 @@ sel, err := idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})
 
 `Select` returns an error only for infrastructure failures (git cannot run); every other uncertainty is a widening in the
 returned `Selection`. The JSON form of a `Selection` is described in [CLI](cli.md#json-output).
+
+```go
+plan, err := bgraph.Commands(sel, bgraph.CommandOptions{ListDir: ".bgraph-lists"})
+if plan.Scope == bgraph.TierFull {
+	// run the full suite; sel.Widening says why
+}
+for _, c := range plan.Commands { /* run c.Argv in c.Project with c.Env */ }
+why := bgraph.Explain(sel, "tests/test_api.py")
+```
+
+`Commands` is `bgraph command --json` and `Explain` is `bgraph explain`. The scope tiers (`TierNone` … `TierFull`) and the
+widening reasons (`ReasonNoBase`, `ReasonLockChanged`, …) are exported as constants.
+
+- `Change.Base` and `Change.Head` accept any ref or commit OID, including a commit on no branch (for example one made
+  with `git commit-tree` from a snapshot of the working tree), as long as the object exists in the repository.
+- Several processes may open the same `StateDir` and call `Select` concurrently: the scan cache is SQLite in WAL mode
+  (one writer at a time, waiting up to 5 s for the lock; a cache that cannot be written degrades to memory with a
+  warning, never a wrong result), and dynamic-layer records are replaced atomically. An `Index` is safe for concurrent
+  `Select` calls within one process.
