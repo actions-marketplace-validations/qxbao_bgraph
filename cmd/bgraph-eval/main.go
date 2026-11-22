@@ -92,6 +92,8 @@ func main() {
 		err = cmdJVMLocate(ctx, os.Args[2:], "jvm")
 	case "dotnet-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "dotnet")
+	case "go-provider":
+		err = cmdGoProvider(ctx, os.Args[2:])
 	case "go-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "go")
 	case "manifest":
