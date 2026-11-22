@@ -1,0 +1,22 @@
+A project reference stored in an extra property of the root script (ext { coreProject = project(':core') }) is used by other projects through that property: a change in core selects them.
+-- base/settings.gradle --
+include ':core', ':app'
+-- base/build.gradle --
+ext {
+    coreProject = project(':core')
+}
+-- base/core/build.gradle --
+plugins { id 'java' }
+-- base/core/src/main/java/C.java --
+class C {}
+-- base/app/build.gradle --
+plugins { id 'java' }
+dependencies { implementation coreProject }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- head/core/src/main/java/C.java --
+class C { int a; }
+-- want --
+notfull
+select gradle::core
+select gradle::app

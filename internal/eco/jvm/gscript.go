@@ -84,6 +84,22 @@ func (m *gradleModel) scriptRefs(p string) *scriptRefs {
 	return sr
 }
 
+// extraStatement: the tokens of the statement before toks[end] (on its line) name an extra-properties container.
+func extraStatement(toks []token, start, end int) bool {
+	if end >= len(toks) {
+		end = len(toks) - 1
+	}
+	for j := end - 1; j >= start && j >= 0; j-- {
+		if toks[j].line != toks[end].line {
+			break
+		}
+		if isIdent(toks[j], "ext") || isIdent(toks[j], "extra") {
+			return true
+		}
+	}
+	return false
+}
+
 // headScope decides what kind of block a '{' opens from the tokens of its statement head. cross is non-empty for hooks whose
 // effect on other projects cannot be modelled (beforeProject, afterProject, projectsEvaluated).
 func headScope(head []token) (sc scopeInfo, cross string, ok bool) {
@@ -150,13 +166,21 @@ func projectArg(toks []token, i int) (val string, next int, ok bool) {
 
 func (sr *scriptRefs) scan(toks []token) {
 	stack := []scopeInfo{{kind: scopeSelf}}
+	// exported[k]: block k stores values into extra properties (ext { } / extra.apply { }).
+	exported := []bool{false}
 	stmtStart := 0
 	cur := func() scopeInfo { return stack[len(stack)-1] }
+	var i int
 	add := func(r gref) {
 		r.sc = cur()
+		if exported[len(exported)-1] || extraStatement(toks, stmtStart, i) {
+			// A value stored in an extra property (ext.core = project(":core"), val core by extra(project(":core"))) is
+			// inherited by, and can be used from, any project of the build.
+			r.sc = scopeInfo{kind: scopeBuild}
+		}
 		sr.refs = append(sr.refs, r)
 	}
-	for i := 0; i < len(toks); i++ {
+	for i = 0; i < len(toks); i++ {
 		t := toks[i]
 		switch {
 		case isPunct(t, "{"):
@@ -173,10 +197,12 @@ func (sr *scriptRefs) scan(toks []token) {
 				}
 			}
 			stack = append(stack, sc)
+			exported = append(exported, exported[len(exported)-1] || extraStatement(toks, stmtStart, i))
 			stmtStart = i + 1
 		case isPunct(t, "}"):
 			if len(stack) > 1 {
 				stack = stack[:len(stack)-1]
+				exported = exported[:len(exported)-1]
 			}
 			stmtStart = i + 1
 		case isPunct(t, ";"):
