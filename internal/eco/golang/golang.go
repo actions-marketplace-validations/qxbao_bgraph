@@ -54,7 +54,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-2"
+const AnalyzerVersion = "go-3"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -409,7 +409,7 @@ func (b *builder) analyzePackage(p *pkg) {
 				b.edge(from, cgoPattern, model.EdgePattern, "cgo", im.Line)
 				continue
 			}
-			b.resolveImport(p, f, from, im)
+			b.resolveImport(p, f, from, im, true)
 		}
 		for _, em := range sr.Go.Embeds {
 			b.embed(p, from, em)
@@ -429,15 +429,16 @@ func (b *builder) analyzePackage(p *pkg) {
 		if sr, err := b.sc.Scan(b.t, f); err == nil && !sr.Uncertain && sr.Go != nil {
 			for _, im := range sr.Imports {
 				if im.Spec != "C" {
-					b.resolveImport(p, f, lib, im)
+					b.resolveImport(p, f, lib, im, false)
 				}
 			}
 		}
 	}
 }
 
-// resolveImport adds the edges of one import of file f (package p) from node from.
-func (b *builder) resolveImport(p *pkg, f, from string, im model.ImportRef) {
+// resolveImport adds the edges of one import of file f (package p) from node from. compiled: f is a file of the package (not a
+// program under testdata/ or _x/).
+func (b *builder) resolveImport(p *pkg, f, from string, im model.ImportRef, compiled bool) {
 	spec := im.Spec
 	cands := b.ms.candidates(spec)
 	found := false
@@ -475,9 +476,30 @@ func (b *builder) resolveImport(p *pkg, f, from string, im model.ImportRef) {
 	for _, c := range cands {
 		b.edge(n, escapeGlob(c)+"/*.go", model.EdgePattern, "package that does not exist yet", 0)
 	}
-	b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: f, Spec: spec, Class: model.UnresolvedUnknown, Line: im.Line,
-		ScopeTier: model.TierNone, Detail: "in-repo import path with no package (" + strings.Join(cands, ", ") +
-			"); a package added there later is a dependency"})
+	if !compiled {
+		// A program under testdata/ or _x/: not built by the package, so a missing import cannot be a generated package it needs.
+		b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: f, Spec: spec, Class: model.UnresolvedUnknown, Line: im.Line,
+			ScopeTier: model.TierNone, Detail: "in-repo import path with no package (" + strings.Join(cands, ", ") +
+				"); a package added there later is a dependency"})
+		return
+	}
+	// A package the build needs but the tree does not hold: generated (ignored by git) or broken. Its generator inputs are unknown,
+	// so any change in the importer's module, or in the module the package would belong to, selects the importer (plan §6.7).
+	scopes := []string{p.mod.dir}
+	for _, c := range cands {
+		d := ""
+		if m := b.ms.innermost(c); m != nil {
+			d = m.dir
+		}
+		if !slices.Contains(scopes, d) {
+			scopes = append(scopes, d)
+		}
+	}
+	for _, sd := range scopes {
+		b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: f, Spec: spec, Class: model.UnresolvedUnknown, Line: im.Line,
+			ScopeTier: model.TierModule, ScopeDir: sd, Detail: "in-repo import path with no package in the tree (" + strings.Join(cands, ", ") +
+				"): generated or missing; a package added there later is also a dependency"})
+	}
 }
 
 // embed adds the pattern edges of one //go:embed pattern. A pattern matching a directory embeds it recursively.

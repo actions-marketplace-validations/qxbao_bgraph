@@ -46,8 +46,9 @@ Status: six ecosystems.
   import (in-repo module paths and local `replace` targets, longest prefix, then `vendor/`; test-only imports reach the package's
   own unit, not its importers), on its `//go:embed` patterns, and on the existing paths its tests name in string literals
   (`"../x/testdata/y"`, `filepath.Join("..", "x", ...)`); a cgo package depends on every C/C++/header/assembly file. Files of a
-  module that no package owns are inputs of every package of the module. An in-repo import with no package yet is tracked, so a
-  package added later is caught; a file whose imports do not parse is selected on any change in its module. `go.mod` changes are
+  module that no package owns are inputs of every package of the module. An in-repo import path with no package in the tree (generated,
+  or not written yet) selects the importer on any change in its module, and a package added there later is caught; a file whose
+  imports do not parse is selected on any change in its module. `go.mod` changes are
   diffed structurally (comments and `retract` are harmless; `module` widens every Go unit; other directives widen the module and
   the modules that build with it through `go.work` or a local `replace`); `go.sum` and `vendor/` widen their module; `.go` files
   under no `go.mod` widen to full. `bgraph command` emits one `go test ./a ./b/c` per module, run in the module directory.
