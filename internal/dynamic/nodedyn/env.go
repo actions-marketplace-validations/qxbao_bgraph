@@ -112,7 +112,7 @@ func Installed(root string, t tree.Tree) (lines, files []string, err error) {
 			continue
 		}
 		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(d), ".pnp.cjs")); err == nil {
-			return nil, nil, errors.New("Yarn Plug'n'Play is not supported by the Node collector")
+			return nil, nil, errors.New("the Node collector does not support Yarn Plug'n'Play")
 		}
 		found := false
 		for _, sf := range stateFiles {

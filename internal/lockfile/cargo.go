@@ -25,17 +25,17 @@ type cargoPkg struct {
 func ParseCargo(dir string, data []byte) (*Graph, error) {
 	var top map[string]any
 	if err := toml.Unmarshal(data, &top); err != nil {
-		return nil, fmt.Errorf("Cargo.lock: %w", err)
+		return nil, fmt.Errorf("lockfile Cargo.lock: %w", err)
 	}
 	var doc struct {
 		Version int64      `toml:"version"`
 		Package []cargoPkg `toml:"package"`
 	}
 	if err := toml.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("Cargo.lock: %w", err)
+		return nil, fmt.Errorf("lockfile Cargo.lock: %w", err)
 	}
 	if doc.Version != 3 && doc.Version != 4 {
-		return nil, fmt.Errorf("Cargo.lock: version %d not supported", doc.Version)
+		return nil, fmt.Errorf("lockfile Cargo.lock: version %d not supported", doc.Version)
 	}
 	g := &Graph{Format: FormatCargo, Version: fmt.Sprint(doc.Version), Nodes: map[string]*Node{}, Projects: map[string]string{}, ScriptsKnown: false}
 	extra := map[string]any{}
@@ -54,7 +54,7 @@ func ParseCargo(dir string, data []byte) (*Graph, error) {
 	resolve := func(ref string) (string, error) {
 		f := strings.Fields(ref)
 		if len(f) == 0 {
-			return "", fmt.Errorf("Cargo.lock: empty dependency")
+			return "", fmt.Errorf("lockfile Cargo.lock: empty dependency")
 		}
 		var hits []*cargoPkg
 		for _, c := range byName[f[0]] {
@@ -80,7 +80,7 @@ func ParseCargo(dir string, data []byte) (*Graph, error) {
 			}
 		}
 		if len(hits) != 1 {
-			return "", fmt.Errorf("Cargo.lock: dependency %q matches %d packages", ref, len(hits))
+			return "", fmt.Errorf("lockfile Cargo.lock: dependency %q matches %d packages", ref, len(hits))
 		}
 		return idOf(hits[0]), nil
 	}
@@ -88,7 +88,7 @@ func ParseCargo(dir string, data []byte) (*Graph, error) {
 		p := &doc.Package[i]
 		id := idOf(p)
 		if _, dup := g.Nodes[id]; dup {
-			return nil, fmt.Errorf("Cargo.lock: duplicate package %s %s", p.Name, p.Version)
+			return nil, fmt.Errorf("lockfile Cargo.lock: duplicate package %s %s", p.Name, p.Version)
 		}
 		n := &Node{ID: id, Name: p.Name, Package: p.Name, Version: p.Version, Ident: "cargo " + p.Name + " " + p.Version + " " + p.Source + " " + p.Checksum,
 			Deps: map[string]string{}, Scripts: true}

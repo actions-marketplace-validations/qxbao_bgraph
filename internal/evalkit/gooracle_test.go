@@ -55,12 +55,11 @@ func TestLocateGo(t *testing.T) {
 	patch := map[string]bool{"b/b2_test.go": true, "a/a_test.go": true}
 	got := LocateGoTests(mt, names, patch)
 	type exp struct {
-		units    []string
-		amb, nf  bool
-		inPatch  bool
-		form     string
-		pkgHit   bool
-		noModule bool
+		units   []string
+		amb, nf bool
+		inPatch bool
+		form    string
+		pkgHit  bool
 	}
 	want := []exp{
 		{units: []string{"go:a"}, form: "top", inPatch: true},
