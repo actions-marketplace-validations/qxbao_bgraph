@@ -74,12 +74,22 @@ func TestJVMClassWiring(t *testing.T) {
 		t.Fatalf("no records: %+v", s.Warnings)
 	}
 	now := time.Now().UTC()
+	jar := filepath.Join(t.TempDir(), "junit.jar")
+	os.WriteFile(jar, []byte("PK junit"), 0o644)
+	digest, err := jvmdyn.ArtifactDigest(jar)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rec := func(unit string, deps ...string) dynamic.Record {
 		m := map[string]string{}
 		for _, d := range deps {
 			m[d] = ht.Key(d)
 		}
-		return dynamic.Record{Eco: jvmdyn.Eco, Unit: unit, Collector: coll, Env: env, Deps: m, Complete: true, Pass: true, Recorded: now}
+		r := dynamic.Record{Eco: jvmdyn.Eco, Unit: unit, Collector: coll, Env: env, Deps: m, Complete: true, Pass: true, Recorded: now}
+		if strings.Contains(unit, "#") {
+			r.Artifacts = map[string]string{jar: digest}
+		}
+		return r
 	}
 	cl := rec("maven:.", "src/test/java/a/BarTest.java", "src/test/java/a/FooTest.java")
 	cl.Classes = []string{"a.BarTest", "a.FooTest"}

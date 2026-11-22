@@ -685,7 +685,12 @@ Lead decisions on the open points of the draft:
 3. **Any changed non-code file refuses class narrowing for the whole selection**, except documentation files (JVM variant of
    §2's rule: `classify.Doc`/`Harmless`, status M, no other ecosystem's role, JVM role data or none, not global, claimed,
    declared or named by a `[[rule]]`; graph edges to it (every module depends on its files) do not matter because the
-   collector observes reads).
+   collector observes reads). Tests read resources from build output and module jars, not from the source path, so the
+   exception is denied (review, 2026-11-23) for any file under a `src/` directory of any module (conventional source and
+   resource roots), and for every file of the repository when a build file declares a non-conventional resource root
+   (Maven `<resources>`/`<testResources>` `<directory>` outside `src/`, the source directories and the build output; any
+   Gradle `resources ... srcDir(s)`; lexical and conservative). Reads of a resource's build-output copy are mapped back to
+   the tracked file only when byte-identical (`Mapper.resourceCopy`); a filtered copy makes the record incomplete.
 4. **Lombok**: no narrowing when any build-definition file of the base or head tree mentions `lombok` or a `lombok.config`
    exists (repository-wide: a Lombok module's changed file reaches the tests of every downstream module).
 5. **Collector**: as §9.5, with the mmap hook required (below); a JNI library outside the JDK (`java.home` of the fork) and the
@@ -738,12 +743,19 @@ Implementation (`internal/dynamic/jvmdyn`):
   file of the module's test roots). The class list is incomplete when the build failed (non-zero exit, timeout), when a fork
   ran a class the runner did not report, or when the module has test sources but no reported class (tests skipped, reports
   elsewhere): such a module is never narrowed.
-- **Fingerprint** (`jvm-agent-1`, `+trust-native` with `trust_native_env`): OS, arch, a digest of the JDK's `release` file
+- **Fingerprint** (`jvm-agent-2`, `+trust-native` with `trust_native_env`): OS, arch, a digest of the JDK's `release` file
   (`JAVA_HOME`, else `java` on PATH), the installed Maven/Gradle (core jar names under `MAVEN_HOME`/`GRADLE_HOME` or the
   executable on PATH) when the repository has no wrapper, and the content of every build-definition file (POMs, `.mvn/**`,
-  Gradle scripts, settings, `gradle.properties`, version catalogs, wrapper properties, `buildSrc/**`, `build-logic/**`). Not
-  implemented: the refusal of builds with SNAPSHOT or version-range external dependencies (an external SNAPSHOT that changes
-  without a file change is a residual) and the local repository's content (`~/.m2`).
+  Gradle scripts, settings, `gradle.properties`, version catalogs, wrapper properties, `buildSrc/**`, `build-logic/**`). 
+- **External artifacts** (review, 2026-11-23; collector `jvm-agent-2`, older records are not used): the resolved external
+  class path is checked per record instead of being fingerprinted. Each class record lists in `Record.Artifacts` every
+  archive outside the repository and the fork's JDK that its JVM loaded classes from or read (as observed by the agent:
+  class code sources and JFR reads of `.jar`/`.zip`), as absolute path → size and SHA-1. At selection time every listed
+  archive is re-hashed (cached by path, size and modification time): a missing or changed archive, or a record without
+  artifacts, is not usable. A re-resolved SNAPSHOT or version range, or a rewritten local repository, therefore invalidates
+  exactly the records that used it. A read-only archive that is gone after the run (surefire's booter jar, a class-path
+  manifest) is not listed; a class directory outside the repository makes the record incomplete. Records are tied to the
+  machine's artifact paths (a CI record imported on another machine is unusable unless the paths match).
 - **Selection** (`Guard`, `Narrow`; wired in `applyDynamic` for eco `jvm`): the guards of §9.2 as decided above, plus: any
   widening with eco `jvm` (build-definition changes) refuses. A selected unit gets `SelectedTest.ClassFilter` and `Classes`
   (the kept classes, possibly none) and a `Dynamic` note; removed classes are `Narrowed` entries `<unit>#<class>`;

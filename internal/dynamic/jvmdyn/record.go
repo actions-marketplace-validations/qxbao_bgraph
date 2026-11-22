@@ -471,6 +471,19 @@ func Records(m *Mapper, units []UnitResult, forks []*Fork, env, collector, commi
 			for _, f := range fs {
 				deps, w := m.Map(f)
 				why = append(why, w...)
+				ext, w := m.External(f)
+				why = append(why, w...)
+				for _, p := range ext {
+					d, err := ArtifactDigest(p)
+					if err != nil {
+						why = append(why, "cannot hash external artifact "+p)
+						continue
+					}
+					if r.Artifacts == nil {
+						r.Artifacts = map[string]string{}
+					}
+					r.Artifacts[p] = d
+				}
 				for d := range deps {
 					if k := m.Tree.Key(d); k != "" {
 						r.Deps[d] = k

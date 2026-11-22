@@ -41,6 +41,9 @@ type Record struct {
 	// Classes: the test classes the runner reported for a JVM unit (the class-list record of docs/dynamic.md §9.1, whose Unit
 	// is the module's unit ID and whose Deps are the files of its test roots).
 	Classes []string `json:"classes,omitempty"`
+	// Artifacts: JVM class records list the external archives their test JVM loaded classes from or read (absolute path →
+	// "size:sha1"); a missing or changed archive makes the record unusable (docs/dynamic.md §9.9).
+	Artifacts map[string]string `json:"artifacts,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.

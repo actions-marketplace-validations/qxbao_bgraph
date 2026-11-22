@@ -47,11 +47,16 @@ func newMapper(root string, mt *tree.MapTree) *Mapper {
 
 // fooFork is a complete fork that ran a.FooTest and loaded a.Foo.
 func fooFork(root string) *Fork {
+	jar := filepath.Join(filepath.Dir(root), "m2", "junit.jar")
+	os.MkdirAll(filepath.Dir(jar), 0o755)
+	if _, err := os.Stat(jar); err != nil {
+		os.WriteFile(jar, []byte("PK junit"), 0o644)
+	}
 	return &Fork{Complete: true, JavaHome: filepath.Join(root, "..", "jdk"), Classes: []ClassLoad{
 		{Name: "a/FooTest", Location: fileURL(root, "core/target/test-classes"), SourceFile: "FooTest.java"},
 		{Name: "a/Foo", Location: fileURL(root, "core/target/classes"), SourceFile: "Foo.java"},
 		{Name: "a/Foo$1", Location: fileURL(root, "core/target/classes"), SourceFile: "Foo.java"},
-		{Name: "org/junit/Assert", Location: "file:/C:/m2/junit.jar", SourceFile: "Assert.java"},
+		{Name: "org/junit/Assert", Location: "file:/" + strings.TrimPrefix(filepath.ToSlash(jar), "/"), SourceFile: "Assert.java"},
 	}}
 }
 
@@ -177,7 +182,7 @@ func TestRecordsCrossCheck(t *testing.T) {
 	}
 	// Normal: two classes, one fork each.
 	recs := Records(m, []UnitResult{{Unit: u, Reports: Reports{"a.FooTest": true, "a.BarTest": false}, BuildOK: true}}, []*Fork{foo, bar}, "env", "c", "h", now)
-	if r := get(recs, "maven:core#a.FooTest"); !r.Complete || !r.Pass || r.Deps["core/src/main/java/a/Foo.java"] == "" {
+	if r := get(recs, "maven:core#a.FooTest"); !r.Complete || !r.Pass || r.Deps["core/src/main/java/a/Foo.java"] == "" || len(r.Artifacts) != 1 {
 		t.Errorf("FooTest: %+v", r)
 	}
 	if r := get(recs, "maven:core#a.BarTest"); !r.Complete || r.Pass {
@@ -221,5 +226,72 @@ func TestTestOutputDir(t *testing.T) {
 		if want == "" && ok || want != "" && got != want {
 			t.Errorf("testOutputDir(%q) = %q %v, want %q", in, got, ok, want)
 		}
+	}
+}
+
+// TestDocResourceRead: a documentation file under a resource root is read by tests through its build-output copy; the read maps
+// back to the tracked file (Mapper.resourceCopy), and a copy that differs makes the record incomplete.
+func TestDocResourceRead(t *testing.T) {
+	root, mt := repoFixture(t)
+	files := map[string]string{"core/src/test/resources/notes.md": "# notes\n"}
+	for _, p := range mt.Files() {
+		b, _ := mt.Read(p)
+		files[p] = string(b)
+	}
+	mt = tree.NewMapTree(files)
+	os.MkdirAll(abs(root, "core/src/test/resources"), 0o755)
+	os.MkdirAll(abs(root, "core/target/test-classes"), 0o755)
+	os.WriteFile(abs(root, "core/src/test/resources/notes.md"), []byte("# notes\n"), 0o644)
+	os.WriteFile(abs(root, "core/target/test-classes/notes.md"), []byte("# notes\n"), 0o644)
+	m := newMapper(root, mt)
+	f := fooFork(root)
+	f.Reads = []string{abs(root, "core/target/test-classes/notes.md")}
+	deps, why := m.Map(f)
+	if len(why) != 0 || !deps["core/src/test/resources/notes.md"] {
+		t.Errorf("copy: deps %v why %v", deps, why)
+	}
+	os.WriteFile(abs(root, "core/target/test-classes/notes.md"), []byte("# filtered\n"), 0o644)
+	if _, why := m.Map(f); !strings.Contains(strings.Join(why, ";"), "reads build output") {
+		t.Errorf("differing copy: %v", why)
+	}
+}
+
+// TestExternal: the archives outside the repository and the JDK that a fork loaded classes from or read are its external
+// artifacts; a class directory outside the repository cannot be checked and makes the record incomplete.
+func TestExternal(t *testing.T) {
+	root, mt := repoFixture(t)
+	m := newMapper(root, mt)
+	f := fooFork(root)
+	jdkJar := filepath.Join(f.JavaHome, "lib", "jrt-fs.jar")
+	extDir := filepath.Join(filepath.Dir(root), "classes")
+	os.MkdirAll(extDir, 0o755)
+	f.Classes = append(f.Classes, ClassLoad{Name: "x/Y", Location: "file:/" + strings.TrimPrefix(filepath.ToSlash(jdkJar), "/")})
+	zip := filepath.Join(filepath.Dir(root), "m2", "data.zip")
+	os.WriteFile(zip, []byte("PK"), 0o644)
+	f.Reads = append(f.Reads, zip, abs(root, "core/target/core.jar"))
+	paths, why := m.External(f)
+	if len(paths) != 2 || len(why) != 0 {
+		t.Errorf("external: %v %v", paths, why)
+	}
+	f.Classes = append(f.Classes, ClassLoad{Name: "x/Z", Location: "file:/" + strings.TrimPrefix(filepath.ToSlash(extDir), "/") + "/"})
+	if _, why := m.External(f); len(why) != 1 || !strings.Contains(why[0], "directory outside the repository") {
+		t.Errorf("class directory: %v", why)
+	}
+}
+
+// TestExternalTemporaryManifestJar: a read-only archive that is gone after the run (surefire's booter jar) is no artifact; a
+// gone archive that classes were loaded from still is (and fails to hash at record time).
+func TestExternalTemporaryManifestJar(t *testing.T) {
+	root, mt := repoFixture(t)
+	m := newMapper(root, mt)
+	f := fooFork(root)
+	gone := filepath.Join(filepath.Dir(root), "tmp", "surefirebooter-1.jar")
+	f.Reads = append(f.Reads, gone)
+	if paths, _ := m.External(f); len(paths) != 1 {
+		t.Errorf("booter jar listed: %v", paths)
+	}
+	f.Classes = append(f.Classes, ClassLoad{Name: "x/Y", Location: "file:/" + strings.TrimPrefix(filepath.ToSlash(gone), "/")})
+	if paths, _ := m.External(f); len(paths) != 2 {
+		t.Errorf("class source missing: %v", paths)
 	}
 }

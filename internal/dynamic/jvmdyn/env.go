@@ -22,12 +22,13 @@ import (
 // Eco is the ecosystem name of the records.
 const Eco = "jvm"
 
-// Collector returns the collector ID (docs/dynamic.md §9.3); trust_native_env changes it, as for Python and Node.
+// Collector returns the collector ID (docs/dynamic.md §9.3); trust_native_env changes it, as for Python and Node. Version 2:
+// class records list their external artifacts (records without them are not usable).
 func Collector(trust bool) string {
 	if trust {
-		return "jvm-agent-1+trust-native"
+		return "jvm-agent-2+trust-native"
 	}
-	return "jvm-agent-1"
+	return "jvm-agent-2"
 }
 
 // JavaHome resolves the JDK the builds run with: JAVA_HOME from env (KEY=VALUE list, later entries win) or the process

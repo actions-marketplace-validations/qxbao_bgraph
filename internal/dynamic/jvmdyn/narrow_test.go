@@ -1,6 +1,8 @@
 package jvmdyn
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -85,6 +87,17 @@ func TestGuard(t *testing.T) {
 			func() dynamic.Change { c := change("core/pom.xml", model.RoleManifest); c.Claimed = true; return c }, nil, "claimed"},
 		{"documentation file", map[string]string{"README.md": "# changed\n"},
 			func() dynamic.Change { c := change("README.md", model.RoleData); c.Referenced = true; return c }, nil, ""},
+		{"documentation file under src/test/resources", map[string]string{"core/src/test/resources/notes.md": "# changed\n"},
+			func() dynamic.Change { return change("core/src/test/resources/notes.md", model.RoleData) }, nil, "src/ directory"},
+		{"documentation file with a non-conventional Maven resource root", map[string]string{"README.md": "# changed\n",
+			"core/pom.xml": "<project><build><resources><resource><directory>../docs</directory></resource></resources></build></project>"},
+			func() dynamic.Change { return change("README.md", model.RoleData) }, nil, "non-conventional resource root"},
+		{"documentation file with a Gradle resources srcDir", map[string]string{"README.md": "# changed\n",
+			"core/build.gradle": "sourceSets { main { resources { srcDir 'docs' } } }\n"},
+			func() dynamic.Change { return change("README.md", model.RoleData) }, nil, "non-conventional resource root"},
+		{"documentation file with conventional and build-output resource roots", map[string]string{"README.md": "# changed\n",
+			"core/pom.xml": "<project><build><resources><resource><directory>src/main/res</directory></resource><resource><directory>${project.build.directory}/gen</directory></resource></resources></build></project>"},
+			func() dynamic.Change { return change("README.md", model.RoleData) }, nil, ""},
 		{"documentation file named by a rule", map[string]string{"README.md": "# changed\n"},
 			func() dynamic.Change { c := change("README.md", model.RoleData); c.Rule = true; return c }, nil, "non-code"},
 		{"added file", map[string]string{"core/src/main/java/a/New.java": "package a;\nclass New {}\n"},
@@ -127,8 +140,17 @@ func TestGuard(t *testing.T) {
 	}
 }
 
+// testJar is an external archive the class records list (created once per test binary).
+var testJar = func() string {
+	d, _ := os.MkdirTemp("", "jvmdyn-art")
+	p := filepath.Join(d, "lib.jar")
+	os.WriteFile(p, []byte("PK lib 1"), 0o644)
+	return p
+}()
+
 func classRecords(base tree.Tree, env string, now time.Time, deps map[string][]string) []dynamic.Record {
-	cl := dynamic.Record{Eco: Eco, Unit: "maven:core", Collector: "jvm-agent-1", Env: env, Complete: true, Pass: true, Recorded: now,
+	digest, _ := ArtifactDigest(testJar)
+	cl := dynamic.Record{Eco: Eco, Unit: "maven:core", Collector: "jvm-agent-2", Env: env, Complete: true, Pass: true, Recorded: now,
 		Deps: map[string]string{}}
 	for _, f := range TestRootFiles(base, "core") {
 		cl.Deps[f] = base.Key(f)
@@ -136,8 +158,8 @@ func classRecords(base tree.Tree, env string, now time.Time, deps map[string][]s
 	recs := []dynamic.Record{cl}
 	for c, ds := range deps {
 		cl.Classes = append(cl.Classes, c)
-		r := dynamic.Record{Eco: Eco, Unit: "maven:core#" + c, Collector: "jvm-agent-1", Env: env, Complete: true, Pass: true, Recorded: now,
-			Deps: map[string]string{}}
+		r := dynamic.Record{Eco: Eco, Unit: "maven:core#" + c, Collector: "jvm-agent-2", Env: env, Complete: true, Pass: true, Recorded: now,
+			Deps: map[string]string{}, Artifacts: map[string]string{testJar: digest}}
 		for _, d := range ds {
 			r.Deps[d] = base.Key(d)
 		}
@@ -155,7 +177,7 @@ func TestNarrow(t *testing.T) {
 		"a.BarTest": {"core/src/test/java/a/BarTest.java", "core/src/main/java/a/Bar.java"},
 	}
 	recs := classRecords(base, "env", now, deps)
-	p := Params{Collector: "jvm-agent-1", Env: "env", Records: recs, Base: base, Head: base, UnitEco: map[string]string{"maven:core": Eco}}
+	p := Params{Collector: "jvm-agent-2", Env: "env", Records: recs, Base: base, Head: base, UnitEco: map[string]string{"maven:core": Eco}}
 	run := func(p Params, changed ...string) model.SelectedTest { return Narrow(sel(changed...), p).Tests[0] }
 
 	got := run(p, "core/src/main/java/a/Foo.java")
@@ -197,6 +219,31 @@ func TestNarrow(t *testing.T) {
 			}
 		}
 	}
+	// External artifacts: a record whose archive changed (a SNAPSHOT re-resolved) or disappeared, or that lists none, is not
+	// usable.
+	for name, mod := range map[string]func(r *dynamic.Record){
+		"changed": func(r *dynamic.Record) { r.Artifacts = map[string]string{testJar: "8:0000"} },
+		"missing": func(r *dynamic.Record) { r.Artifacts = map[string]string{testJar + ".gone": "8:0000"} },
+		"none":    func(r *dynamic.Record) { r.Artifacts = nil },
+	} {
+		rs := classRecords(base, "env", now, deps)
+		for i := range rs {
+			if rs[i].Unit == "maven:core#a.BarTest" {
+				mod(&rs[i])
+			}
+		}
+		q := p
+		q.Records = rs
+		if got := run(q, "core/src/main/java/a/Foo.java"); got.ClassFilter {
+			t.Errorf("artifact %s: BarTest removed: %+v", name, got)
+		}
+	}
+	// Rewriting the archive itself (same path, new content) is seen at selection time.
+	os.WriteFile(testJar, []byte("PK lib 2"), 0o644)
+	if got := run(p, "core/src/main/java/a/Foo.java"); got.ClassFilter {
+		t.Errorf("rewritten artifact: %+v", got)
+	}
+	os.WriteFile(testJar, []byte("PK lib 1"), 0o644)
 	// The class list is not trusted when a test-root file was added since the recording, or for another environment.
 	added := with(baseFiles, map[string]string{"core/src/test/java/a/NewTest.java": "package a;\nclass NewTest {}\n"})
 	q := p

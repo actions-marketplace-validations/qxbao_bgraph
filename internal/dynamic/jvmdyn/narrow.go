@@ -3,6 +3,7 @@ package jvmdyn
 import (
 	"fmt"
 	"path"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -65,6 +66,11 @@ func Guard(sel model.Selection, changes []dynamic.Change, base, head tree.Tree) 
 			}
 			why = ConstantGuard(c.Path, b, h)
 		case docFile(c):
+			if inSrc(c.Path) {
+				why = "documentation file under a src/ directory (a resource root: tests read its build-output copy)"
+			} else if r := customResourceRoot(base, head); r != "" {
+				why = "documentation file, but " + r + " declares a non-conventional resource root (the file may be a resource)"
+			}
 		default:
 			why = "not a Java/Kotlin file of a compiled source root nor an unclaimed documentation file (a non-code change refuses class narrowing for the whole selection)"
 		}
@@ -86,6 +92,57 @@ func codeRole(r model.Role) bool { return r == model.RoleSource || r == model.Ro
 func docFile(c dynamic.Change) bool {
 	return (classify.Doc(c.Path) || classify.Harmless(c.Path)) && !c.OtherRole && !c.Rule && !c.Declared && !c.Global && !c.Claimed &&
 		(c.BaseRole == "" || c.BaseRole == model.RoleData) && (c.HeadRole == "" || c.HeadRole == model.RoleData)
+}
+
+// inSrc: p lies under a src/ directory of any module (conventional source and resource roots; a documentation file there may
+// be a resource that tests read from build output or a module jar).
+func inSrc(p string) bool { return strings.HasPrefix(p, "src/") || strings.Contains(p, "/src/") }
+
+var (
+	mavenResources = regexp.MustCompile(`(?s)<(?:testR|r)esources>(.*?)</(?:testR|r)esources>`)
+	mavenDirectory = regexp.MustCompile(`(?s)<directory>\s*(.*?)\s*</directory>`)
+	gradleResource = regexp.MustCompile(`(?s)resources.{0,200}?srcDirs?`)
+)
+
+// customResourceRoot returns the build file that declares a resource root outside src/ (Maven <resources>/<testResources>
+// <directory>, Gradle resources srcDir/srcDirs), "" when every resource root is conventional. Lexical and conservative:
+// any Gradle resources srcDir counts.
+func customResourceRoot(trees ...tree.Tree) string {
+	for _, t := range trees {
+		for _, p := range t.Files() {
+			b := path.Base(p)
+			if b != "pom.xml" && !strings.HasSuffix(b, ".gradle") && !strings.HasSuffix(b, ".gradle.kts") {
+				continue
+			}
+			src, err := t.Read(p)
+			if err != nil {
+				return p + " (unreadable)"
+			}
+			if b == "pom.xml" {
+				for _, blk := range mavenResources.FindAllSubmatch(src, -1) {
+					for _, d := range mavenDirectory.FindAllSubmatch(blk[1], -1) {
+						dir := string(d[1])
+						for _, pre := range []string{"${project.basedir}/", "${basedir}/"} {
+							dir = strings.TrimPrefix(dir, pre)
+						}
+						// The source roots and the build output (derived files only) are not new roots of tracked files.
+						for _, pre := range []string{"${project.build.sourceDirectory}", "${project.build.testSourceDirectory}",
+							"${project.build.directory}", "${project.build.outputDirectory}", "${project.build.testOutputDirectory}"} {
+							if strings.HasPrefix(dir, pre) {
+								dir = "src/"
+							}
+						}
+						if !strings.HasPrefix(dir, "src/") {
+							return p
+						}
+					}
+				}
+			} else if gradleResource.Match(src) {
+				return p
+			}
+		}
+	}
+	return ""
 }
 
 // Params is what Narrow needs besides the selection.
@@ -190,8 +247,8 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 				run[c] = true
 				continue
 			}
-			if dynamic.Usable(r, nil, bp) != "" {
-				run[c] = true
+			if dynamic.Usable(r, nil, bp) != "" || len(r.Artifacts) == 0 || ArtifactsUnchanged(r.Artifacts) != "" {
+				run[c] = true // not usable: incomplete, failed, stale, or an external artifact missing or changed
 				continue
 			}
 			hit := false
