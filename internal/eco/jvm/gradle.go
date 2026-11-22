@@ -685,6 +685,18 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 					b.edge(fu.node, escapeGlob(target)+"/**", model.EdgePattern, "directory "+r.val)
 				}
 			}
+		case refWorkDir:
+			for _, q := range targets(r.sc) {
+				if qu := byProj[q]; qu != nil {
+					d := path.Join(q.dir, r.val)
+					if r.rootRel {
+						d = path.Join(gb.dir, r.val)
+					}
+					if d != q.dir && !slices.Contains(qu.workDirs, d) {
+						qu.workDirs = append(qu.workDirs, d)
+					}
+				}
+			}
 		case refApply:
 			full := ""
 			if r.rootRel {

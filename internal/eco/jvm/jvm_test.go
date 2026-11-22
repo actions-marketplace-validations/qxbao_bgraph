@@ -355,3 +355,13 @@ func TestAnywhereGlob(t *testing.T) {
 		}
 	}
 }
+
+func TestScanPathLiterals(t *testing.T) {
+	src := "// \"../a/x\"\n/* '../b/y' */\nclass T {\n  char c = '\"';\n  String s = \"../c/z.json\";\n  String e = \"a\\\"/b\";\n" +
+		"  String tb = \"\"\"\n  ../d\n  \"\"\";\n  val g = '../e/f'\n  String n = \"plain\";\n}\n"
+	got := scanPathLiterals([]byte(src))
+	want := []string{"../c/z.json", `a\"/b`, "../e/f"}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("scanPathLiterals = %q, want %q", got, want)
+	}
+}

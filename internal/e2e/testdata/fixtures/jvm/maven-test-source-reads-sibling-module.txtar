@@ -1,0 +1,50 @@
+A test that reads another module's file through a literal relative path (surefire runs in the module directory) is selected when that file changes; a path that only appears in a comment is not a dependency.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>core</module><module>app</module><module>other</module></modules>
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>core</artifactId>
+</project>
+-- base/core/src/test/resources/fixtures/users.json --
+{}
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+</project>
+-- base/app/src/test/java/AppTest.java --
+import java.io.File;
+class AppTest {
+    File users = new File("../core/src/test/resources/fixtures/users.json");
+    String own = "src/test/resources/local.json";
+}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- base/other/src/test/java/OtherTest.java --
+class OtherTest {
+    // used to read "../core/src/test/resources/fixtures/users.json"
+    /* and "../core/src/test/resources/fixtures" */
+    char q = '"';
+    String s = "not/a/path";
+}
+-- head/core/src/test/resources/fixtures/users.json --
+{"a":1}
+-- want --
+notfull
+select maven:core
+select maven:app
+noselect maven:other

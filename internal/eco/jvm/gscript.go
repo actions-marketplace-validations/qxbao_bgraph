@@ -14,6 +14,7 @@ const (
 	refUnplaceable                // a reference whose target cannot be determined
 	refFile                       // a path literal reaching outside the project directory
 	refApply                      // apply from: "script.gradle"
+	refWorkDir                    // a test working directory: val relative to the project, or to the build when rootRel
 )
 
 type scopeKind int
@@ -82,6 +83,34 @@ func (m *gradleModel) scriptRefs(p string) *scriptRefs {
 	}
 	sr.scan(toks)
 	return sr
+}
+
+// workDirRef reads `workingDir = rootDir`, `workingDir(rootProject.projectDir)`, `workingDir = file("../x")` at toks[i]: the root
+// directory or a literal directory. Other values (build directories, variables) are not modelled.
+func workDirRef(toks []token, i int) (gref, bool) {
+	for j := i + 1; j < len(toks) && j <= i+8 && toks[j].line == toks[i].line; j++ {
+		t := toks[j]
+		if isPunct(t, ";") || isPunct(t, "{") || isPunct(t, "}") {
+			break
+		}
+		if t.kind == tIdent && rootDirIdents[t.text] {
+			// rootDir, rootProject.projectDir, rootProject.layout.projectDirectory, or a literal below them.
+			for k := j + 1; k < len(toks) && k <= j+8 && toks[k].line == t.line; k++ {
+				if toks[k].kind == tStr && !toks[k].dyn {
+					return gref{kind: refWorkDir, val: cleanRel(toks[k].text), rootRel: true, line: t.line}, true
+				}
+			}
+			return gref{kind: refWorkDir, val: ".", rootRel: true, line: t.line}, true
+		}
+		if t.kind == tStr {
+			s := strings.TrimSuffix(t.text, "/") + "/" // "$rootDir" names the root like "$rootDir/"
+			if r, ok := stripRootDir(s); ok {
+				return gref{kind: refWorkDir, val: cleanRel(r), rootRel: r != s, line: t.line}, true
+			}
+			return gref{}, false
+		}
+	}
+	return gref{}, false
 }
 
 // extraStatement: the tokens of the statement before toks[end] (on its line) name an extra-properties container.
@@ -216,6 +245,11 @@ func (sr *scriptRefs) scan(toks []token) {
 			case projectSets[t.text] && nextDot, t.text == "getAllprojects" || t.text == "getSubprojects" || t.text == "getChildProjects",
 				t.text == "evaluationDependsOnChildren":
 				add(gref{kind: refUnplaceable, val: t.text + " used as a collection at line " + itoa(t.line), line: t.line})
+			}
+			if t.text == "workingDir" || t.text == "setWorkingDir" {
+				if r, ok := workDirRef(toks, i); ok {
+					add(r)
+				}
 			}
 			switch t.text {
 			case "beforeProject", "afterProject", "projectsEvaluated":

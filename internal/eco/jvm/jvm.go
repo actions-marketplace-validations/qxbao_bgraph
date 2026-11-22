@@ -37,9 +37,17 @@
 //   - a Maven module inherits the references of its local parent chain and depends on those POM files (<parent> through
 //     relativePath, any file name, or else the reactor module with the parent's coordinates);
 //   - a unit depends on the files and directories named by paths it does not own: Maven source/resource directories and every
-//     other path-like text or attribute of its POM chain that names an existing file or directory (resolved against the module);
-//     Gradle strings starting with "../", "$rootDir/" and similar, and strings after rootProject/rootDir/settingsDir in a call
-//     chain that name an existing file or directory;
+//     other path-like text or attribute of its POM chain that names an existing file or directory (resolved against the module;
+//     ${main.basedir} and ${maven.multiModuleProjectDirectory} are the reactor root); a plugin path holding a property no POM
+//     defines is a pattern matched anywhere in the repository ("${x}/checkstyle.xml" is **/checkstyle.xml, "${x}-rules.xml" is
+//     **/*-rules.xml), except external properties (settings.*, env.*, user.*, java.*, os.*, maven.*, session.*, build output)
+//     and a value that is only a property (a known gap); Gradle strings starting with "../", "$rootDir/" and similar, and
+//     strings after rootProject/rootDir/settingsDir in a call chain that name an existing file or directory;
+//   - a unit depends on the files and directories named by the string literals of its test sources (src/test*, src/*Test,
+//     src/it, src/testFixtures; .java/.kt/.groovy/.scala) that it does not own, resolved against the module directory (surefire
+//     basedir, Gradle's default test workingDir) and against a Gradle test workingDir set to the root directory or a literal
+//     directory. Paths assembled at run time (concatenation, System.getProperty, variables) and other working directories are
+//     a known gap;
 //   - Gradle references stored in extra properties (ext { }, extra) and references inside the project-configuring blocks of a
 //     settings script (gradle.allprojects { }, ...) are dependencies of every project they can reach; references in convention
 //     plugins of buildSrc/, build-logic/ and included builds are dependencies of every project of the build;
@@ -81,13 +89,15 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "jvm-4"
+const AnalyzerVersion = "jvm-5"
 
 // Eco is the JVM ecosystem.
 type Eco struct {
 	mu     sync.Mutex
 	mcache map[tree.Tree]*mvnModel
 	gcache map[tree.Tree]*gradleModel
+	// lits caches the path literals of test sources by content key (see pathLiterals).
+	lits map[string][]string
 }
 
 // New creates the JVM ecosystem. The rules file is accepted for symmetry with the other ecosystems; JVM has no declarations yet.
@@ -156,6 +166,9 @@ type unit struct {
 	// shareSrc: the unit compiles nothing from src/ (a Maven aggregator/parent with packaging pom), so the non-code files there
 	// are build configuration (checkstyle, license headers, assembly descriptors) that nested units may read.
 	shareSrc bool
+	// workDirs are further directories the unit's tests run in (Gradle test { workingDir = rootDir }): test-source path literals
+	// are resolved against them too.
+	workDirs []string
 }
 
 type edgeKey struct {
@@ -167,6 +180,8 @@ type builder struct {
 	t    tree.Tree
 	a    *eco.Analysis
 	seen map[edgeKey]bool
+	// lits returns the path literals of a test source file (nil: test sources are not scanned).
+	lits func(p string) []string
 }
 
 func newBuilder(t tree.Tree, a *eco.Analysis) *builder {
@@ -204,6 +219,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, _ eco.Scanner) (*eco.Ana
 		return a, nil
 	}
 	b := newBuilder(t, a)
+	b.lits = func(p string) []string { return e.pathLiterals(t, p) }
 	var units []*unit
 	if hasMaven {
 		m := e.mavenModel(t)
@@ -221,6 +237,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, _ eco.Scanner) (*eco.Ana
 		a.Tests = append(a.Tests, model.TestUnit{Eco: Name, ID: u.id, Project: u.dir, Files: []string{u.node}, Runner: u.kind,
 			Package: u.pkg, Config: u.config})
 	}
+	e.prefetchLiterals(t, units)
 	b.own(units)
 	slices.SortFunc(a.Edges, func(x, y model.Edge) int {
 		if c := strings.Compare(x.From, y.From); c != 0 {
@@ -317,6 +334,9 @@ func (b *builder) own(units []*unit) {
 				b.edge(u.node, f, model.EdgeImplicit, "module file")
 			}
 			b.role(f, role)
+			if b.lits != nil && testSource(rel) {
+				b.testLiterals(f, ud, byDir[ud], near)
+			}
 			// Shared with nested units: not under src/ (unless the unit compiles nothing from there and the file is no code), not a
 			// build definition of the enclosing unit, not documentation.
 			inSrc := rel == "src" || strings.HasPrefix(rel, "src/")
@@ -336,6 +356,33 @@ func (b *builder) own(units []*unit) {
 			for _, f := range u.own {
 				if b.t.Has(f) {
 					b.a.Roles[f] = model.RoleManifest
+				}
+			}
+		}
+	}
+}
+
+// testLiterals adds the dependencies of the units in directory ud on the files and directories that the path literals of their
+// test source f name and that they do not own (nearest unit directory near(target) != ud).
+func (b *builder) testLiterals(f, ud string, us []*unit, near func(string) string) {
+	lits := b.lits(f)
+	if len(lits) == 0 {
+		return
+	}
+	for _, u := range us {
+		bases := append([]string{ud}, u.workDirs...)
+		for _, lit := range lits {
+			for _, base := range bases {
+				tg, ok := literalTarget(lit, base)
+				if !ok || near(tg) == ud || eco.Within(ud, tg) {
+					continue // outside the repository, owned by the unit, or an ancestor directory (a base, not an input)
+				}
+				spec := "path literal " + lit + " in " + f
+				switch {
+				case b.t.Has(tg):
+					b.edge(u.node, tg, model.EdgeInclude, spec)
+				case b.t.IsDir(tg) && tg != ".":
+					b.edge(u.node, escapeGlob(tg)+"/**", model.EdgePattern, spec)
 				}
 			}
 		}

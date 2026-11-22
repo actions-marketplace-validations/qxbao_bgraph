@@ -1,0 +1,39 @@
+Test sources that read another project's files through literal paths: relative to the project directory (Gradle's default test workingDir, here from a Kotlin Multiplatform jvmTest source set and a directory literal), and relative to the root for projects whose tests run with workingDir = rootDir.
+-- base/settings.gradle.kts --
+include(":data", ":app", ":mpp", ":other")
+-- base/build.gradle.kts --
+project(":app") { tasks.withType<Test> { workingDir = rootDir } }
+-- base/data/build.gradle.kts --
+plugins { java }
+-- base/data/fixtures/users.json --
+{}
+-- base/data/fixtures/orders/o1.json --
+{}
+-- base/app/build.gradle.kts --
+plugins { java }
+-- base/app/src/test/kotlin/AppTest.kt --
+class AppTest {
+    val users = java.io.File("data/fixtures/users.json")
+}
+-- base/mpp/build.gradle.kts --
+plugins { kotlin("multiplatform") }
+-- base/mpp/src/jvmTest/kotlin/MppTest.kt --
+class MppTest {
+    val dir = java.io.File("../data/fixtures/orders")
+}
+-- base/other/build.gradle.kts --
+plugins { java }
+-- base/other/src/test/kotlin/OtherTest.kt --
+class OtherTest {
+    val users = java.io.File("data/fixtures/users.json")
+}
+-- head/data/fixtures/users.json --
+{"a":1}
+-- head/data/fixtures/orders/o1.json --
+{"a":1}
+-- want --
+notfull
+select gradle::data
+select gradle::app
+select gradle::mpp
+noselect gradle::other
