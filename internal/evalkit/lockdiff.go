@@ -209,7 +209,12 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 		var unreadable bool
 		switch o.Format {
 		case lockfile.FormatPnpm, lockfile.FormatNpm:
-			tool, unreadable, terr = lockdiffJS(ctx, o, repo, repoDir, c, lockPath)
+			var projects []string
+			for p := range g.Projects {
+				projects = append(projects, p)
+			}
+			sort.Strings(projects)
+			tool, unreadable, terr = lockdiffJS(ctx, o, repo, repoDir, c, lockPath, projects)
 		case lockfile.FormatCargo:
 			tool, unreadable, terr = lockdiffCargo(ctx, o, repoDir, wt, c, lockDir)
 		}
@@ -448,7 +453,7 @@ func runTool(ctx context.Context, dir string, env []string, name string, args ..
 
 // lockdiffJS runs pnpm list / npm ls on the materialized tree of commit c and returns each project's package set, keyed
 // by repo-relative project directory.
-func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath string) (map[string]map[string]bool, bool, error) {
+func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath string, projects []string) (map[string]map[string]bool, bool, error) {
 	dst := filepath.Join(o.Tmp, o.Format+"-"+repo+"-"+c[:10])
 	os.RemoveAll(dst)
 	defer os.RemoveAll(dst)
@@ -465,7 +470,12 @@ func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath 
 		out, errb, err := runTool(ctx, dst, o.Env, o.Pnpm[0], args...)
 		var projs []pnpmProject
 		if jerr := json.Unmarshal(out, &projs); jerr != nil {
-			msg := firstLine(string(out) + " " + string(errb))
+			msg := strings.Join(strings.Fields(string(out)+" "+string(errb)), " ")
+			if strings.Contains(msg, "Invalid string length") {
+				// The JSON tree exceeds Node's string limit: list each project's deduplicated package paths instead.
+				return pnpmParseable(ctx, o, dst, lockDir, projects)
+			}
+			msg = firstLine(msg)
 			unreadable := strings.Contains(msg, "LOCKFILE") || strings.Contains(msg, "lockfile")
 			return nil, unreadable, fmt.Errorf("pnpm list: %v: %s", err, msg)
 		}
@@ -552,6 +562,49 @@ func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath 
 				delete(set, k)
 			}
 		}
+	}
+	return res, false, nil
+}
+
+// pnpmParseable runs pnpm list --parseable in every project directory (our graph's importers: the tool cannot tell
+// which projects exist in this mode) and reads name@version from the virtual store paths
+// (".pnpm/<name with + for />@<version>[_peers|(peers)]/node_modules/<name>").
+func pnpmParseable(ctx context.Context, o LockdiffOpts, dst, lockDir string, projects []string) (map[string]map[string]bool, bool, error) {
+	res := map[string]map[string]bool{}
+	for _, p := range projects {
+		rel := p
+		if lockDir != "." {
+			rel = strings.TrimPrefix(strings.TrimPrefix(p, lockDir), "/")
+		}
+		if rel == "" {
+			rel = "."
+		}
+		args := append(append([]string(nil), o.Pnpm[1:]...), "list", "--depth", "Infinity", "--parseable", "--lockfile-only")
+		out, errb, err := runTool(ctx, filepath.Join(dst, filepath.FromSlash(rel)), o.Env, o.Pnpm[0], args...)
+		if err != nil {
+			return nil, false, fmt.Errorf("pnpm list --parseable in %s: %v: %s", rel, err, firstLine(string(out)+" "+string(errb)))
+		}
+		set := map[string]bool{}
+		for _, line := range strings.Split(string(out), "\n") {
+			line = filepath.ToSlash(strings.TrimSpace(line))
+			dir, ok := strings.CutPrefix(line, ".pnpm/")
+			if !ok {
+				continue // a project path
+			}
+			dir, name, ok := strings.Cut(dir, "/node_modules/")
+			if !ok {
+				continue
+			}
+			v, ok := strings.CutPrefix(dir, strings.ReplaceAll(name, "/", "+")+"@")
+			if !ok {
+				continue
+			}
+			if i := strings.IndexAny(v, "_("); i >= 0 {
+				v = v[:i]
+			}
+			set[name+"@"+v] = true
+		}
+		res[p] = set
 	}
 	return res, false, nil
 }
