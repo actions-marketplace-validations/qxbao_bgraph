@@ -70,7 +70,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-6"
+const AnalyzerVersion = "go-7"
 
 // Eco is the Go ecosystem.
 type Eco struct {

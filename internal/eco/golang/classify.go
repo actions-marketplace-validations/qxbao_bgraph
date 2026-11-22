@@ -43,7 +43,9 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonLockChanged, Path: p, Scope: m, Eco: Name,
 			Detail: "vendored dependency changed"}}, true
 	}
-	if strings.HasSuffix(p, ".go") && bm.innermost(dir) == nil && hm.innermost(dir) == nil {
+	// A .go file under no go.mod in a repository with Go modules: a GOPATH-layout package beside them, not analyzed → full. In a
+	// repository without any go.mod there are no Go units to affect: the file is left to the general rules (an unowned file).
+	if strings.HasSuffix(p, ".go") && bm.innermost(dir) == nil && hm.innermost(dir) == nil && (len(bm.list) > 0 || len(hm.list) > 0) {
 		return []model.Widening{{Tier: model.TierFull, Reason: model.ReasonUnknownFile, Path: p, Eco: Name,
 			Detail: ".go file under no go.mod (GOPATH layout is not analyzed)"}}, true
 	}

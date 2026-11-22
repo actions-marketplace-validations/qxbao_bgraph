@@ -1,0 +1,28 @@
+A .go file in a repository with no go.mod at all affects no Go unit: it is left to the general rules (here an unreferenced file of
+the Node project, which widens to that project), not widened to full. The other Node project is not selected.
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- base/web/tools/tool.go --
+package main
+
+func main() {}
+-- base/api/package.json --
+{"name":"api","devDependencies":{"vitest":"^2.0.0"}}
+-- base/api/src/b.test.ts --
+import { b } from './b'
+void b
+-- base/api/src/b.ts --
+export const b = 1
+-- head/web/tools/tool.go --
+package main
+
+func main() { _ = 1 }
+-- want --
+select web/src/a.test.ts
+noselect api/src/b.test.ts
+notfull
