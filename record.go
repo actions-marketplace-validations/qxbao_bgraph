@@ -15,6 +15,7 @@ import (
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/jvm"
 	"github.com/qxbao/bgraph/internal/eco/node"
 	"github.com/qxbao/bgraph/internal/eco/python"
 	"github.com/qxbao/bgraph/internal/glob"
@@ -29,7 +30,7 @@ type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
 type RecordOptions struct {
-	// Eco: the ecosystem to record ("python" or "node"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
+	// Eco: the ecosystem to record ("python", "node" or "jvm"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
 	// set, otherwise every ecosystem with a dynamic layer that has test units.
 	Eco        string
 	Units      string        // glob on unit IDs (test files); empty: every unit
@@ -41,6 +42,10 @@ type RecordOptions struct {
 	// Env: extra environment variables for the test processes (e.g. PYTHONPATH=<checkout>/src so that a worktree's sources
 	// shadow an editable install of another checkout). They are not part of the environment fingerprint.
 	Env []string
+	// BuildArgs: extra Maven/Gradle arguments of the JVM recording build (e.g. -Dmaven.repo.local=...).
+	BuildArgs []string
+	// KeepLogs keeps the JVM collector logs (for debugging; they are removed by default).
+	KeepLogs bool
 	// Progress is called after each unit.
 	Progress func(done, total int, rec DynamicRecord, elapsed time.Duration, tail string)
 }
@@ -229,6 +234,8 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 			recs, skipped, err = ix.recordPython(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		case node.Name:
 			recs, skipped, err = ix.recordNode(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		case jvm.Name:
+			recs, skipped, err = ix.recordJVM(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		}
 		sum.Skipped = append(sum.Skipped, skipped...)
 		if err != nil {
@@ -381,7 +388,11 @@ func (ix *Index) recordNode(ctx context.Context, opt RecordOptions, rf *rules.Fi
 
 // reasonKey drops the file name from per-file reasons so that the histogram groups them.
 func reasonKey(why string) string {
-	for _, pre := range []string{"reads untracked file ", "cannot hash ", "the unit's own file ", "native addon in the repository: "} {
+	for _, pre := range []string{"reads untracked file ", "cannot hash ", "the unit's own file ", "native addon in the repository: ",
+		"unmapped repository class ", "repository class loaded before the agent: ", "maps repository file ", "starts a process: ",
+		"native library in the repository: ", "native library outside the JDK and the OS: ", "reads class file that no longer exists: ",
+		"reads an archive built in the repository: ", "reads build output that is not a copy of a tracked file: ", "build: ",
+		"forks ran classes the runner did not report: "} {
 		if strings.HasPrefix(why, pre) {
 			return strings.TrimSpace(pre)
 		}
@@ -494,7 +505,11 @@ func (ix *Index) DynamicStatusOf(ctx context.Context, eco string) (DynamicStatus
 			continue
 		}
 		st.CurrentEnv++
-		why := dynamic.Usable(r, []string{r.Unit}, p)
+		files := []string{r.Unit}
+		if eco == jvm.Name {
+			files = nil // class and class-list records: the class's file is among its dependencies, not named by the unit
+		}
+		why := dynamic.Usable(r, files, p)
 		if why == "" {
 			st.Usable++
 			continue

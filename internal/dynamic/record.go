@@ -38,6 +38,9 @@ type Record struct {
 	// Toolchain: native addons of the Node toolchain allowlist the run loaded ("name@version", docs/dynamic.md §8.3), for
 	// transparency only.
 	Toolchain []string `json:"toolchain,omitempty"`
+	// Classes: the test classes the runner reported for a JVM unit (the class-list record of docs/dynamic.md §9.1, whose Unit
+	// is the module's unit ID and whose Deps are the files of its test roots).
+	Classes []string `json:"classes,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.

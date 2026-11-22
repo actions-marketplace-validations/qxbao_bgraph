@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/classify"
+	"github.com/qxbao/bgraph/internal/eco/jvm"
 	"github.com/qxbao/bgraph/internal/eco/node"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
@@ -43,6 +44,9 @@ type Params struct {
 var sourceFile = map[string]func(p string) bool{
 	"python": func(p string) bool { return strings.HasSuffix(p, ".py") },
 	"node":   node.DynamicSource,
+	// jvm: the per-test-class layer (docs/dynamic.md §9) has its own guards and narrowing (package jvmdyn); this entry only
+	// makes the ecosystem known to the record store, import and status.
+	"jvm": jvm.DynamicSource,
 }
 
 // Supported reports whether eco has a dynamic layer.

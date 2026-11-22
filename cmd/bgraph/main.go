@@ -38,9 +38,9 @@ Usage:
   bgraph index     [--root DIR]
   bgraph mcp       [--root DIR]        (MCP server on stdio)
   bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE] [--node EXE] [--trust-native-env]
-  bgraph record    [--root DIR] [--eco python|node] [--python EXE] [--node EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--json]
+  bgraph record    [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
   bgraph dynamic import [--root DIR] FILE
-  bgraph dynamic status [--root DIR] [--eco python|node] [--python EXE] [--node EXE] [--trust-native-env] [--json]
+  bgraph dynamic status [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--json]
   bgraph doctor                (not implemented)
   bgraph version | help
 `
@@ -208,6 +208,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		for _, c := range plan.Commands {
 			line := shellLine(c.Argv)
+			for i := len(c.Env) - 1; i >= 0; i-- {
+				k, v, _ := strings.Cut(c.Env[i], "=")
+				line = k + "=" + shellQuote(v) + " " + line
+			}
 			if c.Project != "." && c.Project != "" {
 				line = "cd " + shellQuote(c.Project) + " && " + line
 			}

@@ -36,9 +36,11 @@ type Options struct {
 
 // Command is one test-run command.
 type Command struct {
-	Runner   string   `json:"runner"`
-	Project  string   `json:"project"` // working directory, relative to the repo root
-	Argv     []string `json:"argv"`
+	Runner  string   `json:"runner"`
+	Project string   `json:"project"` // working directory, relative to the repo root
+	Argv    []string `json:"argv"`
+	// Env: environment variables (KEY=VALUE) the command needs besides the caller's (e.g. MAVEN_ARGS carrying a class filter).
+	Env      []string `json:"env,omitempty"`
 	ListFile string   `json:"list_file,omitempty"`
 	Batch    int      `json:"batch,omitempty"` // 1..Batches when split into batches
 	Batches  int      `json:"batches,omitempty"`

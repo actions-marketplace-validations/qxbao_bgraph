@@ -293,6 +293,10 @@ type SelectedTest struct {
 	// Dynamic: why the dynamic layer kept this widened unit (a changed file is among its recorded dependencies, or its record
 	// is not usable). Empty when the dynamic layer did not run or the unit is precise.
 	Dynamic string `json:"dynamic,omitempty"`
+	// ClassFilter: the JVM class layer narrowed the unit (docs/dynamic.md §9): the unit is still built, but only the test classes
+	// in Classes run (none when Classes is empty).
+	ClassFilter bool     `json:"class_filter,omitempty"`
+	Classes     []string `json:"classes,omitempty"` // binary names of the top-level test classes to run (with ClassFilter)
 }
 
 // NarrowedTest is a widened unit the dynamic layer removed from the selection (docs/dynamic.md §6).

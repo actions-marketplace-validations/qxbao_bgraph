@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
+	"github.com/qxbao/bgraph/internal/dynamic/jvmdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/model"
@@ -64,6 +65,9 @@ func (ix *Index) ecoEnv(ctx context.Context, eco string, rf *rules.File, t tree.
 		return ix.pythonEnv(ctx, rf, t)
 	case "node":
 		return ix.nodeEnv(ctx, rf, t)
+	case jvmdyn.Eco:
+		env, collector, _, err = ix.jvmEnv(rf, t, nil)
+		return env, collector, err
 	}
 	return "", "", errors.New("no dynamic layer for ecosystem " + eco)
 }
@@ -115,6 +119,10 @@ func (ix *Index) tmpDir() string {
 func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input, res selector.Result) Selection {
 	sel := res.Selection
 	for _, eco := range dynamicEcos(ch.Dynamic, in.Rules) {
+		if eco == jvmdyn.Eco {
+			sel = ix.applyJVMClasses(ctx, in, res, sel) // per-test-class layer: narrows precise units (docs/dynamic.md §9)
+			continue
+		}
 		candidate := false
 		for _, t := range sel.Tests {
 			if t.Widened && res.UnitEco[t.Unit] == eco {

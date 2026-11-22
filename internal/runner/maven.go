@@ -110,10 +110,51 @@ func mavenCommands(k jvmKey, tests []model.SelectedTest, opt Options) ([]Command
 		return []Command{{Runner: jvm.RunnerMaven, Project: k.root, Argv: []string{tool, "verify"},
 			Note: "the module list does not fit the command line (or cannot be passed to -pl): running the whole reactor"}}, []string{mavenNote}
 	}
-	return []Command{
+	cmds := []Command{
 		{Runner: jvm.RunnerMaven, Project: k.root, Argv: []string{tool, "-pl", list, "-am", "-DskipTests", "install"},
 			Note: "step 1 of 2: build and install the selected modules and their upstream modules without running tests"},
-		{Runner: jvm.RunnerMaven, Project: k.root, Argv: []string{tool, "-pl", list, "verify"},
-			Note: "step 2 of 2: test the selected modules only (verify keeps Failsafe integration tests)"},
-	}, []string{mavenNote}
+	}
+	// The JVM class layer (docs/dynamic.md §9.6): modules narrowed to some test classes run in a separate invocation, because
+	// -Dtest applies to every module of an invocation. The class list goes through MAVEN_ARGS (Maven >= 3.9; the environment
+	// is not limited like cmd.exe's command line): an older Maven ignores it and runs every class, a harmless superset.
+	var plain, filtered, compileOnly, classes []string
+	for _, t := range tests {
+		switch {
+		case !t.ClassFilter:
+			plain = append(plain, plEntry(k, t))
+		case len(t.Classes) == 0:
+			compileOnly = append(compileOnly, plEntry(k, t))
+		default:
+			filtered = append(filtered, plEntry(k, t))
+			for _, c := range t.Classes {
+				classes = append(classes, c, c+"$*")
+			}
+		}
+	}
+	plain, filtered = dedupe(plain), dedupe(filtered)
+	if len(plain) > 0 {
+		cmds = append(cmds, Command{Runner: jvm.RunnerMaven, Project: k.root, Argv: []string{tool, "-pl", strings.Join(plain, ","), "verify"},
+			Note: "step 2 of 2: test the selected modules only (verify keeps Failsafe integration tests)"})
+	}
+	if len(filtered) > 0 {
+		cmds = append(cmds, Command{Runner: jvm.RunnerMaven, Project: k.root,
+			Argv: []string{tool, "-pl", strings.Join(filtered, ","), "-Dsurefire.failIfNoSpecifiedTests=false", "verify"},
+			Env:  []string{"MAVEN_ARGS=-Dtest=" + strings.Join(dedupe(classes), ",")},
+			Note: "step 2 of 2: test only the classes the dynamic class layer kept in these modules (class list in MAVEN_ARGS)"})
+	}
+	notes := []string{mavenNote}
+	if len(compileOnly) > 0 {
+		notes = append(notes, "maven: no test class of "+strings.Join(dedupe(compileOnly), ", ")+
+			" reaches a changed file (dynamic class layer): step 1 builds and compiles them, nothing runs there")
+	}
+	return cmds, notes
+}
+
+// plEntry is the -pl entry of a unit (as in the module list above).
+func plEntry(k jvmKey, t model.SelectedTest) string {
+	rel := relFrom(k.root, cleanProject(t.Project))
+	if strings.HasPrefix(rel, "-") || strings.HasPrefix(rel, "!") || strings.HasPrefix(rel, "?") || strings.HasPrefix(rel, ":") {
+		rel = "./" + rel
+	}
+	return rel
 }
