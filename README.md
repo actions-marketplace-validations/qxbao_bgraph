@@ -1,143 +1,83 @@
 # bgraph
 
-Affected-test selection across languages, **fail-closed**: for every change, the output either contains every test
-that could be affected, or widens the scope (project, full suite) with a machine-readable reason. It never silently
-drops a test.
+Affected-test selection across languages, **fail-closed**.
 
-Status: six ecosystems.
+Given a change (a branch, a commit range or your working tree), bgraph tells you which tests can be affected. It reads
+imports, manifests and runner configurations as text, builds a file-level dependency graph of the old and the new tree,
+and walks it backwards from the changed files.
 
-- **Node** (JS/TS, CJS/ESM; Jest, Vitest, Mocha, node:test, Playwright), at test-file granularity.
-- **Rust** (Cargo workspaces and standalone crates; `cargo test`), at Cargo-target granularity: one unit per library
-  (`<pkgdir>::lib`), doc-tests (`::doc`), binary (`::bin:<name>`), integration test (`::test:<name>`), bench and example.
-  Inside a crate the `mod`/`use` graph is not a sound dependency relation, so the module tree only decides which target owns a
-  file. `bgraph command` emits `cargo test -p <package> --lib --test <name> ...` (plus a separate `--doc` command).
+## The promise
 
-- **Python** (pytest; Django's own runner), at test-file granularity. A test file is a unit (`python_files`, `testpaths`,
-  `norecursedirs` and `--doctest-modules` are read from pytest.ini / pyproject.toml / tox.ini / setup.cfg in pytest's order).
-  Imports are resolved against the union of every plausible import root (repo root, project dirs, `src/`, pyproject/setup.cfg
-  package locations, pytest `pythonpath`, rootdir-insertion dirs of tests and conftests, literal `sys.path` edits), including
-  ancestor `__init__.py`, namespace packages and `.pyi` stubs; every conftest above a test, `-p` plugins and `pytest11` entry points
-  are dependencies. Non-constant `importlib`/`__import__`/`sys.path` use is unresolved at project scope and fires only when a loadable file (.py, .pyi, .pyc, .so, .pyd) changes there; `[[dynamic]]` in `bgraph.toml` describes what such a site can load. `bgraph command` emits
-  `python -m pytest --rootdir R -c CFG <files>` (an `@argfile` for long lists needs pytest >= 8.2) or
-  `python tests/runtests.py <labels>` / `python manage.py test <labels>`.
-- **.NET** (MSBuild projects; `dotnet test`), at project granularity: every `.csproj`/`.fsproj`/`.vbproj` is a unit
-  (`dotnet:<project file>`). A file belongs to every ancestor project whose directory contains it (SDK default globs); `Compile`/`None`/
-  `Content`/`EmbeddedResource` includes outside the directory, `ProjectReference` (analyzers included), `<Import>` (shared projects'
-  `.projitems`) and the `Directory.Build.props/targets` / `Directory.Packages.props` that apply to a project are dependencies, so a
-  props change selects exactly its subtree. `Condition` is never evaluated (union). Constructs bgraph cannot evaluate select the
-  project that contains them on any change; `global.json` is full, `nuget.config`/`*.runsettings` select every .NET unit.
-  `bgraph command` emits one `dotnet test <project>` per project (`--project <project>` when `global.json` selects
-  Microsoft.Testing.Platform).
-- **JVM** (Maven; Gradle), at module/project granularity: every Maven module (`maven:<dir>`) and Gradle project
-  (`gradle:<builddir>:<path>`, e.g. `gradle::core:api`) is a unit, read as text (no Maven/Gradle run). A unit owns every file under its
-  directory (nested modules and `target/` / `build/` excluded; files an enclosing module keeps outside `src/` are shared with the
-  nested ones). Edges: Maven `<dependency>` (any scope, `test-jar`), plugins and plugin dependencies that are reactor modules, build
-  extensions, BOM imports and the local `<parent>` chain; Gradle `project(":x")`, `projects.x.y`, `testFixtures(project(..))`,
-  `platform(project(..))`, any configuration, `includeBuild`. Property interpolation (`${project.version}`, `${revision}`) is done;
-  what cannot be resolved or placed widens. Root/shared POMs (except a `<version>`-only change), `.mvn/`, profiles with
-  `<modules>`, Gradle settings and root scripts, `buildSrc/`, `build-logic/`, version catalogs, the wrapper and
-  `gradle.properties` widen to every JVM unit of the build (full at the repo root). `bgraph command` emits
-  `mvn -pl <modules> -am -DskipTests install` then `mvn -pl <modules> verify` (`./mvnw` when present), or `./gradlew :a:test :b:test`.
+For every change, the output either contains **every** test that could be affected, or widens the scope (a project, a
+package, the full suite) with a machine-readable reason. bgraph never silently drops a test. When it cannot be sure (a
+computed import, a build file it cannot evaluate, a CI definition), it selects more and says why; an optional
+[`bgraph.toml`](docs/configuration.md) lets you supply what it could not infer.
 
-- **Go** (modules, `go.work`, vendoring; `go test`), at package granularity, with pure resolution (`go.mod`, `go.work` and
-  `go/parser`; the go command is never run): every directory with a `_test.go` file is a unit (`go:<dir>`, `go:.` for the root).
-  Build constraints and GOOS/GOARCH suffixes are ignored (the union of every configuration). A package depends on every file in
-  its directory, on the files of sub-directories that are not packages (`testdata/`, `_x/`, `.x/`, fixtures), on what its files
-  import (in-repo module paths and local `replace` targets, longest prefix, then `vendor/`; test-only imports reach the package's
-  own unit, not its importers), on its `//go:embed` patterns, and on the existing paths its tests name in string literals
-  (`"../x/testdata/y"`, `filepath.Join("..", "x", ...)`); a cgo package depends on every C/C++/header/assembly file. Files of a
-  module that no package owns are inputs of every package of the module. An in-repo import path with no package in the tree (generated,
-  or not written yet) selects the importer on any change in its module, and a package added there later is caught; a file whose
-  imports do not parse is selected on any change in its module. `go.mod` changes are
-  diffed structurally (comments and `retract` are harmless; `module` widens every Go unit; other directives widen the module and
-  the modules that build with it through `go.work` or a local `replace`); `go.sum` and `vendor/` widen their module; `.go` files
-  under no `go.mod` widen to full. A sub-tree holding another ecosystem's manifest (`package.json`, `pyproject.toml`, `Cargo.toml`,
-  `pom.xml`, Gradle scripts, .NET project files...) and no `.go` file is not owned by Go, so a frontend change under a root `go.mod`
-  selects no Go unit; `//go:embed` patterns and test string literals still reach files there (a Go test reading them through a
-  path built at run time is not seen). A module-level widening also selects modules nested in the module's directory. In
-  `bgraph.toml` rules, Go units are addressed by module directory (or `"."` / `"all"`), not by package directory.
-  `bgraph command` emits one `go test ./a ./b/c` per module, run in the module directory.
+## Supported ecosystems
 
-Lockfiles: `pnpm-lock.yaml` (lockfile 6.x and 9.0), `package-lock.json` (v2/v3) and `Cargo.lock` (v3/v4) are compared at
-level **L1** by default: both sides are parsed and the resolved dependency closure (direct and transitive, through workspace
-links/path dependencies, dev/build/optional and every target included) of every project is diffed; a project whose closure
-changed selects all its tests and, through the graph, the tests of projects that import its files. A change in the closure of
-the lockfile's root project (the workspace tooling: runner, transpiler, plugins) selects every project under the lockfile. An
-unreadable side, a lockfile format change, or a change outside the package graph (overrides, patches, settings) stays at **L0**
-(every project under the lockfile's directory), as do the other lockfile formats. `[lockfile] level = "L2"` in `bgraph.toml`
-(opt-in; npm and pnpm 6.x only, pnpm 9.0 does not record install scripts) narrows a project to the tests that import a direct
-dependency whose closure changed, and falls back to L1 for local/workspace dependencies, install scripts, peer dependencies,
-runner/toolchain/plugin and `@types` packages, a dependency no file of the project imports, and undeclared imports of a changed
-package. Cargo has no L2 (units are whole targets). `level = "L0"` restores the old behaviour.
+| Ecosystem | Unit of selection | Runners / build tools | Details |
+|---|---|---|---|
+| Node (JS/TS, CJS/ESM) | test file | Vitest, Jest, Mocha, AVA, `node --test`, Playwright | [docs/ecosystems/node.md](docs/ecosystems/node.md) |
+| Python | test file (or directory for collection hooks) | pytest, Django's runner | [docs/ecosystems/python.md](docs/ecosystems/python.md) |
+| Rust | Cargo target (`lib`, `doc`, `bin`, `test`, `bench`, `example`) | `cargo test` | [docs/ecosystems/rust.md](docs/ecosystems/rust.md) |
+| JVM | Maven module, Gradle project | Maven, Gradle (wrappers detected) | [docs/ecosystems/jvm.md](docs/ecosystems/jvm.md) |
+| .NET | MSBuild project (`.csproj`, `.fsproj`, `.vbproj`) | `dotnet test` (VSTest, Microsoft.Testing.Platform) | [docs/ecosystems/dotnet.md](docs/ecosystems/dotnet.md) |
+| Go | package | `go test` (modules, `go.work`, vendoring) | [docs/ecosystems/go.md](docs/ecosystems/go.md) |
 
-Other ecosystems are not supported yet: changes there widen to `full`.
+Lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`) are compared by resolved dependency closure, so a bump
+selects only the projects it touches ([lockfiles](docs/lockfiles.md)). Changes in other languages widen to the project
+or to the full suite.
 
-## Usage
+An optional [dynamic layer](docs/dynamic-layer.md) (off by default) narrows widened selections with recorded per-test
+dependencies for Python, Node and JVM test classes.
+
+## Install
 
 ```sh
-go install github.com/qxbao/bgraph/cmd/bgraph@latest   # or: go build -o bgraph ./cmd/bgraph
-
-bgraph affected --base origin/main          # tests affected by the working tree relative to base
-bgraph affected --base A --head B --json    # between two commits, JSON output
-bgraph command --base origin/main           # runner commands (jest --runTestsByPath, vitest run, ...)
-bgraph explain src/a.test.ts                # why a test was selected
-bgraph unresolved                           # unresolved imports, with suggested bgraph.toml rules
+go install github.com/qxbao/bgraph/cmd/bgraph@latest
+# or, from a checkout:
+go build -o bgraph ./cmd/bgraph
 ```
 
-Go library: `bgraph.Open(ctx, root, bgraph.Options{})`, then
-`idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})`.
+bgraph needs `git` on PATH. It never runs your package manager, build tool or test runner to select tests.
 
-Optional `bgraph.toml` at the repository root declares what the tool cannot infer: dependencies no import expresses
-(`[[rule]]`), ignored build outputs that code imports (`[[generated]]`), and runner-config keys computed in code such as
-an alias table built by a script (`[[config]]`). Some entries narrow the selection and are trusted as written, so they
-need a `reason`. [`docs/bgraph.example.toml`](docs/bgraph.example.toml) documents every key with examples, and
-`bgraph unresolved` prints a ready-to-edit snippet for each thing it could not read.
+## Quick start
+
+```sh
+bgraph affected --base origin/main          # tests affected by the working tree relative to base
+bgraph affected --base A --head B --json    # between two commits, as JSON
+bgraph command --base origin/main           # ready-to-run runner commands (vitest run ..., cargo test -p ..., go test ...)
+bgraph explain src/a.test.ts                # why a test was selected
+bgraph unresolved                           # what bgraph could not read, with suggested bgraph.toml entries
+```
+
+Before trusting the selection in CI, run it in **shadow mode**: keep running the full suite and let `bgraph audit` report
+every failure the selection would have skipped ([CLI: audit](docs/cli.md#audit), and a
+[GitHub Actions example](docs/ci/shadow-github-actions.yml)).
+
+bgraph also runs as an MCP server (`bgraph mcp`) and as a Go library:
+
+```go
+idx, err := bgraph.Open(ctx, root, bgraph.Options{})
+sel, err := idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})
+```
 
 Caches live in the user cache directory, never inside the repository.
 
-## Shadow mode
+## Documentation
 
-Before trusting a selection, run it in shadow: CI runs the **full** suite as usual, then audits the results.
+| Page | Content |
+|---|---|
+| [Architecture](docs/architecture.md) | the fail-closed contract, the graph, scope tiers, widening reasons |
+| [Configuration](docs/configuration.md) | `bgraph.toml` reference ([annotated example](docs/bgraph.example.toml)) |
+| [CLI](docs/cli.md) | commands, flags, JSON output, exit codes, shadow audits, MCP |
+| [Lockfiles](docs/lockfiles.md) | levels L0 / L1 / L2 |
+| [Dynamic layer](docs/dynamic-layer.md) | record-based narrowing |
+| [Evaluation](docs/evaluation.md) | how soundness is tested, and the results per ecosystem |
+| [Benchmarks](docs/benchmarks.md) | comparison with general code-graph tools |
 
-```sh
-bgraph audit --results test-results/junit.xml --base origin/main --log shadow.jsonl
-```
-
-`audit` computes the selection for the same change and reports every **failed** test that lies outside it, that is, a
-test the selection would have skipped although it failed. Such a failure is a potential unsafe miss, a flaky test or a
-failure that already existed on the base; the audit cannot tell which, so it reports and a human judges. Switch
-selection on after N clean shadow runs in a row (`--log` appends one JSON line per run and prints the streak).
-
-- Results formats (`--format auto` by default; `--results` may be repeated): JUnit XML, Jest/Vitest JSON,
-  Playwright JSON. Failures that cannot be attributed to a known test file (e.g. JUnit from Mocha with describe names
-  only) are listed as `unmapped`, never dropped.
-- Exit codes: `0` clean, `3` at least one missed failure (with `--strict`, also an unmapped one), `1` error
-  (unreadable results, git error), `2` usage.
-- A run whose scope is `full` (no base, shallow clone, global input changed) is trivially clean.
-
-A ready-to-adapt GitHub Actions workflow is in [`docs/ci/shadow-github-actions.yml`](docs/ci/shadow-github-actions.yml).
-
-## MCP
-
-`bgraph mcp [--root DIR]` runs an MCP server on stdio (one index per session, so repeated queries are fast). Tools:
-
-- `affected_tests` — `{base?, head?, previously_failed?, limit?}`: the selection (scope, tests with reasons, widening, warnings).
-- `dependents_of` — `{files, rev?, limit?}`: who depends on the files, with the dependency chain and the unresolved imports that may too.
-- `explain_selection` — `{target, base?, head?, limit?}`: why a test is selected / where a file leads.
-
-Results are size-bounded (`limit`, default 200): when a list is cut, `truncated` is true and the `*_total` counts give the real
-size. The `widening`, `warnings` and `unresolved` sections are always present; `scope: full` means run the whole suite.
-
-```json
-{
-  "mcpServers": {
-    "bgraph": { "command": "bgraph", "args": ["mcp", "--root", "/path/to/repo"] }
-  }
-}
-```
-
-With Claude Code: `claude mcp add bgraph -- bgraph mcp --root /path/to/repo`.
+The full index is [docs/README.md](docs/README.md).
 
 ## License
 
-Apache License 2.0 — see `LICENSE` and `THIRD_PARTY_LICENSES`.
+Apache License 2.0; see [LICENSE](LICENSE) and [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
