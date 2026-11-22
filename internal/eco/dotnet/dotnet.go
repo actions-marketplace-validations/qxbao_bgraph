@@ -35,7 +35,11 @@
 // Properties are evaluated for each project over the union of every definition found in the project and its import closure
 // ($(MSBuildThisFileDirectory), $(MSBuildProjectDirectory), $(SolutionDir) when a .sln/.slnx sits in an ancestor directory,
 // [MSBuild]::GetPathOfFileAbove/NormalizePath/NormalizeDirectory/EnsureTrailingSlash, System.IO.Path.Combine...). $(Configuration) and
-// the like become "*", build output properties drop the item, toolchain locations are ignored. A Condition is never evaluated: every
+// the like become "*", build output properties drop the item, toolchain locations are ignored. Under a Condition, a property defined
+// nowhere in the repository (SDK, command line, environment) is "*" inside a path segment and "any directories" ("**/*") when it starts
+// a segment glued to a name ($(RepositoryEngineeringDir)x.targets); a whole-segment one stays Unresolved. When the nearest global.json
+// names the Arcade SDK, its layout properties are known: $(RepoRoot) is the global.json directory, $(RepositoryEngineeringDir) its eng/
+// and $(ArtifactsDir) and the like are build output. A Condition is never evaluated: every
 // conditional ProjectReference, Import and item counts as present. The plan (§6.5) forces a full run for a Condition on a
 // ProjectReference/Import; the union is a superset of every branch, so it cannot miss a dependency and keeps conditional references
 // (TargetFramework-specific ones are everywhere) from widening everything.
@@ -88,7 +92,7 @@ const Name = "dotnet"
 const Runner = "dotnet"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "dotnet-2"
+const AnalyzerVersion = "dotnet-3"
 
 // Eco is the .NET ecosystem.
 type Eco struct{}
@@ -144,7 +148,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, _ eco.Scanner) (*eco.Ana
 		return a, nil
 	}
 	b := &builder{t: t, a: a, seen: map[edgeKey]bool{}, files: map[string]*msFile{}, seenU: map[string]bool{},
-		projSet: map[string]bool{}, projDirs: map[string][]string{}, mtp: map[string]string{}}
+		projSet: map[string]bool{}, projDirs: map[string][]string{}, mtp: map[string]string{}, globs: map[string][]string{}, arc: map[string]string{}, strs: map[string]string{}}
 	for _, p := range projects {
 		b.projSet[p] = true
 		d := path.Dir(p)
@@ -199,6 +203,9 @@ type builder struct {
 	projSet  map[string]bool     // project file → true
 	projDirs map[string][]string // directory → project files in it
 	mtp      map[string]string   // directory → global.json selecting MTP (memo)
+	globs    map[string][]string // glob → matching files (memo)
+	arc      map[string]string   // directory → global.json selecting the Arcade SDK (memo)
+	strs     map[string]string   // interned strings
 }
 
 func (b *builder) edge(from, to string, kind model.EdgeKind, spec string) {
@@ -207,7 +214,16 @@ func (b *builder) edge(from, to string, kind model.EdgeKind, spec string) {
 		return
 	}
 	b.seen[k] = true
-	b.a.Edges = append(b.a.Edges, model.Edge{From: from, To: to, Kind: kind, Spec: spec, Provenance: model.ProvScan})
+	// Specs and targets repeat across the projects that share a props file: keep one copy of each string.
+	b.a.Edges = append(b.a.Edges, model.Edge{From: b.intern(from), To: b.intern(to), Kind: kind, Spec: b.intern(spec), Provenance: model.ProvScan})
+}
+
+func (b *builder) intern(s string) string {
+	if v, ok := b.strs[s]; ok {
+		return v
+	}
+	b.strs[s] = s
+	return s
 }
 
 func (b *builder) role(p string, r model.Role) {
@@ -357,6 +373,13 @@ func (b *builder) analyzeProject(p string, slnDirs []string) {
 		}
 	}
 	c.add(p)
+	if g := b.arcade(dir); g != "" {
+		// The Arcade SDK (RepoLayout.props) defines the repository layout from the global.json that names it.
+		for k, v := range map[string]string{"reporoot": "$(MSBuildThisFileDirectory)", "repositoryengineeringdir": "$(MSBuildThisFileDirectory)eng/",
+			"repositoryengineeringcommondir": "$(MSBuildThisFileDirectory)eng/common/"} {
+			c.env.props[k] = append(c.env.props[k], propVal{raw: v, file: g})
+		}
+	}
 	for _, name := range implicitImports {
 		if f, ok := b.nearestAbove(dir, name); ok {
 			b.edge(node, f, model.EdgeImplicit, name)
@@ -510,12 +533,8 @@ func (c *closure) resolveImport(f *msFile, imp importDef) (bool, error) {
 				g := globOf(tg.rel)
 				b.edge(f.path, g, model.EdgePattern, "Import "+imp.project)
 				b.edge(c.node, g, model.EdgePattern, "Import "+imp.project)
-				if gp, err := glob.Compile(g); err == nil {
-					for _, x := range b.t.Files() {
-						if gp.Match(x) {
-							c.imported(f, x, imp)
-						}
-					}
+				for _, x := range b.matchFiles(g) {
+					c.imported(f, x, imp)
 				}
 			case b.t.Has(tg.rel):
 				c.imported(f, tg.rel, imp)
@@ -530,6 +549,23 @@ func (c *closure) resolveImport(f *msFile, imp importDef) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+// matchFiles returns the files of the tree that glob g matches (memoized: the same import pattern recurs in every project below it).
+func (b *builder) matchFiles(g string) []string {
+	if m, ok := b.globs[g]; ok {
+		return m
+	}
+	var m []string
+	if gp, err := glob.Compile(g); err == nil {
+		for _, x := range b.t.Files() {
+			if gp.Match(x) {
+				m = append(m, x)
+			}
+		}
+	}
+	b.globs[g] = m
+	return m
 }
 
 func (c *closure) imported(from *msFile, to string, imp importDef) {
@@ -577,6 +613,11 @@ func (c *closure) items(f *msFile) {
 	}
 }
 
+// fileItems: item types whose Include always names files.
+var fileItems = map[string]bool{"compile": true, "none": true, "content": true, "embeddedresource": true, "additionalfiles": true,
+	"analyzer": true, "reference": true, "page": true, "resource": true, "apptxcontent": true, "editorconfigfiles": true,
+	"globalanalyzerconfigfiles": true, "codeanalysisdictionary": true, "trimmerrootdescriptor": true, "compilerinputs": true}
+
 func (c *closure) item(f *msFile, it itemDef, lt, v string) {
 	b := c.b
 	spec := it.typ + " " + it.include
@@ -595,7 +636,10 @@ func (c *closure) item(f *msFile, it itemDef, lt, v string) {
 			c.projectRef(f, tg.rel, it, spec)
 			continue
 		}
-		pathLike := strings.Contains(tg.rel, "/") || hasWildcard(tg.rel) || b.t.Has(tg.rel) || lt == "hintpath"
+		// The written value decides whether it is a path (tg.rel always has a separator once joined with the base): a word of a
+		// non-file item (<SequenceOfIntegers Include="0;1;2" />) that names no file is not an input; a file item type keeps a
+		// not-yet-existing bare name (a later-added file).
+		pathLike := strings.ContainsAny(v, `/\`) || hasWildcard(v) || b.t.Has(tg.rel) || lt == "hintpath" || fileItems[lt]
 		if !pathLike {
 			continue
 		}
@@ -647,6 +691,23 @@ func (c *closure) projectRef(f *msFile, rel string, it itemDef, spec string) {
 			c.unresolved(f, spec, "ProjectReference to a file that does not exist: "+rel)
 		}
 	}
+}
+
+var arcadeRe = regexp.MustCompile(`"Microsoft\.DotNet\.Arcade\.Sdk"\s*:`)
+
+// arcade returns the global.json at or above dir when it selects the Arcade SDK (msbuild-sdks), else "".
+func (b *builder) arcade(dir string) string {
+	if v, ok := b.arc[dir]; ok {
+		return v
+	}
+	res := ""
+	if g, ok := b.nearestAbove(dir, "global.json"); ok {
+		if src, err := b.t.Read(g); err == nil && arcadeRe.Match(src) {
+			res = g
+		}
+	}
+	b.arc[dir] = res
+	return res
 }
 
 var mtpRe = regexp.MustCompile(`(?i)"runner"\s*:\s*"Microsoft\.Testing\.Platform"`)

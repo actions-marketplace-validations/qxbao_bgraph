@@ -1,0 +1,26 @@
+Under a Condition an undefined property that starts a path segment and is glued to a file name ($(EngDir)contract.targets, as Arcade's $(RepositoryEngineeringDir)) is a directory prefix that may hold separators: files in any directory match, so the ProjectReference added by eng/contract.targets is seen.
+-- base/Directory.Build.targets --
+<Project><Import Project="$(EngDir)contract.targets" Condition="'$(IsSource)' == 'true'" /></Project>
+-- base/eng/contract.targets --
+<Project>
+  <ItemGroup>
+    <ProjectReference Include="$(MSBuildThisFileDirectory)../src/Lib/Lib.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Lib/Lib.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Lib/l.cs --
+class L {}
+-- head/src/Lib/l.cs --
+class L { int x; }
+-- want --
+notfull
+nowiden unknown_import
+select dotnet:src/App/App.csproj
+select dotnet:src/Lib/Lib.csproj

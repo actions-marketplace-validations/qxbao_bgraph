@@ -5,6 +5,7 @@ package graph
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/eco"
@@ -28,6 +29,12 @@ type Graph struct {
 	Unresolved []model.Unresolved
 }
 
+// unresolvedKey identifies an Unresolved for deduplication (every field).
+func unresolvedKey(u model.Unresolved) string {
+	return strings.Join(append([]string{u.File, u.Spec, string(u.Class), strconv.Itoa(u.Line), fmt.Sprint(u.ScopeTier), u.ScopeDir,
+		u.Detail}, u.TriggerGlobs...), "\x00")
+}
+
 // Build unions the Analyses. Duplicate edges (From, To, Kind) are kept once.
 func Build(as ...*eco.Analysis) *Graph {
 	g := &Graph{rev: map[string][]model.Edge{}, roles: map[string]model.Role{}}
@@ -37,6 +44,7 @@ func Build(as ...*eco.Analysis) *Graph {
 	}
 	seen := map[key]bool{}
 	seenU := map[string]bool{}
+	compiled := map[string]*glob.Pattern{}
 	for _, a := range as {
 		if a == nil {
 			continue
@@ -54,7 +62,15 @@ func Build(as ...*eco.Analysis) *Graph {
 			}
 			seen[k] = true
 			if e.Kind == model.EdgePattern {
-				pat, err := glob.Compile(e.To)
+				// The same pattern recurs on many edges (one per project that names it): compile it once.
+				pat, ok := compiled[e.To]
+				var err error
+				if !ok {
+					pat, err = glob.Compile(e.To)
+					if err == nil {
+						compiled[e.To] = pat
+					}
+				}
 				if err != nil {
 					g.badPattern = append(g.badPattern, e)
 					continue
@@ -70,7 +86,7 @@ func Build(as ...*eco.Analysis) *Graph {
 			g.rev[e.To] = append(g.rev[e.To], e)
 		}
 		for _, u := range a.Unresolved {
-			if k := fmt.Sprintf("%#v", u); !seenU[k] {
+			if k := unresolvedKey(u); !seenU[k] {
 				seenU[k] = true
 				g.Unresolved = append(g.Unresolved, u)
 			}

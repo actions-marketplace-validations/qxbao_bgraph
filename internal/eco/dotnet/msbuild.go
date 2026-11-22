@@ -231,7 +231,8 @@ var scalarProps = map[string]bool{"configuration": true, "platform": true, "targ
 var outputProps = map[string]bool{"outdir": true, "outputpath": true, "intermediateoutputpath": true, "baseintermediateoutputpath": true,
 	"baseoutputpath": true, "targetdir": true, "targetpath": true, "projectextensionspath": true, "msbuildprojectextensionspath": true,
 	"targetfilename": true, "documentationfile": true, "packageoutputpath": true, "publishdir": true, "nugetpackageroot": true,
-	"nugetpackagesdirectory": true, "artifactspath": true, "artifactsbinoutput": true, "userprofile": true, "homedrive": true, "homepath": true, "home": true}
+	"nugetpackagesdirectory": true, "artifactspath": true, "artifactsdir": true, "artifactsbindir": true, "artifactsobjdir": true,
+	"artifactstmpdir": true, "artifactslogdir": true, "artifactspackagesdir": true, "artifactsshippingpackagesdir": true, "artifactsbinoutput": true, "userprofile": true, "homedrive": true, "homepath": true, "home": true}
 
 // externalProps are the locations of the installed toolchain.
 var externalProps = map[string]bool{"msbuildtoolspath": true, "msbuildbinpath": true, "msbuildextensionspath": true,
@@ -248,6 +249,10 @@ func (e *env) eval(s string, this string, depth int) ([]string, error) {
 		return nil, errors.New("item list or metadata reference")
 	}
 	results := []string{""}
+	// segStart: the text before the next $( ends a path segment (start of the string, a separator, or another property whose value
+	// may end with one).
+	// atStart: nothing precedes the property, so a directory prefix in it can be anywhere in the repository.
+	segStart, atStart := true, true
 	for len(s) > 0 {
 		i := strings.Index(s, "$(")
 		if i < 0 {
@@ -256,15 +261,28 @@ func (e *env) eval(s string, this string, depth int) ([]string, error) {
 		}
 		if i > 0 {
 			results = appendAll(results, []string{s[:i]})
+			segStart = s[i-1] == '/' || s[i-1] == '\\'
+			atStart = atStart && strings.TrimSpace(s[:i]) == ""
 		}
 		j := matchParen(s, i+1)
 		if j < 0 {
 			return nil, errors.New("unbalanced $(")
 		}
-		// A path fragment glued to literal text of its segment ("eng/$(ProjectType).targets") can stand for "*"; a whole segment
-		// ("$(HumanizerProject)") may hold a path with separators, which "*" does not cover.
-		bounded := (i > 0 && s[i-1] != '/' && s[i-1] != '\\') || (j+1 < len(s) && s[j+1] != '/' && s[j+1] != '\\')
-		vals, err := e.evalExpr(s[i+2:j], this, depth, bounded)
+		// How an undefined property under a Condition is replaced: a fragment glued to literal text inside its segment
+		// ("eng/$(ProjectType).targets") is "*"; one that starts its segment and is glued to a name ("$(RepositoryEngineeringDir)x.targets")
+		// is a directory prefix that may hold separators and point anywhere in the repository ("<root>/**/*"); a whole segment
+		// ("$(HumanizerProject)") may be any path and stays an error.
+		gluedRight := j+1 < len(s) && s[j+1] != '/' && s[j+1] != '\\'
+		mode := subNone
+		switch {
+		case segStart && gluedRight && atStart:
+			mode = subRootPrefix
+		case segStart && gluedRight:
+			mode = subPrefix
+		case !segStart:
+			mode = subFragment
+		}
+		vals, err := e.evalExpr(s[i+2:j], this, depth, mode)
 		if err != nil {
 			return nil, err
 		}
@@ -273,14 +291,30 @@ func (e *env) eval(s string, this string, depth int) ([]string, error) {
 			return nil, errors.New("too many property combinations")
 		}
 		s = s[j+1:]
+		segStart, atStart = true, false
 	}
 	return results, nil
 }
+
+// Lenient substitution modes of an undefined property (see eval).
+const (
+	subNone       = iota // whole path segment: no substitution
+	subFragment          // inside a segment: "*"
+	subPrefix            // starts a segment after literal text, glued to a name: any directories below it ("**/*")
+	subRootPrefix        // starts the whole string, glued to a name: any directory of the repository
+)
 
 func appendAll(prefixes, suffixes []string) []string {
 	out := make([]string, 0, len(prefixes)*len(suffixes))
 	for _, p := range prefixes {
 		for _, s := range suffixes {
+			if p != "" {
+				// A root-anywhere prefix (subRootPrefix) that ended up after text, through a property whose value starts with it:
+				// any directories below that text.
+				if rest, ok := strings.CutPrefix(s, vroot+"/**/*"); ok {
+					s = "**/*" + rest
+				}
+			}
 			out = append(out, p+s)
 		}
 	}
@@ -314,7 +348,7 @@ func matchParen(s string, open int) int {
 	return -1
 }
 
-func (e *env) evalExpr(expr, this string, depth int, bounded bool) ([]string, error) {
+func (e *env) evalExpr(expr, this string, depth int, mode int) ([]string, error) {
 	expr = strings.TrimSpace(expr)
 	if strings.HasPrefix(expr, "[") {
 		return e.evalFunc(expr, this, depth)
@@ -384,8 +418,15 @@ func (e *env) evalExpr(expr, this string, depth int, bounded bool) ([]string, er
 	case externalProps[name]:
 		return nil, errExternal
 	}
-	if e.lenient && bounded {
-		return []string{"*"}, nil
+	if e.lenient {
+		switch mode {
+		case subFragment:
+			return []string{"*"}, nil
+		case subPrefix:
+			return []string{"**/*"}, nil
+		case subRootPrefix:
+			return []string{vroot + "/**/*"}, nil
+		}
 	}
 	return nil, errors.New("undefined property $(" + expr + ")")
 }

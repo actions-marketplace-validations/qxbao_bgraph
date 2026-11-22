@@ -1,0 +1,36 @@
+In a repository built with the Arcade SDK (named in global.json msbuild-sdks), $(RepoRoot) and $(RepositoryEngineeringDir) are the global.json directory and its eng/: an import through them resolves without widening, and a ProjectReference it adds is a dependency.
+-- base/global.json --
+{ "sdk": { "version": "8.0.100" }, "msbuild-sdks": { "Microsoft.DotNet.Arcade.Sdk": "8.0.0-beta.1" } }
+-- base/Directory.Build.targets --
+<Project>
+  <Import Project="Sdk.targets" Sdk="Microsoft.DotNet.Arcade.Sdk" />
+  <Import Project="$(RepositoryEngineeringDir)contract.targets" />
+</Project>
+-- base/eng/contract.targets --
+<Project>
+  <ItemGroup>
+    <ProjectReference Include="$(RepoRoot)src/Lib/Lib.csproj" />
+  </ItemGroup>
+</Project>
+-- base/src/App/App.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Lib/Lib.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- base/src/Lib/l.cs --
+class L {}
+-- base/src/Free/Free.csproj --
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net8.0</TargetFramework></PropertyGroup>
+</Project>
+-- head/src/Lib/l.cs --
+class L { int x; }
+-- want --
+notfull
+nowiden unknown_import
+select dotnet:src/App/App.csproj
+select dotnet:src/Lib/Lib.csproj
+select dotnet:src/Free/Free.csproj
