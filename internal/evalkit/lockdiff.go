@@ -466,6 +466,28 @@ func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath 
 		if b, err := os.ReadFile(lp); err == nil {
 			os.WriteFile(lp, stripPnpmEnvDocument(b), 0o644)
 		}
+		// pnpm 10 refuses manifests that require a newer node or pnpm; the engines do not change the lockfile's graph.
+		filepath.WalkDir(dst, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() || d.Name() != "package.json" {
+				return nil
+			}
+			b, _ := os.ReadFile(p)
+			var m map[string]any
+			if json.Unmarshal(b, &m) != nil {
+				return nil
+			}
+			_, e1 := m["engines"]
+			_, e2 := m["packageManager"]
+			_, e3 := m["devEngines"]
+			if e1 || e2 || e3 {
+				delete(m, "engines")
+				delete(m, "packageManager")
+				delete(m, "devEngines")
+				nb, _ := json.Marshal(m)
+				os.WriteFile(p, nb, 0o644)
+			}
+			return nil
+		})
 		args := append(append([]string(nil), o.Pnpm[1:]...), "list", "-r", "--depth", "Infinity", "--json", "--lockfile-only")
 		out, errb, err := runTool(ctx, dst, o.Env, o.Pnpm[0], args...)
 		var projs []pnpmProject
