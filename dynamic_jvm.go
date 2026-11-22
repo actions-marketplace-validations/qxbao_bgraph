@@ -48,7 +48,7 @@ func (ix *Index) applyJVMClasses(ctx context.Context, in selector.Input, res sel
 		}
 		changes = append(changes, dynamic.Change{Path: c.Path, Status: c.Status, OldMode: c.OldMode, NewMode: c.NewMode,
 			BaseRole: roles[0], HeadRole: roles[1], Global: c.Global, Claimed: len(c.Claimed) > 0,
-			Declared: dynamic.Declared(in.Rules, c.Path), Rule: c.Rule, Referenced: c.Dependents, OtherRole: other})
+			Declared: dynamic.Declared(in.Rules, c.Path), Rule: c.Rule, Referenced: c.Dependents, OtherRole: other, Linked: c.Linked})
 	}
 	if why := jvmdyn.Guard(sel, changes, in.BaseTree, in.HeadTree); why != "" {
 		return dynamic.Skip(sel, jvmdyn.Eco, why)

@@ -1,0 +1,25 @@
+A Python package directory reached through a symlink: tests import pkg, and pkg -> impl/pkg_v2. Changing the
+target module selects the test that imports it through the link.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/impl/pkg_v2/__init__.py --
+-- base/impl/pkg_v2/leaf.py --
+X = 1
+-- base/impl/pkg_v2/other.py --
+Y = 1
+-- link:base/pkg --
+impl/pkg_v2
+-- base/tests/test_leaf.py --
+from pkg.leaf import X
+-- base/tests/test_other.py --
+from pkg.other import Y
+-- head/impl/pkg_v2/leaf.py --
+X = 2
+-- want --
+notfull
+precise tests/test_leaf.py
+nowiden unknown_import
+noselect tests/test_other.py
+nowiden symlink_outside

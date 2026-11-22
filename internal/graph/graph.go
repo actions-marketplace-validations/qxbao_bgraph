@@ -139,10 +139,22 @@ func (g *Graph) IsNode(p string) bool {
 	return g.HasDependents(p)
 }
 
-// HasDependents: p has an incoming edge (direct or glob).
-func (g *Graph) HasDependents(p string) bool {
-	if len(g.rev[p]) > 0 {
-		return true
+// HasDependents: p has an incoming edge (direct or glob). A symlink edge counts only when its alias (the path that reads p through a
+// link) is itself a test or has dependents: an alias nobody uses does not make p used.
+func (g *Graph) HasDependents(p string) bool { return g.hasDependents(p, map[string]bool{p: true}) }
+
+func (g *Graph) hasDependents(p string, seen map[string]bool) bool {
+	for _, e := range g.rev[p] {
+		if e.Kind != model.EdgeSymlink {
+			return true
+		}
+		if seen[e.From] {
+			continue
+		}
+		seen[e.From] = true
+		if g.roles[e.From] == model.RoleTest || g.hasDependents(e.From, seen) {
+			return true
+		}
 	}
 	found := false
 	g.candidates(p, func(pe patternEdge) bool {
@@ -153,6 +165,17 @@ func (g *Graph) HasDependents(p string) bool {
 		return true
 	})
 	return found
+}
+
+// Aliases returns the paths that read p through a symbolic link (the sources of the symlink edges to p), sorted.
+func (g *Graph) Aliases(p string) []string {
+	var out []string
+	for _, e := range g.rev[p] {
+		if e.Kind == model.EdgeSymlink {
+			out = append(out, e.From)
+		}
+	}
+	return out
 }
 
 // candidates calls f with every pattern that could match p: those whose static prefix is "" or an ancestor directory of p

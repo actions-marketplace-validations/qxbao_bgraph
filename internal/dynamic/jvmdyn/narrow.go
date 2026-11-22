@@ -47,6 +47,8 @@ func Guard(sel model.Selection, changes []dynamic.Change, base, head tree.Tree) 
 			why = fmt.Sprintf("mode changed %s -> %s", c.OldMode, c.NewMode)
 		case c.NewMode != "100644" && c.NewMode != "100755":
 			why = "mode " + c.NewMode + " is not a regular file"
+		case c.Linked:
+			why = "read through a symbolic link (the recorded path may be the link's)"
 		case c.Global:
 			why = "global input"
 		case c.Claimed:

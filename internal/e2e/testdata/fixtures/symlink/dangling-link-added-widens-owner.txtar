@@ -1,0 +1,19 @@
+A dangling symlink (its target is not in the tree) cannot be followed: adding one widens with symlink_outside to the
+owning project.
+-- base/apps/a/package.json --
+{"name":"a","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/a/src/a.test.ts --
+import { test } from 'vitest'
+test('a', () => {})
+-- base/apps/b/package.json --
+{"name":"b","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/b/src/b.test.ts --
+import { test } from 'vitest'
+test('b', () => {})
+-- link:head/apps/a/src/gen.ts --
+../generated/gen.ts
+-- want --
+widen symlink_outside
+scope module
+select apps/a/src/a.test.ts
+noselect apps/b/src/b.test.ts

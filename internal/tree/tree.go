@@ -11,6 +11,10 @@ import (
 
 // Tree is a read-only snapshot of the repo's file set (tracked + untracked non-ignored). Paths follow the
 // model convention: root-relative, forward slashes, case-sensitive per git's index.
+//
+// Symbolic links (git mode 120000) are followed when the target is inside the tree (see Linker): a file link is a file that reads
+// its target, a directory link behaves as if the target directory's files were present under the link path. A directory link
+// and a link that cannot be followed are not files.
 type Tree interface {
 	// Files returns every file, sorted. Contains no directories.
 	Files() []string
@@ -26,21 +30,35 @@ type Tree interface {
 	FoldLookup(p string) []string
 }
 
-// MapTree is an in-memory Tree, used for tests and fixtures.
+// MapTree is an in-memory Tree, used for tests and fixtures. It follows its symbolic links (see Linker).
 type MapTree struct {
+	*LinkView
 	files map[string]string
-	list  []string
 	dirs  map[string]bool
 	fold  map[string][]string
 }
 
+var _ Linker = (*MapTree)(nil)
+
 // NewMapTree builds a tree from a map of path → content.
-func NewMapTree(files map[string]string) *MapTree {
+func NewMapTree(files map[string]string) *MapTree { return NewMapTreeLinks(files, nil) }
+
+// NewMapTreeLinks builds a tree from a map of path → content and a map of symbolic link path → target (as git stores it).
+func NewMapTreeLinks(files, links map[string]string) *MapTree {
 	t := &MapTree{files: map[string]string{}, dirs: map[string]bool{}, fold: map[string][]string{}}
+	var list []string
 	for p, c := range files {
 		p = path.Clean(strings.ReplaceAll(p, "\\", "/"))
 		t.files[p] = c
-		t.list = append(t.list, p)
+		list = append(list, p)
+	}
+	slices.Sort(list)
+	ls := map[string]string{}
+	for p, tg := range links {
+		ls[path.Clean(strings.ReplaceAll(p, "\\", "/"))] = tg
+	}
+	t.LinkView = FollowLinks(list, func(p string) bool { _, ok := t.files[p]; return ok }, ls)
+	for _, p := range t.LinkView.Files() {
 		for d := path.Dir(p); d != "."; d = path.Dir(d) {
 			t.dirs[d] = true
 		}
@@ -48,31 +66,29 @@ func NewMapTree(files map[string]string) *MapTree {
 		k := strings.ToLower(p)
 		t.fold[k] = append(t.fold[k], p)
 	}
-	slices.Sort(t.list)
 	for _, v := range t.fold {
 		slices.Sort(v)
 	}
 	return t
 }
 
-func (t *MapTree) Files() []string { return t.list }
 func (t *MapTree) Has(p string) bool {
-	_, ok := t.files[p]
+	_, ok := t.Real(p)
 	return ok
 }
 func (t *MapTree) IsDir(p string) bool { return t.dirs[p] }
 func (t *MapTree) Read(p string) ([]byte, error) {
-	c, ok := t.files[p]
+	r, ok := t.Real(p)
 	if !ok {
 		return nil, fs.ErrNotExist
 	}
-	return []byte(c), nil
+	return []byte(t.files[r]), nil
 }
 func (t *MapTree) Key(p string) string {
-	c, ok := t.files[p]
+	r, ok := t.Real(p)
 	if !ok {
 		return ""
 	}
-	return BlobKey([]byte(c))
+	return BlobKey([]byte(t.files[r]))
 }
 func (t *MapTree) FoldLookup(p string) []string { return t.fold[strings.ToLower(p)] }

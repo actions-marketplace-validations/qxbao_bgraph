@@ -142,7 +142,7 @@ func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input,
 			}
 			changes = append(changes, dynamic.Change{Path: c.Path, Status: c.Status, OldMode: c.OldMode, NewMode: c.NewMode,
 				BaseRole: roles[0], HeadRole: roles[1], Global: c.Global, Claimed: len(c.Claimed) > 0,
-				Declared: dynamic.Declared(in.Rules, c.Path), Rule: c.Rule, Referenced: c.Dependents, OtherRole: other})
+				Declared: dynamic.Declared(in.Rules, c.Path), Rule: c.Rule, Referenced: c.Dependents, OtherRole: other, Linked: c.Linked})
 		}
 		if why := dynamic.Guard(sel, changes, eco); why != "" {
 			sel = dynamic.Skip(sel, eco, why)

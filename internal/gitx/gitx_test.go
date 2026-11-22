@@ -328,10 +328,18 @@ func TestTypeChangeAndGitlinkAndSymlink(t *testing.T) {
 	if ct.Mode("link") != "120000" {
 		t.Errorf("Mode(link)=%s", ct.Mode("link"))
 	}
+	// A link is followed: it reads its target file and has its key; the raw entry keeps the blob holding the target text.
 	b, err := ct.Read("link")
-	if err != nil || string(b) != "target.txt" {
+	if err != nil || string(b) != "target.txt-content" {
 		t.Fatalf("Read(link)=%q,%v", b, err)
 	}
+	if ct.Key("link") != ct.Key("target.txt") || ct.EntryOID("link") != lnk {
+		t.Errorf("Key(link)=%s EntryOID(link)=%s", ct.Key("link"), ct.EntryOID("link"))
+	}
+	if b, err := wt.Read("link"); err != nil || string(b) != "target.txt-content" || wt.Key("link") != wt.Key("target.txt") {
+		t.Errorf("WorkTree Read(link)=%q,%v", b, err)
+	}
+	eq(t, ct.Entries(), []string{"link", "t.ts", "target.txt"})
 }
 
 func hashObject(t testing.TB, dir, content string) string {

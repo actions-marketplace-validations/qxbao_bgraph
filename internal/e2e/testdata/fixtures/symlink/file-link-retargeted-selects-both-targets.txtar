@@ -1,0 +1,28 @@
+Retargeting a file symlink (src/util.ts: ../shared/v1.ts -> ../shared/v2.ts) changes what the link path reads: the
+test importing the link is selected, and so are the dependents of the old and the new target; an unrelated test is not.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/shared/v1.ts --
+export const add = (a: number, b: number) => a + b
+-- base/shared/v2.ts --
+export const add = (a: number, b: number) => b + a
+-- link:base/src/util.ts --
+../shared/v1.ts
+-- link:head/src/util.ts --
+../shared/v2.ts
+-- base/src/util.test.ts --
+import { add } from './util'
+-- base/src/v1.test.ts --
+import { add } from '../shared/v1'
+-- base/src/v2.test.ts --
+import { add } from '../shared/v2'
+-- base/src/other.test.ts --
+export {}
+-- want --
+notfull
+precise src/util.test.ts
+select src/v1.test.ts
+select src/v2.test.ts
+noselect src/other.test.ts
+nowiden symlink_outside
+nowiden unknown_file

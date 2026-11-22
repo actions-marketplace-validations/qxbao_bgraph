@@ -1,0 +1,54 @@
+A Go package whose testdata directory is a symlink to another package's testdata (a/testdata -> ../b/testdata): changing a
+file under the target selects both packages (their tests read it), and not an unrelated package.
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- link:base/a/testdata --
+../b/testdata
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/testdata/input.json --
+{}
+-- base/c/c.go --
+package c
+
+func C() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/b/testdata/input.json --
+{"x":1}
+-- want --
+notfull
+select go:a
+select go:b
+noselect go:c
+nowiden symlink_outside

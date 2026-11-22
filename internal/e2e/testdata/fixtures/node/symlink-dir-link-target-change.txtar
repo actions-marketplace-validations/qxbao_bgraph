@@ -1,0 +1,25 @@
+A directory symlink behaves as if the target directory's files were under the link path: changing packages/lib/x.ts
+selects the test that imports ./lib/x through the link src/lib -> ../packages/lib.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/packages/lib/x.ts --
+export const x = 1
+-- base/packages/lib/y.ts --
+export const y = 1
+-- link:base/src/lib --
+../packages/lib
+-- base/src/x.test.ts --
+import { x } from './lib/x'
+import { test } from 'vitest'
+test('x', () => x)
+-- base/src/y.test.ts --
+import { y } from './lib/y'
+import { test } from 'vitest'
+test('y', () => y)
+-- head/packages/lib/x.ts --
+export const x = 2
+-- want --
+scope graph
+select src/x.test.ts
+noselect src/y.test.ts
+nowiden symlink_outside

@@ -1,0 +1,20 @@
+A glob over a directory symlink reaches the target's files: a page added later under the target directory selects the
+test of the file whose import.meta.glob names the link directory.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/src/routes.ts --
+export const pages = import.meta.glob('./pages/*.ts')
+-- link:base/src/pages --
+../content/pages
+-- base/content/pages/home.ts --
+export default 1
+-- base/src/a.test.ts --
+import { pages } from './routes'
+-- base/src/b.test.ts --
+export {}
+-- head/content/pages/about.ts --
+export default 2
+-- want --
+select src/a.test.ts
+noselect src/b.test.ts
+notfull

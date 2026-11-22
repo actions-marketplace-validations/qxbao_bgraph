@@ -44,7 +44,7 @@ func (ix *Index) Dependents(ctx context.Context, q DependentsQuery) (DependentsR
 	if err != nil {
 		return res, err
 	}
-	g := graph.Build(an.Analyses...)
+	g := graph.Build(append(slices.Clip(an.Analyses), eco.LinkAnalysis(an.Tree))...)
 
 	var seeds []graph.Seed
 	for _, f := range q.Files {

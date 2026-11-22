@@ -109,12 +109,12 @@ func (e memoEco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis)
 	return e.Ecosystem.ClassifyChange(p, base, head, a)
 }
 
-// snapshotPath: the analysis snapshot file for (ecosystem, version, scanner version, commit, bgraph.toml).
+// snapshotPath: the analysis snapshot file for (ecosystem, version, scanner version, link semantics of trees, commit, bgraph.toml).
 func (m *memo) snapshotPath(ecoName, ver, oid, rules string) string {
 	if m.dir == "" || oid == "" {
 		return ""
 	}
-	h := sha256.Sum256([]byte(ecoName + "|" + ver + "|" + scancache.ScannerVersion + "|" + oid + "|" + rules))
+	h := sha256.Sum256([]byte(ecoName + "|" + ver + "|" + scancache.ScannerVersion + "|" + tree.LinkSemantics + "|" + oid + "|" + rules))
 	return filepath.Join(m.dir, "analysis", ecoName+"-"+hex.EncodeToString(h[:16])+".gob")
 }
 

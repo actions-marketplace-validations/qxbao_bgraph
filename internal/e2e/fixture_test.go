@@ -5,7 +5,10 @@
 //	free-form comment at the top
 //	-- base/<path> --        file in the base tree (also in the current tree unless overridden/deleted)
 //	-- head/<path> --        file added or modified in the current tree
-//	-- delete/<path> --      file deleted in the current tree (content ignored)
+//	-- delete/<path> --      file or link deleted in the current tree (content ignored)
+//	-- link:base/<path> --   symbolic link (git mode 120000) in the base tree, also in the current tree unless overridden/deleted;
+//	                         the first line of the body is the target, as git stores it
+//	-- link:head/<path> --   symbolic link added or retargeted in the current tree (replaces a file of the base at that path)
 //	-- want --               expected answers, one assertion per line:
 //	    select <unit>        must be selected (or the scope is full)
 //	    noselect <unit>      must not be selected (and the scope is not full)
@@ -39,13 +42,14 @@ import (
 )
 
 type fixture struct {
-	base, head map[string]string
-	deleted    []string
-	want       []string
+	base, head         map[string]string
+	baseLink, headLink map[string]string
+	deleted            []string
+	want               []string
 }
 
 func parseFixture(data string) (fixture, error) {
-	f := fixture{base: map[string]string{}, head: map[string]string{}}
+	f := fixture{base: map[string]string{}, head: map[string]string{}, baseLink: map[string]string{}, headLink: map[string]string{}}
 	data = strings.ReplaceAll(data, "\r\n", "\n")
 	lines := strings.SplitAfter(data, "\n")
 	var cur string
@@ -67,6 +71,10 @@ func parseFixture(data string) (fixture, error) {
 			f.base[strings.TrimPrefix(cur, "base/")] = content
 		case strings.HasPrefix(cur, "head/"):
 			f.head[strings.TrimPrefix(cur, "head/")] = content
+		case strings.HasPrefix(cur, "link:base/"):
+			f.baseLink[strings.TrimPrefix(cur, "link:base/")] = strings.TrimRight(content, "\n")
+		case strings.HasPrefix(cur, "link:head/"):
+			f.headLink[strings.TrimPrefix(cur, "link:head/")] = strings.TrimRight(content, "\n")
 		case strings.HasPrefix(cur, "delete/"):
 			f.deleted = append(f.deleted, strings.TrimPrefix(cur, "delete/"))
 		}
@@ -91,29 +99,56 @@ func parseFixture(data string) (fixture, error) {
 func run(t *testing.T, f fixture) model.Selection {
 	t.Helper()
 	headFiles := map[string]string{}
+	headLinks := map[string]string{}
 	for p, c := range f.base {
 		headFiles[p] = c
 	}
+	for p, c := range f.baseLink {
+		headLinks[p] = c
+	}
 	for p, c := range f.head {
 		headFiles[p] = c
+		delete(headLinks, p)
+	}
+	for p, c := range f.headLink {
+		headLinks[p] = c
+		delete(headFiles, p)
 	}
 	for _, p := range f.deleted {
 		delete(headFiles, p)
+		delete(headLinks, p)
 	}
-	baseT := tree.NewMapTree(f.base)
-	headT := tree.NewMapTree(headFiles)
+	baseT := tree.NewMapTreeLinks(f.base, f.baseLink)
+	headT := tree.NewMapTreeLinks(headFiles, headLinks)
+	// entry: the mode and content (a link: its target) of path p among files and links.
+	type entry struct{ mode, content string }
+	entries := func(files, links map[string]string) map[string]entry {
+		m := map[string]entry{}
+		for p, c := range files {
+			m[p] = entry{"100644", c}
+		}
+		for p, c := range links {
+			m[p] = entry{tree.ModeSymlink, c}
+		}
+		return m
+	}
+	be, he := entries(f.base, f.baseLink), entries(headFiles, headLinks)
 	var changed []selector.Changed
-	for p, c := range headFiles {
-		old, ok := f.base[p]
+	for p, h := range he {
+		b, ok := be[p]
 		switch {
 		case !ok:
-			changed = append(changed, selector.Changed{Path: p, Status: 'A', NewMode: "100644"})
-		case old != c:
-			changed = append(changed, selector.Changed{Path: p, Status: 'M', OldMode: "100644", NewMode: "100644"})
+			changed = append(changed, selector.Changed{Path: p, Status: 'A', NewMode: h.mode})
+		case b.mode != h.mode:
+			changed = append(changed, selector.Changed{Path: p, Status: 'T', OldMode: b.mode, NewMode: h.mode})
+		case b.content != h.content:
+			changed = append(changed, selector.Changed{Path: p, Status: 'M', OldMode: b.mode, NewMode: h.mode})
 		}
 	}
-	for _, p := range f.deleted {
-		changed = append(changed, selector.Changed{Path: p, Status: 'D', OldMode: "100644"})
+	for p, b := range be {
+		if _, ok := he[p]; !ok {
+			changed = append(changed, selector.Changed{Path: p, Status: 'D', OldMode: b.mode})
+		}
 	}
 	var rf *rules.File
 	var rerr error

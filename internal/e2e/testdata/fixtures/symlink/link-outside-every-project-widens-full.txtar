@@ -1,0 +1,16 @@
+A symlink outside every project that cannot be followed widens to full.
+-- base/apps/a/package.json --
+{"name":"a","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/a/src/a.test.ts --
+import { test } from 'vitest'
+test('a', () => {})
+-- base/apps/b/package.json --
+{"name":"b","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/b/src/b.test.ts --
+import { test } from 'vitest'
+test('b', () => {})
+-- link:head/tools/cache --
+../../cache
+-- want --
+widen symlink_outside
+full

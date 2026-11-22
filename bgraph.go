@@ -197,18 +197,19 @@ func noBase(in selector.Input, detail string) Selection {
 		Widening: []model.Widening{{Tier: model.TierFull, Reason: model.ReasonNoBase, Detail: detail}}}
 }
 
-// diffTrees compares two commit trees by blob OID and mode (no git spawn cost).
+// diffTrees compares the entries of two commit trees by blob OID and mode (no git spawn cost). Symbolic links are entries here
+// (a changed target text is a changed link), not followed.
 func diffTrees(a, b *gitx.CommitTree) []selector.Changed {
 	var out []selector.Changed
-	for _, p := range b.Files() {
-		if !a.Has(p) {
+	for _, p := range b.Entries() {
+		if a.Mode(p) == "" {
 			out = append(out, selector.Changed{Path: p, Status: 'A', NewMode: b.Mode(p)})
-		} else if a.Key(p) != b.Key(p) || a.Mode(p) != b.Mode(p) {
+		} else if a.EntryOID(p) != b.EntryOID(p) || a.Mode(p) != b.Mode(p) {
 			out = append(out, selector.Changed{Path: p, Status: 'M', OldMode: a.Mode(p), NewMode: b.Mode(p)})
 		}
 	}
-	for _, p := range a.Files() {
-		if !b.Has(p) {
+	for _, p := range a.Entries() {
+		if b.Mode(p) == "" {
 			out = append(out, selector.Changed{Path: p, Status: 'D', OldMode: a.Mode(p)})
 		}
 	}

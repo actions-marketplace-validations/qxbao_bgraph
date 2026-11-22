@@ -70,6 +70,9 @@ type ChangeInfo struct {
 	Rule bool
 	// Dependents: some file of the graph depends on it (a direct or glob edge points to it).
 	Dependents bool
+	// Linked: the file is a symbolic link, or other paths read it through one (docs/architecture.md, "Paths, case, symlinks and
+	// LFS"); its aliases were classified as changed files too.
+	Linked bool
 }
 
 // Result is Select's output together with the details the dynamic layer needs.
@@ -145,15 +148,23 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		projects = append(projects, ba.Projects...)
 		units = append(units, ha.Tests...)
 	}
-	g := graph.Build(all...)
-	info := make(map[string]*ChangeInfo, len(changed))
-	for _, c := range changed {
+	g := graph.Build(append(all, eco.LinkAnalysis(in.BaseTree), eco.LinkAnalysis(in.HeadTree))...)
+	links := linkSides(in.BaseTree, in.HeadTree)
+	// A file read through symbolic links changes every path that reads it (its aliases): they are classified as changed files
+	// too (a manifest seen through a directory link, a glob over the link directory, a scoped unresolved import...).
+	work, aliasOf := withAliases(changed, g, in.BaseTree, in.HeadTree)
+	info := make(map[string]*ChangeInfo, len(work))
+	for _, c := range work {
 		ci := &ChangeInfo{Changed: c, Roles: map[string][2]model.Role{}, Dependents: g.HasDependents(c.Path)}
 		for i, e := range in.Ecos {
 			ci.Roles[e.Name()] = [2]model.Role{all[2*i].Roles[c.Path], all[2*i+1].Roles[c.Path]}
 		}
+		_, isLink := links[c.Path]
+		ci.Linked = isLink || len(g.Aliases(c.Path)) > 0 || aliasOf[c.Path] != ""
 		info[c.Path] = ci
-		res.Changes = append(res.Changes, *ci) // replaced below once the classification is complete
+		if aliasOf[c.Path] == "" {
+			res.Changes = append(res.Changes, *ci) // replaced below once the classification is complete
+		}
 	}
 	defer func() {
 		for i := range res.Changes {
@@ -171,8 +182,25 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	}
 	var ruleTargets []ruleTarget
 
-	for _, c := range changed {
+	widenedLink := map[string]bool{}
+	widenLink := func(l tree.Link, why string) {
+		if widenedLink[l.Path] {
+			return
+		}
+		widenedLink[l.Path] = true
+		w := model.Widening{Tier: model.TierFull, Reason: model.ReasonSymlinkOutside, Path: l.Path,
+			Detail: fmt.Sprintf("symlink %s -> %s: %s; %s", l.Path, strings.TrimSpace(l.Target), l.Problem, why)}
+		if pr, ok := eco.NearestProject(projects, l.Path); ok {
+			w.Tier, w.Scope = model.TierModule, pr.Dir
+		}
+		s.widen(w)
+	}
+	for _, c := range work {
 		p := c.Path
+		seedReason := "changed"
+		if a := aliasOf[p]; a != "" {
+			seedReason = "changed (reads " + a + " through a symlink)"
+		}
 		if c.OldMode == "160000" || c.NewMode == "160000" {
 			s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonSubmodule, Path: p, Detail: "submodule pointer changed"})
 			continue
@@ -206,9 +234,39 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		// A rule with targets already declared the file's impact (docs/architecture.md, "Rules come first": rules override the widening table): no further widening; still walk backwards if it is a node.
 		if ruled {
 			if g.IsNode(p) {
-				seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
+				seeds = append(seeds, graph.Seed{Path: p, Reason: seedReason})
 			}
 			continue
+		}
+		// A file under the target of a link the trees follow only partly (a cycle, an oversized expansion): what reads it through
+		// the link is not fully known.
+		for _, l := range links.partial() {
+			if eco.Within(p, l.Real) {
+				widenLink(l, p+" changed under its target")
+			}
+		}
+		// A symbolic link changed (added, removed, retargeted, type change): what it pointed to and what it points to now count as
+		// changed for whoever reads them through it; a link that cannot be followed widens (symlink_outside).
+		if side, ok := links[p]; ok {
+			for i, l := range side {
+				if l == nil {
+					continue
+				}
+				if l.Problem != "" {
+					widenLink(*l, "the link changed")
+				}
+				t := in.BaseTree
+				if i == 1 {
+					t = in.HeadTree
+				}
+				for _, f := range linkTargetFiles(t, *l) {
+					seeds = append(seeds, graph.Seed{Path: f, Reason: "changed (target of changed symlink " + p + ")"})
+				}
+			}
+			if !in.BaseTree.Has(p) && !in.HeadTree.Has(p) {
+				// A directory link or a link that cannot be followed is not a file of either tree: its effect is fully described above.
+				continue
+			}
 		}
 		// 2. Global inputs.
 		if w, ok := classify.Global(p); ok {
@@ -233,7 +291,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		}
 		// 4. Graph node: walk backwards (even if already widened because of config: the union does no harm).
 		if g.IsNode(p) {
-			seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
+			seeds = append(seeds, graph.Seed{Path: p, Reason: seedReason})
 			// Code/data file that nothing depends on: walking backwards reaches no test, but a test may still use it outside the graph
 			// (read via fs, run via child_process). Nobody known → widen to the project (unreferenced_file, docs/architecture.md).
 			if r := g.Role(p); !claimed && r != model.RoleTest && r != model.RoleConfig && r != model.RoleManifest && r != model.RoleLock &&
@@ -268,7 +326,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 			continue // report only: the ecosystem already encoded the dependency as an edge (glob)
 		}
 		hit := ""
-		for _, c := range changed {
+		for _, c := range work {
 			if eco.Triggers(u, c.Path) {
 				hit = c.Path
 				break
@@ -292,10 +350,11 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 
 	reach := g.Walk(seeds)
 	// The precise walk: from the changed files only (docs/dynamic-layer.md §1). Seeds of unresolved imports are added after every
-	// changed-file seed, so the changed-file seeds are exactly those whose reason is "changed".
+	// changed-file seed, so the changed-file seeds are exactly those whose reason starts with "changed" (a changed file, a path that
+	// reads it through a symbolic link, the targets of a changed link).
 	var changedSeeds []graph.Seed
 	for _, sd := range seeds {
-		if sd.Reason == "changed" {
+		if strings.HasPrefix(sd.Reason, "changed") {
 			changedSeeds = append(changedSeeds, sd)
 		}
 	}
@@ -391,7 +450,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		}
 	}
 	// New tests.
-	for _, c := range changed {
+	for _, c := range work {
 		if c.Status == 'A' && g.Role(c.Path) == model.RoleTest {
 			s.sel.AlwaysRun = append(s.sel.AlwaysRun, c.Path)
 		}
@@ -511,4 +570,82 @@ func isUnresolvedReason(r string) bool {
 		return true
 	}
 	return false
+}
+
+// linkSide holds a path's symbolic link in the base tree ([0]) and in the head tree ([1]); nil where it is not a link.
+type linkSide [2]*tree.Link
+
+type linkMap map[string]linkSide
+
+// linkSides collects the symbolic links of both trees.
+func linkSides(base, head tree.Tree) linkMap {
+	m := linkMap{}
+	for i, t := range []tree.Tree{base, head} {
+		for _, l := range tree.LinksOf(t) {
+			sd := m[l.Path]
+			sd[i] = &l
+			m[l.Path] = sd
+		}
+	}
+	return m
+}
+
+// partial returns the directory links (of either tree) that are followed only partly: a cycle or an oversized expansion.
+func (m linkMap) partial() []tree.Link {
+	var out []tree.Link
+	for _, sd := range m {
+		for _, l := range sd {
+			if l != nil && l.Real != "" && l.Problem != "" {
+				out = append(out, *l)
+			}
+		}
+	}
+	slices.SortFunc(out, func(a, b tree.Link) int { return strings.Compare(a.Path, b.Path) })
+	return out
+}
+
+// linkTargetFiles returns the files of t the link resolves to: its target file, or every file under its target directory.
+func linkTargetFiles(t tree.Tree, l tree.Link) []string {
+	if l.Real == "" {
+		return nil
+	}
+	if !l.Dir {
+		return []string{l.Real}
+	}
+	var out []string
+	for _, f := range t.Files() {
+		if eco.Within(f, l.Real) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// withAliases returns changed followed by the aliases of its files (paths that read a changed file through a symbolic link) that
+// are not changed themselves, and alias → the changed file it reads.
+func withAliases(changed []Changed, g *graph.Graph, base, head tree.Tree) ([]Changed, map[string]string) {
+	work := slices.Clone(changed)
+	aliasOf := map[string]string{}
+	seen := map[string]bool{}
+	for _, c := range changed {
+		seen[c.Path] = true
+	}
+	for _, c := range changed {
+		for _, a := range g.Aliases(c.Path) {
+			if seen[a] {
+				continue
+			}
+			seen[a] = true
+			aliasOf[a] = c.Path
+			st := byte('M')
+			switch inB, inH := base.Has(a), head.Has(a); {
+			case !inB:
+				st = 'A'
+			case !inH:
+				st = 'D'
+			}
+			work = append(work, Changed{Path: a, Status: st, OldMode: c.OldMode, NewMode: c.NewMode})
+		}
+	}
+	return work, aliasOf
 }

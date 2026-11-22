@@ -1,0 +1,22 @@
+A file symlink is a file that reads its target: changing the target selects the test that imports the link path.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/shared/util.ts --
+export const add = (a: number, b: number) => a + b
+-- link:base/src/util.ts --
+../shared/util.ts
+-- base/src/math.test.ts --
+import { add } from './util'
+import { test } from 'vitest'
+test('add', () => add(1, 2))
+-- base/src/other.test.ts --
+import { test } from 'vitest'
+test('x', () => {})
+-- head/shared/util.ts --
+export const add = (a: number, b: number) => b + a
+-- want --
+scope graph
+select src/math.test.ts
+noselect src/other.test.ts
+nowiden symlink_outside
+nowiden unreferenced_file

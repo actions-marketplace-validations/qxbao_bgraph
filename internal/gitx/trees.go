@@ -22,17 +22,35 @@ var (
 
 func joinRoot(root, p string) string { return filepath.Join(root, filepath.FromSlash(p)) }
 
-// pathSet holds the shared part: the sorted file list, the set of ancestor directories, and a case-insensitive lookup table.
+// pathSet holds the shared part: the sorted file list (symbolic links followed, see tree.Linker), the set of ancestor directories,
+// a case-insensitive lookup table, and the raw entries (links as entries, not followed).
 type pathSet struct {
-	files []string
-	dirs  map[string]bool
-	fold  map[string][]string
+	*tree.LinkView
+	entries []string // every entry except gitlinks, links included, sorted
+	dirs    map[string]bool
+	fold    map[string][]string
 }
 
-// newPathSet takes a list (sorted in place) of distinct files.
-func newPathSet(files []string) pathSet {
-	slices.Sort(files)
-	ps := pathSet{files: files, dirs: map[string]bool{}, fold: make(map[string][]string, len(files))}
+// newPathSet takes a list (sorted in place) of distinct entries, the targets of those that are symbolic links, and the entry
+// membership test.
+func newPathSet(entries []string, links map[string]string, isEntry func(string) bool) pathSet {
+	slices.Sort(entries)
+	regular := entries
+	if len(links) > 0 {
+		regular = make([]string, 0, len(entries))
+		for _, p := range entries {
+			if _, ok := links[p]; !ok {
+				regular = append(regular, p)
+			}
+		}
+	}
+	isRegular := isEntry
+	if len(links) > 0 {
+		isRegular = func(p string) bool { _, link := links[p]; return !link && isEntry(p) }
+	}
+	lv := tree.FollowLinks(regular, isRegular, links)
+	files := lv.Files()
+	ps := pathSet{LinkView: lv, entries: entries, dirs: map[string]bool{}, fold: make(map[string][]string, len(files))}
 	if len(files) > 0 {
 		ps.dirs["."] = true
 	}
@@ -46,8 +64,11 @@ func newPathSet(files []string) pathSet {
 	return ps
 }
 
-func (ps *pathSet) Files() []string              { return ps.files }
-func (ps *pathSet) IsDir(p string) bool          { return ps.dirs[p] }
+func (ps *pathSet) Has(p string) bool   { _, ok := ps.Real(p); return ok }
+func (ps *pathSet) IsDir(p string) bool { return ps.dirs[p] }
+
+// Entries returns every entry (symbolic links as entries, not followed; no gitlinks), sorted.
+func (ps *pathSet) Entries() []string            { return ps.entries }
 func (ps *pathSet) FoldLookup(p string) []string { return ps.fold[strings.ToLower(p)] }
 
 func notExist(op, p string) error { return &fs.PathError{Op: op, Path: p, Err: fs.ErrNotExist} }
@@ -110,32 +131,64 @@ func buildWorkTree(root string, idx []indexEntry, ls lsFiles, diff []ChangedFile
 			}
 		}
 	}
+	// The working tree's mode wins over the index's (an unstaged file ↔ symlink type change): the diff against the base reports it.
+	for _, f := range diff {
+		if e, ok := ents[f.Path]; ok && (f.NewMode == "100644" || f.NewMode == "100755" || f.NewMode == tree.ModeSymlink) {
+			e.mode = f.NewMode
+		}
+	}
 	for _, p := range ls.untracked {
 		if strings.HasSuffix(p, "/") {
 			subs = append(subs, strings.TrimRight(p, "/"))
 			continue
 		}
 		if _, ok := ents[p]; !ok {
-			ents[p] = &wtEntry{mode: "100644", dirty: true}
+			mode := "100644"
+			if fi, err := os.Lstat(joinRoot(root, p)); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
+				mode = tree.ModeSymlink
+			}
+			ents[p] = &wtEntry{mode: mode, dirty: true}
 		}
 	}
 	files := make([]string, 0, len(ents))
+	var links map[string]string
 	for p, e := range ents {
 		if e.mode == "160000" {
 			subs = append(subs, p)
 			delete(ents, p)
 			continue
 		}
+		if e.mode == tree.ModeSymlink {
+			tgt, err := readLinkTarget(root, p)
+			if err != nil {
+				tgt = "" // unreadable: a dangling link (never followed; widened when involved in a change)
+			}
+			if links == nil {
+				links = map[string]string{}
+			}
+			links[p] = tgt
+		}
 		files = append(files, p)
 	}
 	slices.Sort(subs)
 	subs = slices.Compact(subs)
-	return &WorkTree{pathSet: newPathSet(files), root: root, ents: ents, subs: subs}
+	return &WorkTree{pathSet: newPathSet(files, links, func(p string) bool { _, ok := ents[p]; return ok }), root: root, ents: ents, subs: subs}
 }
 
-func (t *WorkTree) Has(p string) bool { _, ok := t.ents[p]; return ok }
+// readLinkTarget reads the target of the symbolic link p from disk: the link itself when the checkout made one, otherwise the
+// plain file holding the target text (core.symlinks=false, the usual Windows checkout).
+func readLinkTarget(root, p string) (string, error) {
+	full := joinRoot(root, p)
+	if fi, err := os.Lstat(full); err == nil && fi.Mode()&fs.ModeSymlink != 0 {
+		t, err := os.Readlink(full)
+		return filepath.ToSlash(t), err
+	}
+	b, err := os.ReadFile(full)
+	return string(b), err
+}
 
-// Mode returns the file's git mode ("100644", "100755", "120000"); untracked is always "100644"; "" if absent.
+// Mode returns the entry's git mode ("100644", "100755", "120000"); untracked is "100644" ("120000" for a symbolic link); ""
+// if absent. It is not resolved through links.
 func (t *WorkTree) Mode(p string) string {
 	if e, ok := t.ents[p]; ok {
 		return e.mode
@@ -146,8 +199,13 @@ func (t *WorkTree) Mode(p string) string {
 // Submodules returns gitlink paths (mode 160000) and untracked directories that are nested git repos; sorted.
 func (t *WorkTree) Submodules() []string { return t.subs }
 
-// Read reads a file from disk. For a "dirty" file it also computes and caches the key.
+// Read reads a file from disk (through a symbolic link: its target file). For a "dirty" file it also computes and caches the key.
 func (t *WorkTree) Read(p string) ([]byte, error) {
+	r, ok := t.Real(p)
+	if !ok {
+		return nil, notExist("read", p)
+	}
+	p = r
 	e, ok := t.ents[p]
 	if !ok {
 		return nil, notExist("read", p)
@@ -164,7 +222,13 @@ func (t *WorkTree) Read(p string) ([]byte, error) {
 
 // Key: a tracked file unchanged versus the index → the index blob OID; a modified file (including staged-then-reverted), unmerged or
 // untracked → the BlobKey of the on-disk bytes (computed lazily, cached). "" if the file is absent or the disk cannot be read.
+// Through a symbolic link: the key of its target file.
 func (t *WorkTree) Key(p string) string {
+	r, ok := t.Real(p)
+	if !ok {
+		return ""
+	}
+	p = r
 	e, ok := t.ents[p]
 	if !ok {
 		return ""
@@ -202,6 +266,7 @@ func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) 
 	}
 	t := &CommitTree{r: r, ents: map[string]ctEntry{}}
 	var files []string
+	var links map[string]string
 	for _, rec := range bytes.Split(out, []byte{0}) {
 		if len(rec) == 0 {
 			continue
@@ -225,15 +290,26 @@ func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) 
 		}
 		t.ents[p] = ctEntry{mode: f[0], oid: f[2]}
 		files = append(files, p)
+		if f[0] == tree.ModeSymlink {
+			if links == nil {
+				links = map[string]string{}
+			}
+			links[p] = ""
+		}
+	}
+	for p := range links {
+		b, err := r.cat.get(ctx, t.ents[p].oid)
+		if err != nil {
+			return nil, err
+		}
+		links[p] = string(b)
 	}
 	slices.Sort(t.subs)
-	t.pathSet = newPathSet(files)
+	t.pathSet = newPathSet(files, links, func(p string) bool { _, ok := t.ents[p]; return ok })
 	return t, nil
 }
 
-func (t *CommitTree) Has(p string) bool { _, ok := t.ents[p]; return ok }
-
-// Mode returns the file's git mode in the commit; "" if absent.
+// Mode returns the entry's git mode in the commit ("120000" for a symbolic link: not resolved); "" if absent.
 func (t *CommitTree) Mode(p string) string { return t.ents[p].mode }
 
 // Submodules returns the commit's gitlink paths; sorted.
@@ -242,21 +318,28 @@ func (t *CommitTree) Submodules() []string { return t.subs }
 // SubmoduleOID returns the commit a gitlink points to; "" if p is not a gitlink of this tree.
 func (t *CommitTree) SubmoduleOID(p string) string { return t.subOIDs[p] }
 
-// Key is the blob OID.
-func (t *CommitTree) Key(p string) string { return t.ents[p].oid }
+// EntryOID returns the blob OID of entry p, not resolved through links (a symbolic link: the blob holding its target); "" if absent.
+func (t *CommitTree) EntryOID(p string) string { return t.ents[p].oid }
 
-// Read reads a blob (symlink: the link's target text). tree.Tree has no ctx; Repo.Close can interrupt a hung request.
-func (t *CommitTree) Read(p string) ([]byte, error) {
-	e, ok := t.ents[p]
+// Key is the blob OID of the file p reads (through a symbolic link: of its target file); "" if absent.
+func (t *CommitTree) Key(p string) string {
+	r, ok := t.Real(p)
 	if !ok {
-		return nil, notExist("read", p)
+		return ""
 	}
-	return t.r.cat.get(context.Background(), e.oid)
+	return t.ents[r].oid
 }
+
+// Read reads a blob (through a symbolic link: its target file's). tree.Tree has no ctx; Repo.Close can interrupt a hung request.
+func (t *CommitTree) Read(p string) ([]byte, error) { return t.ReadContext(context.Background(), p) }
 
 // ReadContext is like Read but honors ctx (cancelling ctx kills the cat-file process; the next read restarts it).
 func (t *CommitTree) ReadContext(ctx context.Context, p string) ([]byte, error) {
-	e, ok := t.ents[p]
+	r, ok := t.Real(p)
+	if !ok {
+		return nil, notExist("read", p)
+	}
+	e, ok := t.ents[r]
 	if !ok {
 		return nil, notExist("read", p)
 	}

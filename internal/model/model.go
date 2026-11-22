@@ -61,7 +61,7 @@ const (
 	ReasonUnsupported     = "unsupported_language"
 	ReasonGeneratedOutput = "generated_output" // import of an ignored build output
 	ReasonFrameworkMagic  = "framework_magic"  // Next file routing, auto-import...
-	ReasonSymlinkOutside  = "symlink_outside"
+	ReasonSymlinkOutside  = "symlink_outside"  // a symbolic link involved in the change cannot be followed (outside, absolute, dangling, cycle)
 	ReasonSubmodule       = "submodule"
 	ReasonInternalError   = "internal_error" // bgraph's own error: always widen, never return empty
 	ReasonRuleRejected    = "rule_rejected"  // an affects="none" rule matched a file that is a graph node: ignored (warning only, no widening)
@@ -211,6 +211,8 @@ const (
 	EdgeGenerated   EdgeKind = "generated"
 	EdgeRule        EdgeKind = "rule"
 	EdgeMock        EdgeKind = "mock"
+	// EdgeSymlink: From is a path that reads To through a symbolic link (a file link, or a file under a directory link).
+	EdgeSymlink EdgeKind = "symlink"
 )
 
 // Provenance is where an edge came from.

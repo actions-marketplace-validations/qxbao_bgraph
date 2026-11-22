@@ -91,3 +91,18 @@ func depth(dir string) int {
 	}
 	return strings.Count(path.Clean(dir), "/") + 1
 }
+
+// LinkAnalysis returns the edges that tie every alias of t (a path that reads another file through a symbolic link) to the file
+// it reads (model.EdgeSymlink); nil when t has no alias. The selector and graph queries add it to the ecosystems' analyses, so
+// that a change to a link's target reaches whatever depends on the link path, in every ecosystem.
+func LinkAnalysis(t tree.Tree) *Analysis {
+	al := tree.AliasesOf(t)
+	if len(al) == 0 {
+		return nil
+	}
+	a := &Analysis{Roles: map[string]model.Role{}}
+	for from, to := range al {
+		a.Edges = append(a.Edges, model.Edge{From: from, To: to, Kind: model.EdgeSymlink, Provenance: model.ProvScan})
+	}
+	return a
+}

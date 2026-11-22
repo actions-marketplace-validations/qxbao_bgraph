@@ -1,0 +1,21 @@
+Retargeting a directory symlink (src/lib: ../v1 -> ../v2) selects the tests that import through it; an unrelated test
+is not selected and the link itself is not an unknown file.
+-- base/package.json --
+{"name":"app","devDependencies":{"vitest":"^5.0.0"}}
+-- base/v1/x.ts --
+export const x = 1
+-- base/v2/x.ts --
+export const x = 2
+-- link:base/src/lib --
+../v1
+-- link:head/src/lib --
+../v2
+-- base/src/x.test.ts --
+import { x } from './lib/x'
+-- base/src/other.test.ts --
+export {}
+-- want --
+scope graph
+precise src/x.test.ts
+noselect src/other.test.ts
+nowiden unknown_file

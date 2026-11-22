@@ -25,6 +25,8 @@ type Change struct {
 	Rule               bool // a bgraph.toml [[rule]] matches it
 	Referenced         bool // a graph edge (direct or glob) points to it
 	OtherRole          bool // some ecosystem (any) gives it a role in the base or head analysis
+	// Linked: the file is a symbolic link or is read through one; a collector may record either path, so it is never narrowed.
+	Linked bool
 }
 
 // Params is everything Narrow needs besides the selection and the changes.
@@ -96,6 +98,8 @@ func Guard(sel model.Selection, changes []Change, eco string) string {
 			why = fmt.Sprintf("mode changed %s -> %s", c.OldMode, c.NewMode)
 		case c.NewMode != "100644" && c.NewMode != "100755":
 			why = "mode " + c.NewMode + " is not a regular file"
+		case c.Linked:
+			why = "read through a symbolic link (the recorded path may be the link's)"
 		case !isSource(c.Path):
 			if !docFile(c) {
 				why = "not a " + eco + " source file the collector observes, nor an unreferenced documentation file"

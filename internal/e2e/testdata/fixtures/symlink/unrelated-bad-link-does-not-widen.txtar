@@ -1,0 +1,24 @@
+A symlink that is not involved in the change has no effect: the selection stays precise.
+-- base/apps/a/package.json --
+{"name":"a","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/a/src/a.test.ts --
+import { test } from 'vitest'
+test('a', () => {})
+-- base/apps/b/package.json --
+{"name":"b","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/b/src/b.test.ts --
+import { test } from 'vitest'
+test('b', () => {})
+-- link:base/apps/a/data --
+../../../outside/data
+-- base/apps/b/src/util.ts --
+export const u = 1
+-- base/apps/b/src/u.test.ts --
+import { u } from './util'
+-- head/apps/b/src/util.ts --
+export const u = 2
+-- want --
+scope graph
+select apps/b/src/u.test.ts
+noselect apps/a/src/a.test.ts
+nowiden symlink_outside

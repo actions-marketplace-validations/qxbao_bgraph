@@ -1,0 +1,23 @@
+A symlink retargeted outside the repository cannot be followed: it widens with symlink_outside to the project that
+owns the link (apps/a), never silently, and not to the other project.
+-- base/apps/a/package.json --
+{"name":"a","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/a/src/a.test.ts --
+import { test } from 'vitest'
+test('a', () => {})
+-- base/apps/b/package.json --
+{"name":"b","devDependencies":{"vitest":"^5.0.0"}}
+-- base/apps/b/src/b.test.ts --
+import { test } from 'vitest'
+test('b', () => {})
+-- base/apps/a/fixtures/data.json --
+{}
+-- link:base/apps/a/data --
+fixtures
+-- link:head/apps/a/data --
+../../../outside/data
+-- want --
+widen symlink_outside
+scope module
+select apps/a/src/a.test.ts
+noselect apps/b/src/b.test.ts
