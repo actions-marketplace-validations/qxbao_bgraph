@@ -88,7 +88,7 @@ func TestLinksOnDisk(t *testing.T) {
 	write(t, dir, "shared/a.js", "A")
 	write(t, dir, "other/c.js", "C")
 	commitAll(t, dir, "base")
-	if err := os.Symlink(filepath.FromSlash("../shared"), filepath.Join(dir, "app")); err != nil {
+	if err := os.Symlink("shared", filepath.Join(dir, "app")); err != nil {
 		t.Skipf("cannot create a symlink here: %v", err)
 	}
 	r := open(t, dir)

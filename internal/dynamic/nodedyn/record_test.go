@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -133,7 +134,11 @@ func TestEnviron(t *testing.T) {
 	if n != 1 || !slices.Contains(env, "FOO=1") {
 		t.Errorf("%v", env)
 	}
-	if got := nodeOptionsToken(`C:\a b\x.cjs`); got != `--require="C:/a b/x.cjs"` {
+	path, want := "/a b/x.cjs", `--require="/a b/x.cjs"`
+	if runtime.GOOS == "windows" {
+		path, want = `C:\a b\x.cjs`, `--require="C:/a b/x.cjs"`
+	}
+	if got := nodeOptionsToken(path); got != want {
 		t.Errorf("quoted: %s", got)
 	}
 }
