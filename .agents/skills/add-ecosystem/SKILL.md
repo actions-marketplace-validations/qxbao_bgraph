@@ -98,7 +98,7 @@ Decide and fix before any code:
 
 ## 3. Evaluation (agents B and C)
 
-Data lives under `D:\bench\bgraph-eval` (durable). Never delete anything there on your own; at each phase close ask the
+Data lives in a durable evaluation directory outside the repository (`--work`/`--out` of `bgraph-eval`). Never delete anything there on your own; at each phase close ask the
 user whether to keep or delete the ecosystem's clones/caches.
 
 1. **Tasks**: `evalkit/tools/fetch_<lang>.py` pulls the ecosystem's instances from pinned HF revisions (SWE-bench
@@ -140,7 +140,7 @@ submodule in both trees counted as changed → bat always full; fixed by compari
 
 - Write `docs/private/eval/phase-<n>-<date>/README.md` (gitignored, local): tables for T1 (dev/holdout), provider
   check, T2, smoke numbers, every violation with its classification, widening reasons, and the exact paths of raw
-  outputs under `D:\bench\bgraph-eval`.
+  outputs in the evaluation directory.
 - Update the public docs: a new `docs/ecosystems/<lang>.md`, the ecosystem table of the root README and `docs/README.md`,
   the results in `docs/evaluation.md`, and `bgraph.toml` additions in `docs/configuration.md` and
   `docs/bgraph.example.toml` (a test keeps it parseable).
