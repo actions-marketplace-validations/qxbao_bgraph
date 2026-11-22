@@ -57,8 +57,42 @@ func (s *state) widen(w model.Widening) {
 	}
 }
 
+// ChangeInfo is how the selector classified one changed file; the dynamic layer's guards (docs/dynamic.md §2) read it.
+type ChangeInfo struct {
+	Changed
+	// Roles: ecosystem name → the file's role in that ecosystem's analysis of the base and of the head tree ("" when unclaimed).
+	Roles map[string][2]model.Role
+	// Global: the file matched the built-in global widening table.
+	Global bool
+	// Claimed: ecosystems whose ClassifyChange claimed the file as their manifest/config/lockfile/other non-source input.
+	Claimed []string
+	// Rule: a bgraph.toml [[rule]] matched the file.
+	Rule bool
+}
+
+// Result is Select's output together with the details the dynamic layer needs.
+type Result struct {
+	Selection model.Selection
+	// Changes: one entry per changed file, in the order of Selection.Changed. Empty when the selection ended full before the
+	// classification (no base, broken bgraph.toml, oversized diff, analysis error).
+	Changes []ChangeInfo
+	// UnitEco: selected unit ID → its ecosystem.
+	UnitEco map[string]string
+}
+
 // Select computes the selection.
 func Select(ctx context.Context, in Input) model.Selection {
+	return Run(ctx, in).Selection
+}
+
+// Run computes the selection and returns it with the classification details (see Result).
+func Run(ctx context.Context, in Input) Result {
+	var res Result
+	res.Selection = run(ctx, in, &res)
+	return res
+}
+
+func run(ctx context.Context, in Input, res *Result) model.Selection {
 	s := &state{in: in}
 	s.sel = model.Selection{Base: in.Base, Head: in.Head, Scope: model.TierNone, Changed: []string{}}
 	changed := normalize(in.Changed)
@@ -110,6 +144,20 @@ func Select(ctx context.Context, in Input) model.Selection {
 		units = append(units, ha.Tests...)
 	}
 	g := graph.Build(all...)
+	info := make(map[string]*ChangeInfo, len(changed))
+	for _, c := range changed {
+		ci := &ChangeInfo{Changed: c, Roles: map[string][2]model.Role{}}
+		for i, e := range in.Ecos {
+			ci.Roles[e.Name()] = [2]model.Role{all[2*i].Roles[c.Path], all[2*i+1].Roles[c.Path]}
+		}
+		info[c.Path] = ci
+		res.Changes = append(res.Changes, *ci) // replaced below once the classification is complete
+	}
+	defer func() {
+		for i := range res.Changes {
+			res.Changes[i] = *info[res.Changes[i].Path]
+		}
+	}()
 	for _, e := range g.BadPatterns() {
 		s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonInternalError, Path: e.From, Detail: "invalid glob: " + e.To})
 	}
@@ -131,6 +179,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 		skip, ruled := false, false
 		if in.Rules != nil {
 			for _, r := range in.Rules.Match(p) {
+				info[p].Rule = true
 				switch {
 				case r.AffectsAll:
 					s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonUserRule, Path: p, Detail: ruleDetail(r)})
@@ -161,6 +210,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 		}
 		// 2. Global inputs.
 		if w, ok := classify.Global(p); ok {
+			info[p].Global = true
 			s.widen(w)
 			continue
 		}
@@ -170,6 +220,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 			ws, ok := e.ClassifyChange(p, in.BaseTree, in.HeadTree, headA[e.Name()])
 			if ok {
 				claimed = true
+				info[p].Claimed = append(info[p].Claimed, e.Name())
 				for _, w := range ws {
 					s.widen(w)
 				}
@@ -235,6 +286,15 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 
 	reach := g.Walk(seeds)
+	// The precise walk: from the changed files only (docs/dynamic.md §1). Seeds of unresolved imports are added after every
+	// changed-file seed, so the changed-file seeds are exactly those whose reason is "changed".
+	var changedSeeds []graph.Seed
+	for _, sd := range seeds {
+		if sd.Reason == "changed" {
+			changedSeeds = append(changedSeeds, sd)
+		}
+	}
+	reachP := g.Walk(changedSeeds)
 	// Warnings of the current tree relevant to the selection (the file with the problem is on the backward path).
 	for _, e := range in.Ecos {
 		if ha := headA[e.Name()]; ha != nil {
@@ -247,11 +307,18 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 	units = DedupUnits(units)
 	chosen := map[string]*model.SelectedTest{}
-	choose := func(u model.TestUnit, reason string) {
+	precise := map[string]bool{}
+	res.UnitEco = map[string]string{}
+	// choose selects u; exact: u is chosen precisely (docs/dynamic.md §1), not only because of a widening.
+	choose := func(u model.TestUnit, reason string, exact bool) {
 		st, ok := chosen[u.ID]
 		if !ok {
 			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package, Config: u.Config}
 			chosen[u.ID] = st
+			res.UnitEco[u.ID] = u.Eco
+		}
+		if exact {
+			precise[u.ID] = true
 		}
 		if !slices.Contains(st.Reasons, reason) {
 			st.Reasons = append(st.Reasons, reason)
@@ -259,7 +326,8 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 	for _, u := range units {
 		if f, ok := ReachedFile(u, reach); ok {
-			choose(u, strings.Join(reach.Chain(f), " ; "))
+			_, exact := ReachedFile(u, reachP)
+			choose(u, strings.Join(reach.Chain(f), " ; "), exact)
 		}
 	}
 	// Scope widening (module/package): every test unit in the scope.
@@ -275,7 +343,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 				continue
 			}
 			if unitWithin(u, w.Scope) {
-				choose(u, fmt.Sprintf("widen %s (%s) due to %s", scopeName(w.Scope), w.Reason, w.Path))
+				choose(u, fmt.Sprintf("widen %s (%s) due to %s", scopeName(w.Scope), w.Reason, w.Path), false)
 			}
 		}
 	}
@@ -287,13 +355,13 @@ func Select(ctx context.Context, in Input) model.Selection {
 		}
 		for _, u := range units {
 			if pat == nil && unitWithin(u, path.Clean(rt.target)) {
-				choose(u, rt.reason)
+				choose(u, rt.reason, true)
 				continue
 			}
 			if pat != nil {
 				for _, f := range u.Files {
 					if pat.Match(f) {
-						choose(u, rt.reason)
+						choose(u, rt.reason, true)
 						break
 					}
 				}
@@ -304,7 +372,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	if len(seeds) > 0 || len(s.sel.Widening) > 0 {
 		for _, u := range units {
 			if u.Whole {
-				choose(u, model.ReasonConfigIsCode+": test file set of project "+scopeName(u.Project)+" is unknown (test pattern computed by code)")
+				choose(u, model.ReasonConfigIsCode+": test file set of project "+scopeName(u.Project)+" is unknown (test pattern computed by code)", false)
 			}
 		}
 	}
@@ -312,7 +380,7 @@ func Select(ctx context.Context, in Input) model.Selection {
 	for _, id := range in.PreviouslyFailed {
 		for _, u := range units {
 			if u.ID == id {
-				choose(u, "previously_failed")
+				choose(u, "previously_failed", true)
 				s.sel.AlwaysRun = append(s.sel.AlwaysRun, id)
 			}
 		}
@@ -332,7 +400,10 @@ func Select(ctx context.Context, in Input) model.Selection {
 	}
 	slices.Sort(ids)
 	for _, id := range ids {
-		s.sel.Tests = append(s.sel.Tests, *chosen[id])
+		st := *chosen[id]
+		// A new test file is always run (AlwaysRun): precise even if it was only reached through a widening.
+		st.Widened = !precise[id] && !slices.Contains(s.sel.AlwaysRun, id)
+		s.sel.Tests = append(s.sel.Tests, st)
 	}
 	s.sel.Scope = model.TierNone
 	if len(s.sel.Tests) > 0 {

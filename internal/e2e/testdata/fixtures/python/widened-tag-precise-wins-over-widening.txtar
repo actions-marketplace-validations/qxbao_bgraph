@@ -1,0 +1,41 @@
+docs/dynamic.md §1: a unit reached both from a changed file and through a widening is precise; a unit chosen only by a project
+widening (unreferenced file), the dynamic import seed or a previously failed run is tagged accordingly.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/loader.py --
+import importlib
+from pkg import a
+def load(n):
+    return importlib.import_module(n)
+-- base/pkg/a.py --
+X = 1
+-- base/pkg/b.py --
+Y = 1
+-- base/pkg/orphan.py --
+Z = 1
+-- base/tests/test_loader.py --
+from pkg.loader import load
+-- base/tests/test_a.py --
+import pkg.a
+-- base/tests/test_b.py --
+import pkg.b
+-- base/tests/test_new.py --
+import json
+-- head/pkg/a.py --
+X = 2
+-- head/pkg/orphan.py --
+Z = 2
+-- head/tests/test_added.py --
+import json
+-- want --
+notfull
+widen dynamic_import
+widen unreferenced_file
+precise tests/test_a.py
+precise tests/test_loader.py
+precise tests/test_added.py
+widened tests/test_b.py
+widened tests/test_new.py

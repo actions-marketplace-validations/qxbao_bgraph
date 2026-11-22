@@ -23,4 +23,7 @@ notfull
 widen dynamic_import
 select tests/test_loader.py
 select tests/test_unrelated.py
+# docs/dynamic.md §1: test_unrelated is reached from the changed file, test_loader only through the unresolved import.
+precise tests/test_unrelated.py
+widened tests/test_loader.py
 noselect tests/test_none.py

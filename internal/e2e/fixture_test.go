@@ -15,6 +15,8 @@
 //	    full                 scope must be full
 //	    notfull              scope must not be full
 //	    warn <reason>        there must be a warning with this reason
+//	    precise <unit>       must be selected and not tagged widened (docs/dynamic.md §1)
+//	    widened <unit>       must be selected and tagged widened
 //
 // A "# ..." line in want is a comment.
 package e2e
@@ -127,8 +129,10 @@ func run(t *testing.T, f fixture) model.Selection {
 func check(t *testing.T, sel model.Selection, want []string) {
 	t.Helper()
 	units := map[string]bool{}
+	widened := map[string]bool{}
 	for _, st := range sel.Tests {
 		units[st.Unit] = true
+		widened[st.Unit] = st.Widened
 	}
 	hasReason := func(ws []model.Widening, r string) bool {
 		return slices.ContainsFunc(ws, func(w model.Widening) bool { return w.Reason == r })
@@ -155,6 +159,10 @@ func check(t *testing.T, sel model.Selection, want []string) {
 			ok = !isFull
 		case "warn":
 			ok = hasReason(sel.Warnings, arg)
+		case "precise":
+			ok = units[arg] && !widened[arg]
+		case "widened":
+			ok = units[arg] && widened[arg]
 		default:
 			t.Fatalf("unknown assertion: %q", w)
 		}
