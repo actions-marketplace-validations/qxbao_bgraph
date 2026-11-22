@@ -111,6 +111,7 @@ These codes are stable and appear in the `reason` field of `widening` and `warni
 | `unreferenced_file` | module or full | A file of an ecosystem that nothing in the graph depends on; a test may still read or run it. |
 | `generated_output` | module | (detail of an `unknown_import`) an import of a git-ignored build output; describe it with [`[[generated]]`](configuration.md#generated). |
 | `submodule` | full | A submodule pointer changed. |
+| `symlink_outside` | module or full | A symbolic link involved in the change cannot be followed: its target is outside the repository, absolute, dangling, or part of a link cycle. See [symbolic links](#paths-case-symlinks-and-lfs). |
 | `internal_error` | full | bgraph's own failure (analysis error, invalid glob edge, cancelled context). |
 
 Warnings (never change the scope):
@@ -121,8 +122,7 @@ Warnings (never change the scope):
 | `rule_rejected` | A `[[rule]]` with `affects = "none"` matched a file that is part of the graph; the rule is ignored for that file. |
 | `dynamic_skipped` | The [dynamic layer](dynamic-layer.md) is enabled but did not narrow this selection; the detail says why. |
 
-Reserved codes (defined for compatibility, not emitted today): `framework_magic`, `symlink_outside`,
-`unsupported_language`.
+Reserved codes (defined for compatibility, not emitted today): `framework_magic`, `unsupported_language`.
 
 Each widening may carry a `suggest` field with a ready-to-edit `bgraph.toml` snippet, and an `eco` field when it applies
 to one ecosystem's units only (for example a `Cargo.lock` at the root must not select Node tests).
@@ -249,11 +249,19 @@ graph nodes: a Markdown file that is embedded, imported or collected as a test s
 
 - **Case.** Paths are matched against git's index, case-sensitively. A Node import that matches a file only when
   ignoring case still gets its edge, plus a `case_mismatch` warning. A case-only rename is a deletion plus an addition.
-- **Symbolic links.** bgraph works on git's view of the tree: a symlink is a path whose content is its target text, and
-  a change to the link is a change to that path. Links are not followed when imports are resolved. A test that reaches a
-  file only through a symlink is therefore not linked to the target file by an edge; when the target changes, it is
-  classified on its own (for example `unreferenced_file` when nothing else depends on it). Declare such dependencies with
-  a [`[[rule]]`](configuration.md#rule).
+- **Symbolic links.** bgraph reads links from git (mode `120000`, the blob holds the target path), so they are handled
+  the same way whether the checkout made a real link or a plain text file (`core.symlinks=false`, usual on Windows).
+  A link whose target is inside the repository is followed, in every ecosystem: a file link is a file that reads its
+  target, and a directory link behaves as if the target directory's files were present under the link path (an import
+  of `link/x.js` reaches `target/x.js`, a glob over the link directory matches the target's files, a file added later
+  under the target is seen under the link too). Each such path is tied to the file it reads by a `symlink` edge, and a
+  change to the target counts as a change of every path that reads it through a link.
+  A change to the link itself (added, removed, retargeted) is a changed path, and also a change of what it pointed to
+  and of what it points to now: the dependents of both targets are selected.
+  A link that cannot be followed (target outside the repository, absolute, dangling, or a link cycle) is never skipped
+  silently: when it is part of the change, the selection widens with `symlink_outside` to the project that owns the link,
+  or to `full` outside every project. A directory link that re-enters itself is followed one level, and a change under its
+  target widens the same way.
 - **Git LFS.** Files are compared by their git blobs. An LFS object change changes its pointer file, so the path counts
   as changed like any other file.
 - **Submodules.** A changed gitlink widens to `full` (`submodule`); so does an untracked nested repository.
