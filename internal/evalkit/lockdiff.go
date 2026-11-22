@@ -313,6 +313,8 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 			}
 			ours[n.Package+"@"+n.Version] = true
 			ours[n.Name+"@"+n.Version] = true
+			ours[n.Package+"@*"] = true
+			ours[n.Name+"@*"] = true
 		}
 		var miss []string
 		for pkg := range tool[p] {
@@ -621,6 +623,11 @@ func pnpmParseable(ctx context.Context, o LockdiffOpts, dst, lockDir string, pro
 			if !ok {
 				continue
 			}
+			if reTruncated.MatchString(v) {
+				// A long directory name is truncated and hashed: the version may be cut; check the name only.
+				set[name+"@*"] = true
+				continue
+			}
 			if i := strings.IndexAny(v, "_("); i >= 0 {
 				v = v[:i]
 			}
@@ -630,6 +637,8 @@ func pnpmParseable(ctx context.Context, o LockdiffOpts, dst, lockDir string, pro
 	}
 	return res, false, nil
 }
+
+var reTruncated = regexp.MustCompile(`_[0-9a-f]{32}$`)
 
 type pnpmProject struct {
 	Name                 string              `json:"name"`
