@@ -52,6 +52,8 @@
    "runner": "jest",
    "bin": "node_modules/jest/bin/jest.js",
    "args": [],
+   "env": ["CI="],
+   "covers": "jest 29; CI is cleared because resources/jestResolver.js maps 'immutable' to the built dist/ (absent) when CI is set",
    "include": ["^src/.*\\.(js|ts)$"],
    "exclude": ["\\.d\\.ts$"],
    "mutants": 24,
