@@ -12,6 +12,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/qxbao/bgraph"
@@ -30,13 +31,13 @@ func main() {
 const usage = `bgraph - select affected tests from the file-level import graph (fail-closed)
 
 Usage:
-  bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...]
-  bgraph explain   [--root DIR] [--base REF] <test|file>
+  bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...] [--dynamic[=false]] [--python EXE]
+  bgraph explain   [--root DIR] [--base REF] [--dynamic[=false]] [--python EXE] <test|file>
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
-  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json]
+  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json] [--dynamic[=false]] [--python EXE]
   bgraph index     [--root DIR]
   bgraph mcp       [--root DIR]        (MCP server on stdio)
-  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict]
+  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE]
   bgraph doctor                (not implemented)
   bgraph version | help
 `
@@ -71,8 +72,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("bgraph "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
-	var base, head, failed, class, listDir string
+	var base, head, failed, class, listDir, python string
 	var asJSON bool
+	var dyn dynamicFlag
+	switch cmd {
+	case "affected", "explain", "command":
+		dyn.register(fs)
+		fs.StringVar(&python, "python", "", "interpreter of the dynamic layer (overrides bgraph.toml [dynamic_layer] python)")
+	}
 	switch cmd {
 	case "affected":
 		fs.StringVar(&base, "base", "", "base ref (default: merge-base with origin/HEAD, origin/main, main, master)")
@@ -108,7 +115,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: python})
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
@@ -158,7 +165,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		base = b // empty → Select returns full (no_base)
 	}
-	ch := bgraph.Change{Base: base, Head: head, Worktree: head == ""}
+	ch := bgraph.Change{Base: base, Head: head, Worktree: head == "", Dynamic: dyn.mode}
 	if failed != "" {
 		ch.PreviouslyFailed = strings.Split(failed, ",")
 	}
@@ -249,6 +256,32 @@ func printSelection(w io.Writer, sel model.Selection) {
 		}
 		fmt.Fprintf(w, "  %s  (%s)  %s\n", t.Unit, t.Runner, first)
 	}
+	if len(sel.Narrowed) > 0 {
+		fmt.Fprintf(w, "\nnarrowed by dynamic records: %d\n", len(sel.Narrowed))
+		for _, n := range sel.Narrowed {
+			fmt.Fprintf(w, "  %s  %s\n", n.Unit, n.Reason)
+		}
+	}
+}
+
+// dynamicFlag is --dynamic: absent → bgraph.toml decides, --dynamic → on, --dynamic=false → off.
+type dynamicFlag struct{ mode bgraph.DynamicMode }
+
+func (d *dynamicFlag) register(fs *flag.FlagSet) {
+	fs.Var(d, "dynamic", "narrow widened tests with recorded dependencies (docs/dynamic.md); =false disables it even if bgraph.toml enables it")
+}
+func (d *dynamicFlag) IsBoolFlag() bool { return true }
+func (d *dynamicFlag) String() string   { return string(d.mode) }
+func (d *dynamicFlag) Set(v string) error {
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return err
+	}
+	d.mode = bgraph.DynamicOff
+	if b {
+		d.mode = bgraph.DynamicOn
+	}
+	return nil
 }
 
 func suggestRule(u model.Unresolved) string {

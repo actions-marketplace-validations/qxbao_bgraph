@@ -54,3 +54,36 @@ func TestDynamicErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestDynamicLayer(t *testing.T) {
+	f, err := Parse("x", []byte(`
+[[dynamic]]
+file = "c.py"
+sys_path_only = true
+reason = "r"
+
+[dynamic_layer]
+ecosystems = ["python", "python"]
+python = ".venv/Scripts/python.exe"
+trust_native_env = true
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d := f.Dynamic; len(d.Ecosystems) != 1 || d.Ecosystems[0] != "python" || d.Python != ".venv/Scripts/python.exe" || !d.TrustNativeEnv || len(f.Dynamics) != 1 {
+		t.Fatalf("%+v", f)
+	}
+	f, err = Parse("x", nil)
+	if err != nil || len(f.Dynamic.Ecosystems) != 0 || f.Dynamic.Python != "" || f.Dynamic.TrustNativeEnv {
+		t.Fatalf("default: %v %+v", err, f.Dynamic)
+	}
+	for src, want := range map[string]string{
+		"[dynamic_layer]\necosystems = [\"node\"]": "node",
+		"[dynamic_layer]\nbogus = 1":               "bogus",
+		"[dynamic_layer]\npython = \" python\"":    "python",
+	} {
+		if _, err := Parse("x", []byte(src)); err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("%q: %v", src, err)
+		}
+	}
+}

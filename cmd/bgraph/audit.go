@@ -57,6 +57,9 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	asJSON := fs.Bool("json", false, "in JSON")
 	logPath := fs.String("log", "", "append one JSON line per run to this file and print the clean-run streak")
 	strict := fs.Bool("strict", false, "also exit 3 when a failure cannot be mapped to a test file")
+	var dyn dynamicFlag
+	dyn.register(fs)
+	python := fs.String("python", "", "interpreter of the dynamic layer (overrides bgraph.toml [dynamic_layer] python)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -87,7 +90,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python})
 	if err != nil {
 		return fail(err)
 	}
@@ -101,7 +104,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 		}
 		b = d // empty → full (no_base): every failure is covered
 	}
-	ch := bgraph.Change{Base: b, Head: *head, Worktree: *head == ""}
+	ch := bgraph.Change{Base: b, Head: *head, Worktree: *head == "", Dynamic: dyn.mode}
 	if *failed != "" {
 		ch.PreviouslyFailed = strings.Split(*failed, ",")
 	}

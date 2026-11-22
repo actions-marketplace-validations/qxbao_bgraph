@@ -95,6 +95,23 @@ type Options struct {
 	MaxChanged int
 }
 
+// DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic.md).
+var DynamicEcosystems = []string{"python"}
+
+// DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic.md), off by default. It is a table of its own,
+// not [dynamic], because [[dynamic]] is already the array of dynamic-import declarations and TOML cannot hold both.
+type DynamicLayer struct {
+	// Ecosystems narrowed by recorded dependencies (subset of DynamicEcosystems). Empty: the layer is off unless the caller
+	// enables it (bgraph --dynamic).
+	Ecosystems []string
+	// Python: the interpreter used by `bgraph record` and for the environment fingerprint at selection time. A path with a
+	// separator is relative to the repo root; a bare name is looked up on PATH. Empty: "python".
+	Python string
+	// TrustNativeEnv: native extension modules installed in the environment (not CPython's own) do not make a record
+	// incomplete; the environment fingerprint covers their versions.
+	TrustNativeEnv bool
+}
+
 // File is the validated content of bgraph.toml.
 type File struct {
 	Rules     []Rule
@@ -102,7 +119,8 @@ type File struct {
 	Configs   []Config
 	Dynamics  []Dynamic
 	Options   Options
-	Path      string // path of the file read; empty if there is no file
+	Dynamic   DynamicLayer // [dynamic_layer]
+	Path      string       // path of the file read; empty if there is no file
 }
 
 type rawFile struct {
@@ -137,6 +155,11 @@ type rawFile struct {
 	Options struct {
 		MaxChanged *int64 `toml:"max_changed"`
 	} `toml:"options"`
+	DynamicLayer struct {
+		Ecosystems     []string `toml:"ecosystems"`
+		Python         string   `toml:"python"`
+		TrustNativeEnv bool     `toml:"trust_native_env"`
+	} `toml:"dynamic_layer"`
 }
 
 // Load reads <root>/bgraph.toml. No file → an empty File with defaults, no error.
@@ -350,6 +373,19 @@ func Parse(name string, data []byte) (*File, error) {
 		}
 		f.Options.MaxChanged = int(*m)
 	}
+	dl := raw.DynamicLayer
+	for _, e := range dl.Ecosystems {
+		if !slices.Contains(DynamicEcosystems, e) {
+			return nil, fmt.Errorf("%s: dynamic_layer.ecosystems: %q has no dynamic layer (supported: %s)", name, e, strings.Join(DynamicEcosystems, ", "))
+		}
+		if !slices.Contains(f.Dynamic.Ecosystems, e) {
+			f.Dynamic.Ecosystems = append(f.Dynamic.Ecosystems, e)
+		}
+	}
+	if strings.ContainsRune(dl.Python, 0) || dl.Python != strings.TrimSpace(dl.Python) {
+		return nil, fmt.Errorf("%s: dynamic_layer.python: invalid interpreter %q", name, dl.Python)
+	}
+	f.Dynamic.Python, f.Dynamic.TrustNativeEnv = dl.Python, dl.TrustNativeEnv
 	return f, nil
 }
 

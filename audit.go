@@ -45,6 +45,8 @@ type AuditReport struct {
 //   - F is in Files of some SelectedTest, or
 //   - some SelectedTest has Whole=true and F lies within its Project (eco.Within: "." contains everything).
 //
+// Units removed by the dynamic layer (Selection.Narrowed) are not in Tests: their failures are missed like any other.
+//
 // Module/package widenings need no extra case: the selector already expands them into SelectedTests, and the runner
 // executes exactly those, so SelectedTests is the ground truth. Not modelled (reported as missed, never hidden): a
 // runner falling back to a whole-project command because of glob characters in a file name.
@@ -120,6 +122,11 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 					continue
 				}
 				ft.Reason = why
+				for _, n := range sel.Narrowed {
+					if n.Unit == file {
+						ft.Reason = "selected by a widening but removed by the dynamic layer: " + n.Reason
+					}
+				}
 				rep.Missed = append(rep.Missed, ft)
 			case audit.Ambiguous:
 				ft.Reason = "test file is ambiguous (candidate matches several known test files)"

@@ -79,6 +79,7 @@ type AffectedInput struct {
 	Head             string   `json:"head,omitempty" jsonschema:"target commit; default: the working tree (staged, unstaged and untracked changes included)"`
 	PreviouslyFailed []string `json:"previously_failed,omitempty" jsonschema:"ids of test units that failed in the previous run; they are always re-selected"`
 	Limit            int      `json:"limit,omitempty" jsonschema:"cap for the changed/tests lists (default 200, max 5000)"`
+	Dynamic          *bool    `json:"dynamic,omitempty" jsonschema:"narrow widened tests with recorded dependencies (true) or never (false); default: bgraph.toml [dynamic_layer]"`
 }
 
 // AffectedOutput is the structured result of affected_tests.
@@ -95,6 +96,8 @@ type AffectedOutput struct {
 	Warnings      []model.Widening     `json:"warnings" jsonschema:"problems that do not change the scope; always present"`
 	WarningsTotal int                  `json:"warnings_total"`
 	AlwaysRun     []string             `json:"always_run"`
+	Narrowed      []model.NarrowedTest `json:"narrowed" jsonschema:"widened tests removed by the dynamic layer (recorded dependencies); always present"`
+	NarrowedTotal int                  `json:"narrowed_total"`
 	Notes         []string             `json:"notes"`
 	Truncated     bool                 `json:"truncated" jsonschema:"true when any list was cut; see the *_total counts"`
 	Limit         int                  `json:"limit"`
@@ -103,7 +106,7 @@ type AffectedOutput struct {
 func (s *Server) affected(ctx context.Context, _ *mcp.CallToolRequest, in AffectedInput) (*mcp.CallToolResult, AffectedOutput, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sel, notes, err := s.selection(ctx, in.Base, in.Head, in.PreviouslyFailed)
+	sel, notes, err := s.selection(ctx, in.Base, in.Head, in.PreviouslyFailed, in.Dynamic)
 	if err != nil {
 		return nil, AffectedOutput{}, err
 	}
@@ -113,7 +116,7 @@ func (s *Server) affected(ctx context.Context, _ *mcp.CallToolRequest, in Affect
 
 // selection runs Select the way the CLI does, including the default base; a missing default base is a note, not an error
 // (Select then returns scope=full / no_base).
-func (s *Server) selection(ctx context.Context, base, head string, failed []string) (model.Selection, []string, error) {
+func (s *Server) selection(ctx context.Context, base, head string, failed []string, dyn *bool) (model.Selection, []string, error) {
 	notes := []string{}
 	if base == "" {
 		b, err := s.ix.DefaultBase(ctx)
@@ -122,19 +125,27 @@ func (s *Server) selection(ctx context.Context, base, head string, failed []stri
 		}
 		base = b
 	}
-	sel, err := s.ix.Select(ctx, bgraph.Change{Base: base, Head: head, Worktree: head == "", PreviouslyFailed: failed})
+	mode := bgraph.DynamicDefault
+	if dyn != nil {
+		mode = bgraph.DynamicOff
+		if *dyn {
+			mode = bgraph.DynamicOn
+		}
+	}
+	sel, err := s.ix.Select(ctx, bgraph.Change{Base: base, Head: head, Worktree: head == "", PreviouslyFailed: failed, Dynamic: mode})
 	return sel, notes, err
 }
 
 func affectedOutput(sel model.Selection, notes []string, limit int) AffectedOutput {
 	out := AffectedOutput{Scope: sel.Scope, Base: sel.Base, Head: sel.Head, Notes: nonNil(notes), Limit: limit}
-	var t1, t2, t3, t4 bool
+	var t1, t2, t3, t4, t5 bool
 	out.Changed, out.ChangedTotal, t1 = capList(sel.Changed, limit)
 	out.Tests, out.TestsTotal, t2 = capList(sel.Tests, limit)
 	out.Widening, out.WideningTotal, t3 = capList(sel.Widening, failClosedLimit(limit))
 	out.Warnings, out.WarningsTotal, t4 = capList(sel.Warnings, failClosedLimit(limit))
+	out.Narrowed, out.NarrowedTotal, t5 = capList(sel.Narrowed, limit)
 	out.AlwaysRun = nonNil(sel.AlwaysRun)
-	out.Truncated = t1 || t2 || t3 || t4
+	out.Truncated = t1 || t2 || t3 || t4 || t5
 	return out
 }
 
@@ -185,6 +196,8 @@ type ExplainInput struct {
 	Base   string `json:"base,omitempty" jsonschema:"base ref or commit; default: merge-base with the default branch"`
 	Head   string `json:"head,omitempty" jsonschema:"target commit; default: the working tree"`
 	Limit  int    `json:"limit,omitempty" jsonschema:"cap for the explanation lines (default 200, max 5000)"`
+	// Dynamic: see AffectedInput.Dynamic.
+	Dynamic *bool `json:"dynamic,omitempty" jsonschema:"narrow widened tests with recorded dependencies (true) or never (false); default: bgraph.toml [dynamic_layer]"`
 }
 
 // ExplainOutput is the structured result of explain_selection.
@@ -197,9 +210,12 @@ type ExplainOutput struct {
 	WideningTotal int              `json:"widening_total"`
 	Warnings      []model.Widening `json:"warnings" jsonschema:"always present"`
 	WarningsTotal int              `json:"warnings_total"`
-	Notes         []string         `json:"notes"`
-	Truncated     bool             `json:"truncated"`
-	Limit         int              `json:"limit"`
+	// Narrowed: widened units removed by the dynamic layer.
+	Narrowed      []model.NarrowedTest `json:"narrowed" jsonschema:"widened tests removed by the dynamic layer (recorded dependencies); always present"`
+	NarrowedTotal int                  `json:"narrowed_total"`
+	Notes         []string             `json:"notes"`
+	Truncated     bool                 `json:"truncated"`
+	Limit         int                  `json:"limit"`
 }
 
 func (s *Server) explain(ctx context.Context, _ *mcp.CallToolRequest, in ExplainInput) (*mcp.CallToolResult, ExplainOutput, error) {
@@ -208,17 +224,18 @@ func (s *Server) explain(ctx context.Context, _ *mcp.CallToolRequest, in Explain
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	sel, notes, err := s.selection(ctx, in.Base, in.Head, nil)
+	sel, notes, err := s.selection(ctx, in.Base, in.Head, nil, in.Dynamic)
 	if err != nil {
 		return nil, ExplainOutput{}, err
 	}
 	limit := clampLimit(in.Limit)
 	out := ExplainOutput{Target: in.Target, Scope: sel.Scope, Notes: nonNil(notes), Limit: limit}
-	var t1, t2, t3 bool
+	var t1, t2, t3, t4 bool
 	out.Lines, out.LinesTotal, t1 = capList(explain.Lines(sel, in.Target), limit)
 	out.Widening, out.WideningTotal, t2 = capList(sel.Widening, failClosedLimit(limit))
 	out.Warnings, out.WarningsTotal, t3 = capList(sel.Warnings, failClosedLimit(limit))
-	out.Truncated = t1 || t2 || t3
+	out.Narrowed, out.NarrowedTotal, t4 = capList(sel.Narrowed, limit)
+	out.Truncated = t1 || t2 || t3 || t4
 	return textResult(explainText(out)), out, nil
 }
 
@@ -282,6 +299,7 @@ func affectedText(o AffectedOutput) string {
 			fmt.Fprintf(&b, "  %s (%s)\n", t.Unit, t.Runner)
 		}
 	}
+	writeNarrowed(&b, o.Narrowed, o.NarrowedTotal)
 	if o.Truncated {
 		fmt.Fprintf(&b, "\nTRUNCATED: some lists were cut at limit=%d; compare the *_total counts. Raise `limit` to see more.\n", o.Limit)
 	}
@@ -339,10 +357,25 @@ func explainText(o ExplainOutput) string {
 	}
 	writeWidenings(&b, "widening", o.Widening, o.WideningTotal)
 	writeWidenings(&b, "warnings", o.Warnings, o.WarningsTotal)
+	writeNarrowed(&b, o.Narrowed, o.NarrowedTotal)
 	if o.Truncated {
 		fmt.Fprintf(&b, "\nTRUNCATED at limit=%d; compare the *_total counts.\n", o.Limit)
 	}
 	return b.String()
+}
+
+func writeNarrowed(b *strings.Builder, ns []model.NarrowedTest, total int) {
+	if len(ns) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "\nnarrowed by dynamic records: %d (widened tests whose recorded run loaded none of the changed files)\n", total)
+	for i, n := range ns {
+		if i == textLines {
+			fmt.Fprintf(b, "  ... %d more in the structured result (narrowed_total=%d)\n", len(ns)-i, total)
+			break
+		}
+		fmt.Fprintf(b, "  %s\n", n.Unit)
+	}
 }
 
 func writeWidenings(b *strings.Builder, title string, ws []model.Widening, total int) {

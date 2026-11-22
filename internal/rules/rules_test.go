@@ -94,6 +94,30 @@ func TestExampleFileParses(t *testing.T) {
 	if len(f.Rules) == 0 || len(f.Generated) == 0 || len(f.Configs) != 2 || len(f.Dynamics) != 3 {
 		t.Fatalf("%+v", f)
 	}
+	// The [dynamic_layer] example is commented out (the layer is off by default): uncommented, it must parse too.
+	var block []string
+	in := false
+	for _, l := range strings.Split(strings.ReplaceAll(string(b), "\r\n", "\n"), "\n") {
+		if l == "# [dynamic_layer]" {
+			in = true
+		}
+		if in && !strings.HasPrefix(l, "# ") {
+			break
+		}
+		if in {
+			block = append(block, strings.TrimPrefix(l, "# "))
+		}
+	}
+	if len(block) < 2 {
+		t.Fatal("no commented [dynamic_layer] example")
+	}
+	f, err = Parse("bgraph.example.toml", append(b, []byte("\n"+strings.Join(block, "\n")+"\n")...))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.Dynamic.Ecosystems) != 1 || f.Dynamic.Python == "" {
+		t.Fatalf("%+v", f.Dynamic)
+	}
 }
 
 func TestDefaults(t *testing.T) {

@@ -288,3 +288,19 @@ func splitLines(s string) []string {
 	}
 	return out
 }
+
+// EnvFile reports whether p is part of the Python environment of a repository for the dynamic layer's fingerprint
+// (docs/dynamic.md §5): a manifest, lockfile, requirements file, runner configuration or toolchain pin. A change to one of these
+// changes what is installed or how tests are launched, so records made with other contents are not used.
+func EnvFile(p string) bool {
+	if skipPath(p) {
+		return false
+	}
+	base := path.Base(p)
+	switch base {
+	case "pyproject.toml", "setup.cfg", "setup.py", "tox.ini", "pytest.ini", ".pytest.ini", "pytest.toml", ".pytest.toml",
+		"Pipfile", "noxfile.py", ".python-version":
+		return true
+	}
+	return isLockfile(base) || isRequirementsFile(p) || path.Ext(base) == ".lock"
+}

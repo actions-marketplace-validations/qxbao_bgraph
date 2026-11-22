@@ -185,6 +185,33 @@ none = true
 reason = "load_plugins() imports entry points of installed packages, never a module of this repo"
 
 # ---------------------------------------------------------------------------------------------------------------------
+# [dynamic_layer]: narrow widened selections with recorded test dependencies (docs/dynamic.md).        (NARROWING)
+#
+# Off by default. When the static graph widens (a dynamic import, an unreferenced file...), the dynamic layer may remove
+# a WIDENED test whose recorded run (`bgraph record`: each test file in its own process with an audit hook) shows that
+# it loaded or opened none of the changed files. Tests reached through ordinary imports are never removed. Records are
+# only used when complete (no subprocess, no native code outside the environment's trust), passing, made in the same
+# environment (interpreter, installed distributions, manifests/lockfiles/runner configs at the base) and when every
+# recorded dependency is unchanged at the base; and only when every changed file is an existing .py file that was
+# modified (no addition, deletion, rename, stub, config or lockfile). It is not proven safe by research: enable it per
+# ecosystem after evaluating it on your repository. `bgraph affected --dynamic` enables it for one run.
+#
+#   ecosystems       : ecosystems to narrow (currently only "python").
+#   python           : interpreter for `bgraph record` and the environment fingerprint ("python" on PATH by default;
+#                      a path with a separator is relative to the repo root, e.g. ".venv/Scripts/python.exe").
+#   trust_native_env : native extension modules installed in the environment (not CPython's own) do not make a
+#                      record incomplete; their versions are part of the fingerprint. Default false.
+#                      Records made with another setting are not used.
+#
+# Not a [dynamic] table: [[dynamic]] above is the list of dynamic-import declarations.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# [dynamic_layer]
+# ecosystems = ["python"]
+# python = ".venv/bin/python"
+# trust_native_env = false
+
+# ---------------------------------------------------------------------------------------------------------------------
 # [options]
 #   max_changed : above this many changed files, run the full suite (diff_too_large). Default 5000.
 # ---------------------------------------------------------------------------------------------------------------------

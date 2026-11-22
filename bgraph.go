@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/eco/dotnet"
 	"github.com/qxbao/bgraph/internal/eco/jvm"
@@ -36,8 +37,12 @@ type Options struct {
 	// StateDir: durable index directory (Bint passes its state directory). Empty → the user's cache directory
 	// (scancache.DefaultDir), never inside the repo.
 	StateDir string
-	// MemoryOnly: do not write the durable cache (tests, one-shot runs).
+	// MemoryOnly: do not write the durable cache (tests, one-shot runs). The dynamic layer still reads and writes its records
+	// under StateDir when one is given.
 	MemoryOnly bool
+	// Python: interpreter of the dynamic layer (docs/dynamic.md §5), overriding bgraph.toml [dynamic_layer] python. A path with
+	// a separator is relative to the repo root; a bare name is looked up on PATH.
+	Python string
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
@@ -46,6 +51,9 @@ type Index struct {
 	cache *scancache.Cache
 	opt   Options
 	memo  memo
+	// stateDir: where the dynamic layer keeps its records (empty: none, the layer cannot narrow).
+	stateDir string
+	probes   pydyn.ProbeCache
 }
 
 // Open opens the repo containing root.
@@ -54,7 +62,7 @@ func Open(ctx context.Context, root string, opt Options) (*Index, error) {
 	if err != nil {
 		return nil, err
 	}
-	ix := &Index{repo: r, cache: scancache.New(), opt: opt}
+	ix := &Index{repo: r, cache: scancache.New(), opt: opt, stateDir: opt.StateDir}
 	if !opt.MemoryOnly {
 		dir := opt.StateDir
 		if dir == "" {
@@ -65,6 +73,7 @@ func Open(ctx context.Context, root string, opt Options) (*Index, error) {
 				ix.cache = c
 			}
 			ix.memo.dir = dir
+			ix.stateDir = dir
 		}
 	}
 	return ix, nil
@@ -89,6 +98,9 @@ type Change struct {
 	Head             string
 	Worktree         bool
 	PreviouslyFailed []string
+	// Dynamic: whether the dynamic layer (docs/dynamic.md) narrows widened units. DynamicDefault follows bgraph.toml
+	// [dynamic_layer] ecosystems.
+	Dynamic DynamicMode
 }
 
 // Select computes the selection. Infrastructure errors (git cannot run) return an error; everything else uncertain becomes a widening in the Selection.
@@ -151,9 +163,9 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 	if err := ix.cache.Prefetch(ctx, bt, bt.Files(), 0); err != nil {
 		return Selection{}, err
 	}
-	sel := selector.Select(ctx, in)
+	res := selector.Run(ctx, in)
 	ix.cache.Flush()
-	return sel, nil
+	return ix.applyDynamic(ctx, ch, in, res), nil
 }
 
 // Ecosystems are the supported ecosystems.

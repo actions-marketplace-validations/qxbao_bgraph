@@ -13,8 +13,14 @@ through ordinary edges is never removed.
 Selected = S_precise ∪ { t ∈ S_widened \ S_precise : not (record(t) usable AND Dep(t) ∩ Changed = ∅) }
 ```
 
-Off by default; enabled per ecosystem (`[dynamic] ecosystems = ["python"]` in bgraph.toml, or `--dynamic` on the CLI) and only recommended
-after the ecosystem passes the §10.3 gate for the hybrid configuration.
+Off by default; enabled per ecosystem (`[dynamic_layer] ecosystems = ["python"]` in bgraph.toml, or `--dynamic` on the CLI) and only
+recommended after the ecosystem passes the §10.3 gate for the hybrid configuration.
+
+Clarification (implementation): the table is `[dynamic_layer]`, not `[dynamic]`: `[[dynamic]]` is already the array of dynamic-import
+declarations and TOML cannot hold a table and an array of tables under one key. Keys: `ecosystems`, `python`, `trust_native_env`
+(documented in docs/bgraph.example.toml). `--dynamic` turns the layer on for every supported ecosystem for one run, `--dynamic=false`
+turns it off even when bgraph.toml enables it; library callers use `Change.Dynamic` (`DynamicOn`/`DynamicOff`/default) and
+`Options.Python` (also `--python` on the CLI) to override the interpreter.
 
 ## 1. Which units can be narrowed (selector)
 
@@ -95,8 +101,21 @@ configs (pyproject.toml, setup.cfg, setup.py, tox.ini, pytest.ini, requirements*
 fingerprint by running the configured interpreter once (`[dynamic] python = "..."`, default `python` on PATH; cached per Index by executable
 path+mtime). If the interpreter cannot run → no narrowing (note).
 
+Clarification (implementation): the probe runs a script from an otherwise empty temporary directory (no repository module can shadow
+what it imports), from the repo root, without isolation flags (PYTHONPATH and user site count, as for the tests). The cached probe is
+also dropped when the modification time of one of the interpreter's `sys.path` directories changes, so that an install into the same
+interpreter during a long-lived session (MCP) is seen. Distribution names are normalized (PEP 503). The environment files are, at any
+depth outside `node_modules`/`site-packages`: pyproject.toml, setup.cfg, setup.py, tox.ini, pytest.ini, .pytest.ini, pytest.toml,
+.pytest.toml, Pipfile, noxfile.py, .python-version, requirements/constraints files and every `*.lock` / pylock file.
+`trust_native_env = true` changes the collector ID (`python-audit-1+trust-native`), so records made under one setting are not
+used under the other.
+
 ## 6. Output and tooling
 
+- The `dynamic_skipped` note of §2 is a selection warning (`Selection.Warnings`, reason `dynamic_skipped`, the detail names the
+  ecosystem and the reason); unreadable or corrupt record lines are reported the same way. A kept widened unit carries
+  `SelectedTest.Dynamic` (json `dynamic`), saying why the layer kept it. When every unit is removed the scope becomes `none` (an
+  empty selection with another scope means "run everything" to the runner adapter).
 - `Selection.Narrowed []NarrowedTest{Unit, Recorded, Commit, Reason}` lists removed units; `bgraph explain <unit>` shows why a unit was
   removed or kept (which changed file is in its deps, or why the record is unusable); `bgraph affected` prints a "narrowed by dynamic records:
   N" section; MCP `explain_selection` includes it.
