@@ -43,6 +43,8 @@ type RunOptions struct {
 	Timeout     time.Duration
 	Jobs        int
 	TrustNative bool
+	// Env: extra environment variables (KEY=VALUE) for the unit processes. PYTHONPATH entries go after the plugin directory.
+	Env []string
 	// Progress is called after each unit (from the collecting goroutine, serialized).
 	Progress func(done, total int, o Outcome)
 }
@@ -163,6 +165,16 @@ func runUnit(ctx context.Context, opt RunOptions, plug, outFile string, u Unit) 
 	cmd := exec.CommandContext(rctx, opt.Python, Argv(u, plug)...)
 	cmd.Dir = filepath.Join(opt.Root, filepath.FromSlash(u.Project))
 	pp := plug
+	var extra []string
+	for _, kv := range opt.Env {
+		if v, ok := strings.CutPrefix(kv, "PYTHONPATH="); ok {
+			if v != "" {
+				pp += string(os.PathListSeparator) + v
+			}
+			continue
+		}
+		extra = append(extra, kv)
+	}
 	if old := os.Getenv("PYTHONPATH"); old != "" {
 		pp += string(os.PathListSeparator) + old
 	}
@@ -172,6 +184,7 @@ func runUnit(ctx context.Context, opt RunOptions, plug, outFile string, u Unit) 
 	}
 	cmd.Env = append(os.Environ(), "PYTHONPATH="+pp, "PYTHONDONTWRITEBYTECODE=1", "BGRAPH_COLLECT_ROOT="+opt.Root,
 		"BGRAPH_COLLECT_OUT="+outFile, "BGRAPH_COLLECT_TRUST_NATIVE="+trust)
+	cmd.Env = append(cmd.Env, extra...)
 	var buf tailBuffer
 	cmd.Stdout, cmd.Stderr = &buf, &buf
 	cmd.WaitDelay = 10 * time.Second

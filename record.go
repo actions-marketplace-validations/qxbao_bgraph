@@ -29,6 +29,9 @@ type RecordOptions struct {
 	AllowDirty bool          // record a working tree that differs from HEAD (dependencies keyed by the content on disk)
 	// Out: write the records to this JSONL file (to import elsewhere with ImportRecords) instead of the state directory.
 	Out string
+	// Env: extra environment variables for the test processes (e.g. PYTHONPATH=<checkout>/src so that a worktree's sources
+	// shadow an editable install of another checkout). They are not part of the environment fingerprint.
+	Env []string
 	// Progress is called after each unit.
 	Progress func(done, total int, rec DynamicRecord, elapsed time.Duration, tail string)
 }
@@ -141,7 +144,7 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 	for _, u := range units {
 		byID[u.ID] = u
 	}
-	ropt := pydyn.RunOptions{Python: exe, Root: ix.repo.Root, TmpDir: ix.tmpDir(), Timeout: opt.Timeout, Jobs: jobs, TrustNative: trust}
+	ropt := pydyn.RunOptions{Python: exe, Root: ix.repo.Root, TmpDir: ix.tmpDir(), Timeout: opt.Timeout, Jobs: jobs, TrustNative: trust, Env: opt.Env}
 	if opt.Progress != nil {
 		ropt.Progress = func(done, total int, o pydyn.Outcome) {
 			opt.Progress(done, total, pydyn.RecordOf(o, byID[o.Unit], wt, ix.repo.Root, env, collector, head, now), o.Elapsed, o.Tail)
