@@ -1,0 +1,91 @@
+name: bgraph affected tests
+description: >-
+  Select the tests affected by a change from the file-level import graph (fail-closed: when unsure, run more).
+  Outputs the scope and the test-runner commands. Requires actions/checkout with fetch-depth 0.
+author: qxbao
+branding:
+  icon: filter
+  color: green
+
+inputs:
+  version:
+    description: bgraph release to install, "latest" or a tag such as "v0.1.0".
+    required: false
+    default: latest
+  base:
+    description: >-
+      Base ref or commit to compare with. Default: origin/<PR base branch> on pull_request and pull_request_target, the
+      merge group's base on merge_group, the commit before the push on push (HEAD~1 when that commit is unknown, e.g.
+      for a new branch). Needs the full history (actions/checkout with fetch-depth 0); a missing base gives scope "full".
+    required: false
+    default: ""
+  mode:
+    description: >-
+      "command" (default): the selection as runner commands (outputs commands and script).
+      "affected": the selection as JSON (bgraph affected --json).
+      "audit": shadow mode, bgraph audit --json against HEAD; pass the results with args, e.g. "--results junit.xml".
+    required: false
+    default: command
+  root:
+    description: Directory inside the repository.
+    required: false
+    default: .
+  args:
+    description: Extra flags for the bgraph command, split on whitespace (e.g. "--list-dir .bgraph-lists" or "--dynamic=false").
+    required: false
+    default: ""
+  binary:
+    # Undocumented: path to a local bgraph binary instead of a release download (used by this repository's CI).
+    description: Internal use.
+    required: false
+    default: ""
+
+outputs:
+  scope:
+    description: none, graph, package, module or full.
+    value: ${{ steps.run.outputs.scope }}
+  full:
+    description: '"true" when the full suite must run (scope full), else "false".'
+    value: ${{ steps.run.outputs.full }}
+  commands:
+    description: The runner commands, one shell line each (mode command; empty for scope none and full).
+    value: ${{ steps.run.outputs.commands }}
+  script:
+    description: Path to a bash script running the commands with set -e (mode command).
+    value: ${{ steps.run.outputs.script }}
+  json:
+    description: Path to a file with bgraph's full JSON output (the plan, the selection or the audit report).
+    value: ${{ steps.run.outputs.json }}
+  clean:
+    description: 'Mode audit: "true" when no failed test lies outside the selection.'
+    value: ${{ steps.run.outputs.clean }}
+  path:
+    description: Path to the installed bgraph binary (its directory is also added to PATH).
+    value: ${{ steps.install.outputs.path }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install bgraph
+      id: install
+      shell: bash
+      env:
+        BGRAPH_VERSION: ${{ inputs.version }}
+        BGRAPH_BINARY: ${{ inputs.binary }}
+        BGRAPH_REPO: qxbao/bgraph
+      run: bash "$GITHUB_ACTION_PATH/action/install.sh"
+
+    - name: Run bgraph
+      id: run
+      shell: bash
+      env:
+        BGRAPH: ${{ steps.install.outputs.path }}
+        MODE: ${{ inputs.mode }}
+        BASE: ${{ inputs.base }}
+        ROOT: ${{ inputs.root }}
+        ARGS: ${{ inputs.args }}
+        EVENT_NAME: ${{ github.event_name }}
+        BASE_REF: ${{ github.base_ref }}
+        BEFORE: ${{ github.event.before }}
+        MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
+      run: bash "$GITHUB_ACTION_PATH/action/run.sh"

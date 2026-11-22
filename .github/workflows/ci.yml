@@ -21,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
         shell: bash
@@ -45,6 +45,8 @@ jobs:
         run: GOOS=windows go vet ./...
       - name: go vet (GOOS=linux)
         run: GOOS=linux go vet ./...
+      - name: go vet (GOOS=darwin)
+        run: GOOS=darwin go vet ./...
 
       - name: Install staticcheck
         run: go install honnef.co/go/tools/cmd/staticcheck@${STATICCHECK_VERSION}
@@ -55,6 +57,127 @@ jobs:
         run: GOOS=windows staticcheck ./...
       - name: staticcheck (GOOS=linux)
         run: GOOS=linux staticcheck ./...
+      - name: staticcheck (GOOS=darwin)
+        run: GOOS=darwin staticcheck ./...
 
       - name: Test
         run: go test -timeout 10m ./...
+
+  # Exercises the composite action (action.yml) on every OS with a bgraph built from source (the undocumented `binary`
+  # input), until a release exists to download.
+  action:
+    name: action (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Disable CRLF conversion (before checkout)
+        run: git config --global core.autocrlf false
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build bgraph
+        id: build
+        run: |
+          exe=bgraph
+          [ "$RUNNER_OS" = "Windows" ] && exe=bgraph.exe
+          go build -trimpath -ldflags "-X main.version=0.0.0-ci" -o "$RUNNER_TEMP/bgraph-bin/$exe" ./cmd/bgraph
+          echo "binary=$RUNNER_TEMP/bgraph-bin/$exe" >> "$GITHUB_OUTPUT"
+
+      # A fixture repository whose last commit changes package a only: the selection is `go test ./a`.
+      - name: Create fixture repository
+        id: fixture
+        run: |
+          dir="$RUNNER_TEMP/fixture"
+          mkdir -p "$dir/a" "$dir/b"
+          cd "$dir"
+          git init -q
+          git config user.email ci@example.com
+          git config user.name ci
+          printf 'module example.com/fx\n\ngo 1.22\n' > go.mod
+          printf 'package a\n\nfunc A() int { return 1 }\n' > a/a.go
+          printf 'package a\n\nimport "testing"\n\nfunc TestA(t *testing.T) { _ = A() }\n' > a/a_test.go
+          printf 'package b\n\nfunc B() int { return 2 }\n' > b/b.go
+          printf 'package b\n\nimport "testing"\n\nfunc TestB(t *testing.T) { _ = B() }\n' > b/b_test.go
+          git add .
+          git commit -qm init
+          printf 'package a\n\nfunc A() int { return 3 }\n' > a/a.go
+          git commit -qam change
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      - name: Action, mode command (fixture)
+        id: cmd
+        uses: ./
+        with:
+          binary: ${{ steps.build.outputs.binary }}
+          root: ${{ steps.fixture.outputs.dir }}
+          base: HEAD~1
+
+      - name: Check mode command
+        env:
+          SCOPE: ${{ steps.cmd.outputs.scope }}
+          FULL: ${{ steps.cmd.outputs.full }}
+          COMMANDS: ${{ steps.cmd.outputs.commands }}
+          SCRIPT: ${{ steps.cmd.outputs.script }}
+          JSON: ${{ steps.cmd.outputs.json }}
+          FIXTURE: ${{ steps.fixture.outputs.dir }}
+        run: |
+          set -x
+          [ "$SCOPE" = "graph" ]
+          [ "$FULL" = "false" ]
+          [ "$COMMANDS" = "go test ./a" ]
+          [ -s "$JSON" ]
+          grep -q '"scope": "graph"' "$JSON"
+          (cd "$FIXTURE" && bash "$SCRIPT")
+
+      - name: Action, mode affected (fixture)
+        id: aff
+        uses: ./
+        with:
+          binary: ${{ steps.build.outputs.binary }}
+          root: ${{ steps.fixture.outputs.dir }}
+          base: HEAD~1
+          mode: affected
+
+      - name: Check mode affected
+        env:
+          SCOPE: ${{ steps.aff.outputs.scope }}
+          FULL: ${{ steps.aff.outputs.full }}
+          JSON: ${{ steps.aff.outputs.json }}
+        run: |
+          set -x
+          [ "$SCOPE" = "graph" ]
+          [ "$FULL" = "false" ]
+          grep -q '"unit": "go:a"' "$JSON"
+
+      # On this repository with the default base: any scope is fine, the action must not fail (a `full` selection is
+      # not an error).
+      - name: Action, default base (this repository)
+        id: self
+        uses: ./
+        with:
+          binary: ${{ steps.build.outputs.binary }}
+
+      - name: Check default base
+        env:
+          SCOPE: ${{ steps.self.outputs.scope }}
+          FULL: ${{ steps.self.outputs.full }}
+          VERSION_PATH: ${{ steps.self.outputs.path }}
+        run: |
+          set -x
+          case "$SCOPE" in none | graph | package | module | full) ;; *) exit 1 ;; esac
+          case "$FULL" in true | false) ;; *) exit 1 ;; esac
+          bgraph version | grep -q '0.0.0-ci'
