@@ -4,7 +4,7 @@ Affected-test selection across languages, **fail-closed**: for every change, the
 that could be affected, or widens the scope (project, full suite) with a machine-readable reason. It never silently
 drops a test.
 
-Status: three ecosystems.
+Status: six ecosystems.
 
 - **Node** (JS/TS, CJS/ESM; Jest, Vitest, Mocha, node:test, Playwright), at test-file granularity.
 - **Rust** (Cargo workspaces and standalone crates; `cargo test`), at Cargo-target granularity: one unit per library
@@ -38,6 +38,19 @@ Status: three ecosystems.
   `<modules>`, Gradle settings and root scripts, `buildSrc/`, `build-logic/`, version catalogs, the wrapper and
   `gradle.properties` widen to every JVM unit of the build (full at the repo root). `bgraph command` emits
   `mvn -pl <modules> -am -DskipTests install` then `mvn -pl <modules> verify` (`./mvnw` when present), or `./gradlew :a:test :b:test`.
+
+- **Go** (modules, `go.work`, vendoring; `go test`), at package granularity, with pure resolution (`go.mod`, `go.work` and
+  `go/parser`; the go command is never run): every directory with a `_test.go` file is a unit (`go:<dir>`, `go:.` for the root).
+  Build constraints and GOOS/GOARCH suffixes are ignored (the union of every configuration). A package depends on every file in
+  its directory, on the files of sub-directories that are not packages (`testdata/`, `_x/`, `.x/`, fixtures), on what its files
+  import (in-repo module paths and local `replace` targets, longest prefix, then `vendor/`; test-only imports reach the package's
+  own unit, not its importers), on its `//go:embed` patterns, and on the existing paths its tests name in string literals
+  (`"../x/testdata/y"`, `filepath.Join("..", "x", ...)`); a cgo package depends on every C/C++/header/assembly file. Files of a
+  module that no package owns are inputs of every package of the module. An in-repo import with no package yet is tracked, so a
+  package added later is caught; a file whose imports do not parse is selected on any change in its module. `go.mod` changes are
+  diffed structurally (comments and `retract` are harmless; `module` widens every Go unit; other directives widen the module and
+  the modules that build with it through `go.work` or a local `replace`); `go.sum` and `vendor/` widen their module; `.go` files
+  under no `go.mod` widen to full. `bgraph command` emits one `go test ./a ./b/c` per module, run in the module directory.
 
 Other ecosystems are not supported yet: changes there widen to `full`.
 

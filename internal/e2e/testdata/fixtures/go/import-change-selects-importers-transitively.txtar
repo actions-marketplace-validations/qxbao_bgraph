@@ -1,0 +1,72 @@
+Changing b selects b, its importer a, and a's importer d; c is independent.
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- head/b/b.go --
+package b
+
+func B() { _ = 2 }
+-- want --
+select go:b
+select go:a
+select go:d
+noselect go:c
+scope graph
+precise go:a

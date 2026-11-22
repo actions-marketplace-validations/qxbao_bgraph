@@ -1,0 +1,75 @@
+In a repo with a Go module and a Node project side by side, a Node change selects Node tests only.
+-- base/server/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/server/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/server/b/b.go --
+package b
+
+func B() {}
+-- base/server/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/server/c/c.go --
+package c
+
+func F() {}
+-- base/server/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/server/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/server/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/server/go.mod --
+module example.com/m
+
+go 1.22
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/web/src/a.ts --
+export const a = 2
+-- want --
+select web/src/a.test.ts
+noselect go:server/a
+noselect go:server/c
+notfull

@@ -1,0 +1,101 @@
+tools/ is a module: its module-level files select its packages, not the root package of the parent module.
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/root.go --
+package m
+
+func F() {}
+-- base/root_test.go --
+package m
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/data.txt --
+x
+-- base/tools/gen/gen.go --
+package main
+
+import (
+	"example.com/m/a"
+)
+
+func main() { a.A() }
+-- base/tools/gen/gen_test.go --
+package main
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+-- head/tools/data.txt --
+y
+-- want --
+select go:tools/gen
+noselect go:.
+noselect go:a

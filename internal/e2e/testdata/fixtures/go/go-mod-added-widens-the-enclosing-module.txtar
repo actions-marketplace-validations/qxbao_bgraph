@@ -1,0 +1,89 @@
+Adding a go.mod moves packages into a new module: the enclosing module widens (Eco go only).
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/sub/x/x.go --
+package x
+
+func F() {}
+-- base/sub/x/x_test.go --
+package x
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/web/a.test.ts --
+import { x } from './a'
+void x
+-- base/web/a.ts --
+export const x = 1
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- head/sub/go.mod --
+module example.com/m/sub
+
+go 1.22
+-- want --
+select go:a
+select go:sub/x
+noselect web/a.test.ts
+widen manifest_changed

@@ -11,6 +11,7 @@
 //   - cargo: units are Cargo targets addressed by package (-p) and target flags (--lib, --test, ...); see cargo.go.
 //   - dotnet: units are MSBuild projects, one `dotnet test <project>` each; see dotnet.go.
 //   - maven, gradle: units are modules/projects built by the build tool; see maven.go and gradle.go.
+//   - go: units are package directories, one `go test ./<dir> ./<dir2>` per module (run in the module directory); see gotest.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -88,7 +89,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -100,6 +101,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == "maven" || t.Runner == "gradle" {
 			jvmTests = append(jvmTests, t) // units are modules/projects: dedicated adapter (maven.go, gradle.go)
+			continue
+		}
+		if t.Runner == "go" {
+			goTests = append(goTests, t) // units are package directories: dedicated adapter (gotest.go)
 			continue
 		}
 		if t.Runner == "pytest" || t.Runner == "django" {
@@ -179,6 +184,11 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	}
 	if len(jvmTests) > 0 {
 		cmds, notes := jvmCommands(jvmTests, opt)
+		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(goTests) > 0 {
+		cmds, notes := goCommands(goTests, opt)
 		plan.Commands = append(plan.Commands, cmds...)
 		plan.Notes = append(plan.Notes, notes...)
 	}

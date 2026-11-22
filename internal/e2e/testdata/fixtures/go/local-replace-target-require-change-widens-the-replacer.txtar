@@ -1,0 +1,70 @@
+The replacement module's requirements join x's build list: a require change there widens x too.
+-- base/forks/lib/go.mod --
+module github.com/someone/lib-fork
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/forks/lib/util/u.go --
+package util
+
+func U() {}
+-- base/forks/lib/util/u_test.go --
+package util
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/x/go.mod --
+module example.com/x
+
+go 1.22
+
+require example.com/lib v1.0.0
+
+replace example.com/lib => ../forks/lib
+-- base/x/x.go --
+package x
+
+import (
+	"example.com/lib/util"
+)
+
+func X() { util.U() }
+-- base/x/x_test.go --
+package x
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/y/go.mod --
+module example.com/y
+
+go 1.22
+-- base/y/y.go --
+package y
+
+func F() {}
+-- base/y/y_test.go --
+package y
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/forks/lib/go.mod --
+module github.com/someone/lib-fork
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- want --
+select go:x
+select go:forks/lib/util
+noselect go:y
+widen manifest_changed

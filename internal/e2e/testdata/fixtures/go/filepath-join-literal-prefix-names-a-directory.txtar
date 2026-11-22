@@ -1,0 +1,76 @@
+filepath.Join("..", "z", "testdata", "golden", name): the literal prefix names a directory, so any file under it, even one added later, is a dependency of c.
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+	"os"
+	"path/filepath"
+)
+
+func TestX(t *testing.T) { os.ReadFile(filepath.Join("..", "z", "testdata", "golden", name)) }
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/z/testdata/golden/one.txt --
+1
+-- base/z/z.go --
+package z
+
+func F() {}
+-- head/z/testdata/golden/two.txt --
+2
+-- want --
+select go:c
+noselect go:d
+noselect go:a
+noselect go:b

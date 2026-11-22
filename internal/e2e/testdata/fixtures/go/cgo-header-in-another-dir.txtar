@@ -1,0 +1,71 @@
+a uses cgo and includes a header that lives in package c's directory: changing it selects a.
+-- base/a/a.go --
+package a
+
+// #cgo CFLAGS: -I${SRCDIR}/../c
+// #include "helper.h"
+import "C"
+
+import "example.com/m/b"
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/helper.h --
+int helper(void);
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- head/c/helper.h --
+int helper(int);
+-- want --
+select go:a
+select go:c
+noselect go:b

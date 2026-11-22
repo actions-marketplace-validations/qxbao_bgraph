@@ -1,0 +1,28 @@
+.go files under no go.mod (GOPATH layout) are not analyzed: full.
+-- base/mod/a/a.go --
+package a
+
+func F() {}
+-- base/mod/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/mod/go.mod --
+module example.com/mod
+
+go 1.22
+-- base/src/github.com/x/y/y.go --
+package y
+
+func F() {}
+-- head/src/github.com/x/y/y.go --
+package y
+
+func F() { _ = 1 }
+-- want --
+full
+widen unknown_file

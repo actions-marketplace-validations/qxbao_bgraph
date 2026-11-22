@@ -1,0 +1,75 @@
+A dependency change in a workspace module changes the build list of every module of the workspace.
+-- base/app/go.mod --
+module example.com/app
+
+go 1.22
+
+require example.com/lib v0.0.0
+-- base/app/main.go --
+package main
+
+import (
+	"example.com/lib/util"
+)
+
+func main() { util.U() }
+-- base/app/main_test.go --
+package main
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.work --
+go 1.22
+
+use (
+	./app
+	./lib
+)
+-- base/lib/go.mod --
+module example.com/lib
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/lib/util/u.go --
+package util
+
+func U() {}
+-- base/lib/util/u_test.go --
+package util
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/other/go.mod --
+module example.com/other
+
+go 1.22
+-- base/other/o/o.go --
+package o
+
+func F() {}
+-- base/other/o/o_test.go --
+package o
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/lib/go.mod --
+module example.com/lib
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- want --
+select go:app
+select go:lib/util
+noselect go:other/o
+widen manifest_changed

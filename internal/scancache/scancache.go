@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/qxbao/bgraph/internal/model"
+	goscan "github.com/qxbao/bgraph/internal/scan/golang"
 	jsscan "github.com/qxbao/bgraph/internal/scan/js"
 	pyscan "github.com/qxbao/bgraph/internal/scan/python"
 	rsscan "github.com/qxbao/bgraph/internal/scan/rust"
@@ -27,7 +28,7 @@ import (
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1+rs-2+py-2"
+const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-1"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
@@ -86,6 +87,8 @@ func lang(p string) string {
 		return "rs"
 	case ".py":
 		return "py"
+	case ".go":
+		return "go"
 	}
 	return ""
 }
@@ -157,6 +160,8 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 		r = rsscan.Scan(p, b)
 	case "py":
 		r = pyscan.Scan(p, b)
+	case "go":
+		r = goscan.Scan(p, b)
 	default:
 		r = jsscan.Scan(p, b)
 	}

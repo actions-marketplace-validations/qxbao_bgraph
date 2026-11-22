@@ -1,0 +1,78 @@
+a embeds assets/*.txt, and a/assets is a package of its own: changing a/assets/x.txt still selects a and its importers.
+-- base/a/a.go --
+package a
+
+import (
+	"embed"
+	"example.com/m/b"
+)
+
+//go:embed assets/*.txt
+var fs embed.FS
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/a/assets/assets.go --
+package assets
+
+func F() {}
+-- base/a/assets/x.txt --
+x
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- head/a/assets/x.txt --
+y
+-- want --
+select go:a
+select go:d
+noselect go:c
+noselect go:b

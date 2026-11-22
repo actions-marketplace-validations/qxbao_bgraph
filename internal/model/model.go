@@ -135,6 +135,24 @@ type ScanResult struct {
 	UncertainReason string      `json:"uncertain_reason,omitempty"`
 	// Rust is set by the Rust scanner only (.rs files); Imports is empty for them.
 	Rust *RustScan `json:"rust,omitempty"`
+	// Go is set by the Go scanner only (.go files) on a certain result; the imports are in Imports (Kind import, Spec = import path).
+	Go *GoScan `json:"go,omitempty"`
+}
+
+// GoScan is what the Go scanner extracts from one .go file besides its imports.
+type GoScan struct {
+	Package string    `json:"package,omitempty"`
+	Embeds  []GoEmbed `json:"embeds,omitempty"`
+	// Strings: in _test.go files only, the string literals that may name a path (they contain '/', '\' or '.'), plus the joined
+	// literal leading arguments of X.Join("a", "b", ...) calls ("a/b").
+	Strings []string `json:"strings,omitempty"`
+}
+
+// GoEmbed is one pattern of a //go:embed directive.
+type GoEmbed struct {
+	Pattern string `json:"pattern,omitempty"` // as written, including an "all:" prefix
+	Line    int    `json:"line"`
+	Unknown string `json:"unknown,omitempty"` // non-empty when the directive could not be parsed (Pattern is then empty)
 }
 
 // RustScan is what the Rust scanner extracts from one .rs file: the module declarations that decide which Cargo target

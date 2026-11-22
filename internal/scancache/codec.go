@@ -16,6 +16,8 @@ import (
 // Optional trailer for Rust results (absent in results without a Rust section, so older blobs still decode):
 // [1][uvarint mod count] per mod: [str name][uvarint line][str path][str unknown][uvarint nest count][str nest...];
 // [uvarint include count] per include: [str macro][str kind][str path][uvarint line].
+// Optional trailer for Go results (after the Rust one if both were ever present): [2][str package][uvarint embed count] per embed:
+// [str pattern][uvarint line][str unknown]; [uvarint string count][str...].
 
 const codecVersion = 1
 
@@ -83,6 +85,20 @@ func encode(r model.ScanResult) []byte {
 			b = appendStr(b, inc.Kind)
 			b = appendStr(b, inc.Path)
 			b = binary.AppendUvarint(b, uint64(inc.Line))
+		}
+	}
+	if g := r.Go; g != nil {
+		b = append(b, 2)
+		b = appendStr(b, g.Package)
+		b = binary.AppendUvarint(b, uint64(len(g.Embeds)))
+		for _, e := range g.Embeds {
+			b = appendStr(b, e.Pattern)
+			b = binary.AppendUvarint(b, uint64(e.Line))
+			b = appendStr(b, e.Unknown)
+		}
+		b = binary.AppendUvarint(b, uint64(len(g.Strings)))
+		for _, s := range g.Strings {
+			b = appendStr(b, s)
 		}
 	}
 	return b
@@ -160,48 +176,85 @@ func decode(b []byte) (model.ScanResult, error) {
 		}
 		out.Imports = append(out.Imports, im)
 	}
-	if len(r.b) > 0 {
-		if r.byte() != 1 {
-			return model.ScanResult{}, errCodec
+	for len(r.b) > 0 {
+		var err error
+		switch tag := r.byte(); {
+		case tag == 1 && out.Rust == nil && out.Go == nil:
+			out.Rust, err = decodeRust(r)
+		case tag == 2 && out.Go == nil:
+			out.Go, err = decodeGo(r)
+		default:
+			err = errCodec
 		}
-		rs := &model.RustScan{}
-		nm := r.uvarint()
-		if r.err != nil || nm > uint64(len(r.b)) {
-			return model.ScanResult{}, errCodec
+		if err != nil {
+			return model.ScanResult{}, err
 		}
-		for i := uint64(0); i < nm; i++ {
-			m := model.RustMod{Name: r.str()}
-			m.Line = int(r.uvarint())
-			m.Path = r.str()
-			m.Unknown = r.str()
-			nn := r.uvarint()
-			if r.err != nil || nn > uint64(len(r.b)) {
-				return model.ScanResult{}, errCodec
-			}
-			for j := uint64(0); j < nn; j++ {
-				m.Nest = append(m.Nest, r.str())
-			}
-			if r.err != nil {
-				return model.ScanResult{}, r.err
-			}
-			rs.Mods = append(rs.Mods, m)
-		}
-		ni := r.uvarint()
-		if r.err != nil || ni > uint64(len(r.b)) {
-			return model.ScanResult{}, errCodec
-		}
-		for i := uint64(0); i < ni; i++ {
-			inc := model.RustInclude{Macro: r.str(), Kind: r.str(), Path: r.str()}
-			inc.Line = int(r.uvarint())
-			if r.err != nil {
-				return model.ScanResult{}, r.err
-			}
-			rs.Includes = append(rs.Includes, inc)
-		}
-		if len(r.b) != 0 {
-			return model.ScanResult{}, errCodec
-		}
-		out.Rust = rs
 	}
 	return out, nil
+}
+
+func decodeRust(r *reader) (*model.RustScan, error) {
+	rs := &model.RustScan{}
+	nm := r.uvarint()
+	if r.err != nil || nm > uint64(len(r.b)) {
+		return nil, errCodec
+	}
+	for i := uint64(0); i < nm; i++ {
+		m := model.RustMod{Name: r.str()}
+		m.Line = int(r.uvarint())
+		m.Path = r.str()
+		m.Unknown = r.str()
+		nn := r.uvarint()
+		if r.err != nil || nn > uint64(len(r.b)) {
+			return nil, errCodec
+		}
+		for j := uint64(0); j < nn; j++ {
+			m.Nest = append(m.Nest, r.str())
+		}
+		if r.err != nil {
+			return nil, r.err
+		}
+		rs.Mods = append(rs.Mods, m)
+	}
+	ni := r.uvarint()
+	if r.err != nil || ni > uint64(len(r.b)) {
+		return nil, errCodec
+	}
+	for i := uint64(0); i < ni; i++ {
+		inc := model.RustInclude{Macro: r.str(), Kind: r.str(), Path: r.str()}
+		inc.Line = int(r.uvarint())
+		if r.err != nil {
+			return nil, r.err
+		}
+		rs.Includes = append(rs.Includes, inc)
+	}
+	return rs, nil
+}
+
+func decodeGo(r *reader) (*model.GoScan, error) {
+	g := &model.GoScan{Package: r.str()}
+	ne := r.uvarint()
+	if r.err != nil || ne > uint64(len(r.b)) {
+		return nil, errCodec
+	}
+	for i := uint64(0); i < ne; i++ {
+		e := model.GoEmbed{Pattern: r.str()}
+		e.Line = int(r.uvarint())
+		e.Unknown = r.str()
+		if r.err != nil {
+			return nil, r.err
+		}
+		g.Embeds = append(g.Embeds, e)
+	}
+	ns := r.uvarint()
+	if r.err != nil || ns > uint64(len(r.b)) {
+		return nil, errCodec
+	}
+	for i := uint64(0); i < ns; i++ {
+		g.Strings = append(g.Strings, r.str())
+		if r.err != nil {
+			return nil, r.err
+		}
+	}
+	return g, nil
 }

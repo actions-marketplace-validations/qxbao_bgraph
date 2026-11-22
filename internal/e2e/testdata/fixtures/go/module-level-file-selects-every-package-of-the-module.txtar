@@ -1,0 +1,54 @@
+config/ is not under any package of module example.com/m: every package of that module depends on it; the nested module does not.
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/config/defaults.yaml --
+x: 1
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/tools/go.mod --
+module example.com/tools
+
+go 1.22
+-- base/tools/t/t.go --
+package t
+
+func F() {}
+-- base/tools/t/t_test.go --
+package t
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/config/defaults.yaml --
+x: 2
+-- want --
+select go:b
+select go:c
+noselect go:tools/t
+notfull
