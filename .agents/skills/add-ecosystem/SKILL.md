@@ -1,6 +1,6 @@
 ---
 name: add-ecosystem
-description: Add a new language/ecosystem (or a new test framework/runner inside one) to bgraph end to end — design contract, scanner, eco package, ClassifyChange, runner adapter, fixtures, then the evaluation (T1 dataset + oracle, provider cross-check, T2 mutation, regression of existing ecosystems) and the phase report. Use when starting a bgraph phase for a new ecosystem (Python, JVM, .NET, Go...) or a large runner addition; distilled from how Rust (Phase 3) and Python (Phase 4) were integrated.
+description: Add a new language/ecosystem (or a new test framework/runner inside one) to bgraph end to end — design contract, scanner, eco package, ClassifyChange, runner adapter, fixtures, then the evaluation (T1 dataset + oracle, provider cross-check, T2 mutation, regression of existing ecosystems) and the phase report. Use when starting a bgraph phase for a new ecosystem (Python, JVM, .NET, Go...) or a large runner addition; distilled from how Rust, Python, JVM, .NET and Go were integrated.
 ---
 
 # Adding an ecosystem to bgraph
@@ -27,8 +27,14 @@ violations on the dev set, trap fixtures green, widening rates reported by reaso
   run `git stash/reset/checkout --`, and must not push or tag. Expect the other agent's in-progress files to break the
   build of unrelated packages; they test their own packages and say so.
 - Repo conventions: English for code comments, user-facing strings, docs and commit messages; commit messages end with
-  the Co-Authored-By trailer the session specifies. Push only after review; CI (ubuntu + windows, vet for
-  native/linux/windows, staticcheck 2025.1.1) must be green.
+  the Co-Authored-By trailer the session specifies. Public files never cite private material (`docs/private/` is
+  gitignored); cite the public docs instead.
+- Shared files (`cmd/bgraph-eval/main.go`, `internal/model`, `internal/selector`): keep edits minimal and stage only your
+  hunks (`git apply --cached` of a partial diff) when another agent has uncommitted changes in the same file.
+- Push only after review, and only after a local run of **everything CI runs**, in an isolated worktree: gofmt, `go vet`
+  (native, `GOOS=linux`, `GOOS=windows`), `staticcheck ./...` 2025.1.1 (native and `GOOS=linux`), `go test ./...`. Tests
+  that skip locally (real symlinks need a privilege on Windows, OS-specific paths) only run on CI: check `gh run list`
+  after every push and fix a red run before anything else.
 - The lead (you) writes the contract, reviews every agent's diff for fail-closed holes, verifies claimed oracle artefacts
   by hand, and owns the phase report.
 
@@ -68,19 +74,32 @@ Decide and fix before any code:
   - Roles for every file it claims (source, test, config, manifest, lock, data).
   - Resolution as a **union over all plausible interpretations** (all import roots, all conditions/targets); zero
     matches → unknown, never "probably external".
-  - A repo without the ecosystem's files must return immediately (cost ~0).
+  - A repo without the ecosystem's files must return immediately (cost ~0). A stray file of the language in a repo
+    with no project of the ecosystem is left to the general rules, never widened to full (a `.go` helper in a Java repo
+    made a JVM task full).
+  - A sub-tree holding another ecosystem's manifest and no file of this language is not owned by this ecosystem (a
+    `web/` frontend under a root `go.mod` must not select every Go package).
+  - Tests that build or run the repository's own programs (`go build ./cmd/x`, `exec.Command("../bin/x")`, import paths
+    or relative paths in string literals, testscripts) depend on the built program's whole closure, not only its files.
   - **Bump `AnalyzerVersion` on every logic change** — analysis snapshots are keyed by it and stale snapshots hide fixes
-    (this bit us repeatedly; never bump it *down*).
+    (this bit us repeatedly; never bump it *down*). A change in a shared layer that alters what an analysis sees (the
+    tree's symlink semantics, path rules) needs its own cache-key bump.
+  - Symbolic links are resolved by the tree layer for every ecosystem; do not re-implement them per ecosystem.
 - **ClassifyChange** with a structural diff of manifests: harmless keys (metadata, docs, linters' config) → claim with
   no widening; dependency/feature changes → manifest_changed at the scope where unification happens; target layout →
-  package + reverse deps; test-runner config → test_config_changed; lockfiles → lock_changed (L0).
+  package + reverse deps; test-runner config → test_config_changed; lockfiles → lock_changed at L0. A lockfile format
+  moves to L1 (closure comparison, `internal/lockfile`) only after the differential check against the package manager
+  (`bgraph-eval lockdiff`, see `docs/lockfiles.md`): our per-project closure must be a superset of the tool's on ~10
+  repos × 20–30 lockfile-changing commits.
 - **Runner adapter** in `internal/runner` (+ tests), using `SelectedTest.Package`/`Project`/`Whole` as needed.
 - **Registration** in `bgraph.Ecosystems()`; the e2e harness already runs all ecosystems.
-- **Fixtures** (txtar: `base/`, `head/`, `delete/`, `want` with select/noselect/scope/widen/nowiden/full/notfull/warn),
+- **Fixtures** (txtar: `base/`, `head/`, `delete/`, `link:base/`, `link:head/` (symbolic links, body = target), `want`
+  with select/noselect/scope/widen/nowiden/full/notfull/warn),
   one per rule, each with both a `select` and a `noselect`. Always include: every widening path, a manifest harmless
   change (nothing), a lockfile change, unknown/dynamic constructs, files outside every project (orphan rule must fire,
   not silently skip), and a **mixed repo** with Node to prove isolation.
-- **Smoke** on 2–3 real repos (shallow clones in the scratchpad): `bgraph index`, then `bgraph affected --base HEAD`
+- **Smoke** on 2–3 real repos (clones with some history: a depth-1 clone has no base and every run is `full`):
+  `bgraph index`, then `bgraph affected --base HEAD`
   after touching a leaf, a shared core file, a config/manifest, and a single test; report unit counts and timings, and
   compare discovered projects/targets with the native tool's metadata when one exists.
 
@@ -94,12 +113,13 @@ Decide and fix before any code:
   (a module-tier Unresolved only seeds its own file — a broken manifest needs a real scope).
 - Version bumps present; old cache rows still decode; Node behaviour unchanged (run the Node quick suite).
 - General-rule changes made along the way (e.g. "test files named in a config are not implicit deps", gitlink pointer
-  comparison) need the **full** T1 of every existing ecosystem, not just the quick suite.
+  comparison, symlink resolution in the tree layer) need the **full** T1 of every existing ecosystem, not just the
+  quick suite; compare the per-task status sets with the previous runs, not only the totals.
 
 ## 3. Evaluation (agents B and C)
 
-Data lives in a durable evaluation directory outside the repository (`--work`/`--out` of `bgraph-eval`). Never delete anything there on your own; at each phase close ask the
-user whether to keep or delete the ecosystem's clones/caches.
+Data lives in a durable evaluation directory outside the repository (`--work`/`--out` of `bgraph-eval`). Never delete
+anything there on your own; at each phase close ask the user whether to keep or delete the ecosystem's clones/caches.
 
 1. **Tasks**: `evalkit/tools/fetch_<lang>.py` pulls the ecosystem's instances from pinned HF revisions (SWE-bench
    Multilingual, Multi-SWE-bench, SWE-bench Verified for Python; SWE-Gym / SWE-rebench for application-style repos)
@@ -117,19 +137,27 @@ user whether to keep or delete the ecosystem's clones/caches.
    tests are the usual not-found causes.
 5. **Owners → required units**: map located files to the units that *run* them (direct ownership edges; package-level
    files → every unit linked to the package node). Ambiguous names → require **all** candidates (strict oracle; review
-   violations by hand).
+   violations by hand). Also record, per violation, whether it disappears when an ambiguous name only requires the
+   candidate the test patch touches: it separates name-ambiguity artefacts from real misses quickly.
 6. **T1** (`bgraph-eval t1 --ecosystem <lang>`): P → C = gold patch; a task is OK if scope is full or every required unit
    is selected. Report per group/repo: ok, full (by reason), violations, full rate, median selected/units, timings, and
    the rule-of-three bound. **Every violation gets a hand check** (does the changed package really not reach the test?
-   read the manifests at that base commit) and is classified real miss vs oracle artefact before anything is claimed.
+   read the manifests at that base commit; where the toolchain can answer, take the dependency closure of each missing
+   unit at C, e.g. `go list -deps -test`, and look for changed files in it) and is classified real miss vs oracle
+   artefact before anything is claimed. SWE-bench-Live FAIL_TO_PASS lists often contain thousands of unrelated (flaky,
+   timing) names: expect artefacts there, and still check each one.
 7. **Provider cross-check** when the ecosystem has an exact graph provider (`cargo metadata --no-deps`, Gradle/MSBuild
    project graphs, `go list`): `bgraph-eval <provider>` on ~5 base commits per repo via temporary worktrees; projects,
-   targets and root files must match; extra non-member projects are acceptable (they can only widen).
+   targets and root files must match; extra non-member projects are acceptable (they can only widen). Run it under
+   more than one platform configuration when the tool is platform-dependent (`GOOS=linux` and the host). When a native
+   affected-test tool exists (GIB, dotnet-affected, `--changed` of Vitest/Jest), check that bgraph's selection is a
+   superset of it and explain every divergence.
 8. **T2 mutation** (agent C): one-line operator mutations in non-test source of 2–3 small repos, whole suite per
    mutant, red units (confirmed by a re-run, minus units red/flaky at R over two baseline runs) must be selected.
    Separate build cache per repo (`CARGO_TARGET_DIR` etc.) so mutants build incrementally; exclude non-compiling
    mutants; cache the oracle so `bgraph-eval t2 --ecosystem <lang>` re-checks bgraph alone. Drop repos whose suite
-   cannot run on the host (symlink privilege, toolchain too old) and say why.
+   cannot run on the host (symlink privilege, toolchain too old) and say why. Pick repos with at least 5 test units;
+   T2 is the check most likely to find a real miss (Go: a `TestMain` building a command by import path).
 9. **Regression of existing ecosystems**: Node quick suite (`bgraph-eval quick ...`, ~1 min) after every change; full
    Node T1 (~16 min) after any general-rule or selector change.
 
@@ -141,7 +169,11 @@ submodule in both trees counted as changed → bat always full; fixed by compari
 - Write `docs/private/eval/phase-<n>-<date>/README.md` (gitignored, local): tables for T1 (dev/holdout), provider
   check, T2, smoke numbers, every violation with its classification, widening reasons, and the exact paths of raw
   outputs in the evaluation directory.
-- Update the public docs: a new `docs/ecosystems/<lang>.md`, the ecosystem table of the root README and `docs/README.md`,
-  the results in `docs/evaluation.md`, and `bgraph.toml` additions in `docs/configuration.md` and
-  `docs/bgraph.example.toml` (a test keeps it parseable).
+- Update the public docs (English, verified against the code, no private references): a new `docs/ecosystems/<lang>.md`
+  with the same headings as the existing pages (At a glance, Supported layouts, Test units, What a unit depends on,
+  Changes to manifests/configuration/lockfiles, Unresolved and uncertain imports, Running the selection, Addressing units
+  in bgraph.toml, Known gaps and over-selection, See also); the ecosystem table and numbers of the root README and
+  `docs/README.md`; the results in `docs/evaluation.md` (every number from the latest run, not an older report);
+  `bgraph.toml` additions in `docs/configuration.md` and `docs/bgraph.example.toml` (a test keeps it parseable). Run
+  `bgraph command` on a fixture to capture example output instead of writing it by hand.
 - Ask the user: keep or delete the phase's eval data; proceed to the next phase.
