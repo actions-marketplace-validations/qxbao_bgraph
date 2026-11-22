@@ -1,0 +1,1000 @@
+{
+ "ecosystem": "go",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "SWE-bench/SWE-bench_Multilingual",
+   "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual",
+   "revision": "846e647b9f33c0b51b739d005d13d85493c9af09",
+   "notes": "test split; keeps Go repos (instances whose test patch touches a _test.go file)"
+  },
+  {
+   "name": "ByteDance-Seed/Multi-SWE-bench",
+   "url": "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench",
+   "revision": "56ff018c04a38e27ada1e9d0a6d5839a51f88f0d",
+   "notes": "go/ directory (JSONL); FAIL_TO_PASS = f2p_tests keys, else n2p_tests keys (task field f2p_kind)"
+  },
+  {
+   "name": "SWE-bench-Live/MultiLang",
+   "url": "https://huggingface.co/datasets/SWE-bench-Live/MultiLang",
+   "revision": "eb09c2e5db6e4c5a95e01c903c8fd1d5da33c4f3",
+   "notes": "split go; FAIL_TO_PASS names are \u003cimport path\u003e/\u003cTestName\u003e"
+  }
+ ],
+ "repos": [
+  {
+   "name": "openfga/openfga",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "terraform-docs/terraform-docs",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "ethereum/go-ethereum",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "slack-go/slack",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "modelcontextprotocol/go-sdk",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "cli/cli",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "crowdsecurity/crowdsec",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "centrifugal/centrifugo",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "prometheus/prometheus",
+   "role": "holdout",
+   "t1_tasks": 7,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "tikv/pd",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "pelletier/go-toml",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "oauth2-proxy/oauth2-proxy",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "TecharoHQ/anubis",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "graphql-go/graphql",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "open-telemetry/opentelemetry-go-contrib",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kyverno/kyverno",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "influxdata/telegraf",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "moonD4rk/HackBrowserData",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "knative/eventing",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "google/starlark-go",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "nginx/kubernetes-ingress",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kubernetes-sigs/kubebuilder",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "go-vikunja/vikunja",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "argoproj/argo-rollouts",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "nextlevelbuilder/goclaw",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "cert-manager/cert-manager",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "mgechev/revive",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "rqlite/rqlite",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "cadence-workflow/cadence",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "nats-io/nats-server",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "getgauge/gauge",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kube-vip/kube-vip",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "submariner-io/submariner",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "ossf/scorecard",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "hashicorp/terraform",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "redpanda-data/connect",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "jesseduffield/lazygit",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "ollama/ollama",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "caddyserver/caddy",
+   "role": "dev",
+   "t1_tasks": 12,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang",
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "modelcontextprotocol/registry",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "twpayne/chezmoi",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "tmc/langchaingo",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "IBM/sarama",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "open-telemetry/opentelemetry-go",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "amir20/dozzle",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "open-telemetry/opentelemetry-operator",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "yuin/gopher-lua",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "gruntwork-io/cloud-nuke",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kubernetes/kube-state-metrics",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "grpc/grpc-go",
+   "role": "dev",
+   "t1_tasks": 16,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "akuity/kargo",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "gin-gonic/gin",
+   "role": "dev",
+   "t1_tasks": 8,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "stripe/stripe-cli",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "magefile/mage",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "netbirdio/netbird",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "danielmiessler/Fabric",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "charmbracelet/crush",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "fortio/fortio",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "cucumber/godog",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "golang-jwt/jwt",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "Gentleman-Programming/gentle-ai",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "moby/moby",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kumahq/kuma",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "github/gh-aw",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "zitadel/zitadel",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "libp2p/go-libp2p",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "zeromicro/go-zero",
+   "role": "dev",
+   "t1_tasks": 15,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Multi-SWE-bench"
+   ]
+  },
+  {
+   "name": "a-h/templ",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "gohugoio/hugo",
+   "role": "dev",
+   "t1_tasks": 14,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang",
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "open-telemetry/opentelemetry-collector-contrib",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "karmada-io/karmada",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "lima-vm/lima",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "chenhg5/cc-connect",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "NVIDIA/gpu-operator",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "envoyproxy/gateway",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "velero-io/velero",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "casbin/casbin",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "sqlc-dev/sqlc",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "prometheus/alertmanager",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "go-task/task",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "evcc-io/evcc",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kubernetes-sigs/controller-runtime",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "bpg/terraform-provider-proxmox",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "0xERR0R/blocky",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "gastownhall/beads",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "dlvhdr/gh-dash",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "rook/rook",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "coder/coder",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kedacore/keda",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "github/github-mcp-server",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "sustainable-computing-io/kepler",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "istio/istio",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "google/go-github",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "coze-dev/coze-loop",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kubernetes/kops",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "kubernetes-sigs/kueue",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  },
+  {
+   "name": "open-telemetry/opentelemetry-ebpf-profiler",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench-Live_MultiLang"
+   ]
+  }
+ ]
+}

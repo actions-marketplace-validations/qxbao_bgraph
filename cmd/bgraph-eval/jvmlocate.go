@@ -24,6 +24,10 @@ type locName struct {
 	Cat     string   `json:"category"` // unique | ambiguous | notfound | task
 	Scanned bool     `json:"scanned,omitempty"`
 	InPatch bool     `json:"in_patch,omitempty"`
+	// Go only: candidate units (go:<dir>), those touched by the test patch, and whether the import path in the name picked them.
+	Units      []string `json:"units,omitempty"`
+	PatchUnits []string `json:"patch_units,omitempty"`
+	PkgHit     bool     `json:"pkg_hit,omitempty"`
 }
 
 type locRow struct {
@@ -41,6 +45,19 @@ func jvmLocName(l evalkit.JVMTestLoc) locName {
 	switch {
 	case l.Task:
 		n.Cat = "task"
+	case l.NotFound:
+		n.Cat = "notfound"
+	case l.Ambiguous:
+		n.Cat = "ambiguous"
+	default:
+		n.Cat = "unique"
+	}
+	return n
+}
+
+func goLocName(l evalkit.GoTestLoc) locName {
+	n := locName{Name: l.Name, Form: l.Form, Class: l.Func, Files: l.Files, InPatch: l.InPatch, Units: l.Units, PatchUnits: l.PatchUnits, PkgHit: l.PkgHit}
+	switch {
 	case l.NotFound:
 		n.Cat = "notfound"
 	case l.Ambiguous:
@@ -107,7 +124,13 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 				os.MkdirAll(filepath.Dir(idx), 0o755)
 				dir := evalkit.RustRepoDir(*work, t.Repo)
 				var r locRow
-				if eco == "dotnet" {
+				if eco == "go" {
+					x := evalkit.GoLocateTask(ctx, dir, idx, t)
+					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
+					for _, l := range x.Locs {
+						r.Names = append(r.Names, goLocName(l))
+					}
+				} else if eco == "dotnet" {
 					x := evalkit.DotnetLocateTask(ctx, dir, idx, t)
 					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, F2P: x.F2P, Err: x.Err}
 					for _, l := range x.Locs {

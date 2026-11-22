@@ -13,7 +13,7 @@ import (
 )
 
 // SetupHermeticEnv sets up a hermetic git environment for this process and for every git that bgraph launches: no system/
-// user config, fixed author, core.autocrlf=false, core.longpaths=true, no password prompts. emptyCfgDir holds an empty config file.
+// user config, fixed author, core.autocrlf=false, core.longpaths=true, core.protectNTFS=false, no password prompts. emptyCfgDir holds an empty config file.
 func SetupHermeticEnv(emptyCfgDir string) error {
 	if err := os.MkdirAll(emptyCfgDir, 0o755); err != nil {
 		return err
@@ -32,13 +32,16 @@ func SetupHermeticEnv(emptyCfgDir string) error {
 		"GIT_COMMITTER_NAME":  "bgraph-eval",
 		"GIT_COMMITTER_EMAIL": "eval@example.invalid",
 		"GIT_COMMITTER_DATE":  "2020-01-01T00:00:00Z",
-		"GIT_CONFIG_COUNT":    "3",
+		"GIT_CONFIG_COUNT":    "4",
 		"GIT_CONFIG_KEY_0":    "core.autocrlf",
 		"GIT_CONFIG_VALUE_0":  "false",
 		"GIT_CONFIG_KEY_1":    "core.longpaths",
 		"GIT_CONFIG_VALUE_1":  "true",
 		"GIT_CONFIG_KEY_2":    "gc.auto",
 		"GIT_CONFIG_VALUE_2":  "0",
+		// Trees are built with plumbing only (temporary index, never checked out): Windows-invalid names such as "a:0" must not abort read-tree.
+		"GIT_CONFIG_KEY_3":   "core.protectNTFS",
+		"GIT_CONFIG_VALUE_3": "false",
 	}
 	for k, v := range kv {
 		if err := os.Setenv(k, v); err != nil {

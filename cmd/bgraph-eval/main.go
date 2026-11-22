@@ -92,6 +92,8 @@ func main() {
 		err = cmdJVMLocate(ctx, os.Args[2:], "jvm")
 	case "dotnet-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "dotnet")
+	case "go-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "go")
 	case "manifest":
 		err = cmdManifest(os.Args[2:])
 	default:
@@ -326,7 +328,7 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go")
 	fs.Parse(args)
 	tasks, err := evalkit.LoadTasks(*tasksPath)
 	if err != nil {
@@ -373,7 +375,7 @@ func cmdManifest(args []string) error {
 		}
 	}
 	var man evalkit.Manifest
-	if *eco == "jvm" || *eco == "dotnet" {
+	if *eco == "jvm" || *eco == "dotnet" || *eco == "go" {
 		man = evalkit.BuildJVMDotnetManifest(*eco, t1, *metaPath, *maxPer)
 	} else if *eco == "python" {
 		ds = []evalkit.DatasetInfo{{Name: "princeton-nlp/SWE-bench_Verified", URL: "https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified", Notes: "test split (500 tasks); all repos are libraries/frameworks"}}

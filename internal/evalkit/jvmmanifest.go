@@ -28,6 +28,45 @@ var dotnetKinds = map[string]string{
 	"openclaw/openclaw-windows-node": "application",
 }
 
+// goKinds gives the manifest kind of every Go repo of tasks-go.jsonl; unknown repos default to "library". Fixed before looking at any
+// result: applications ship a binary or service (CLIs, servers, operators, agents), frameworks are what other programs build on and
+// extend (web/rpc/controller frameworks), everything else is a library.
+var goKinds = map[string]string{
+	"0xerr0r/blocky": "application", "gentleman-programming/gentle-ai": "application", "ibm/sarama": "library",
+	"nvidia/gpu-operator": "application", "techarohq/anubis": "application", "a-h/templ": "framework", "akuity/kargo": "application",
+	"amir20/dozzle": "application", "argoproj/argo-rollouts": "application", "bpg/terraform-provider-proxmox": "application",
+	"caddyserver/caddy": "application", "cadence-workflow/cadence": "application", "casbin/casbin": "library",
+	"centrifugal/centrifugo": "application", "cert-manager/cert-manager": "application", "charmbracelet/crush": "application",
+	"chenhg5/cc-connect": "application", "cli/cli": "application", "coder/coder": "application", "coze-dev/coze-loop": "application",
+	"crowdsecurity/crowdsec": "application", "cucumber/godog": "framework", "danielmiessler/fabric": "application",
+	"dlvhdr/gh-dash": "application", "envoyproxy/gateway": "application", "ethereum/go-ethereum": "application", "evcc-io/evcc": "application",
+	"fortio/fortio": "application", "gastownhall/beads": "application", "getgauge/gauge": "framework", "gin-gonic/gin": "framework",
+	"github/gh-aw": "application", "github/github-mcp-server": "application", "go-task/task": "application",
+	"go-vikunja/vikunja": "application", "gohugoio/hugo": "application", "golang-jwt/jwt": "library", "google/go-github": "library",
+	"google/starlark-go": "library", "graphql-go/graphql": "library", "grpc/grpc-go": "framework", "gruntwork-io/cloud-nuke": "application",
+	"hashicorp/terraform": "application", "influxdata/telegraf": "application", "istio/istio": "application",
+	"jesseduffield/lazygit": "application", "karmada-io/karmada": "application", "kedacore/keda": "application",
+	"knative/eventing": "framework", "kube-vip/kube-vip": "application", "kubernetes-sigs/controller-runtime": "framework",
+	"kubernetes-sigs/kubebuilder": "framework", "kubernetes-sigs/kueue": "application", "kubernetes/kops": "application",
+	"kubernetes/kube-state-metrics": "application", "kumahq/kuma": "application", "kyverno/kyverno": "application",
+	"libp2p/go-libp2p": "framework", "lima-vm/lima": "application", "magefile/mage": "application", "mgechev/revive": "application",
+	"moby/moby": "application", "modelcontextprotocol/go-sdk": "library", "modelcontextprotocol/registry": "application",
+	"moond4rk/hackbrowserdata": "application", "nats-io/nats-server": "application", "netbirdio/netbird": "application",
+	"nextlevelbuilder/goclaw": "application", "nginx/kubernetes-ingress": "application", "oauth2-proxy/oauth2-proxy": "application",
+	"ollama/ollama": "application", "open-telemetry/opentelemetry-collector-contrib": "application",
+	"open-telemetry/opentelemetry-ebpf-profiler": "application", "open-telemetry/opentelemetry-go": "library",
+	"open-telemetry/opentelemetry-go-contrib": "library", "open-telemetry/opentelemetry-operator": "application",
+	"openfga/openfga": "application", "ossf/scorecard": "application", "pelletier/go-toml": "library",
+	"prometheus/alertmanager": "application", "prometheus/prometheus": "application", "redpanda-data/connect": "application",
+	"rook/rook": "application", "rqlite/rqlite": "application", "slack-go/slack": "library", "sqlc-dev/sqlc": "application",
+	"stripe/stripe-cli": "application", "submariner-io/submariner": "application", "sustainable-computing-io/kepler": "application",
+	"terraform-docs/terraform-docs": "application", "tikv/pd": "application", "tmc/langchaingo": "library", "twpayne/chezmoi": "application",
+	"velero-io/velero": "application", "yuin/gopher-lua": "library", "zeromicro/go-zero": "framework", "zitadel/zitadel": "application",
+}
+
+// GoRepoKind is the manifest kind of a Go repo.
+func GoRepoKind(repo string) string { return kindOf(goKinds, repo) }
+
 // JVMRepoKind is the manifest kind of a JVM repo.
 func JVMRepoKind(repo string) string { return kindOf(jvmKinds, repo) }
 
@@ -46,7 +85,14 @@ func kindOf(m map[string]string, repo string) string {
 func BuildJVMDotnetManifest(eco string, t1 map[string]*ManifestRepo, metaPath string, capPer int) Manifest {
 	kind := JVMRepoKind
 	var ds []DatasetInfo
-	if eco == "dotnet" {
+	if eco == "go" {
+		kind = GoRepoKind
+		ds = []DatasetInfo{
+			{Name: "SWE-bench/SWE-bench_Multilingual", URL: "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual", Notes: "test split; keeps Go repos (instances whose test patch touches a _test.go file)"},
+			{Name: "ByteDance-Seed/Multi-SWE-bench", URL: "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-bench", Notes: "go/ directory (JSONL); FAIL_TO_PASS = f2p_tests keys, else n2p_tests keys (task field f2p_kind)"},
+			{Name: "SWE-bench-Live/MultiLang", URL: "https://huggingface.co/datasets/SWE-bench-Live/MultiLang", Notes: "split go; FAIL_TO_PASS names are <import path>/<TestName>"},
+		}
+	} else if eco == "dotnet" {
 		kind = DotnetRepoKind
 		ds = []DatasetInfo{
 			{Name: "microsoft/SWE-Sharp-Bench", URL: "https://huggingface.co/datasets/microsoft/SWE-Sharp-Bench", Notes: "swe-sharp-bench.csv (150 tasks, 17 repos); FAIL_TO_PASS is a Python list literal; tasks with an empty FAIL_TO_PASS dropped"},
