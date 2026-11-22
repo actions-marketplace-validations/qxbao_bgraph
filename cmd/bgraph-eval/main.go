@@ -153,6 +153,9 @@ func cmdT1(ctx context.Context, args []string) error {
 	if *eco == "jvm" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/jvm.json"
 	}
+	if *eco == "go" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/go.json"
+	}
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return fmt.Errorf("--tasks, --work, --out are required")
 	}
@@ -202,6 +205,11 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "jvm" {
 		if werr := evalkit.WriteJVMReport(*out, rs); werr != nil {
+			return werr
+		}
+	}
+	if *eco == "go" {
+		if werr := evalkit.WriteGoReport(*out, rs); werr != nil {
 			return werr
 		}
 	}

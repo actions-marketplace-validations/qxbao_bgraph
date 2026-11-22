@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -60,6 +61,7 @@ type T1Result struct {
 	Py      *PyT1Info     `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
 	JVM     *JVMT1Info    `json:"jvm,omitempty"`           // JVM oracle details (ecosystem jvm only)
 	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"`        // .NET oracle details (ecosystem dotnet only)
+	Go      *GoT1Info     `json:"go,omitempty"`            // Go oracle details (ecosystem go only)
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
 	Kind    string        `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
@@ -429,6 +431,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("unmapped", nil)
 		}
+	} else if rr.cfg.Ecosystem == "go" {
+		greq, info, err := goRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch), t.F2PKind)
+		res.Go = info
+		if err != nil {
+			return skip("go_oracle", err)
+		}
+		req = greq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("unmapped", errors.New(goInfoDetail(info)))
+		}
 	} else if rr.cfg.Ecosystem == "python" {
 		preq, info, err := pyRequired(ctx, dir, res.P, ids, t.Repo)
 		res.Py = info
@@ -496,6 +509,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Missing = jvmMissing(req, su, res.JVM, sel.Changed)
 	} else if rr.cfg.Ecosystem == "dotnet" {
 		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
+	} else if rr.cfg.Ecosystem == "go" {
+		res.Missing = goMissing(req, su, res.Go, sel.Changed)
 	} else if rr.cfg.Ecosystem == "python" {
 		res.Missing = pyMissing(req, su, res.Py, sel.Changed)
 		res.PyW = pySelStats(sel)
@@ -514,6 +529,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			jvmDiagnose(res.JVM)
 		} else if rr.cfg.Ecosystem == "dotnet" {
 			dotnetDiagnose(res.Dotnet)
+		} else if rr.cfg.Ecosystem == "go" {
+			goDiagnose(res.Go)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
 		} else if rr.cfg.Ecosystem != "rust" {
