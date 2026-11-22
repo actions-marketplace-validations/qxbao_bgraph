@@ -464,7 +464,8 @@ func (r T2Repo) buildOracleGo(ctx context.Context, cfg *T2Config, store *OracleS
 		func() {
 			defer func() {
 				os.WriteFile(wt, orig, 0o644)
-				git(context.Background(), root, "checkout", "-q", "--", m.File)
+				// the whole tracked tree: with -mod=mod the go command may add go.sum lines (e.g. go.mod hashes of a sub-module)
+				git(context.Background(), root, "checkout", "-q", "--", ".")
 			}()
 			if err := os.WriteFile(wt, mutated, 0o644); err != nil {
 				rec.Status, rec.Detail = "error", err.Error()
