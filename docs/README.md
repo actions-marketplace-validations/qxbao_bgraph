@@ -1,0 +1,24 @@
+# bgraph documentation
+
+| Page | What it covers |
+|---|---|
+| [Architecture](architecture.md) | How a selection is computed: the fail-closed contract, the file graph, scope tiers, every widening reason, caches |
+| [Configuration](configuration.md) | `bgraph.toml` reference: `[[rule]]`, `[[generated]]`, `[[config]]`, `[[dynamic]]`, `[dynamic_layer]`, `[lockfile]`, `[options]` |
+| [bgraph.example.toml](bgraph.example.toml) | An annotated example of every `bgraph.toml` key |
+| [CLI](cli.md) | Commands, flags, JSON output, exit codes, shadow audits, the MCP server |
+| [Lockfiles](lockfiles.md) | Lockfile levels L0 / L1 / L2, supported formats, fallbacks |
+| [Dynamic layer](dynamic-layer.md) | Optional narrowing with recorded test dependencies (Python, Node, JVM test classes) |
+| [Evaluation](evaluation.md) | How soundness is tested (fixtures, FAIL_TO_PASS, mutation, provider checks) and the results |
+| [Benchmarks](benchmarks.md) | Comparison with general code-graph tools (codegraph, GitNexus, graphify) |
+| [Shadow-mode workflow](ci/shadow-github-actions.yml) | A GitHub Actions workflow that audits selections against full runs |
+
+## Ecosystems
+
+| Ecosystem | Granularity | Page |
+|---|---|---|
+| Node (JS/TS) | test file | [ecosystems/node.md](ecosystems/node.md) |
+| Python | test file | [ecosystems/python.md](ecosystems/python.md) |
+| Rust | Cargo target | [ecosystems/rust.md](ecosystems/rust.md) |
+| JVM (Maven, Gradle) | module / project | [ecosystems/jvm.md](ecosystems/jvm.md) |
+| .NET | MSBuild project | [ecosystems/dotnet.md](ecosystems/dotnet.md) |
+| Go | package | [ecosystems/go.md](ecosystems/go.md) |
