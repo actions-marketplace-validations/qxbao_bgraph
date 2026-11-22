@@ -30,7 +30,7 @@ type T1Config struct {
 	Jobs       int
 	MaxPerRepo int
 	Resume     bool
-	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go); "python": test-file oracle (pyt1.go); "dotnet": project oracle (dotnett1.go)
+	Ecosystem  string // "" or "node": Node oracle; "rust": Cargo-unit oracle (rustt1.go); "python": test-file oracle (pyt1.go); "dotnet": project oracle (dotnett1.go); "jvm": module oracle (jvmt1.go)
 	// RulesDir: when DIR/<owner>__<name>.toml exists it is injected as bgraph.toml at the repo root of both P and C (identical content, so
 	// the bgraph.toml change itself is not part of the diff). Empty: no overlay.
 	RulesDir string
@@ -58,6 +58,7 @@ type T1Result struct {
 
 	Rust    *RustT1Info   `json:"rust,omitempty"`          // Rust oracle details (ecosystem rust only)
 	Py      *PyT1Info     `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
+	JVM     *JVMT1Info    `json:"jvm,omitempty"`           // JVM oracle details (ecosystem jvm only)
 	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"`        // .NET oracle details (ecosystem dotnet only)
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
@@ -406,6 +407,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("unmapped", nil)
 		}
+	} else if rr.cfg.Ecosystem == "jvm" {
+		jreq, info, err := jvmRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch), t.F2PKind == "n2p")
+		res.JVM = info
+		if err != nil {
+			return skip("jvm_oracle", err)
+		}
+		req = jreq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("unmapped", nil)
+		}
 	} else if rr.cfg.Ecosystem == "dotnet" {
 		dreq, info, err := dotnetRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch))
 		res.Dotnet = info
@@ -480,6 +492,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	}
 	if rr.cfg.Ecosystem == "rust" {
 		res.Missing = rustMissing(req, su, res.Rust, sel.Changed)
+	} else if rr.cfg.Ecosystem == "jvm" {
+		res.Missing = jvmMissing(req, su, res.JVM, sel.Changed)
 	} else if rr.cfg.Ecosystem == "dotnet" {
 		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
 	} else if rr.cfg.Ecosystem == "python" {
@@ -496,7 +510,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	default:
 		res.Status = "violation"
 		res.WideList = sel.Widening
-		if rr.cfg.Ecosystem == "dotnet" {
+		if rr.cfg.Ecosystem == "jvm" {
+			jvmDiagnose(res.JVM)
+		} else if rr.cfg.Ecosystem == "dotnet" {
 			dotnetDiagnose(res.Dotnet)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
