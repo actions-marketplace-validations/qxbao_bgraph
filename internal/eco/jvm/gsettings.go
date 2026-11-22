@@ -12,6 +12,7 @@ type settingsInfo struct {
 	includeBuilds []string          // includeBuild(...) arguments
 	pluginBuilds  map[string]bool   // the includeBuilds declared inside pluginManagement { } (plugin builds)
 	dirs          map[string]string // normalized project path → projectDir relative to the settings directory
+	renames       map[string]string // normalized project path → new project name (project(":x").name = "y")
 	applied       []string          // literal `apply from:` targets, relative to the settings directory
 	rootName      string
 	// dynamic lists the constructs that make the project list or layout unknowable lexically.
@@ -138,7 +139,7 @@ func cleanRel(s string) string {
 
 // parseSettings reads a settings script.
 func parseSettings(src string, kotlin bool) settingsInfo {
-	si := settingsInfo{dirs: map[string]string{}, pluginBuilds: map[string]bool{}}
+	si := settingsInfo{dirs: map[string]string{}, pluginBuilds: map[string]bool{}, renames: map[string]string{}}
 	toks, ok := lexGradle(src, kotlin)
 	if !ok {
 		si.dynamic = append(si.dynamic, "settings script cannot be tokenized")
@@ -200,7 +201,19 @@ func parseSettings(src string, kotlin bool) settingsInfo {
 			// `name = ` inside a block is the name of a repository or cache.
 			if prevDot && i+1 < len(toks) && isPunct(toks[i+1], "=") && !(i+2 < len(toks) && isPunct(toks[i+2], "=")) &&
 				!(i > 1 && isIdent(toks[i-2], "rootProject")) {
-				si.dynamic = append(si.dynamic, "a project is renamed (line "+itoa(t.line)+")")
+				// The literal form project(":x").name = "y" / findProject(":x")?.name = "y" is modelled; any other is dynamic.
+				k := i - 2
+				if k >= 0 && isPunct(toks[k], "?") {
+					k--
+				}
+				if k >= 3 && isPunct(toks[k], ")") && toks[k-1].kind == tStr && !toks[k-1].dyn && isPunct(toks[k-2], "(") &&
+					(isIdent(toks[k-3], "project") || isIdent(toks[k-3], "findProject")) &&
+					i+2 < len(toks) && toks[i+2].kind == tStr && !toks[i+2].dyn && toks[i+2].text != "" &&
+					!strings.ContainsAny(toks[i+2].text, ":/\\") {
+					si.renames[normProjectPath(toks[k-1].text)] = toks[i+2].text
+				} else {
+					si.dynamic = append(si.dynamic, "a project is renamed (line "+itoa(t.line)+")")
+				}
 			}
 		case "projectDir":
 			if i+1 < len(toks) && isPunct(toks[i+1], "=") && !(i+2 < len(toks) && isPunct(toks[i+2], "=")) {

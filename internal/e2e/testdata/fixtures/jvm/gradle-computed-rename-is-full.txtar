@@ -1,0 +1,16 @@
+A project renamed to a computed name (project(":x").name = when (...) { ... }) has an unknown path: the project list is dynamic and a change widens to full.
+-- base/settings.gradle.kts --
+include(":core-impl", ":app")
+project(":core-impl").name = when (System.getenv("FLAVOR")) { "a" -> "core-a" else -> "core" }
+-- base/core-impl/build.gradle.kts --
+plugins { java }
+-- base/core-impl/src/main/java/C.java --
+class C {}
+-- base/app/build.gradle.kts --
+plugins { java }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- head/core-impl/src/main/java/C.java --
+class C { int a; }
+-- want --
+full

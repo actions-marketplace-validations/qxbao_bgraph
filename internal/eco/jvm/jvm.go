@@ -61,7 +61,9 @@
 // modules, a remote parent's version; Gradle settings and root scripts, buildSrc/, build-logic/, version catalogs, the wrapper,
 // gradle.properties, cross-project configuration) widen to every JVM unit of the build (full when the build is the repo root).
 // Dynamic constructs that hide the project list or layout (Gradle include in a loop, projectDir assigned without a literal
-// receiver, a renamed project, setProjectDir/setName) are Unresolved at full scope.
+// receiver, a project renamed to a computed name or through a non-literal receiver, setProjectDir/setName) are Unresolved at
+// full scope. A literal rename (project(":x").name = "y", findProject(":x")?.name = "y") is modelled: the project's path becomes
+// the parent path plus the new name and its directory stays.
 package jvm
 
 import (
@@ -89,7 +91,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "jvm-5"
+const AnalyzerVersion = "jvm-6"
 
 // Eco is the JVM ecosystem.
 type Eco struct {

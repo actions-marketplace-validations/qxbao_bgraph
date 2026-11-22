@@ -1,17 +1,33 @@
-A project renamed in settings (project(":x").name = "y") changes its path: the build structure is not literal and a change widens rather than missing the projects that reference the new path.
+A literal rename in settings (project(':x').name = 'y', Groovy and Kotlin forms, findProject(..)?.name) changes the project path to the parent path plus the new name while the directory stays: references to the new path (project(':core'), projects.mockwebserver3) resolve to the renamed project, and the change is not full.
 -- base/settings.gradle --
-include ':core-impl', ':app'
+include ':core-impl', ':app', ':mockwebserver', ':other'
 project(':core-impl').name = 'core'
+findProject(':mockwebserver')?.name = "mockwebserver3"
 -- base/core-impl/build.gradle --
 plugins { id 'java' }
 -- base/core-impl/src/main/java/C.java --
 class C {}
--- base/app/build.gradle --
+-- base/mockwebserver/build.gradle --
 plugins { id 'java' }
-dependencies { implementation project(':core') }
+-- base/mockwebserver/src/main/java/M.java --
+class M {}
+-- base/app/build.gradle.kts --
+plugins { java }
+dependencies {
+    implementation(project(":core"))
+    testImplementation(projects.mockwebserver3)
+}
 -- base/app/src/test/java/AppTest.java --
 class AppTest {}
+-- base/other/build.gradle --
+plugins { id 'java' }
 -- head/core-impl/src/main/java/C.java --
 class C { int a; }
+-- head/mockwebserver/src/main/java/M.java --
+class M { int a; }
 -- want --
+notfull
+select gradle::core
+select gradle::mockwebserver3
 select gradle::app
+noselect gradle::other

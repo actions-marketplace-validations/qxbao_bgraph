@@ -134,6 +134,9 @@ func loadGradle(t tree.Tree) *gradleModel {
 					for k, v := range sub.dirs {
 						si.dirs[k] = v
 					}
+					for k, v := range sub.renames {
+						si.renames[k] = v
+					}
 					b.dynamic = append(b.dynamic, sub.dynamic...)
 					nextQ = append(nextQ, sub.applied...)
 				}
@@ -261,14 +264,14 @@ func (m *gradleModel) buildProjects(b *gbuild, si settingsInfo) {
 			dir = path.Join(dirOf[parent], pp[strings.LastIndexByte(pp, ':')+1:])
 		}
 		dirOf[pp] = dir
-		pr := &gproj{path: pp, dir: dir, b: b}
+		pr := &gproj{path: renamed(pp, si.renames), dir: dir, b: b}
 		for _, n := range []string{"build.gradle.kts", "build.gradle"} {
 			if m.t.Has(path.Join(dir, n)) {
 				pr.script = path.Join(dir, n)
 				break
 			}
 		}
-		b.projects[pp] = pr
+		b.projects[pr.path] = pr
 		b.order = append(b.order, pr)
 	}
 	b.libDirs = map[string]bool{}
@@ -281,6 +284,23 @@ func (m *gradleModel) buildProjects(b *gbuild, si settingsInfo) {
 			}
 		}
 	}
+}
+
+// renamed returns the path of project pp after the literal renames of the settings (project(":x").name = "y"): every renamed
+// segment takes its new name, so ":x:z" becomes ":y:z"; the directories stay those of the declared paths.
+func renamed(pp string, renames map[string]string) string {
+	if len(renames) == 0 || pp == ":" {
+		return pp
+	}
+	segs := strings.Split(strings.TrimPrefix(pp, ":"), ":")
+	out := make([]string, len(segs))
+	for i := range segs {
+		out[i] = segs[i]
+		if n, ok := renames[":"+strings.Join(segs[:i+1], ":")]; ok {
+			out[i] = n
+		}
+	}
+	return ":" + strings.Join(out, ":")
 }
 
 // scope is the directory that contains the build directory and every project directory of the build (a projectDir or includeFlat
