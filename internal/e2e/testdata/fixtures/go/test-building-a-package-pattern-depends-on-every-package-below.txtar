@@ -1,0 +1,89 @@
+c's test runs `go vet ../cmd/...`: every package below cmd/ and its closure is an input.
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+	"os/exec"
+)
+
+func TestX(t *testing.T) { exec.Command("go", "build", "../cmd/...").Run() }
+-- base/cmd/x/main.go --
+package main
+
+import (
+	"example.com/m/b"
+)
+
+func main() { b.B() }
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/e/e.go --
+package e
+
+func F() {}
+-- base/e/e_test.go --
+package e
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- head/b/b.go --
+package b
+
+func B() { _ = 2 }
+-- want --
+select go:c
+noselect go:e

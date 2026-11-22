@@ -37,6 +37,10 @@
 // //go:embed patterns and test string literals still reach files there (they do not depend on ownership). A Go test that reads such
 // a file through a path built at run time is not seen: the same gap class as run-time-built paths in general.
 //
+// A test that builds or runs another package of the repository by a literal path ("../cmd/x", "./cmd/...") depends on that
+// package's whole closure. A prebuilt binary referenced by a path that does not exist in the tree (e.g. "../../../alertmanager",
+// built by a Makefile before the tests run) is not seen: a gap, like run-time-built paths.
+//
 // # Known over-selection
 //
 // A module-level widening (go.mod, go.sum, vendor/ change) and an unresolved import that fires on any change in a module are scoped
@@ -65,7 +69,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-4"
+const AnalyzerVersion = "go-5"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -596,14 +600,35 @@ func embedGlob(pat string) string {
 
 // fixtures adds fixture_data edges for the string literals of a test file that name an existing path of the repository, relative to
 // the package directory (go test runs in it). The package's own directory and its ancestors are not data references.
+//
+// A literal naming a package directory ("../cmd/x", as in `go build ../cmd/x` or `go run`) also makes the unit depend on that
+// package's library node, so the whole closure of the program the test builds is an input. A "dir/..." literal (a go command
+// package pattern) makes the unit depend on every package below dir, its own directory and ancestors included.
 func (b *builder) fixtures(p *pkg, unit string, strs []string) {
 	for _, s := range strs {
 		s = strings.ReplaceAll(s, "\\", "/")
 		if strings.HasPrefix(s, "/") || strings.Contains(s, "://") || (len(s) > 1 && s[1] == ':') {
 			continue
 		}
+		all := false
+		if s == "..." {
+			s, all = ".", true
+		} else if t, ok := strings.CutSuffix(s, "/..."); ok {
+			s, all = t, true
+		}
 		target := path.Join(p.dir, s)
-		if target == ".." || strings.HasPrefix(target, "../") || eco.Within(p.dir, target) {
+		if target == ".." || strings.HasPrefix(target, "../") {
+			continue
+		}
+		if all {
+			for d := range b.pkgs {
+				if eco.Within(d, target) && d != p.dir && !b.pkgs[d].vendor {
+					b.edge(unit, LibNode(d), model.EdgeImplicit, "test builds packages "+s+"/...", 0)
+				}
+			}
+			continue
+		}
+		if eco.Within(p.dir, target) {
 			continue
 		}
 		switch {
@@ -611,6 +636,9 @@ func (b *builder) fixtures(p *pkg, unit string, strs []string) {
 			b.edge(unit, target, model.EdgeFixtureData, s, 0)
 		case b.t.IsDir(target):
 			b.edge(unit, dirGlob(target), model.EdgePattern, "fixture directory "+s, 0)
+			if b.pkgs[target] != nil {
+				b.edge(unit, LibNode(target), model.EdgeImplicit, "test may build package "+s, 0)
+			}
 		}
 	}
 }
