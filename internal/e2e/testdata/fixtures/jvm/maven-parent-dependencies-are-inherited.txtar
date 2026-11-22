@@ -1,0 +1,41 @@
+A <dependency> declared in a parent POM's <dependencies> is inherited by every child: a change in that reactor module selects the children, not only the parent.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>support</module><module>parent</module></modules>
+</project>
+-- base/support/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>support</artifactId>
+</project>
+-- base/support/src/main/java/S.java --
+class S {}
+-- base/parent/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>parent</artifactId>
+<packaging>pom</packaging>
+<modules><module>app</module></modules>
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>support</artifactId><version>1.0</version><scope>test</scope></dependency></dependencies>
+</project>
+-- base/parent/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>parent</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+</project>
+-- base/parent/app/src/test/java/AppTest.java --
+class AppTest {}
+-- head/support/src/main/java/S.java --
+class S { int x; }
+-- want --
+notfull
+select maven:support
+select maven:parent/app

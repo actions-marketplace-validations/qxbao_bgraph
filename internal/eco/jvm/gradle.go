@@ -2,6 +2,7 @@ package jvm
 
 import (
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -426,8 +427,81 @@ func (m *gradleModel) analyze(b *builder) []*unit {
 				m.scriptEdges(b, gb, pr, pr.script, byProj, 0)
 			}
 		}
+		m.pluginEdges(b, gb, byProj)
 	}
 	return units
+}
+
+// pluginSourceExt: files of a plugin build (buildSrc/, build-logic/) that can add project dependencies to the projects applying
+// the plugin.
+var pluginSourceExt = []string{".gradle", ".kts", ".kt", ".java", ".groovy"}
+
+// pluginEdges: a convention plugin in buildSrc/ or build-logic/ can add project(":x") dependencies to every project that applies
+// it, and which projects apply which plugin is not modelled, so every project of the build depends on every project such a plugin
+// names (an unplaceable reference: on every project of the build).
+func (m *gradleModel) pluginEdges(b *builder, gb *gbuild, byProj map[*gproj]*unit) {
+	var dirs []string
+	for _, d := range []string{"buildSrc", "build-logic"} {
+		dirs = append(dirs, path.Join(gb.dir, d))
+	}
+	root := gb.projects[":"]
+	var to []*gproj
+	all := false
+	for _, f := range m.t.Files() {
+		in := false
+		for _, d := range dirs {
+			if eco.Within(f, d) {
+				in = true
+				break
+			}
+		}
+		if !in || !slices.ContainsFunc(pluginSourceExt, func(e string) bool { return strings.HasSuffix(f, e) }) {
+			continue
+		}
+		rel := strings.TrimPrefix(f, gb.dir+"/")
+		if outputDir(RunnerGradle, rel) || strings.Contains(f, "/build/") || strings.Contains(f, "/.gradle/") {
+			continue
+		}
+		for _, r := range m.scriptRefs(f).refs {
+			switch r.kind {
+			case refPath:
+				if !strings.HasPrefix(r.val, ":") || root == nil {
+					all = true // relative to the applying project, which is not known
+					continue
+				}
+				to = append(to, gb.lookup(r.val, root)...)
+			case refStrPath:
+				to = append(to, gb.resolveStrPath(r.val)...)
+			case refAccessor:
+				ts := gb.resolveAccessor(strings.Split(r.val, "."))
+				if len(ts) == 0 {
+					all = true
+				}
+				for _, p := range ts {
+					to = append(to, gb.projects[p])
+				}
+			case refUnplaceable:
+				all = true
+			}
+		}
+	}
+	if all {
+		to = gb.order
+	}
+	if len(to) == 0 {
+		return
+	}
+	for _, from := range gb.order {
+		fu := byProj[from]
+		if fu == nil {
+			continue
+		}
+		for _, t := range to {
+			if tu := byProj[t]; tu != nil && tu != fu {
+				b.edge(fu.node, tu.node, model.EdgeProjectRef, "project reference in a convention plugin (buildSrc/build-logic)")
+			}
+		}
+	}
 }
 
 // ownDirs: project directories that hold at least one file of their own.

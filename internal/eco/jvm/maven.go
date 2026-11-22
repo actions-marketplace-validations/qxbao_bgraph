@@ -433,8 +433,9 @@ type mref struct {
 const defaultPluginGroup = "org.apache.maven.plugins"
 
 // refs lists every module-capable coordinate referenced by pi: dependencies (not those that only manage a version), plugins,
-// plugin dependencies, extensions.
-func (pi *pomInfo) refs() []mref {
+// plugin dependencies, extensions. inherited: the references a child module inherits from pi, which leaves out <pluginManagement>
+// (a managed plugin applies only where a module declares it, and that declaration is the module's own reference).
+func (pi *pomInfo) refs(inherited bool) []mref {
 	var out []mref
 	if pi.root == nil {
 		return nil
@@ -461,6 +462,9 @@ func (pi *pomInfo) refs() []mref {
 			out = append(out, mref{g: x.childText("groupId"), a: x.childText("artifactId"), what: what})
 		case "plugin":
 			if par.name != "plugins" {
+				return
+			}
+			if inherited && len(anc) >= 3 && anc[len(anc)-2].name == "pluginManagement" {
 				return
 			}
 			g := x.childText("groupId")
@@ -542,7 +546,13 @@ func (m *mvnModel) analyze(b *builder) []*unit {
 		for _, anc := range m.chain(pi)[1:] {
 			b.edge(u.node, anc.path, model.EdgeImplicit, "parent POM")
 		}
-		for _, r := range pi.refs() {
+		// A module inherits the <dependencies>, <build><plugins> and <extensions> of its local parent chain, so the references of
+		// every ancestor POM are its own (interpolated in the child, as in the effective POM).
+		var refs []mref
+		for i, src := range m.chain(pi) {
+			refs = append(refs, src.refs(i > 0)...)
+		}
+		for _, r := range refs {
 			g, a := m.interp(pi, r.g), m.interp(pi, r.a)
 			if !strings.Contains(g, "${") && !strings.Contains(a, "${") {
 				for _, d := range m.ga[g+":"+a] {

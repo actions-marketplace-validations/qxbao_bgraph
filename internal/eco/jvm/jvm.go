@@ -66,7 +66,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "jvm-2"
+const AnalyzerVersion = "jvm-3"
 
 // Eco is the JVM ecosystem.
 type Eco struct {

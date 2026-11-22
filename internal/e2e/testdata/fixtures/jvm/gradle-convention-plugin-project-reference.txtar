@@ -1,0 +1,22 @@
+A precompiled convention plugin in buildSrc that adds project(':testutil') to every project applying it: a change in testutil selects those projects.
+-- base/buildSrc/build.gradle.kts --
+plugins { `kotlin-dsl` }
+-- base/buildSrc/src/main/kotlin/my.conventions.gradle.kts --
+plugins { java }
+dependencies { "testImplementation"(project(":testutil")) }
+-- base/app/build.gradle.kts --
+plugins { id("my.conventions") }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/settings.gradle.kts --
+include(":testutil", ":app")
+-- base/testutil/build.gradle.kts --
+plugins { java }
+-- base/testutil/src/main/java/T.java --
+class T {}
+-- head/testutil/src/main/java/T.java --
+class T { int a; }
+-- want --
+notfull
+select gradle::testutil
+select gradle::app
