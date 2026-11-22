@@ -1,0 +1,41 @@
+A dependency whose groupId is ${project.parent.groupId} and whose artifactId is a property defined in the parent POM resolves to the reactor module.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<properties><core.artifact>ex-core</core.artifact></properties>
+<modules><module>core</module><module>app</module><module>other</module></modules>
+</project>
+-- base/core/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>${core.artifact}</artifactId>
+</project>
+-- base/core/src/main/java/C.java --
+class C {}
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<dependencies><dependency><groupId>${project.parent.groupId}</groupId><artifactId>${core.artifact}</artifactId><version>${project.version}</version><classifier>tests</classifier><type>test-jar</type></dependency></dependencies>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/core/src/main/java/C.java --
+class C { int x; }
+-- want --
+notfull
+select maven:core
+select maven:app
+noselect maven:other

@@ -1,0 +1,33 @@
+evaluationDependsOn(':x') followed by project(':x').sourceSets.test.output, and a Kotlin Multiplatform commonMain dependency, are project references.
+-- base/settings.gradle --
+include ':core', ':app', ':mpp', ':other'
+-- base/core/build.gradle --
+plugins { id 'java' }
+-- base/core/src/test/java/Helper.java --
+class Helper {}
+-- base/app/build.gradle --
+plugins { id 'java' }
+evaluationDependsOn(':core')
+dependencies { testImplementation files(project(':core').sourceSets.test.output) }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/mpp/build.gradle.kts --
+plugins { kotlin("multiplatform") }
+kotlin {
+    jvm()
+    sourceSets {
+        commonMain.dependencies { implementation(projects.core) }
+    }
+}
+-- base/mpp/src/jvmTest/kotlin/MppTest.kt --
+class MppTest
+-- base/other/build.gradle --
+plugins { id 'java' }
+-- head/core/src/test/java/Helper.java --
+class Helper { int a; }
+-- want --
+notfull
+select gradle::core
+select gradle::app
+select gradle::mpp
+noselect gradle::other

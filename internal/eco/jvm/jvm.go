@@ -25,20 +25,35 @@
 //     Gradle build/ and .gradle/): sources, resources, build files and every other file ("a non-code file change selects the whole
 //     module");
 //   - files that sit in the directory of an ENCLOSING unit but outside its src/ (shared configuration, test data, script plugins) are
-//     dependencies of every nested unit, because a nested module can read them through "../";
+//     dependencies of every nested unit, because a nested module can read them through "../"; for a Maven module with packaging pom
+//     (which compiles nothing) the non-code files under src/ are shared too;
 //   - a unit depends on the unit of every module it references: Maven <dependency> of any scope/type/classifier, <plugin> that is a
-//     reactor module and the plugin's <dependencies>, build <extension>, BOM imports; Gradle project(":x"), projects.x.y accessors,
-//     testFixtures(project(..)), platform(project(..)) and any other configuration. A reference the parser cannot place makes the
-//     unit depend on every unit of its build;
-//   - a Maven module depends on the POM files of its local parent chain (<parent> through relativePath);
-//   - a Gradle project depends on every project of the builds included with includeBuild.
+//     reactor module and the plugin's <dependencies>, build <extension>, BOM imports, any other element with groupId/artifactId
+//     children (annotationProcessorPaths, artifactItem, ...) and "groupId:artifactId[:..]" texts; Gradle project(":x"),
+//     rootProject used as a value, projects.x.y accessors, testFixtures(project(..)), platform(project(..)) and any other
+//     configuration. A reference the parser cannot place (including allprojects/subprojects navigated as a collection, and a
+//     literal project(..) that names no project) makes the unit depend on every unit of its build; a Maven reference that matches
+//     no module reaches the modules whose own coordinates keep an undefined property;
+//   - a Maven module inherits the references of its local parent chain and depends on those POM files (<parent> through
+//     relativePath, any file name, or else the reactor module with the parent's coordinates);
+//   - a unit depends on the files and directories named by paths it does not own: Maven source/resource directories and every
+//     other path-like text or attribute of its POM chain that names an existing file or directory (resolved against the module);
+//     Gradle strings starting with "../", "$rootDir/" and similar, and strings after rootProject/rootDir/settingsDir in a call
+//     chain that name an existing file or directory;
+//   - Gradle references stored in extra properties (ext { }, extra) and references inside the project-configuring blocks of a
+//     settings script (gradle.allprojects { }, ...) are dependencies of every project they can reach; references in convention
+//     plugins of buildSrc/, build-logic/ and included builds are dependencies of every project of the build;
+//   - a Gradle project depends on every project of the builds included with includeBuild; a library build of a composite
+//     (includeBuild outside pluginManagement) depends on every project of the including build and of its sibling library builds
+//     (dependency substitution by coordinates).
 //
 // # Widening
 //
 // Changes to the shared build definition (Maven parent/aggregator POMs unless only <version> changed, .mvn/**, profiles that declare
 // modules, a remote parent's version; Gradle settings and root scripts, buildSrc/, build-logic/, version catalogs, the wrapper,
 // gradle.properties, cross-project configuration) widen to every JVM unit of the build (full when the build is the repo root).
-// Dynamic constructs that hide the project list (Gradle include in a loop) are Unresolved at full scope.
+// Dynamic constructs that hide the project list or layout (Gradle include in a loop, projectDir assigned without a literal
+// receiver, a renamed project, setProjectDir/setName) are Unresolved at full scope.
 package jvm
 
 import (
@@ -66,7 +81,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "jvm-3"
+const AnalyzerVersion = "jvm-4"
 
 // Eco is the JVM ecosystem.
 type Eco struct {
