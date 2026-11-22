@@ -141,6 +141,8 @@ type JVMGibRow struct {
 	Units    int      `json:"units"`
 	Selected int      `json:"selected"`
 	GIB      int      `json:"gib_impacted"`
+	GIBList  []string `json:"gib_modules,omitempty"` // the impacted modules, kept for violations
+	GIBOut   string   `json:"gib_log,omitempty"`     // the GIB lines of the Maven output, kept for violations
 	Missing  []string `json:"missing,omitempty"` // impacted by GIB, not selected by bgraph
 	Extra    int      `json:"extra"`             // selected by bgraph, not impacted by GIB
 	Changed  []string `json:"changed,omitempty"`
@@ -283,6 +285,17 @@ func JVMGibTask(ctx context.Context, cfg JVMGibConfig, mirror string, seq int, t
 	row.Status = "ok"
 	if len(row.Missing) > 0 {
 		row.Status = "violation"
+		for u := range impacted {
+			row.GIBList = append(row.GIBList, u)
+		}
+		sort.Strings(row.GIBList)
+		var gl []string
+		for _, ln := range strings.Split(out, "\n") {
+			if strings.Contains(ln, "gitflow-incremental-builder") || strings.Contains(ln, "GIB") || strings.HasPrefix(ln, "[INFO] - ") {
+				gl = append(gl, ln)
+			}
+		}
+		row.GIBOut = firstN(strings.Join(gl, "\n"), 6000)
 	}
 	return row
 }
