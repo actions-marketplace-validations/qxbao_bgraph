@@ -28,6 +28,7 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 	out := fs.String("out", "", "output directory (default D:\\bench\\bgraph-eval\\out\\lockdiff-<format>)")
 	jobs := fs.Int("jobs", 1, "repos in parallel")
 	pnpm := fs.String("pnpm", "", "pnpm command (space-separated), e.g. \"node C:/.../pnpm/10.28.2/bin/pnpm.cjs\"")
+	pnpmConvert := fs.String("pnpm-convert", "", "pnpm 9 command that rewrites 6.x lockfiles as 9.0 before listing, e.g. \"node D:/bench/tools/pnpm9/node_modules/pnpm/bin/pnpm.cjs\"")
 	cargoHome := fs.String("cargo-home", `D:\bench\tools\cargo-home`, "CARGO_HOME")
 	fs.Parse(args)
 	if *format == "" || len(repos) == 0 {
@@ -45,6 +46,7 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 	switch *format {
 	case "pnpm":
 		o.Pnpm = strings.Fields(*pnpm)
+		o.PnpmConvert = strings.Fields(*pnpmConvert)
 		if len(o.Pnpm) == 0 {
 			o.Pnpm = []string{"pnpm"}
 		}

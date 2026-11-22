@@ -32,6 +32,9 @@ type LockdiffOpts struct {
 	Commits int    // lockfile-changing commits per repo
 	Until   string // only commits before this date (git log --until), to sample older lockfile versions
 	Pnpm    []string
+	// PnpmConvert: a pnpm 9 command that rewrites a 6.x lockfile as 9.0 (install --lockfile-only --frozen-lockfile)
+	// before Pnpm lists it: pnpm list --lockfile-only exists only in pnpm 10, which cannot read 6.x.
+	PnpmConvert []string
 	Env     []string // extra environment for the tool
 	Log     func(string, ...any)
 }
@@ -499,6 +502,12 @@ func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath 
 			}
 			return nil
 		})
+		if b, err := os.ReadFile(lp); err == nil && len(o.PnpmConvert) > 0 && strings.HasPrefix(sniffLockVersion(lockfile.FormatPnpm, string(b)), "6.") {
+			cargs := append(append([]string(nil), o.PnpmConvert[1:]...), "install", "--lockfile-only", "--frozen-lockfile", "--ignore-scripts")
+			if out, errb, err := runTool(ctx, dst, o.Env, o.PnpmConvert[0], cargs...); err != nil {
+				return nil, false, fmt.Errorf("pnpm 9 conversion of the 6.x lockfile: %v: %s", err, firstLine(strings.Join(strings.Fields(string(out)+" "+string(errb)), " ")))
+			}
+		}
 		args := append(append([]string(nil), o.Pnpm[1:]...), "list", "-r", "--depth", "Infinity", "--json", "--lockfile-only")
 		out, errb, err := runTool(ctx, dst, o.Env, o.Pnpm[0], args...)
 		var projs []pnpmProject
@@ -509,7 +518,7 @@ func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath 
 				return pnpmParseable(ctx, o, dst, lockDir, projects)
 			}
 			msg = firstLine(msg)
-			unreadable := strings.Contains(msg, "LOCKFILE") || strings.Contains(msg, "lockfile")
+			unreadable := strings.Contains(msg, "LOCKFILE") || strings.Contains(msg, "lockfile") || strings.Contains(msg, "reading 'resolution'")
 			return nil, unreadable, fmt.Errorf("pnpm list: %v: %s", err, msg)
 		}
 		res := map[string]map[string]bool{}
