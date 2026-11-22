@@ -85,7 +85,7 @@ func runGoList(ctx context.Context, dir, goos string) ([]goListPkg, error) {
 	defer cancel()
 	cmd := exec.CommandContext(cctx, "go", "list", "-e", "-json", "-test", "./...")
 	cmd.Dir = dir
-	env := append(os.Environ(), "GOFLAGS=-mod=mod", "GOMODCACHE=D:/cache/go-mod", "GOCACHE=D:/cache/go-build", "GOTOOLCHAIN=auto", "GOWORK=off")
+	env := append(os.Environ(), "GOFLAGS=-mod=mod", "GOTOOLCHAIN=auto", "GOWORK=off")
 	if goos != "" {
 		env = append(env, "GOOS="+goos)
 	}

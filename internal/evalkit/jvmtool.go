@@ -22,8 +22,8 @@ import (
 	"github.com/qxbao/bgraph/internal/scancache"
 )
 
-// JVMTools locates the portable JDKs, Maven and the Gradle user home used by the external checks. Everything lives on the eval drive:
-// the Maven local repository, the Gradle home and the temp directory of every child process. Nothing touches PATH or the registry.
+// JVMTools locates the JDKs, Maven and the Gradle user home used by the external checks (defaults: DefaultJVMTools). Every child
+// process gets the Maven local repository, the Gradle home and the temp directory given here.
 type JVMTools struct {
 	JDK17, JDK21 string // JAVA_HOME directories
 	Maven        string // Maven home
@@ -33,7 +33,8 @@ type JVMTools struct {
 }
 
 func (t JVMTools) env(jdk string) []string {
-	return append(os.Environ(), "JAVA_HOME="+jdk, "GRADLE_USER_HOME="+t.GradleHome, "TEMP="+t.Tmp, "TMP="+t.Tmp, "TMPDIR="+t.Tmp,
+	env := append(os.Environ(), setIf("GRADLE_USER_HOME", t.GradleHome)...)
+	return append(env, "JAVA_HOME="+jdk, "TEMP="+t.Tmp, "TMP="+t.Tmp, "TMPDIR="+t.Tmp,
 		"MAVEN_OPTS=-Djava.io.tmpdir="+t.Tmp, "GRADLE_OPTS=-Djava.io.tmpdir="+t.Tmp, "JAVA_TOOL_OPTIONS=-Djava.io.tmpdir="+t.Tmp,
 		"MAVEN_ARGS=", "CI=true")
 }
@@ -49,8 +50,11 @@ func (t JVMTools) run(ctx context.Context, jdk, dir, exe string, args ...string)
 }
 
 func (t JVMTools) mvn(ctx context.Context, jdk, dir string, args ...string) (string, error) {
-	base := []string{"-B", "-ntp", "-Dmaven.repo.local=" + t.M2}
-	return t.run(ctx, jdk, dir, filepath.Join(t.Maven, "bin", "mvn.cmd"), append(base, args...)...)
+	base := []string{"-B", "-ntp"}
+	if t.M2 != "" {
+		base = append(base, "-Dmaven.repo.local="+t.M2)
+	}
+	return t.run(ctx, jdk, dir, mvnExe(t.Maven), append(base, args...)...)
 }
 
 // exportTree extracts the tree of rev into dir (git archive; works on a partial clone: missing blobs are fetched). Symlinks are skipped.

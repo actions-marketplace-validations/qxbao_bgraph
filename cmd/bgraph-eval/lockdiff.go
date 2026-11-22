@@ -19,23 +19,24 @@ import (
 func cmdLockdiff(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("lockdiff", flag.ExitOnError)
 	format := fs.String("format", "", "pnpm | npm | cargo")
-	work := fs.String("work", `D:\bench\bgraph-eval\work`, "work directory (repos/<owner__name>)")
-	tmp := fs.String("tmp", `D:\bench\bgraph-eval\tmp\lockdiff`, "scratch directory (materialized trees and worktrees, removed after use)")
+	evalDir := evalkit.EvalDir()
+	work := fs.String("work", filepath.Join(evalDir, "work"), "work directory (repos/<owner__name>; default under $BGRAPH_EVAL_DIR)")
+	tmp := fs.String("tmp", filepath.Join(evalDir, "tmp", "lockdiff"), "scratch directory (materialized trees and worktrees, removed after use)")
 	var repos multi
 	fs.Var(&repos, "repos", "repos owner__name[:lockfile path], comma-separated")
 	commits := fs.Int("commits", 25, "last N lockfile-changing commits per repo")
 	until := fs.String("until", "", "only commits before this date (e.g. 2023-06-01), to sample older lockfile versions")
-	out := fs.String("out", "", "output directory (default D:\\bench\\bgraph-eval\\out\\lockdiff-<format>)")
+	out := fs.String("out", "", "output directory (default <$BGRAPH_EVAL_DIR>/out/lockdiff-<format>)")
 	jobs := fs.Int("jobs", 1, "repos in parallel")
-	pnpm := fs.String("pnpm", "", "pnpm command (space-separated), e.g. \"node C:/.../pnpm/10.28.2/bin/pnpm.cjs\"")
-	pnpmConvert := fs.String("pnpm-convert", "", "pnpm 9 command that rewrites 6.x lockfiles as 9.0 before listing, e.g. \"node D:/bench/tools/pnpm9/node_modules/pnpm/bin/pnpm.cjs\"")
-	cargoHome := fs.String("cargo-home", `D:\bench\tools\cargo-home`, "CARGO_HOME")
+	pnpm := fs.String("pnpm", "", "pnpm command (space-separated), e.g. \"node /path/to/pnpm/bin/pnpm.cjs\"")
+	pnpmConvert := fs.String("pnpm-convert", "", "pnpm 9 command that rewrites 6.x lockfiles as 9.0 before listing, e.g. \"node /path/to/pnpm9/node_modules/pnpm/bin/pnpm.cjs\"")
+	cargoHome := fs.String("cargo-home", evalkit.ToolPath("cargo-home", os.Getenv("CARGO_HOME")), "CARGO_HOME (default $BGRAPH_EVAL_TOOLS/cargo-home, else $CARGO_HOME; empty: inherited)")
 	fs.Parse(args)
 	if *format == "" || len(repos) == 0 {
 		return fmt.Errorf("--format and --repos are required")
 	}
 	if *out == "" {
-		*out = filepath.Join(`D:\bench\bgraph-eval\out`, "lockdiff-"+*format)
+		*out = filepath.Join(evalDir, "out", "lockdiff-"+*format)
 	}
 	if err := evalkit.SetupHermeticEnv(filepath.Join(*work, "gitcfg")); err != nil {
 		return err
@@ -50,13 +51,21 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 		if len(o.Pnpm) == 0 {
 			o.Pnpm = []string{"pnpm"}
 		}
-		o.Env = []string{"npm_config_manage_package_manager_versions=false", "COREPACK_ENABLE_STRICT=0",
-			`npm_config_store_dir=D:\bench\tools\pnpm-store`, `npm_config_cache_dir=D:\bench\tools\pnpm-cache`,
-			`XDG_CACHE_HOME=D:\bench\tools\pnpm-cache`, `PNPM_HOME=D:\bench\tools\pnpm-home`, "npm_config_update_notifier=false"}
+		o.Env = []string{"npm_config_manage_package_manager_versions=false", "COREPACK_ENABLE_STRICT=0", "npm_config_update_notifier=false"}
+		if evalkit.ToolsDir() != "" { // keep the pnpm store and caches next to the other portable tools
+			o.Env = append(o.Env, "npm_config_store_dir="+evalkit.ToolPath("pnpm-store", ""), "npm_config_cache_dir="+evalkit.ToolPath("pnpm-cache", ""),
+				"XDG_CACHE_HOME="+evalkit.ToolPath("pnpm-cache", ""), "PNPM_HOME="+evalkit.ToolPath("pnpm-home", ""))
+		}
 	case "npm":
-		o.Env = []string{`npm_config_cache=D:\bench\npm-cache`, "npm_config_update_notifier=false", "npm_config_audit=false", "npm_config_fund=false"}
+		o.Env = []string{"npm_config_update_notifier=false", "npm_config_audit=false", "npm_config_fund=false"}
+		if evalkit.ToolsDir() != "" {
+			o.Env = append(o.Env, "npm_config_cache="+evalkit.ToolPath("npm-cache", ""))
+		}
 	case "cargo":
-		o.Env = []string{"CARGO_HOME=" + *cargoHome, "RUSTUP_TOOLCHAIN=stable", "CARGO_NET_GIT_FETCH_WITH_CLI=true"}
+		o.Env = []string{"RUSTUP_TOOLCHAIN=stable", "CARGO_NET_GIT_FETCH_WITH_CLI=true"}
+		if *cargoHome != "" {
+			o.Env = append(o.Env, "CARGO_HOME="+*cargoHome)
+		}
 	default:
 		return fmt.Errorf("unknown format %q", *format)
 	}

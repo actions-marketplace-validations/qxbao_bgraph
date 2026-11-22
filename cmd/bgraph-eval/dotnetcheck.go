@@ -16,10 +16,11 @@ import (
 )
 
 func dotnetToolsFlags(fs *flag.FlagSet) *evalkit.DotnetTools {
+	d := evalkit.DefaultDotnetTools()
 	t := &evalkit.DotnetTools{}
-	fs.StringVar(&t.Dotnet, "dotnet", `D:\bench\tools\dotnet\dotnet.exe`, "portable dotnet executable")
-	fs.StringVar(&t.Affected, "dotnet-affected", `D:\bench\tools\dotnet-tools\dotnet-affected.exe`, "dotnet-affected executable")
-	fs.StringVar(&t.Root, "dotnet-root", `D:\bench\tools\dotnet`, "DOTNET_ROOT given to the tools")
+	fs.StringVar(&t.Dotnet, "dotnet", d.Dotnet, "dotnet executable (default $BGRAPH_EVAL_TOOLS/dotnet, else $DOTNET_ROOT, else PATH)")
+	fs.StringVar(&t.Affected, "dotnet-affected", d.Affected, "dotnet-affected executable (default $BGRAPH_EVAL_TOOLS/dotnet-tools, else PATH)")
+	fs.StringVar(&t.Root, "dotnet-root", d.Root, "DOTNET_ROOT given to the tools (default $BGRAPH_EVAL_TOOLS/dotnet, else $DOTNET_ROOT; empty: inherited)")
 	return t
 }
 

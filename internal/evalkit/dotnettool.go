@@ -20,8 +20,8 @@ import (
 	"github.com/qxbao/bgraph/internal/scancache"
 )
 
-// DotnetTools locates the portable .NET SDK and dotnet-affected used by the external checks. Nothing here touches PATH or the registry:
-// every child process gets its own environment.
+// DotnetTools locates the .NET SDK and dotnet-affected used by the external checks (defaults: DefaultDotnetTools). Every child process
+// gets its own environment.
 type DotnetTools struct {
 	Dotnet   string // dotnet executable
 	Affected string // dotnet-affected executable
@@ -29,7 +29,8 @@ type DotnetTools struct {
 }
 
 func (t DotnetTools) env() []string {
-	return append(os.Environ(), "DOTNET_ROOT="+t.Root, "DOTNET_CLI_TELEMETRY_OPTOUT=1", "DOTNET_NOLOGO=1", "DOTNET_ROLL_FORWARD=Major",
+	env := append(os.Environ(), setIf("DOTNET_ROOT", t.Root)...)
+	return append(env, "DOTNET_CLI_TELEMETRY_OPTOUT=1", "DOTNET_NOLOGO=1", "DOTNET_ROLL_FORWARD=Major",
 		"DOTNET_MULTILEVEL_LOOKUP=0", "DOTNET_SKIP_FIRST_TIME_EXPERIENCE=1", "MSBUILDDISABLENODEREUSE=1", "DOTNET_CLI_UI_LANGUAGE=en")
 }
 

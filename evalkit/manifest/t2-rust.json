@@ -1,7 +1,7 @@
 {
  "version": 1,
  "ts": "",
- "notes": "Rust T2 (`bgraph-eval t2 --ecosystem rust`). Root directory defaults to D:\bench\bgraph-eval\t2\rust: checkouts <dir>, CARGO_TARGET_DIR target-<dir>, oracle.jsonl. Checkouts are full clones (`git clone`, core.autocrlf=false) detached at R. Suite: `cargo test --workspace --no-fail-fast` (lib/bin/integration tests + doc-tests; benches are not run). `mutants` = killed mutants aimed at, `tries` = mutants generated at most. sharkdp/fd was dropped: its integration suite needs symlink privilege that this Windows host lacks (102 of 104 tests fail at R); sharkdp/bat replaces it. fd at HEAD and ripgrep at HEAD also need rustc newer than 1.92, so ripgrep's R is the parent of its MSRV-1.96 bump.",
+ "notes": "Rust T2 (`bgraph-eval t2 --ecosystem rust`). Root directory defaults to $BGRAPH_EVAL_DIR/t2/rust: checkouts <dir>, CARGO_TARGET_DIR target-<dir>, oracle.jsonl. Checkouts are full clones (`git clone`, core.autocrlf=false) detached at R. Suite: `cargo test --workspace --no-fail-fast` (lib/bin/integration tests + doc-tests; benches are not run). `mutants` = killed mutants aimed at, `tries` = mutants generated at most. sharkdp/fd was dropped: its integration suite needs symlink privilege that this Windows host lacks (102 of 104 tests fail at R); sharkdp/bat replaces it. fd at HEAD and ripgrep at HEAD also need rustc newer than 1.92, so ripgrep's R is the parent of its MSRV-1.96 bump.",
  "repos": [
   {
    "name": "tokio-rs/bytes",

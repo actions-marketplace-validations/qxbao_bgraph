@@ -1,7 +1,7 @@
 {
  "version": 1,
  "ts": "tools/node_modules/typescript",
- "notes": "Root directory (t2 dir) defaults to D:\\bench\\bgraph-eval\\t2. Checkout = `git clone --depth 1` then `git fetch --depth 1 origin <R>` + checkout R (see repos[].install). typescript@5.5.4 is installed in <t2>/tools only to generate mutants.",
+ "notes": "Root directory (t2 dir) defaults to $BGRAPH_EVAL_DIR/t2. Checkout = `git clone --depth 1` then `git fetch --depth 1 origin <R>` + checkout R (see repos[].install). typescript@5.5.4 is installed in <t2>/tools only to generate mutants.",
  "repos": [
   {
    "name": "colinhacks/zod",

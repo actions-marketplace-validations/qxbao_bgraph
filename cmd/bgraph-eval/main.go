@@ -4,7 +4,7 @@
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
 //	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
-//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python] [--budget 90m] [--dir D:/bench/bgraph-eval/t2] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
+//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-locate|dotnet-locate --tasks tasks-jvm.jsonl --work DIR [--out locate.json] [--examples 3]   (locate JVM / .NET FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-gib|jvm-provider --tasks tasks-jvm.jsonl --work DIR --out DIR   (JVM: superset check against gitflow-incremental-builder; Maven reactor and Gradle projects against bgraph units)
@@ -115,6 +115,14 @@ func main() {
 
 func usage() {
 	fmt.Fprintln(os.Stderr, "usage: bgraph-eval t1|t2|quick|replay|manifest [flags]  (see -h for each command)")
+	fmt.Fprint(os.Stderr, `
+environment:
+  BGRAPH_EVAL_DIR    root of the evaluation data: T2 sets, reports, scratch (default <user cache dir>/bgraph-eval)
+  BGRAPH_EVAL_TOOLS  optional directory of portable tools: jdk17, jdk21, maven, m2, gradle-home, tmp, nuget, dotnet,
+                     dotnet-tools, cargo-home, pnpm-store, pnpm-cache, pnpm-home, npm-cache. When unset, the tools come
+                     from JAVA_HOME, JAVA21_HOME, MAVEN_HOME, GRADLE_USER_HOME, DOTNET_ROOT, CARGO_HOME, NUGET_PACKAGES
+                     and PATH. Flags such as --jdk17, --maven, --dotnet, --cargo-home override both.
+`)
 	os.Exit(2)
 }
 
@@ -487,7 +495,7 @@ func cmdBaseline(ctx context.Context, args []string) error {
 // cmdT2 runs the mutation oracle (docs/evaluation.md): --run-tests builds/refreshes oracle.jsonl; by default it only re-checks bgraph on the cached oracle.
 func cmdT2(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("t2", flag.ExitOnError)
-	dir := fs.String("dir", "D:/bench/bgraph-eval/t2", "T2 root directory (checkout, tools, state, oracle.jsonl)")
+	dir := fs.String("dir", filepath.Join(evalkit.EvalDir(), "t2"), "T2 root directory (checkout, tools, state, oracle.jsonl; default <$BGRAPH_EVAL_DIR>/t2)")
 	manPath := fs.String("manifest", "evalkit/manifest/t2.json", "manifest repo T2")
 	out := fs.String("out", "", "report directory (default <dir>/out)")
 	repos := fs.String("repos", "", "only these repos (name or directory, comma-separated)")
@@ -495,7 +503,7 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
 	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go (rust/python/jvm/dotnet/go default --dir D:/bench/bgraph-eval/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go (rust/python/jvm/dotnet/go default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
 	budget := fs.Duration("budget", 0, "rust/python: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
 	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" {
@@ -505,7 +513,7 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 			manSet = manSet || f.Name == "manifest"
 		})
 		if !dirSet {
-			*dir = "D:/bench/bgraph-eval/t2/" + *eco
+			*dir = filepath.Join(evalkit.EvalDir(), "t2", *eco)
 		}
 		if !manSet {
 			*manPath = "evalkit/manifest/t2-" + *eco + ".json"

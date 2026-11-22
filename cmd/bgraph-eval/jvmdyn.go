@@ -18,7 +18,7 @@ import (
 //	bgraph-eval jvmdyn --repo gson --clone DIR --state DIR [--mutants id,...] [--replay N --units GLOB --commits 300] [--out DIR]
 func cmdJVMDyn(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("jvmdyn", flag.ExitOnError)
-	t2 := fs.String("t2", "D:/bench/bgraph-eval/t2/jvm", "the JVM T2 set (oracle.jsonl; read only)")
+	t2 := fs.String("t2", filepath.Join(evalkit.EvalDir(), "t2", "jvm"), "the JVM T2 set (oracle.jsonl; read only; default under $BGRAPH_EVAL_DIR)")
 	manifest := fs.String("manifest", "evalkit/manifest/t2-jvm.json", "T2 manifest")
 	repo := fs.String("repo", "", "repo (name or directory)")
 	clone := fs.String("clone", "", "shared clone to run in (its working tree is modified)")
@@ -28,7 +28,7 @@ func cmdJVMDyn(ctx context.Context, args []string) (int, error) {
 	replay := fs.Int("replay", 0, "replay at most N code-only commits instead of the T2 pass (records made fresh at each parent)")
 	units := fs.String("units", "", "replay: --units glob of the recordings")
 	commits := fs.Int("commits", 300, "replay: first-parent commits examined")
-	out := fs.String("out", "D:/bench/bgraph-eval/out/phase7-jvmdyn", "report directory")
+	out := fs.String("out", filepath.Join(evalkit.EvalDir(), "out", "phase7-jvmdyn"), "report directory (default under $BGRAPH_EVAL_DIR)")
 	fs.Parse(args)
 	man, err := evalkit.LoadT2Manifest(*manifest)
 	if err != nil {

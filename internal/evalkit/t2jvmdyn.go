@@ -175,7 +175,7 @@ func (c JVMDynConfig) runClasses(ctx context.Context, units []jvmdyn.Unit, class
 			env = []string{"MAVEN_ARGS=-Dtest=" + strings.Join(pats, ",")}
 		}
 		args = append(args, "-pl", strings.Join(pl, ","), "-am", "test")
-		out, tl, to, err = runProc(ctx, c.Clone, env, timeout, filepath.Join(jvmT2Tools.Maven, "bin", "mvn.cmd"), args...)
+		out, tl, to, err = runProc(ctx, c.Clone, env, timeout, mvnExe(jvmT2Tools.Maven), args...)
 	} else {
 		args := []string{"--console=plain", "--continue", "-q"}
 		args = append(args, c.BuildArgs...)

@@ -24,11 +24,11 @@ import (
 // source at R, the whole suite runs on the mutated working tree, and every red UNIT (Maven module, Gradle project, .NET test project) must
 // be in Select(R->M). A unit is red when any of its tests failed or errored in the run; the red units are re-run alone to confirm.
 
-// jvmT2Tools are the portable tools of the evaluation drive (never PATH, never the registry).
-var jvmT2Tools = JVMTools{JDK17: `D:\bench\tools\jdk17`, JDK21: `D:\bench\tools\jdk21`, Maven: `D:\bench\tools\maven`, M2: `D:\bench\tools\m2`,
-	GradleHome: `D:\bench\tools\gradle-home`, Tmp: `D:\bench\tools\tmp`}
-
-const dotnetRoot = `D:\bench\tools\dotnet`
+// jvmT2Tools and t2Dotnet are the tools of the T2 runs (DefaultJVMTools, DefaultDotnetTools).
+var (
+	jvmT2Tools = DefaultJVMTools()
+	t2Dotnet   = DefaultDotnetTools()
+)
 
 func (r T2Repo) jdJDK() string {
 	if r.Jdk == "21" {
@@ -39,10 +39,13 @@ func (r T2Repo) jdJDK() string {
 
 func (r T2Repo) jdEnv() []string {
 	t := jvmT2Tools
-	return []string{"JAVA_HOME=" + r.jdJDK(), "GRADLE_USER_HOME=" + t.GradleHome, "TEMP=" + t.Tmp, "TMP=" + t.Tmp,
-		"MAVEN_OPTS=-Djava.io.tmpdir=" + t.Tmp, "DOTNET_ROOT=" + dotnetRoot, "DOTNET_CLI_TELEMETRY_OPTOUT=1", "DOTNET_NOLOGO=1",
-		"DOTNET_ROLL_FORWARD=Major", "DOTNET_MULTILEVEL_LOOKUP=0", "NUGET_PACKAGES=" + filepath.Join(filepath.Dir(t.Maven), "nuget"),
-		"MSBUILDDISABLENODEREUSE=1", "CI=true"}
+	os.MkdirAll(t.Tmp, 0o755)
+	env := []string{"JAVA_HOME=" + r.jdJDK(), "TEMP=" + t.Tmp, "TMP=" + t.Tmp,
+		"MAVEN_OPTS=-Djava.io.tmpdir=" + t.Tmp, "DOTNET_CLI_TELEMETRY_OPTOUT=1", "DOTNET_NOLOGO=1",
+		"DOTNET_ROLL_FORWARD=Major", "DOTNET_MULTILEVEL_LOOKUP=0", "MSBUILDDISABLENODEREUSE=1", "CI=true"}
+	env = append(env, setIf("GRADLE_USER_HOME", t.GradleHome)...)
+	env = append(env, setIf("DOTNET_ROOT", t2Dotnet.Root)...)
+	return append(env, setIf("NUGET_PACKAGES", ToolPath("nuget", os.Getenv("NUGET_PACKAGES")))...)
 }
 
 // JDRun is the outcome of one suite run.
@@ -182,7 +185,10 @@ func (r T2Repo) jdRunSuite(ctx context.Context, cfg *T2Config, root string, dirs
 	switch r.Runner {
 	case "maven":
 		removeReports(root, "/target/surefire-reports/")
-		args := []string{"-B", "-ntp", "-Dmaven.repo.local=" + jvmT2Tools.M2, "-Dmaven.test.failure.ignore=true", "-Dsurefire.failIfNoSpecifiedTests=false"}
+		args := []string{"-B", "-ntp", "-Dmaven.test.failure.ignore=true", "-Dsurefire.failIfNoSpecifiedTests=false"}
+		if jvmT2Tools.M2 != "" {
+			args = append(args, "-Dmaven.repo.local="+jvmT2Tools.M2)
+		}
 		args = append(args, r.Args...)
 		if only == nil && len(r.Targets) > 0 {
 			args = append(args, "-pl", strings.Join(r.Targets, ","))
@@ -197,7 +203,7 @@ func (r T2Repo) jdRunSuite(ctx context.Context, cfg *T2Config, root string, dirs
 			args = append(args, "-pl", strings.Join(pl, ","), "-am")
 		}
 		args = append(args, "test")
-		out, tail, to, err := runProc(ctx, root, env, timeout, filepath.Join(jvmT2Tools.Maven, "bin", "mvn.cmd"), args...)
+		out, tail, to, err := runProc(ctx, root, env, timeout, mvnExe(jvmT2Tools.Maven), args...)
 		d := time.Since(t0)
 		if ctx.Err() != nil {
 			return JDRun{}, d, false, ctx.Err()
@@ -269,7 +275,7 @@ func (r T2Repo) jdRunSuite(ctx context.Context, cfg *T2Config, root string, dirs
 		name := fmt.Sprintf("u%d", i)
 		args := []string{"test", filepath.FromSlash(tp), "--nologo", "-v", "q", "--logger", "trx;LogFileName=" + name + ".trx", "--results-directory", filepath.Join(trx, name)}
 		args = append(args, r.Args...)
-		out, tl, to, err := runProc(ctx, root, env, timeout, filepath.Join(dotnetRoot, "dotnet.exe"), args...)
+		out, tl, to, err := runProc(ctx, root, env, timeout, t2Dotnet.Dotnet, args...)
 		if ctx.Err() != nil {
 			return JDRun{}, time.Since(t0), false, ctx.Err()
 		}

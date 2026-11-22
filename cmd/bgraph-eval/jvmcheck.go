@@ -16,13 +16,14 @@ import (
 )
 
 func jvmToolsFlags(fs *flag.FlagSet) *evalkit.JVMTools {
+	d := evalkit.DefaultJVMTools()
 	t := &evalkit.JVMTools{}
-	fs.StringVar(&t.JDK17, "jdk17", `D:\bench\tools\jdk17`, "JAVA_HOME of the default JDK")
-	fs.StringVar(&t.JDK21, "jdk21", `D:\bench\tools\jdk21`, "JAVA_HOME of the fallback JDK (Gradle)")
-	fs.StringVar(&t.Maven, "maven", `D:\bench\tools\maven`, "Maven home")
-	fs.StringVar(&t.M2, "m2", `D:\bench\tools\m2`, "Maven local repository")
-	fs.StringVar(&t.GradleHome, "gradle-home", `D:\bench\tools\gradle-home`, "GRADLE_USER_HOME")
-	fs.StringVar(&t.Tmp, "tmp", `D:\bench\tools\tmp`, "TEMP/TMP of child processes")
+	fs.StringVar(&t.JDK17, "jdk17", d.JDK17, "JAVA_HOME of the default JDK (default $BGRAPH_EVAL_TOOLS/jdk17, else $JAVA_HOME)")
+	fs.StringVar(&t.JDK21, "jdk21", d.JDK21, "JAVA_HOME of the fallback JDK, Gradle (default $BGRAPH_EVAL_TOOLS/jdk21, else $JAVA21_HOME, else $JAVA_HOME)")
+	fs.StringVar(&t.Maven, "maven", d.Maven, "Maven home (default $BGRAPH_EVAL_TOOLS/maven, else $MAVEN_HOME; empty: mvn on PATH)")
+	fs.StringVar(&t.M2, "m2", d.M2, "Maven local repository (default $BGRAPH_EVAL_TOOLS/m2, else ~/.m2/repository)")
+	fs.StringVar(&t.GradleHome, "gradle-home", d.GradleHome, "GRADLE_USER_HOME (default $BGRAPH_EVAL_TOOLS/gradle-home, else $GRADLE_USER_HOME; empty: inherited)")
+	fs.StringVar(&t.Tmp, "tmp", d.Tmp, "TEMP/TMP of child processes (default $BGRAPH_EVAL_TOOLS/tmp, else under the system temp directory)")
 	return t
 }
 

@@ -1,1 +1,3 @@
 docs/private/
+__pycache__/
+/dist/

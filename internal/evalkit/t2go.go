@@ -126,7 +126,7 @@ func moduleArg(m *goModule, d string) string {
 func (r T2Repo) goEnv(cfg *T2Config) []string {
 	tmp := filepath.Join(cfg.Dir, "tmp")
 	os.MkdirAll(tmp, 0o755)
-	return []string{"GOCACHE=" + filepath.Join(cfg.Dir, "gocache-"+r.Dir), "GOMODCACHE=D:\\cache\\go-mod", "GOFLAGS=-mod=mod", "GOTMPDIR=" + tmp,
+	return []string{"GOCACHE=" + filepath.Join(cfg.Dir, "gocache-"+r.Dir), "GOFLAGS=-mod=mod", "GOTMPDIR=" + tmp,
 		"TEMP=" + tmp, "TMP=" + tmp, "CGO_ENABLED=0", "GOTOOLCHAIN=auto", "GOPROXY=https://proxy.golang.org,direct"}
 }
 

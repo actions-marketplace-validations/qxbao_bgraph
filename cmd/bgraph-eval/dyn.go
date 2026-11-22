@@ -22,6 +22,12 @@ type multiFlag []string
 func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
+// defaultPythonDynSets are the Python and Python-dyn T2 sets under the eval directory.
+func defaultPythonDynSets() multiFlag {
+	t2 := filepath.Join(evalkit.EvalDir(), "t2")
+	return multiFlag{filepath.Join(t2, "python") + "=evalkit/manifest/t2-python.json", filepath.Join(t2, "python-dyn") + "=evalkit/manifest/t2-python-dyn.json"}
+}
+
 func splitList(s string) []string {
 	if s == "" {
 		return nil
@@ -30,8 +36,8 @@ func splitList(s string) []string {
 }
 
 // cmdT2Dyn runs the hybrid pass against the cached Python and Node T2 oracles (or, with --prepare, writes the widening-targeted
-// Python mutants). Node sets: --set D:/bench/bgraph-eval/t2=evalkit/manifest/t2.json (hono, dayjs) and
-// --set D:/bench/bgraph-eval/t2/node-dyn=evalkit/manifest/t2-node-dyn.json (express).
+// Python mutants). Node sets: --set <eval dir>/t2=evalkit/manifest/t2.json (hono, dayjs) and
+// --set <eval dir>/t2/node-dyn=evalkit/manifest/t2-node-dyn.json (express); <eval dir> is $BGRAPH_EVAL_DIR (evalkit.EvalDir).
 func cmdT2Dyn(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("t2dyn", flag.ExitOnError)
 	var sets multiFlag
@@ -41,10 +47,10 @@ func cmdT2Dyn(ctx context.Context, args []string) (int, error) {
 	prepare := fs.Bool("prepare", false, "write mutants-<dir>.json with mutants only in files whose edit widens, then stop")
 	rerecord := fs.Bool("rerecord", false, "record again even if records of the current environment exist")
 	jobs := fs.Int("jobs", 8, "record parallelism")
-	out := fs.String("out", "D:/bench/bgraph-eval/out/phase6-t2dyn", "report directory")
+	out := fs.String("out", filepath.Join(evalkit.EvalDir(), "out", "phase6-t2dyn"), "report directory (default under $BGRAPH_EVAL_DIR)")
 	fs.Parse(args)
 	if len(sets) == 0 {
-		sets = multiFlag{"D:/bench/bgraph-eval/t2/python=evalkit/manifest/t2-python.json", "D:/bench/bgraph-eval/t2/python-dyn=evalkit/manifest/t2-python-dyn.json"}
+		sets = defaultPythonDynSets()
 	}
 	lg := logger(*out)
 	var all []evalkit.DynRepoResult
@@ -121,14 +127,14 @@ func cmdReplayDyn(ctx context.Context, args []string) (int, error) {
 	fresh := fs.Bool("fresh", false, "also record at each P of a widened commit whose guards pass and select it again (mode fresh)")
 	freshMax := fs.Int("fresh-max", 0, "with --fresh: at most this many fresh commits, spread over the eligible ones (0: all)")
 	jobs := fs.Int("jobs", 8, "record parallelism")
-	out := fs.String("out", "D:/bench/bgraph-eval/out/phase6-replay", "report directory")
+	out := fs.String("out", filepath.Join(evalkit.EvalDir(), "out", "phase6-replay"), "report directory (default under $BGRAPH_EVAL_DIR)")
 	render := fs.String("render", "", "only render the report from these replaydyn.json files (comma-separated; a later file's repo replaces an earlier one)")
 	fs.Parse(args)
 	if *render != "" {
 		return renderReplayDyn(*out, splitList(*render), splitList(*modes))
 	}
 	if len(sets) == 0 {
-		sets = multiFlag{"D:/bench/bgraph-eval/t2/python=evalkit/manifest/t2-python.json", "D:/bench/bgraph-eval/t2/python-dyn=evalkit/manifest/t2-python-dyn.json"}
+		sets = defaultPythonDynSets()
 	}
 	lg := logger(*out)
 	var all []evalkit.DynReplayResult
