@@ -58,10 +58,12 @@ const Runner = "cargo"
 const AnalyzerVersion = "rust-2"
 
 // Eco is the Rust ecosystem.
-type Eco struct{}
+type Eco struct {
+	rules *rules.File // [lockfile] level; Rust has no declarations yet
+}
 
-// New creates the Rust ecosystem. The rules file is accepted for symmetry with the other ecosystems; Rust has no declarations yet.
-func New(_ *rules.File) *Eco { return &Eco{} }
+// New creates the Rust ecosystem.
+func New(r *rules.File) *Eco { return &Eco{rules: r} }
 
 func (e *Eco) Name() string    { return Name }
 func (e *Eco) Version() string { return AnalyzerVersion }

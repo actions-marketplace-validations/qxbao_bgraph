@@ -211,3 +211,16 @@ func TestLoad(t *testing.T) {
 		t.Error("broken file must error")
 	}
 }
+
+func TestLockfileLevel(t *testing.T) {
+	if lv := (*File)(nil).LockLevel(); lv != LockL1 {
+		t.Fatalf("default = %s", lv)
+	}
+	f, err := Parse("bgraph.toml", []byte("[lockfile]\nlevel = \"L2\"\n"))
+	if err != nil || f.LockLevel() != LockL2 {
+		t.Fatalf("L2: %v %v", f, err)
+	}
+	if _, err := Parse("bgraph.toml", []byte("[lockfile]\nlevel = \"L3\"\n")); err == nil {
+		t.Fatal("L3 must be rejected")
+	}
+}

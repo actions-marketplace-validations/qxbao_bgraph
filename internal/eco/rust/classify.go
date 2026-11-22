@@ -128,7 +128,7 @@ func isCargoConfig(p string) bool {
 	return (b == "config" || b == "config.toml") && path.Base(path.Dir(p)) == ".cargo"
 }
 
-// ClassifyChange classifies Cargo manifests, Cargo.lock and cargo/tool configuration (plan §6.3, §6.8 level L0).
+// ClassifyChange classifies Cargo manifests, Cargo.lock (see classifyLock) and cargo/tool configuration (plan §6.3, §6.8).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	b := path.Base(p)
 	switch {
@@ -141,9 +141,7 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 		if underTarget(p, head, base) {
 			return nil, false
 		}
-		dir := path.Dir(p)
-		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonLockChanged, Path: p, Scope: dir, Eco: Name,
-			Detail: "lockfile at level L0 (closure not compared)"}}, true
+		return e.classifyLock(p, base, head, a), true
 	case isCargoConfig(p):
 		dir := path.Dir(path.Dir(p))
 		if dir == "." {

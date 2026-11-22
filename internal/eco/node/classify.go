@@ -16,7 +16,7 @@ import (
 var harmlessPkgKeys = map[string]bool{"version": true, "description": true, "keywords": true, "author": true, "contributors": true,
 	"homepage": true, "repository": true, "bugs": true, "license": true, "funding": true, "maintainers": true, "publishConfig": true}
 
-// ClassifyChange classifies Node manifests/configs/lockfiles (plan §6.1 "Widening", §6.8 level L0).
+// ClassifyChange classifies Node manifests/configs/lockfiles (plan §6.1 "Widening", §6.8 lockfile levels, see classifyLock).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if inNodeModules(p) {
 		return nil, false
@@ -53,9 +53,7 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 		}
 		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonManifestChanged, Path: p, Scope: dir}}, true
 	case isLockfile(p):
-		// L0: closure not compared yet → every project under the lockfile's directory (usually the workspace root).
-		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonLockChanged, Path: p, Scope: path.Dir(p),
-			Detail: "lockfile at level L0 (closure not compared)"}}, true
+		return e.classifyLock(p, base, head, a), true
 	case isTSConfig(p):
 		dirs := []string{path.Dir(p)}
 		dirs = append(dirs, tsconfigExtenders(base, p)...)

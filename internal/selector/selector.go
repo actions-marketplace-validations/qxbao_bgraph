@@ -225,6 +225,9 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 				info[p].Claimed = append(info[p].Claimed, e.Name())
 				for _, w := range ws {
 					s.widen(w)
+					for _, sd := range w.Seeds {
+						seeds = append(seeds, graph.Seed{Path: sd, Reason: model.ReasonLockChanged + " " + p})
+					}
 				}
 			}
 		}

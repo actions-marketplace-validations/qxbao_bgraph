@@ -1,4 +1,4 @@
-Changing a lockfile widens lock_changed (level L0).
+Changing a lockfile in an unsupported version (lockfileVersion 9.1) widens lock_changed at level L0.
 -- base/package.json --
 {"name":"app","devDependencies":{"vitest":"^5.0.0"}}
 -- base/pnpm-lock.yaml --

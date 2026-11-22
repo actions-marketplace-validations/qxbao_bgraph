@@ -1,0 +1,126 @@
+bgraph.toml [lockfile] level = "L2" is not offered for Cargo: same selection as L1 (a and c for a log bump).
+-- base/Cargo.toml --
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+-- base/Cargo.lock --
+version = 4
+
+[[package]]
+name = "a"
+version = "0.1.0"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "c"
+version = "0.1.0"
+dependencies = [
+ "a",
+]
+
+[[package]]
+name = "log"
+version = "0.4.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "log0.4.20"
+
+[[package]]
+name = "serde"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "serde1.0.0"
+-- base/crates/a/Cargo.toml --
+[package]
+name = "a"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+log = "0.4"
+-- base/crates/a/src/lib.rs --
+pub fn f() {}
+-- base/crates/a/tests/t.rs --
+#[test]
+fn t() {}
+-- base/crates/b/Cargo.toml --
+[package]
+name = "b"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = "1"
+-- base/crates/b/src/lib.rs --
+pub fn f() {}
+-- base/crates/b/tests/t.rs --
+#[test]
+fn t() {}
+-- base/crates/c/Cargo.toml --
+[package]
+name = "c"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+a = { path = "../a" }
+-- base/crates/c/src/lib.rs --
+pub fn f() {}
+-- base/crates/c/tests/t.rs --
+#[test]
+fn t() {}
+-- base/bgraph.toml --
+[lockfile]
+level = "L2"
+-- head/Cargo.lock --
+version = 4
+
+[[package]]
+name = "a"
+version = "0.1.0"
+dependencies = [
+ "log",
+]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "c"
+version = "0.1.0"
+dependencies = [
+ "a",
+]
+
+[[package]]
+name = "log"
+version = "0.4.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "log0.4.21"
+
+[[package]]
+name = "serde"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "serde1.0.0"
+-- want --
+notfull
+widen lock_changed
+select crates/a::lib
+select crates/a::test:t
+noselect crates/b::lib
+noselect crates/b::test:t
+select crates/c::lib
+select crates/c::test:t

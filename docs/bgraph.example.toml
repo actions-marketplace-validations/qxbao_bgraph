@@ -220,6 +220,21 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # trust_native_env = false
 
 # ---------------------------------------------------------------------------------------------------------------------
+# [lockfile]: how a lockfile change is classified (docs/plan.md §6.8).                         (NARROWING at L2)
+#
+#   level : "L1" (default) — pnpm-lock.yaml, package-lock.json and Cargo.lock: the projects whose resolved dependency
+#                            closure changed, plus the tests that import their files; the lockfile's root project
+#                            (workspace tooling) changing selects every project. Other formats and unreadable or
+#                            format-changed lockfiles stay at L0.
+#           "L2"           — npm and pnpm 6.x: within such a project, only the tests that import a changed direct
+#                            dependency; guarded (install scripts, peers, toolchain/@types, unimported dependency → L1).
+#           "L0"           — every project under the lockfile's directory.
+# ---------------------------------------------------------------------------------------------------------------------
+
+# [lockfile]
+# level = "L1"
+
+# ---------------------------------------------------------------------------------------------------------------------
 # [options]
 #   max_changed : above this many changed files, run the full suite (diff_too_large). Default 5000.
 # ---------------------------------------------------------------------------------------------------------------------

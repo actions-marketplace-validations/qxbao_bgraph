@@ -80,6 +80,9 @@ type Widening struct {
 	// Eco restricts a module/package widening to the test units of one ecosystem (empty: every ecosystem). Used by ecosystems whose
 	// scope directory may also hold other ecosystems' projects (a Cargo.lock at the repo root must not select Node tests).
 	Eco string `json:"eco,omitempty"`
+	// Seeds are graph nodes the selector walks backwards from, besides the changed files (lockfile levels L1/L2: the files of
+	// a project whose dependency closure changed, or the virtual node of a changed package).
+	Seeds []string `json:"-"`
 }
 
 // Role is the role of a file.

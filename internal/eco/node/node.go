@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: bump whenever the analysis/resolution rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "node-21"
+const AnalyzerVersion = "node-22"
 
 // Eco is the Node ecosystem.
 type Eco struct {
@@ -419,7 +419,13 @@ func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from,
 		}
 		// A probe is not an edge: the current tree is always fully re-resolved, so a new file shadowing an old one already shows up as an
 		// import edge to the new file (a changed file). res.Probes is for a future incremental index.
-	case resolve.ClassExternal, resolve.ClassBuiltin:
+	case resolve.ClassExternal:
+		// Level L2 narrows a lockfile change to the importers of the changed package: the import is an edge to its node.
+		if res.Package != "" && e.lockLevel() == rules.LockL2 {
+			a.Edges = append(a.Edges, model.Edge{From: from, To: pkgNode(res.Package), Kind: edgeKind(imp.Kind), Line: imp.Line, Spec: imp.Spec,
+				Provenance: model.ProvScan})
+		}
+	case resolve.ClassBuiltin:
 	case resolve.ClassGenerated:
 		e.addGenerated(a, from, imp, res)
 	default: // unknown

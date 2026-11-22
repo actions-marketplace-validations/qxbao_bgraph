@@ -1,4 +1,4 @@
-Cargo.lock is handled at level L0: every Rust unit under its directory.
+Cargo.lock that does not list the workspace members (no closure to compare): every member is widened.
 -- base/Cargo.lock --
 version = 4
 -- base/Cargo.toml --

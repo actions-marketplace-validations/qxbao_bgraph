@@ -123,7 +123,28 @@ type File struct {
 	Dynamics  []Dynamic
 	Options   Options
 	Dynamic   DynamicLayer // [dynamic_layer]
+	Lockfile  Lockfile     // [lockfile]
 	Path      string       // path of the file read; empty if there is no file
+}
+
+// Lockfile levels (docs/plan.md §6.8).
+const (
+	LockL0 = "L0" // every project of the lockfile's directory
+	LockL1 = "L1" // projects whose resolved dependency closure changed, and their reverse dependents (default)
+	LockL2 = "L2" // within those projects, only the tests that import a changed package (opt-in, guarded)
+)
+
+// Lockfile is the [lockfile] table.
+type Lockfile struct {
+	Level string // LockL0, LockL1 or LockL2; empty means LockL1
+}
+
+// LockLevel returns the configured lockfile level (LockL1 when f is nil or the level is not set).
+func (f *File) LockLevel() string {
+	if f == nil || f.Lockfile.Level == "" {
+		return LockL1
+	}
+	return f.Lockfile.Level
 }
 
 type rawFile struct {
@@ -164,6 +185,9 @@ type rawFile struct {
 		Node           string   `toml:"node"`
 		TrustNativeEnv bool     `toml:"trust_native_env"`
 	} `toml:"dynamic_layer"`
+	Lockfile struct {
+		Level string `toml:"level"`
+	} `toml:"lockfile"`
 }
 
 // Load reads <root>/bgraph.toml. No file → an empty File with defaults, no error.
@@ -393,6 +417,12 @@ func Parse(name string, data []byte) (*File, error) {
 		return nil, fmt.Errorf("%s: dynamic_layer.node: invalid executable %q", name, dl.Node)
 	}
 	f.Dynamic.Python, f.Dynamic.Node, f.Dynamic.TrustNativeEnv = dl.Python, dl.Node, dl.TrustNativeEnv
+	switch lv := raw.Lockfile.Level; lv {
+	case "", LockL0, LockL1, LockL2:
+		f.Lockfile.Level = lv
+	default:
+		return nil, fmt.Errorf("%s: lockfile.level: %q is not a level (L0, L1 or L2)", name, lv)
+	}
 	return f, nil
 }
 

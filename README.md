@@ -58,6 +58,18 @@ Status: six ecosystems.
   `bgraph.toml` rules, Go units are addressed by module directory (or `"."` / `"all"`), not by package directory.
   `bgraph command` emits one `go test ./a ./b/c` per module, run in the module directory.
 
+Lockfiles: `pnpm-lock.yaml` (lockfile 6.x and 9.0), `package-lock.json` (v2/v3) and `Cargo.lock` (v3/v4) are compared at
+level **L1** by default: both sides are parsed and the resolved dependency closure (direct and transitive, through workspace
+links/path dependencies, dev/build/optional and every target included) of every project is diffed; a project whose closure
+changed selects all its tests and, through the graph, the tests of projects that import its files. A change in the closure of
+the lockfile's root project (the workspace tooling: runner, transpiler, plugins) selects every project under the lockfile. An
+unreadable side, a lockfile format change, or a change outside the package graph (overrides, patches, settings) stays at **L0**
+(every project under the lockfile's directory), as do the other lockfile formats. `[lockfile] level = "L2"` in `bgraph.toml`
+(opt-in; npm and pnpm 6.x only, pnpm 9.0 does not record install scripts) narrows a project to the tests that import a direct
+dependency whose closure changed, and falls back to L1 for local/workspace dependencies, install scripts, peer dependencies,
+runner/toolchain/plugin and `@types` packages, a dependency no file of the project imports, and undeclared imports of a changed
+package. Cargo has no L2 (units are whole targets). `level = "L0"` restores the old behaviour.
+
 Other ecosystems are not supported yet: changes there widen to `full`.
 
 ## Usage

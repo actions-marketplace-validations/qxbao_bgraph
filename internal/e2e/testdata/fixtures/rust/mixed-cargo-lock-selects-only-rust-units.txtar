@@ -1,4 +1,4 @@
-Cargo.lock at the repo root widens to the Rust units; the Node tests stay out.
+Cargo.lock at the repo root widens only Rust units (here: members missing from the lockfile); the Node tests stay out.
 -- base/Cargo.lock --
 version = 4
 -- base/Cargo.toml --
