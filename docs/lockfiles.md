@@ -61,11 +61,20 @@ An unchanged closure selects nothing: a lockfile edit that only touches other pr
 |---|---|
 | one side is absent, unreadable or does not parse | nothing to compare |
 | the format or the format version changed | closures are not comparable |
-| a setting outside the package graph changed (pnpm overrides, patches, resolution settings; Cargo top-level keys other than packages) | it can change resolution in ways the graph does not show |
+| a top-level key outside the package graph changed: pnpm `settings` (`autoInstallPeers`, `excludeLinksFromLockfile`, `injectWorkspacePackages`...), `packageExtensionsChecksum`, `pnpmfileChecksum`, `ignoredOptionalDependencies`, build allow/deny lists, the env lockfile document (the package manager's pinned version); npm keys other than `packages`; Cargo keys other than `package` | it can change resolution or installation in ways the graph does not show |
+| a changed pnpm patch whose selector is a version range, or that selects no package of either side | the patched packages cannot be identified |
 | a Cargo package matches several lockfile entries | ambiguous |
 | `[lockfile] level = "L0"` | configured |
 
-The detail of the widening says `lockfile at level L0 (<why>)`.
+The detail of the widening says `lockfile at level L0 (<why>)`; for a changed top-level key it names the keys.
+
+pnpm keys outside the importers and packages that do **not** force L0:
+
+| Key | Handling |
+|---|---|
+| `catalogs` | a catalog version is the version every importer that uses it references: compared through the closures |
+| `overrides` | an override only steers resolution: an overridden version is the version an importer or a package entry references, so the closures show every effect; an override that matches nothing installed changes nothing |
+| `patchedDependencies` | a patch whose entry (hash or path) changed, or that was added or removed, marks the packages it selects as changed (`name@version`: that version; `name`: every version), so every project whose closure contains one of them is selected |
 
 ## Level L2 (opt-in)
 

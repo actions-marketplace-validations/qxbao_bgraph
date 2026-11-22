@@ -1,6 +1,7 @@
 package lockfile
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -172,6 +173,102 @@ func TestPnpmCatalogsNotExtra(t *testing.T) {
 	}
 	if got := d.ChangedProjects(); !slices.Equal(got, []string{"packages/a", "packages/b"}) {
 		t.Fatalf("changed = %v", got)
+	}
+}
+
+// Overrides only steer resolution: what they change is in the resolved graph, so they are not a settings change.
+func TestPnpmOverridesCompared(t *testing.T) {
+	ov := func(data, v string) string {
+		return strings.Replace(data, "importers:", "overrides:\n  ms: "+v+"\n\nimporters:", 1)
+	}
+	base := mustParse(t, "pnpm-lock.yaml", ".", ov(pnpm9, "2.1.3"))
+	// The override moves b's ms: b and a (which links b) change.
+	head := mustParse(t, "pnpm-lock.yaml", ".", ov(strings.Replace(pnpm9, "        version: 2.1.3", "        version: 2.1.2", 1), "2.1.2"))
+	d, err := Compare(base, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.ChangedProjects(); !slices.Equal(got, []string{"packages/a", "packages/b"}) {
+		t.Fatalf("changed = %v", got)
+	}
+	// An override that changes nothing that is installed selects nothing.
+	same := mustParse(t, "pnpm-lock.yaml", ".", strings.Replace(ov(pnpm9, "2.1.3"), "  ms: 2.1.3\n", "  ms: 2.1.3\n  left-pad: 1.3.0\n", 1))
+	if d, err := Compare(base, same); err != nil || len(d.Changed) != 0 {
+		t.Fatalf("unused override: changed=%v err=%v", d, err)
+	}
+}
+
+// pnpmPatched patches lodash@4.17.21 with hash h; patches is the patchedDependencies section.
+func pnpmPatched(h, patches string) string {
+	data := strings.Replace(pnpm9, "importers:", "patchedDependencies:\n"+patches+"\nimporters:", 1)
+	data = strings.Replace(data, "        version: 4.17.21", "        version: 4.17.21(patch_hash="+h+")", 1)
+	return strings.Replace(data, "  lodash@4.17.21: {}", "  lodash@4.17.21(patch_hash="+h+"): {}", 1)
+}
+
+func TestPnpmPatches(t *testing.T) {
+	base := mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h1", "  lodash@4.17.21: h1\n"))
+	changed := func(t *testing.T, head string) []string {
+		t.Helper()
+		d, err := Compare(base, mustParse(t, "pnpm-lock.yaml", ".", head))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !d.Names["lodash"] {
+			t.Errorf("names = %v", d.ChangedNames())
+		}
+		return d.ChangedProjects()
+	}
+	// A new patch hash: only the project that installs lodash.
+	if got := changed(t, pnpmPatched("h2", "  lodash@4.17.21: h2\n")); !slices.Equal(got, []string{"packages/a"}) {
+		t.Fatalf("hash changed: %v", got)
+	}
+	// The patch entry changes while the package keys do not (older {hash, path} form, path moved): still marked.
+	old := mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h1", "  lodash@4.17.21:\n    hash: h1\n    path: patches/lodash.patch\n"))
+	d, err := Compare(old, mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h1", "  lodash@4.17.21:\n    hash: h1\n    path: patches/x/lodash.patch\n")))
+	if err != nil || !slices.Equal(d.ChangedProjects(), []string{"packages/a"}) {
+		t.Fatalf("path moved: %v %v", d, err)
+	}
+	// Patch removed.
+	if got := changed(t, pnpm9); !slices.Equal(got, []string{"packages/a"}) {
+		t.Fatalf("patch removed: %v", got)
+	}
+	// A bare package name selects every version.
+	bare := mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h1", "  lodash: h1\n"))
+	if d, err := Compare(bare, mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h2", "  lodash: h2\n"))); err != nil || !slices.Equal(d.ChangedProjects(), []string{"packages/a"}) {
+		t.Fatalf("bare selector: %v %v", d, err)
+	}
+	// A range, or a selector that matches no package: not comparable.
+	for _, sel := range []string{"lodash@^4.17.0", "lodash@4.17.20", "left-pad"} {
+		b := mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h1", "  lodash@4.17.21: h1\n  "+sel+": x1\n"))
+		h := mustParse(t, "pnpm-lock.yaml", ".", pnpmPatched("h1", "  lodash@4.17.21: h1\n  "+sel+": x2\n"))
+		var ie *IncomparableError
+		if _, err := Compare(b, h); !errors.As(err, &ie) || !slices.Equal(ie.Reasons, []string{"patch selector"}) {
+			t.Fatalf("%s: err = %v", sel, err)
+		}
+	}
+	// An unchanged patch next to another change does not widen by itself.
+	head := strings.Replace(pnpmPatched("h1", "  lodash@4.17.21: h1\n"), "        version: 2.1.3", "        version: 2.1.2", 1)
+	if d, err := Compare(base, mustParse(t, "pnpm-lock.yaml", ".", head)); err != nil ||
+		!slices.Equal(d.ChangedProjects(), []string{"packages/a", "packages/b"}) || d.Names["lodash"] {
+		t.Fatalf("unchanged patch: %v %v", d, err)
+	}
+}
+
+// Resolution settings, the env lockfile and other top-level keys stay incomparable, with the reason named.
+func TestPnpmIncomparableReasons(t *testing.T) {
+	base := mustParse(t, "pnpm-lock.yaml", ".", pnpm9)
+	for _, c := range []struct {
+		head string
+		want []string
+	}{
+		{strings.Replace(pnpm9, "autoInstallPeers: true", "autoInstallPeers: false", 1), []string{"settings"}},
+		{strings.Replace(pnpm9, "importers:", "pnpmfileChecksum: abc\n\nimporters:", 1), []string{"pnpmfileChecksum"}},
+		{pnpmEnvDoc + pnpm9, []string{"<env lockfile>"}},
+	} {
+		var ie *IncomparableError
+		if _, err := Compare(base, mustParse(t, "pnpm-lock.yaml", ".", c.head)); !errors.As(err, &ie) || !slices.Equal(ie.Reasons, c.want) {
+			t.Errorf("err = %v, want reasons %v", err, c.want)
+		}
 	}
 }
 

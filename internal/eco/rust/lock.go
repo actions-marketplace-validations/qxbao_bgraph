@@ -67,7 +67,7 @@ func (e *Eco) classifyLock(p string, base, head tree.Tree, a *eco.Analysis) []mo
 	if err != nil {
 		return l0("head: " + err.Error())
 	}
-	if bg.Extra != hg.Extra || bg.Version != hg.Version {
+	if len(lockfile.ExtraChanged(bg, hg)) > 0 || bg.Version != hg.Version {
 		return l0("lockfile version or settings outside the package graph changed")
 	}
 	var out []model.Widening

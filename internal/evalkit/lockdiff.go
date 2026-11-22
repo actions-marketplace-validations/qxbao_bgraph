@@ -11,17 +11,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/qxbao/bgraph/internal/lockfile"
+	"gopkg.in/yaml.v3"
 )
 
 // LockdiffOpts configures one format's run.
@@ -65,11 +69,25 @@ type LockdiffCommit struct {
 
 // LockdiffPair is Compare between two consecutive sampled commits.
 type LockdiffPair struct {
-	Base    string `json:"base"`
-	Head    string `json:"head"`
-	Err     string `json:"err,omitempty"`
-	Changed int    `json:"changed"`
-	Total   int    `json:"total"`
+	Base string `json:"base"`
+	Head string `json:"head"`
+	Err  string `json:"err,omitempty"`
+	// L0: why Compare could not compare the pair (lockfile.IncomparableError reasons: top-level keys, "version"...).
+	L0      []string `json:"l0,omitempty"`
+	Changed int      `json:"changed"`
+	Total   int      `json:"total"`
+	// Patches: patch selectors that changed between the sides (their packages count as changed).
+	Patches []string `json:"patches,omitempty"`
+	// Missed: projects whose package set reported by the tool (name@version) differs between the sides while Compare
+	// says their closure is unchanged (a soundness failure of the pair comparison). Checked only when the tool read both.
+	Missed []string `json:"missed,omitempty"`
+	// KindOnly: projects whose tool package set changed only by packages our closure holds on both sides (a dependency
+	// kind change, e.g. dependencies → devDependencies of a linked workspace package): not a miss.
+	KindOnly []string `json:"kind_only,omitempty"`
+	// FormerL0: the reasons the pair would have had before overrides and patches were compared (L0 plus "overrides" and
+	// "patchedDependencies" when they differ), for the before/after count.
+	FormerL0    []string `json:"former_l0,omitempty"`
+	ToolChecked int      `json:"tool_checked"` // projects compared against the tool for Missed
 }
 
 // LockdiffRepo is one repo's result.
@@ -175,6 +193,8 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 	}
 	var prev *lockfile.Graph
 	var prevC string
+	var prevTool map[string]map[string]bool // our project key → tool package set of prev (nil: not read)
+	var prevData string
 	for _, c := range commits {
 		if ctx.Err() != nil {
 			break
@@ -185,7 +205,7 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 		if err != nil {
 			cr.Status, cr.Err = "absent", firstLine(err.Error())
 			res.Commits = append(res.Commits, cr)
-			prev = nil
+			prev, prevTool = nil, nil
 			continue
 		}
 		cr.LockVersion = sniffLockVersion(o.Format, data)
@@ -196,14 +216,22 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 				cr.Status = "unsupported"
 			}
 			res.Commits = append(res.Commits, cr)
-			prev = nil
+			prev, prevTool = nil, nil
 			continue
 		}
+		var pr *LockdiffPair
+		var pd *lockfile.Diff
 		if prev != nil {
-			pr := LockdiffPair{Base: prevC, Head: c}
+			pr = &LockdiffPair{Base: prevC, Head: c}
 			if d, err := lockfile.Compare(prev, g); err != nil {
 				pr.Err = err.Error()
+				if ie, ok := err.(*lockfile.IncomparableError); ok {
+					pr.L0 = ie.Reasons
+				} else {
+					pr.L0 = []string{"other"}
+				}
 			} else {
+				pd = d
 				all := map[string]bool{}
 				for p := range prev.Projects {
 					all[p] = true
@@ -212,10 +240,12 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 					all[p] = true
 				}
 				pr.Changed, pr.Total = len(d.Changed), len(all)
+				pr.Patches = changedPatches(prev, g)
 			}
-			res.Pairs = append(res.Pairs, pr)
+			pr.FormerL0 = formerL0(o.Format, pr.L0, prevData, data)
 		}
-		prev, prevC = g, c
+		prevG := prev
+		prev, prevC, prevData = g, c, data
 		var tool map[string]map[string]bool
 		var terr error
 		var unreadable bool
@@ -238,12 +268,26 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 			cr.Seconds = time.Since(start).Seconds()
 			res.Commits = append(res.Commits, cr)
 			o.Log("%s %s %.10s %s: %s", o.Format, repo, c, cr.Status, firstLine(cr.Err))
+			if pr != nil {
+				res.Pairs = append(res.Pairs, *pr)
+			}
+			prevTool = nil
 			continue
 		}
-		lockdiffCheck(o.Format, g, tool, &cr)
+		curTool := lockdiffCheck(o.Format, g, tool, &cr)
 		cr.Status = "ok"
 		cr.Seconds = time.Since(start).Seconds()
 		res.Commits = append(res.Commits, cr)
+		if pr != nil {
+			if pd != nil && prevTool != nil {
+				lockdiffPairCheck(prevG, g, pd, prevTool, curTool, pr)
+			}
+			res.Pairs = append(res.Pairs, *pr)
+			if len(pr.Missed) > 0 {
+				o.Log("%s %s %.10s→%.10s MISSED projects: %s", o.Format, repo, pr.Base, pr.Head, strings.Join(pr.Missed, ", "))
+			}
+		}
+		prevTool = curTool
 		o.Log("%s %s %.10s v%s ours=%d tool=%d checked=%d mismatching=%d tool-only=%d (%.0fs)", o.Format, repo, c, cr.LockVersion, cr.OurProjects, cr.ToolProjects, cr.Checked, len(cr.Mismatches), len(cr.ToolOnly), cr.Seconds)
 	}
 	return res
@@ -291,9 +335,111 @@ func sniffLockVersion(format, data string) string {
 	return m[1]
 }
 
+// formerL0 adds to the L0 reasons of a pnpm pair the top-level keys that used to force level L0 and no longer do.
+func formerL0(format string, l0 []string, base, head string) []string {
+	out := append([]string(nil), l0...)
+	if format != lockfile.FormatPnpm {
+		return out
+	}
+	b, h := pnpmLastDoc(base), pnpmLastDoc(head)
+	for _, k := range []string{"overrides", "patchedDependencies"} {
+		if !reflect.DeepEqual(b[k], h[k]) && !slices.Contains(out, k) {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// pnpmLastDoc decodes the last YAML document of a pnpm-lock.yaml (the project lockfile); nil when it does not decode.
+func pnpmLastDoc(data string) map[string]any {
+	dec := yaml.NewDecoder(strings.NewReader(data))
+	var last map[string]any
+	for {
+		var d map[string]any
+		if err := dec.Decode(&d); err != nil {
+			return last
+		}
+		last = d
+	}
+}
+
+// changedPatches returns the sorted patch selectors whose entry differs between the graphs.
+func changedPatches(base, head *lockfile.Graph) []string {
+	var out []string
+	for k, v := range base.Patches {
+		if hv, ok := head.Patches[k]; !ok || hv != v {
+			out = append(out, k)
+		}
+	}
+	for k := range head.Patches {
+		if _, ok := base.Patches[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// lockdiffPairCheck checks Compare's verdict on a pair against the tool: a project present on both sides whose tool
+// package set changed must be in d.Changed.
+func lockdiffPairCheck(base, head *lockfile.Graph, d *lockfile.Diff, bt, ht map[string]map[string]bool, pr *LockdiffPair) {
+	for p := range head.Projects {
+		if _, ok := base.Projects[p]; !ok {
+			continue
+		}
+		bs, ok1 := bt[p]
+		hs, ok2 := ht[p]
+		if !ok1 || !ok2 {
+			continue
+		}
+		pr.ToolChecked++
+		if maps.Equal(bs, hs) || d.Changed[p] {
+			continue
+		}
+		// A package the tool adds or drops while our closure holds it on both sides changed only its dependency kind
+		// (e.g. a workspace package's dependency moved to devDependencies, which the tool does not follow through the
+		// link, while the closure includes every kind): nothing installed changed.
+		bo, ho := lockdiffOurs(base, base.Projects[p]), lockdiffOurs(head, head.Projects[p])
+		kindOnly := true
+		for _, m := range []struct{ a, b map[string]bool }{{bs, hs}, {hs, bs}} {
+			for pkg := range m.a {
+				if !m.b[pkg] && (!bo[pkg] || !ho[pkg]) {
+					kindOnly = false
+				}
+			}
+		}
+		if kindOnly {
+			pr.KindOnly = append(pr.KindOnly, p)
+		} else {
+			pr.Missed = append(pr.Missed, p)
+		}
+	}
+	sort.Strings(pr.Missed)
+	sort.Strings(pr.KindOnly)
+}
+
+// lockdiffOurs returns the name@version set of the closure of node id (with name@* for every name).
+func lockdiffOurs(g *lockfile.Graph, id string) map[string]bool {
+	ours := map[string]bool{}
+	for _, nid := range g.Packages(id) {
+		n, ok := g.Nodes[nid]
+		if !ok || n.Project != "" {
+			continue
+		}
+		ours[n.Package+"@"+n.Version] = true
+		ours[n.Name+"@"+n.Version] = true
+		ours[n.Package+"@*"] = true
+		ours[n.Name+"@*"] = true
+	}
+	return ours
+}
+
 // lockdiffCheck fills the superset comparison of one commit. tool maps a project key to its package set (name@version).
-func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]bool, cr *LockdiffCommit) {
+// It returns the tool's package set by our project key.
+func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]bool, cr *LockdiffCommit) map[string]map[string]bool {
 	cr.OurProjects, cr.ToolProjects = len(g.Projects), len(tool)
+	byOurs := map[string]map[string]bool{}
 	matched := map[string]bool{}
 	keys := make([]string, 0, len(tool))
 	for k := range tool {
@@ -316,18 +462,9 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 			continue
 		}
 		matched[ourKey] = true
+		byOurs[ourKey] = tool[p]
 		cr.Checked++
-		ours := map[string]bool{}
-		for _, nid := range g.Packages(id) {
-			n, ok := g.Nodes[nid]
-			if !ok || n.Project != "" {
-				continue
-			}
-			ours[n.Package+"@"+n.Version] = true
-			ours[n.Name+"@"+n.Version] = true
-			ours[n.Package+"@*"] = true
-			ours[n.Name+"@*"] = true
-		}
+		ours := lockdiffOurs(g, id)
 		var miss []string
 		for pkg := range tool[p] {
 			if !ours[pkg] {
@@ -352,6 +489,7 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 		}
 		sort.Strings(cr.OursOnly)
 	}
+	return byOurs
 }
 
 // lockdiffMaterialize writes the files of commit c the JS package manager reads (lockfile, manifests, workspace and
@@ -893,6 +1031,60 @@ func LockdiffSummary(format string, all []LockdiffRepo) string {
 	if n == 0 {
 		b.WriteString("none\n")
 	}
+	b.WriteString("\n## Pair comparison against the tool\n\n")
+	b.WriteString("For every pair compared without error, a project whose package set reported by the tool changed must be among the changed projects.\n\n")
+	var checked, missed, kindOnly, patchPairs int
+	reasons, formerReasons := map[string]int{}, map[string]int{}
+	combos := map[string]int{}
+	var l0Pairs, formerPairs int
+	for _, r := range all {
+		for _, p := range r.Pairs {
+			checked += p.ToolChecked
+			missed += len(p.Missed)
+			kindOnly += len(p.KindOnly)
+			if len(p.Patches) > 0 {
+				patchPairs++
+			}
+			for _, k := range p.L0 {
+				reasons[k]++
+			}
+			for _, k := range p.FormerL0 {
+				formerReasons[k]++
+			}
+			if len(p.L0) > 0 {
+				l0Pairs++
+			}
+			if len(p.FormerL0) > 0 {
+				formerPairs++
+			}
+			if len(p.L0) > 0 {
+				combos[strings.Join(p.L0, " + ")]++
+			}
+			if len(p.Missed) > 0 {
+				fmt.Fprintf(&b, "- MISSED %s %.10s→%.10s: %s\n", r.Repo, p.Base, p.Head, strings.Join(p.Missed[:min(8, len(p.Missed))], ", "))
+			}
+		}
+	}
+	fmt.Fprintf(&b, "Project checks: %d; missed: %d; dependency-kind-only changes (not misses): %d. Pairs with a changed patch (compared, patched packages marked): %d.\n", checked, missed, kindOnly, patchPairs)
+	b.WriteString("\n## Pairs at level L0 by reason\n\n")
+	fmt.Fprintf(&b, "Pairs at L0: %d (before overrides and patches were compared: %d). A pair counts under every reason it has.\n\n", l0Pairs, formerPairs)
+	b.WriteString("| reason | pairs at L0 | before |\n|---|---|---|\n")
+	keys := map[string]int{}
+	for k := range formerReasons {
+		keys[k] = 0
+	}
+	for k := range reasons {
+		keys[k] = 0
+	}
+	for _, k := range sortedIntKeys(keys) {
+		fmt.Fprintf(&b, "| %s | %d | %d |\n", k, reasons[k], formerReasons[k])
+	}
+	if len(combos) > 0 {
+		b.WriteString("\n| reasons of a pair at L0 | pairs |\n|---|---|\n")
+		for _, k := range sortedIntKeys(combos) {
+			fmt.Fprintf(&b, "| %s | %d |\n", k, combos[k])
+		}
+	}
 	b.WriteString("\n## Errors and project-set differences\n\n")
 	for _, r := range all {
 		for _, c := range r.Commits {
@@ -913,6 +1105,15 @@ func LockdiffSummary(format string, all []LockdiffRepo) string {
 		}
 	}
 	return b.String()
+}
+
+func sortedIntKeys(m map[string]int) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func fmtMedian(f []float64) string {

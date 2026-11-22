@@ -44,7 +44,7 @@ func ParseCargo(dir string, data []byte) (*Graph, error) {
 			extra[k] = v
 		}
 	}
-	g.Extra = canon(extra)
+	g.Extra = canonMap(extra)
 	byName := map[string][]*cargoPkg{}
 	idOf := func(p *cargoPkg) string { return "cargo:" + p.Name + " " + p.Version + " " + p.Source }
 	for i := range doc.Package {

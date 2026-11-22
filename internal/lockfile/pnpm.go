@@ -22,7 +22,12 @@ var pnpmGraphKeys = map[string]bool{"importers": true, "packages": true, "snapsh
 	// a lockfile without importers (single project) lists the root's dependencies at the top level
 	"dependencies": true, "devDependencies": true, "optionalDependencies": true, "dependenciesMeta": true, "specifiers": true,
 	// catalog resolutions are mirrored in every importer's dependency versions, which the closures compare
-	"catalogs": true}
+	"catalogs": true,
+	// overrides only steer resolution: their every effect is in the resolved graph (an overridden version is the
+	// version an importer or a snapshot references; an override that matches nothing changes nothing)
+	"overrides": true,
+	// patches: compared on their own (Graph.Patches); the patched packages count as changed
+	"patchedDependencies": true}
 
 // ParsePnpm reads a pnpm-lock.yaml with lockfileVersion 6.x or 9.0.
 func ParsePnpm(dir string, data []byte) (*Graph, error) {
@@ -45,7 +50,12 @@ func ParsePnpm(dir string, data []byte) (*Graph, error) {
 	if env != nil {
 		extra["<env lockfile>"] = env // the package manager's own pinned version: a change is outside the graph
 	}
-	g.Extra = canon(extra)
+	g.Extra = canonMap(extra)
+	if pd, ok := top["patchedDependencies"].(map[string]any); ok {
+		g.Patches = canonMap(pd) // 9.0: "name@version": hash (older 9.0 and 6.x: {hash, path})
+	} else if top["patchedDependencies"] != nil {
+		return nil, fmt.Errorf("pnpm-lock.yaml: patchedDependencies is not a map")
+	}
 
 	pkgs, _ := top["packages"].(map[string]any)
 	snaps, _ := top["snapshots"].(map[string]any)

@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -54,10 +55,13 @@ type Node struct {
 type Graph struct {
 	Format  string
 	Version string
-	// Extra is the canonical form of every part of the file outside the per-package graph (format version, resolution
-	// settings, overrides, patches...). Two graphs with different Extra cannot be compared: level L0.
-	Extra string
-	Nodes map[string]*Node
+	// Extra maps every top-level key of the file outside the per-package graph (resolution settings, ...) to its
+	// canonical form. Two graphs whose Extra differ cannot be compared: level L0.
+	Extra map[string]string
+	// Patches maps a patch selector (pnpm patchedDependencies: "name@version" or "name") to the canonical form of its
+	// entry (patch hash, path). A patch that changed, was added or was removed marks every package it selects as changed.
+	Patches map[string]string
+	Nodes   map[string]*Node
 	// Projects maps a project directory (repo-relative, "." for the repo root) to its node ID.
 	Projects map[string]string
 	// ScriptsKnown: the format records which packages run install scripts (pnpm 9.0 does not).
@@ -167,16 +171,48 @@ type Diff struct {
 	Names map[string]bool
 }
 
-// Compare compares two graphs. It returns an error when they cannot be compared (different format or Extra).
+// IncomparableError is returned by Compare when two graphs cannot be compared (level L0).
+type IncomparableError struct {
+	// Reasons: short names of what prevents the comparison: "format", "version", the top-level keys outside the package
+	// graph that changed, "patch selector".
+	Reasons []string
+	Msg     string
+}
+
+func (e *IncomparableError) Error() string { return e.Msg }
+
+// ExtraChanged returns the sorted top-level keys outside the package graph whose content differs between the graphs.
+func ExtraChanged(base, head *Graph) []string {
+	var out []string
+	for k, v := range base.Extra {
+		if hv, ok := head.Extra[k]; !ok || hv != v {
+			out = append(out, k)
+		}
+	}
+	for k := range head.Extra {
+		if _, ok := base.Extra[k]; !ok {
+			out = append(out, k)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Compare compares two graphs. It returns an *IncomparableError when they cannot be compared (different format, format
+// version or Extra, or a changed patch whose packages cannot be identified).
 func Compare(base, head *Graph) (*Diff, error) {
 	if base.Format != head.Format {
-		return nil, fmt.Errorf("lockfile format changed (%s → %s)", base.Format, head.Format)
+		return nil, &IncomparableError{Reasons: []string{"format"}, Msg: fmt.Sprintf("lockfile format changed (%s → %s)", base.Format, head.Format)}
 	}
 	if base.Version != head.Version {
-		return nil, fmt.Errorf("lockfile version changed (%s → %s)", base.Version, head.Version)
+		return nil, &IncomparableError{Reasons: []string{"version"}, Msg: fmt.Sprintf("lockfile version changed (%s → %s)", base.Version, head.Version)}
 	}
-	if base.Extra != head.Extra {
-		return nil, fmt.Errorf("lockfile settings outside the package graph changed (overrides, patches, resolution settings...)")
+	if keys := ExtraChanged(base, head); len(keys) > 0 {
+		return nil, &IncomparableError{Reasons: keys, Msg: "lockfile settings outside the package graph changed (" + strings.Join(keys, ", ") + ")"}
+	}
+	bp, hp, err := patchedNodes(base, head)
+	if err != nil {
+		return nil, err
 	}
 	d := &Diff{Base: base, Head: head, Changed: map[string]bool{}, Names: map[string]bool{}}
 	dirs := map[string]bool{}
@@ -189,8 +225,16 @@ func Compare(base, head *Graph) (*Diff, error) {
 	for p := range dirs {
 		bi, ok1 := base.Projects[p]
 		hi, ok2 := head.Projects[p]
-		if !ok1 || !ok2 || !equalSets(base.Closure(bi), head.Closure(hi)) {
+		if !ok1 || !ok2 || !equalSets(base.Closure(bi), head.Closure(hi)) || reaches(base, bi, bp) || reaches(head, hi, hp) {
 			d.Changed[p] = true
+		}
+	}
+	for _, m := range []struct {
+		g   *Graph
+		ids map[string]bool
+	}{{base, bp}, {head, hp}} {
+		for id := range m.ids {
+			d.Names[m.g.Nodes[id].Name] = true
 		}
 	}
 	bid, hid := map[string]bool{}, map[string]bool{}
@@ -211,6 +255,67 @@ func Compare(base, head *Graph) (*Diff, error) {
 		}
 	}
 	return d, nil
+}
+
+// reExactVersion matches an exact semver version (no range).
+var reExactVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$`)
+
+// patchedNodes returns, on each side, the package nodes selected by a patch whose entry differs between the sides
+// (changed, added or removed). A selector is "name" (every version) or "name@version"; a range, or a changed patch
+// that selects no package on either side, cannot be resolved: the graphs are not comparable.
+func patchedNodes(base, head *Graph) (bp, hp map[string]bool, err error) {
+	bp, hp = map[string]bool{}, map[string]bool{}
+	sels := map[string]bool{}
+	for k, v := range base.Patches {
+		if hv, ok := head.Patches[k]; !ok || hv != v {
+			sels[k] = true
+		}
+	}
+	for k := range head.Patches {
+		if _, ok := base.Patches[k]; !ok {
+			sels[k] = true
+		}
+	}
+	for sel := range sels {
+		name, ver := sel, ""
+		if i := strings.LastIndexByte(sel, '@'); i > 0 {
+			name, ver = sel[:i], sel[i+1:]
+			if !reExactVersion.MatchString(ver) {
+				return nil, nil, &IncomparableError{Reasons: []string{"patch selector"},
+					Msg: fmt.Sprintf("changed patch %q does not name an exact version", sel)}
+			}
+		}
+		found := false
+		for _, m := range []struct {
+			g   *Graph
+			ids map[string]bool
+		}{{base, bp}, {head, hp}} {
+			for id, n := range m.g.Nodes {
+				if n.Project == "" && n.Package == name && (ver == "" || n.Version == ver) {
+					m.ids[id] = true
+					found = true
+				}
+			}
+		}
+		if !found {
+			return nil, nil, &IncomparableError{Reasons: []string{"patch selector"},
+				Msg: fmt.Sprintf("changed patch %q selects no package of the lockfile", sel)}
+		}
+	}
+	return bp, hp, nil
+}
+
+// reaches reports whether a node of ids is in the closure of id.
+func reaches(g *Graph, id string, ids map[string]bool) bool {
+	if len(ids) == 0 {
+		return false
+	}
+	for _, n := range g.Packages(id) {
+		if ids[n] {
+			return true
+		}
+	}
+	return false
 }
 
 // ChangedProjects returns the sorted directories of the projects whose closure changed.
@@ -320,6 +425,15 @@ func (d *Diff) DirectChanges(dir string) Direct {
 		out.Bins = append(out.Bins, b)
 	}
 	slices.Sort(out.Bins)
+	return out
+}
+
+// canonMap returns the canonical form of every value of m.
+func canonMap(m map[string]any) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = canon(v)
+	}
 	return out
 }
 

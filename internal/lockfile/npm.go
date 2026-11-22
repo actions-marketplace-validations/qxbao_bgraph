@@ -38,7 +38,7 @@ func ParseNpm(dir string, data []byte) (*Graph, error) {
 		_ = json.Unmarshal(v, &x)
 		extra[k] = x
 	}
-	g.Extra = canon(extra)
+	g.Extra = canonMap(extra)
 
 	isProject := func(key string) bool {
 		return key == "" || !strings.Contains("/"+key+"/", "/node_modules/")
