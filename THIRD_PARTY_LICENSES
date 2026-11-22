@@ -29,6 +29,7 @@ golang.org/x/oauth2                  v0.35.0                             BSD-3-C
 golang.org/x/sync                    v0.20.0                             BSD-3-Clause
 golang.org/x/sys                     v0.41.0                             BSD-3-Clause
 golang.org/x/time                    v0.15.0                             BSD-3-Clause
+gopkg.in/yaml.v3                     v3.0.1                              MIT and Apache-2.0 (see its LICENSE)
 modernc.org/libc                     v1.66.10                            BSD-3-Clause (includes code translated from musl libc, MIT)
 modernc.org/mathutil                 v1.7.1                              BSD-3-Clause
 modernc.org/memory                   v1.11.0                             BSD-3-Clause
