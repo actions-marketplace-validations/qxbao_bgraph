@@ -30,6 +30,7 @@ type LockdiffOpts struct {
 	Work    string // work dir holding repos/<owner__name>
 	Tmp     string // scratch dir for materialized trees and worktrees (removed after use)
 	Commits int    // lockfile-changing commits per repo
+	Until   string // only commits before this date (git log --until), to sample older lockfile versions
 	Pnpm    []string
 	Env     []string // extra environment for the tool
 	Log     func(string, ...any)
@@ -139,12 +140,20 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 	}
 	res.Lockfile = lockPath
 	lockDir := path.Dir(lockPath)
-	out, err := git(ctx, repoDir, "log", "--format=%H", "-n", strconv.Itoa(o.Commits), "--", lockPath)
+	logArgs := []string{"log", "--format=%H", "-n", strconv.Itoa(o.Commits)}
+	if o.Until != "" {
+		logArgs = append(logArgs, "--until="+o.Until)
+	}
+	out, err := git(ctx, repoDir, append(logArgs, "--", lockPath)...)
 	if err != nil {
 		res.Skipped = err.Error()
 		return res
 	}
 	commits := strings.Fields(out)
+	if len(commits) == 0 {
+		res.Skipped = "no lockfile commits"
+		return res
+	}
 	slices_reverse(commits) // chronological
 	var wt string
 	if o.Format == lockfile.FormatCargo {

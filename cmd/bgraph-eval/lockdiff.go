@@ -24,6 +24,7 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 	var repos multi
 	fs.Var(&repos, "repos", "repos owner__name[:lockfile path], comma-separated")
 	commits := fs.Int("commits", 25, "last N lockfile-changing commits per repo")
+	until := fs.String("until", "", "only commits before this date (e.g. 2023-06-01), to sample older lockfile versions")
 	out := fs.String("out", "", "output directory (default D:\\bench\\bgraph-eval\\out\\lockdiff-<format>)")
 	jobs := fs.Int("jobs", 1, "repos in parallel")
 	pnpm := fs.String("pnpm", "", "pnpm command (space-separated), e.g. \"node C:/.../pnpm/10.28.2/bin/pnpm.cjs\"")
@@ -39,7 +40,7 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 		return err
 	}
 	log := logger(*out)
-	o := evalkit.LockdiffOpts{Format: *format, Work: *work, Tmp: filepath.Join(*tmp, *format), Commits: *commits, Log: log}
+	o := evalkit.LockdiffOpts{Format: *format, Work: *work, Tmp: filepath.Join(*tmp, *format), Commits: *commits, Until: *until, Log: log}
 	os.MkdirAll(o.Tmp, 0o755)
 	switch *format {
 	case "pnpm":
