@@ -3,6 +3,8 @@
 // Path convention: every path is relative to the repo root, uses forward slashes, is path.Clean'ed, has no leading "./"; the repo root is ".".
 package model
 
+import "time"
+
 // Tier is the scope of a selection, from narrow to wide.
 type Tier string
 
@@ -63,6 +65,8 @@ const (
 	ReasonSubmodule       = "submodule"
 	ReasonInternalError   = "internal_error" // bgraph's own error: always widen, never return empty
 	ReasonRuleRejected    = "rule_rejected"  // an affects="none" rule matched a file that is a graph node: ignored (warning only, no widening)
+	// ReasonDynamicSkipped (warnings only): the dynamic layer is enabled but did not narrow this selection; Detail says why.
+	ReasonDynamicSkipped = "dynamic_skipped"
 )
 
 // Widening records one widening. Path is the file that caused it; Scope is the widened scope (package/project directory; empty when Tier=full).
@@ -265,17 +269,30 @@ type SelectedTest struct {
 	// project" unit), not by the backward walk from the changed files, a [[rule]] target, previously_failed or as a new test
 	// (docs/dynamic.md §1). Only widened units can be removed by the dynamic layer.
 	Widened bool `json:"widened,omitempty"`
+	// Dynamic: why the dynamic layer kept this widened unit (a changed file is among its recorded dependencies, or its record
+	// is not usable). Empty when the dynamic layer did not run or the unit is precise.
+	Dynamic string `json:"dynamic,omitempty"`
+}
+
+// NarrowedTest is a widened unit the dynamic layer removed from the selection (docs/dynamic.md §6).
+type NarrowedTest struct {
+	Unit     string    `json:"unit"`
+	Recorded time.Time `json:"recorded"`         // when the record that justified the removal was made
+	Commit   string    `json:"commit,omitempty"` // HEAD when it was recorded (informational)
+	Reason   string    `json:"reason"`
 }
 
 // Selection is the selection result (semantically compatible with bint/internal/affected.Selection).
 type Selection struct {
-	Scope      Tier           `json:"scope"`
-	Base       string         `json:"base,omitempty"`
-	Head       string         `json:"head,omitempty"`
-	Changed    []string       `json:"changed"`
-	Tests      []SelectedTest `json:"tests,omitempty"`
-	Widening   []Widening     `json:"widening,omitempty"`
-	Warnings   []Widening     `json:"warnings,omitempty"` // do not change the scope (case_mismatch, rule_rejected...)
-	AlwaysRun  []string       `json:"always_run,omitempty"`
+	Scope     Tier           `json:"scope"`
+	Base      string         `json:"base,omitempty"`
+	Head      string         `json:"head,omitempty"`
+	Changed   []string       `json:"changed"`
+	Tests     []SelectedTest `json:"tests,omitempty"`
+	Widening  []Widening     `json:"widening,omitempty"`
+	Warnings  []Widening     `json:"warnings,omitempty"` // do not change the scope (case_mismatch, rule_rejected...)
+	AlwaysRun []string       `json:"always_run,omitempty"`
+	// Narrowed: widened units removed by the dynamic layer (docs/dynamic.md); they are not in Tests.
+	Narrowed   []NarrowedTest `json:"narrowed,omitempty"`
 	IndexStats map[string]int `json:"index_stats,omitempty"`
 }
