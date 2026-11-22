@@ -83,7 +83,7 @@ All numbers come from single runs on Windows 11. Median selection is selected un
 
 | Ecosystem | Tasks evaluated | Real violations | Full rate | Median selection | 95 % bound |
 |---|---|---|---|---|---|
-| Node | 223 (dev 176, holdout 47) | 0 | 0.4 % (1 task) | 1.000 (holdout 0.956) | 1.3 % (holdout 6.4 %) |
+| Node | 223 (dev 176, holdout 47) | 0 | 0 % | 1.000 (holdout 0.956) | 1.3 % (holdout 6.4 %) |
 | Rust | 154 (dev 111, holdout 43) | 0 (1 oracle artefact) | 3 % | 0.985 (holdout 1.000) | 1.9 % (holdout 7.0 %) |
 | Python | 270 (holdout 86) | 0 | 0 % | 1.000 (dev 0.992) | 1.1 % (holdout 3.5 %) |
 | JVM | 243 (holdout 81) | 0 | 5 % (dev 7 %, holdout 1 %) | 0.94 (holdout 0.82) | holdout 3.7 % |
@@ -92,7 +92,7 @@ All numbers come from single runs on Windows 11. Median selection is selected un
 
 Notes per ecosystem:
 
-- **Node** (SWE-bench Multilingual + Multi-SWE-bench). The one `full` task was a submodule change. Low selectivity comes
+- **Node** (SWE-bench Multilingual + Multi-SWE-bench). No task widens to `full` in the latest run. Low selectivity comes
   from real dependencies: dynamic `import()` in a test helper, barrel files, fixture runners; Vue and Svelte compute
   their runner config in code (a [`[[config]]`](configuration.md#config) declaration took one Vue change from 208 to 18
   selected tests).
@@ -148,7 +148,7 @@ overall (0.100 on hono), median 239 ms per commit (p95 1.0 s).
 | | Python | Node | JVM (class layer) |
 |---|---|---|---|
 | Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi |
-| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % (hono: 126 of 161, failures are runtime-specific tests) | 122 of 130 (gson), 32 of 39 (moshi) |
+| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) |
 | Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) |
 | Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) |
 | Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** |
