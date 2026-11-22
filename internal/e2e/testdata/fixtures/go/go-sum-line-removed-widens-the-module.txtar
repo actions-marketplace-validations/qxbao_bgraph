@@ -1,0 +1,85 @@
+A go.sum line removed (a build may now fail checksum verification) widens the module like level L0.
+-- base/m/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/m/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/m/b/b.go --
+package b
+
+func B() {}
+-- base/m/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/m/c/c.go --
+package c
+
+func F() {}
+-- base/m/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/m/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/m/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/m/go.mod --
+module example.com/m
+
+-- base/m/go.sum --
+golang.org/x/text v0.3.0 h1:abc=
+-- base/tools/go.mod --
+module example.com/tools
+
+go 1.22
+-- base/tools/t/t.go --
+package t
+
+func F() {}
+-- base/tools/t/t_test.go --
+package t
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/m/go.sum --
+golang.org/x/net v0.1.0 h1:xyz=
+-- want --
+select go:m/a
+select go:m/c
+noselect go:tools/t
+widen lock_changed

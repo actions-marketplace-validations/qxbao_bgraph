@@ -7,6 +7,7 @@ import (
 
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
@@ -14,7 +15,7 @@ import (
 var harmlessVerbs = map[string]bool{"retract": true}
 
 // ClassifyChange classifies go.mod, go.sum, go.work, vendored code, linter configuration, and .go files outside every module
-// (docs/ecosystems/go.md; go.sum is at lockfile level L0).
+// (docs/ecosystems/go.md; go.sum: lines only added are harmless, anything else is level L0).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if underNodeModules(p) {
 		return nil, false
@@ -26,9 +27,20 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 	case b == "go.mod" && isMod(dir):
 		return classifyGoMod(p, base, head, bm, hm), true
 	case b == "go.sum" && isMod(dir):
-		// A go.sum is read by its own module's build and, in workspace mode, by every module of the workspace.
+		// go.sum only verifies what go.mod selects: lines only added change no build (level L1). A removed or changed line (a
+		// build may now fail verification) widens like L0: its own module's build and, in workspace mode, every module of the
+		// workspace read it.
+		why := "go.sum lines removed or changed"
+		switch {
+		case e.rules.LockLevel() == rules.LockL0:
+			why = "bgraph.toml [lockfile] level"
+		default:
+			if sumOnlyAdds(p, base, head) {
+				return nil, true
+			}
+		}
 		dirs, exact := moduleScope(dir, coMembers, bm, hm)
-		return scoped(model.ReasonLockChanged, p, dir, "go.sum at level L0 (checksums not compared)", dirs, exact), true
+		return scoped(model.ReasonLockChanged, p, dir, "go.sum at level L0 ("+why+")", dirs, exact), true
 	case (b == "go.work" || b == "go.work.sum") && moduleDirOK(dir):
 		// Normally a global input (full) before ecosystems are asked; kept for callers that rule it otherwise.
 		var out []model.Widening
@@ -237,4 +249,29 @@ func dedupDirs(dirs []string) []string {
 	out := slices.Clone(dirs)
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// sumOnlyAdds: go.sum p exists in both trees and every line of the base file is still in the head file (lines were only
+// added, as `go mod tidy` or `go get` do for new requirements; the go.mod change, if any, is classified on its own).
+func sumOnlyAdds(p string, base, head tree.Tree) bool {
+	bb, err := base.Read(p)
+	if err != nil {
+		return false
+	}
+	hb, err := head.Read(p)
+	if err != nil {
+		return false
+	}
+	have := map[string]bool{}
+	for _, l := range strings.Split(string(hb), "\n") {
+		if l = strings.TrimSpace(l); l != "" {
+			have[l] = true
+		}
+	}
+	for _, l := range strings.Split(string(bb), "\n") {
+		if l = strings.TrimSpace(l); l != "" && !have[l] {
+			return false
+		}
+	}
+	return true
 }

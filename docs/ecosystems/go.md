@@ -13,7 +13,7 @@ command is never run.
 | Unit ID format | `go:<dir>`, e.g. `go:internal/store`, `go:.` for a package at the repo root |
 | Runners | `go test` |
 | Manifests/configs read | `go.mod`, `go.work` (directive-level), `vendor/`, `.golangci.*` (harmless) |
-| Lockfiles (and level) | `go.sum`, always level L0 (checksums are not compared); see [lockfiles](../lockfiles.md) |
+| Lockfiles (and level) | `go.sum`: lines only added widen nothing, any other change is level L0; see [lockfiles](../lockfiles.md) |
 | Dynamic layer | none |
 
 ## Supported layouts
@@ -119,7 +119,8 @@ union of every configuration.
 | `go.mod` added or deleted | `module`, `manifest_changed`: the module, the enclosing module (packages move between them), and the modules that build with either, each with every module nested inside it |
 | `go.mod` unparseable on one side | `module`, `manifest_changed` (L0): the module and the modules that build with it, each with every module nested inside it |
 | `go.mod` that does not parse (either tree) | additionally, any change in the module selects every package of the module and its dependents (`unknown_import`) |
-| `go.sum` of a module | `module`, `lock_changed` (L0): the units of that module and of the other modules of every `go.work` that uses it |
+| `go.sum` of a module, lines only added | nothing (`go.sum` only verifies what `go.mod` selects; the `go.mod` change, if any, is classified on its own) |
+| `go.sum` of a module, a line removed or changed | `module`, `lock_changed` (L0): the units of that module and of the other modules of every `go.work` that uses it |
 | a file under `vendor/` of a module or `go.work` directory | `module`, `lock_changed`: the units of that module, or of the workspace's modules; importers of the vendored package are also selected through the graph |
 | `go.work`, `go.work.sum` (any depth) | `full`, `global_input` (global widening table) |
 | `.golangci.yml`, `.golangci.yaml`, `.golangci.toml`, `.golangci.json` | `none` |
@@ -223,7 +224,7 @@ Go has no `[[dynamic]]` or `[[config]]` declarations. See [configuration](../con
 - **Nested modules that import the parent without a local `replace` or a shared `go.work`**: a parent `go.mod` change does not
   select them (they build the parent from their own requirements). A `go.work` that is not committed (created locally or in CI)
   is not seen.
-- **`go.sum` is L0**: any change widens its module; checksums are not compared.
+- **`go.sum` beyond added lines is L0**: a removed or changed line widens its module; which packages a checksum affects is not computed.
 - **`go.work` and `go.work.sum` are `full`** through the global table, unless a `bgraph.toml` rule says otherwise.
 - **Generated packages**: an import of an in-repo package missing from the tree selects the importer on any change in the module.
 - **Paths built at run time** are not seen, beyond `X.Join` calls whose leading arguments are literals: a test (or a non-test helper

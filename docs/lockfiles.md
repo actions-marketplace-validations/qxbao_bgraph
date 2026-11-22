@@ -23,7 +23,7 @@ ecosystem's tests.
 | `Cargo.lock`, version 3 and 4 | Rust | L1 | no L2: units are whole Cargo targets |
 | `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb` | Node | L0 | |
 | `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files (`requirements*.txt` / `.in`, `constraints*.txt` / `.in`, `*-requirements.txt`, `*_requirements.txt`, any `.txt` / `.in` in a `requirements/` or `reqs/` directory) | Python | L0 | scope: the file's Python project |
-| `go.sum` | Go | L0 | scope: the module; `vendor/` changes widen their module too |
+| `go.sum` | Go | L1 (lines only added) / L0 | lines only added change no build: nothing widens; a removed or changed line widens the module (and the other members of its `go.work`); `vendor/` changes widen their module too |
 | `packages.lock.json` | .NET | L0 | scope: the lockfile's directory |
 
 Lockfiles not listed here are not claimed by any ecosystem and fall under the general rules. JVM builds have no

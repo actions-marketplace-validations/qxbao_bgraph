@@ -78,12 +78,13 @@ const AnalyzerVersion = "go-9"
 
 // Eco is the Go ecosystem.
 type Eco struct {
-	mu   sync.Mutex
-	mods map[tree.Tree]*modules // module layout per tree, for ClassifyChange
+	mu    sync.Mutex
+	mods  map[tree.Tree]*modules // module layout per tree, for ClassifyChange
+	rules *rules.File
 }
 
-// New creates the Go ecosystem. The rules file is accepted for symmetry with the other ecosystems.
-func New(_ *rules.File) *Eco { return &Eco{} }
+// New creates the Go ecosystem; rf ([lockfile] level) may be nil.
+func New(rf *rules.File) *Eco { return &Eco{rules: rf} }
 
 func (e *Eco) Name() string    { return Name }
 func (e *Eco) Version() string { return AnalyzerVersion }
