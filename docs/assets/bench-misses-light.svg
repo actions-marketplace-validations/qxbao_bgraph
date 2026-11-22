@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="290" viewBox="0 0 760 290" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<rect width="760" height="290" rx="12" fill="#FFFFFF"/>
+<text x="24" y="34" font-size="17" font-weight="600" fill="#0F172A">Tasks where a required test was missed (lower is better)</text>
+<text x="24" y="56" font-size="13" fill="#475569">58 real bug-fix tasks (Node, SWE-bench family) · FAIL_TO_PASS oracle</text>
+<line x1="150.0" y1="72" x2="150.0" y2="228" stroke="#E2E8F0" stroke-width="1"/>
+<text x="150.0" y="246" font-size="11" text-anchor="middle" fill="#475569">0%</text>
+<line x1="248.0" y1="72" x2="248.0" y2="228" stroke="#E2E8F0" stroke-width="1"/>
+<text x="248.0" y="246" font-size="11" text-anchor="middle" fill="#475569">10%</text>
+<line x1="346.0" y1="72" x2="346.0" y2="228" stroke="#E2E8F0" stroke-width="1"/>
+<text x="346.0" y="246" font-size="11" text-anchor="middle" fill="#475569">20%</text>
+<line x1="444.0" y1="72" x2="444.0" y2="228" stroke="#E2E8F0" stroke-width="1"/>
+<text x="444.0" y="246" font-size="11" text-anchor="middle" fill="#475569">30%</text>
+<line x1="542.0" y1="72" x2="542.0" y2="228" stroke="#E2E8F0" stroke-width="1"/>
+<text x="542.0" y="246" font-size="11" text-anchor="middle" fill="#475569">40%</text>
+<line x1="640.0" y1="72" x2="640.0" y2="228" stroke="#E2E8F0" stroke-width="1"/>
+<text x="640.0" y="246" font-size="11" text-anchor="middle" fill="#475569">50%</text>
+<text x="136" y="93.8" font-size="14" font-weight="600" text-anchor="end" fill="#0F172A">bgraph</text>
+<path d="M150,78 H151.5 Q153.0,78 153.0,79.5 V98.5 Q153.0,100 151.5,100 H150 Z" fill="#0D9488"/>
+<text x="161.0" y="93.8" font-size="13" font-weight="600" fill="#0F172A">0%  (0 of 58)</text>
+<text x="136" y="133.8" font-size="14" font-weight="400" text-anchor="end" fill="#0F172A">codegraph</text>
+<path d="M150,118 H281.2 Q285.2,118 285.2,122 V136 Q285.2,140 281.2,140 H150 Z" fill="#94A3B8"/>
+<text x="293.2" y="133.8" font-size="13" font-weight="400" fill="#0F172A">14%  (8 of 58)</text>
+<text x="136" y="173.8" font-size="14" font-weight="400" text-anchor="end" fill="#0F172A">graphify</text>
+<path d="M150,158 H510.7 Q514.7,158 514.7,162 V176 Q514.7,180 510.7,180 H150 Z" fill="#94A3B8"/>
+<text x="522.7" y="173.8" font-size="13" font-weight="400" fill="#0F172A">37%  (16 of 43)</text>
+<text x="136" y="213.8" font-size="14" font-weight="400" text-anchor="end" fill="#0F172A">GitNexus</text>
+<path d="M150,198 H579.0 Q583.0,198 583.0,202 V216 Q583.0,220 579.0,220 H150 Z" fill="#94A3B8"/>
+<text x="591.0" y="213.8" font-size="13" font-weight="400" fill="#0F172A">44%  (19 of 43)</text>
+<line x1="150" y1="72" x2="150" y2="228" stroke="#475569" stroke-width="1"/>
+<text x="24" y="278" font-size="11" fill="#475569">codegraph 1.6.2 · graphify 0.8.47 · GitNexus 1.6.12. Rates over the tasks each tool finished. Details: docs/benchmarks.md</text>
+</svg>

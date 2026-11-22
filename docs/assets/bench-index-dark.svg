@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="290" viewBox="0 0 760 290" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+<rect width="760" height="290" rx="12" fill="#0D1117"/>
+<text x="24" y="34" font-size="17" font-weight="600" fill="#E6EDF3">Median time to index the old and new tree (lower is better)</text>
+<text x="24" y="56" font-size="13" fill="#9DA7B3">Same 58 tasks · Windows 11 · single run</text>
+<line x1="150.0" y1="72" x2="150.0" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="150.0" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">0 s</text>
+<line x1="231.7" y1="72" x2="231.7" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="231.7" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">30 s</text>
+<line x1="313.3" y1="72" x2="313.3" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="313.3" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">60 s</text>
+<line x1="395.0" y1="72" x2="395.0" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="395.0" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">90 s</text>
+<line x1="476.7" y1="72" x2="476.7" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="476.7" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">120 s</text>
+<line x1="558.3" y1="72" x2="558.3" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="558.3" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">150 s</text>
+<line x1="640.0" y1="72" x2="640.0" y2="228" stroke="#21262D" stroke-width="1"/>
+<text x="640.0" y="246" font-size="11" text-anchor="middle" fill="#9DA7B3">180 s</text>
+<text x="136" y="93.8" font-size="14" font-weight="600" text-anchor="end" fill="#E6EDF3">bgraph</text>
+<path d="M150,78 H151.5 Q153.0,78 153.0,79.5 V98.5 Q153.0,100 151.5,100 H150 Z" fill="#2DD4BF"/>
+<text x="161.0" y="93.8" font-size="13" font-weight="600" fill="#E6EDF3">&lt; 1 s</text>
+<text x="136" y="133.8" font-size="14" font-weight="400" text-anchor="end" fill="#E6EDF3">codegraph</text>
+<path d="M150,118 H173.2 Q177.2,118 177.2,122 V136 Q177.2,140 173.2,140 H150 Z" fill="#57606A"/>
+<text x="185.2" y="133.8" font-size="13" font-weight="400" fill="#E6EDF3">10 s</text>
+<text x="136" y="173.8" font-size="14" font-weight="400" text-anchor="end" fill="#E6EDF3">graphify</text>
+<path d="M150,158 H189.6 Q193.6,158 193.6,162 V176 Q193.6,180 189.6,180 H150 Z" fill="#57606A"/>
+<text x="201.6" y="173.8" font-size="13" font-weight="400" fill="#E6EDF3">16 s</text>
+<text x="136" y="213.8" font-size="14" font-weight="400" text-anchor="end" fill="#E6EDF3">GitNexus</text>
+<path d="M150,198 H597.9 Q601.9,198 601.9,202 V216 Q601.9,220 597.9,220 H150 Z" fill="#57606A"/>
+<text x="609.9" y="213.8" font-size="13" font-weight="400" fill="#E6EDF3">166 s</text>
+<line x1="150" y1="72" x2="150" y2="228" stroke="#9DA7B3" stroke-width="1"/>
+<text x="24" y="278" font-size="11" fill="#9DA7B3">bgraph's index is incremental and cached between runs. Details: docs/benchmarks.md</text>
+</svg>

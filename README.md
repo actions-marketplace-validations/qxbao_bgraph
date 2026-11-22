@@ -1,83 +1,213 @@
-# bgraph
+<p align="center">
+  <img src="docs/assets/banner.svg" alt="bgraph: one changed file glows amber, and a teal path through the dependency graph lights up the few tests that depend on it" width="900">
+</p>
 
-Affected-test selection across languages, **fail-closed**.
+<h3 align="center">Your agent writes the code in minutes. Don't wait an hour for the tests.</h3>
 
-Given a change (a branch, a commit range or your working tree), bgraph tells you which tests can be affected. It reads
-imports, manifests and runner configurations as text, builds a file-level dependency graph of the old and the new tree,
-and walks it backwards from the changed files.
+<p align="center">
+  <b>bgraph</b> runs only the tests a change can affect, across six language ecosystems,<br>
+  and never silently skips one.
+</p>
 
-## The promise
+<p align="center">
+  <a href="https://github.com/qxbao/bgraph/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/qxbao/bgraph/ci.yml?branch=main&style=flat&labelColor=0F172A&color=14B8A6&logo=githubactions&logoColor=white&label=CI" alt="CI"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/qxbao/bgraph?style=flat&labelColor=0F172A&color=14B8A6&logo=go&logoColor=white" alt="Go version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-F59E0B?style=flat&labelColor=0F172A" alt="License: Apache-2.0"></a>
+  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go"></a>
+  <a href="#built-for-coding-agents"><img src="https://img.shields.io/badge/MCP-server%20included-white?style=flat&labelColor=0F172A" alt="MCP server included"></a>
+  <img src="https://img.shields.io/badge/tested%20on-Linux%20%C2%B7%20Windows-white?style=flat&labelColor=0F172A" alt="Tested on Linux and Windows">
+</p>
 
-For every change, the output either contains **every** test that could be affected, or widens the scope (a project, a
-package, the full suite) with a machine-readable reason. bgraph never silently drops a test. When it cannot be sure (a
-computed import, a build file it cannot evaluate, a CI definition), it selects more and says why; an optional
-[`bgraph.toml`](docs/configuration.md) lets you supply what it could not infer.
+---
+
+## Why bgraph
+
+Coding agents changed where the time goes. Writing a patch takes minutes; proving it did not break anything still means
+running the whole suite, on every iteration and on every pull request. The test run has become the slowest step of the
+loop.
+
+Running fewer tests is easy. Running fewer tests **safely** is the hard part: one skipped test that should have failed
+is a regression shipped to production. bgraph is built around that constraint:
+
+- **It selects precisely.** A file-level dependency graph of the old and the new tree, walked backwards from the changed
+  files, picks the test files, packages or modules that can be affected, nothing more.
+- **It never guesses.** When it cannot be sure (a computed import, a build file it cannot evaluate, a CI definition, a
+  lockfile bump), it widens the selection to the project or the full suite and **says why**, with a machine-readable
+  reason and a suggested fix.
+- **It is fast and local.** Pure Go, a single binary, no package manager, build tool or test runner is ever run to
+  decide. A warm selection takes milliseconds to about a second.
+
+<table>
+  <tr>
+    <td align="center" width="25%"><h3>1,381</h3>real bug-fix tasks replayed<br>across six ecosystems</td>
+    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 327 mutation kills</td>
+    <td align="center" width="25%"><h3>3–13%</h3>of the suite selected on<br>well-structured repositories</td>
+    <td align="center" width="25%"><h3>&lt; 1 s</h3>typical selection time,<br>index cached between runs</td>
+  </tr>
+</table>
+
+<sub>Numbers from the project's own evaluation: SWE-bench-family FAIL_TO_PASS tasks, mutation testing on 16 open-source
+repositories, median selection on dayjs, hono and the Go holdout set. Method and every result:
+<a href="docs/evaluation.md">docs/evaluation.md</a>.</sub>
+
+## See it in action
+
+A one-line fix in [prometheus/common](https://github.com/prometheus/common) (`version/info.go`), 10 test packages:
+
+```console
+$ bgraph affected --base f072bc2~1 --head f072bc2
+scope: graph
+changed files: 1
+
+selected tests: 1
+  go:version  (go)  <go:version> --implicit-> <golib:version> ; <golib:version> --implicit-> version/info.go ; version/info.go (changed)
+```
+
+One package out of ten, with the exact dependency chain that justifies it. A dependency bump in the same repository is a
+different story, and bgraph says so instead of guessing:
+
+```console
+$ bgraph affected --base 6bd4fee~1 --head 6bd4fee
+scope: module
+changed files: 2
+
+widenings:
+  - manifest_changed  go.mod  scope=module .
+      directives changed: require
+  - lock_changed  go.sum  scope=module .
+      go.sum at level L0 (checksums not compared)
+
+selected tests: 10
+```
+
+Turn a selection into commands your runner understands:
+
+```console
+$ bgraph command --base origin/main
+# scope: graph
+cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
+```
+
+## Benchmarks
+
+Before writing bgraph, we measured whether a general code-graph tool could do the job. Each tool indexed the old and the
+new tree of 58 real bug-fix tasks, and a test counted as selected when the tool's graph connected it to a changed file.
+The oracle is the set of tests the upstream fix actually turned from failing to passing.
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/bench-misses-dark.svg">
+    <img src="docs/assets/bench-misses-light.svg" alt="Tasks where a required test was missed: bgraph 0 of 58, codegraph 8 of 58, graphify 16 of 43, GitNexus 19 of 43" width="760">
+  </picture>
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/bench-index-dark.svg">
+    <img src="docs/assets/bench-index-light.svg" alt="Median time to index the old and new tree: bgraph under 1 s, codegraph 10 s, graphify 16 s, GitNexus 166 s" width="760">
+  </picture>
+</p>
+
+|  | **bgraph** | codegraph 1.6.2 | graphify 0.8.47 | GitNexus 1.6.12 |
+|---|:---:|:---:|:---:|:---:|
+| Tasks with a missed required test | **0 / 58** | 8 / 58 | 16 / 43 | 19 / 43 |
+| Trap fixtures with a missed test (code changes, 6 languages) | **0 / 30** | 5 / 30 | 9 / 30 | 6 / 30 |
+| Median index time, old + new tree | **< 1 s** | 10 s | 16 s | 166 s |
+| Says when it is unsure | ✅ widening with a reason | – | – | – |
+| Emits ready-to-run test commands | ✅ | – | – | – |
+| Understands manifests, runner configs and lockfiles | ✅ | – | – | – |
+
+These are general-purpose code-graph tools, not test selectors, measured with test-selection criteria. Full method, scope
+and per-task causes: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Supported ecosystems
 
-| Ecosystem | Unit of selection | Runners / build tools | Details |
-|---|---|---|---|
-| Node (JS/TS, CJS/ESM) | test file | Vitest, Jest, Mocha, AVA, `node --test`, Playwright | [docs/ecosystems/node.md](docs/ecosystems/node.md) |
-| Python | test file (or directory for collection hooks) | pytest, Django's runner | [docs/ecosystems/python.md](docs/ecosystems/python.md) |
-| Rust | Cargo target (`lib`, `doc`, `bin`, `test`, `bench`, `example`) | `cargo test` | [docs/ecosystems/rust.md](docs/ecosystems/rust.md) |
-| JVM | Maven module, Gradle project | Maven, Gradle (wrappers detected) | [docs/ecosystems/jvm.md](docs/ecosystems/jvm.md) |
-| .NET | MSBuild project (`.csproj`, `.fsproj`, `.vbproj`) | `dotnet test` (VSTest, Microsoft.Testing.Platform) | [docs/ecosystems/dotnet.md](docs/ecosystems/dotnet.md) |
-| Go | package | `go test` (modules, `go.work`, vendoring) | [docs/ecosystems/go.md](docs/ecosystems/go.md) |
+| | Ecosystem | Unit of selection | Runners and build tools |
+|:---:|---|---|---|
+| <img src="https://cdn.simpleicons.org/typescript" width="20" alt=""> | [**Node** (JS / TS, CJS / ESM)](docs/ecosystems/node.md) | test file | Vitest, Jest, Mocha, AVA, `node --test`, Playwright |
+| <img src="https://cdn.simpleicons.org/python" width="20" alt=""> | [**Python**](docs/ecosystems/python.md) | test file | pytest, Django's test runner |
+| <img src="https://cdn.simpleicons.org/rust/DEA584" width="20" alt=""> | [**Rust**](docs/ecosystems/rust.md) | Cargo target | `cargo test`, workspaces |
+| <img src="https://cdn.simpleicons.org/openjdk/ED8B00" width="20" alt=""> | [**JVM** (Java / Kotlin)](docs/ecosystems/jvm.md) | Maven module, Gradle project | Maven, Gradle (wrappers detected) |
+| <img src="https://cdn.simpleicons.org/dotnet" width="20" alt=""> | [**.NET** (C# / F# / VB)](docs/ecosystems/dotnet.md) | MSBuild project | `dotnet test` (VSTest, Microsoft.Testing.Platform) |
+| <img src="https://cdn.simpleicons.org/go" width="20" alt=""> | [**Go**](docs/ecosystems/go.md) | package | `go test`, modules, `go.work`, vendoring |
 
-Lockfiles (`pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`) are compared by resolved dependency closure, so a bump
-selects only the projects it touches ([lockfiles](docs/lockfiles.md)). Changes in other languages widen to the project
-or to the full suite.
+Polyglot repositories work out of the box: every ecosystem selects independently, and a change in one does not select
+another's tests unless it is a shared input (CI definitions, toolchain pins).
 
-An optional [dynamic layer](docs/dynamic-layer.md) (off by default) narrows widened selections with recorded per-test
-dependencies for Python, Node and JVM test classes.
+## Features
 
-## Install
-
-```sh
-go install github.com/qxbao/bgraph/cmd/bgraph@latest
-# or, from a checkout:
-go build -o bgraph ./cmd/bgraph
-```
-
-bgraph needs `git` on PATH. It never runs your package manager, build tool or test runner to select tests.
+| Feature | What it does |
+|---|---|
+| 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
+| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json` and `Cargo.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
+| ▶️ **Ready-to-run commands** | `bgraph command` prints `vitest run ...`, `pytest ...`, `cargo test -p ...`, `mvn -pl ...`, `dotnet test ...`, `go test ...`, batched for long lists. [CLI](docs/cli.md#command) |
+| 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
+| ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python, Node and JVM test classes. [Dynamic layer](docs/dynamic-layer.md) |
+| 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |
+| 🤖 **MCP server** | `bgraph mcp` gives coding agents `affected_tests`, `dependents_of` and `explain_selection`. [MCP](docs/cli.md#mcp) |
+| 🧩 **Go library** | Embed the selector in your own tooling with `bgraph.Open` and `Index.Select`. |
 
 ## Quick start
 
 ```sh
-bgraph affected --base origin/main          # tests affected by the working tree relative to base
+go install github.com/qxbao/bgraph/cmd/bgraph@latest
+```
+
+bgraph needs `git` on `PATH`. Then, in any repository:
+
+```sh
+bgraph affected --base origin/main          # tests affected by your working tree
 bgraph affected --base A --head B --json    # between two commits, as JSON
-bgraph command --base origin/main           # ready-to-run runner commands (vitest run ..., cargo test -p ..., go test ...)
-bgraph explain src/a.test.ts                # why a test was selected
-bgraph unresolved                           # what bgraph could not read, with suggested bgraph.toml entries
+bgraph command  --base origin/main          # the commands to run them
+bgraph explain  src/a.test.ts               # why a test was selected
+bgraph unresolved                           # what bgraph could not read, with suggested fixes
 ```
 
-Before trusting the selection in CI, run it in **shadow mode**: keep running the full suite and let `bgraph audit` report
-every failure the selection would have skipped ([CLI: audit](docs/cli.md#audit), and a
-[GitHub Actions example](docs/ci/shadow-github-actions.yml)).
+Caches live in your user cache directory, never inside the repository.
 
-bgraph also runs as an MCP server (`bgraph mcp`) and as a Go library:
+## Built for coding agents
 
-```go
-idx, err := bgraph.Open(ctx, root, bgraph.Options{})
-sel, err := idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})
+Give your agent the same selection it would get in CI, so it runs the right tests after every edit instead of the whole
+suite:
+
+```sh
+claude mcp add bgraph -- bgraph mcp --root .
 ```
 
-Caches live in the user cache directory, never inside the repository.
+```json
+{
+  "mcpServers": {
+    "bgraph": { "command": "bgraph", "args": ["mcp", "--root", "/path/to/repo"] }
+  }
+}
+```
+
+The index stays warm for the whole session, so repeated queries return in milliseconds.
+
+## In CI
+
+Adopt it in two steps:
+
+1. **Shadow mode.** Keep the full suite; add `bgraph audit` after it. Every failure the selection would have skipped is
+   reported, nothing is ever skipped. See the [GitHub Actions example](docs/ci/shadow-github-actions.yml).
+2. **Selection.** Once the shadow runs are clean, run `bgraph command --base origin/${{ github.base_ref }}` and execute
+   its output. A `full` scope tells you to run everything, so the job is never less safe than before.
+
+Check out with `fetch-depth: 0`: bgraph needs the base commit.
 
 ## Documentation
 
-| Page | Content |
+| Page | What it covers |
 |---|---|
 | [Architecture](docs/architecture.md) | the fail-closed contract, the graph, scope tiers, widening reasons |
-| [Configuration](docs/configuration.md) | `bgraph.toml` reference ([annotated example](docs/bgraph.example.toml)) |
+| [Configuration](docs/configuration.md) | the `bgraph.toml` reference ([annotated example](docs/bgraph.example.toml)) |
 | [CLI](docs/cli.md) | commands, flags, JSON output, exit codes, shadow audits, MCP |
-| [Lockfiles](docs/lockfiles.md) | levels L0 / L1 / L2 |
+| [Ecosystems](docs/README.md#ecosystems) | per-language rules, units and runner commands |
+| [Lockfiles](docs/lockfiles.md) | levels L0, L1 and L2 |
 | [Dynamic layer](docs/dynamic-layer.md) | record-based narrowing |
 | [Evaluation](docs/evaluation.md) | how soundness is tested, and the results per ecosystem |
-| [Benchmarks](docs/benchmarks.md) | comparison with general code-graph tools |
-
-The full index is [docs/README.md](docs/README.md).
+| [Benchmarks](docs/benchmarks.md) | the comparison with general code-graph tools |
 
 ## License
 
-Apache License 2.0; see [LICENSE](LICENSE) and [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
+Apache License 2.0. See [LICENSE](LICENSE) and [THIRD_PARTY_LICENSES](THIRD_PARTY_LICENSES).
