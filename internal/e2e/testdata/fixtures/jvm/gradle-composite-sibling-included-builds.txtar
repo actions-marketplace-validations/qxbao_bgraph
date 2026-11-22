@@ -1,0 +1,31 @@
+In a composite build, an included build that consumes another included build by coordinates (dependency substitution, invisible to a text read) is selected when the other changes.
+-- base/settings.gradle.kts --
+pluginManagement { includeBuild("build-plugins") }
+rootProject.name = "platform"
+includeBuild("libs/model")
+includeBuild("libs/service")
+-- base/build-plugins/settings.gradle.kts --
+rootProject.name = "build-plugins"
+-- base/build-plugins/build.gradle.kts --
+plugins { `kotlin-dsl` }
+-- base/libs/model/settings.gradle.kts --
+rootProject.name = "model"
+-- base/libs/model/build.gradle.kts --
+plugins { java }
+group = "org.ex"
+-- base/libs/model/src/main/java/M.java --
+class M {}
+-- base/libs/service/settings.gradle.kts --
+rootProject.name = "service"
+-- base/libs/service/build.gradle.kts --
+plugins { java }
+dependencies { implementation("org.ex:model:1.0") }
+-- base/libs/service/src/test/java/ServiceTest.java --
+class ServiceTest {}
+-- head/libs/model/src/main/java/M.java --
+class M { int a; }
+-- want --
+notfull
+select gradle:libs/model:
+select gradle:libs/service:
+noselect gradle:build-plugins:

@@ -10,6 +10,7 @@ type settingsInfo struct {
 	includes      []string          // include(...) arguments as written
 	flat          []string          // includeFlat(...) arguments
 	includeBuilds []string          // includeBuild(...) arguments
+	pluginBuilds  map[string]bool   // the includeBuilds declared inside pluginManagement { } (plugin builds)
 	dirs          map[string]string // normalized project path → projectDir relative to the settings directory
 	applied       []string          // literal `apply from:` targets, relative to the settings directory
 	rootName      string
@@ -137,7 +138,7 @@ func cleanRel(s string) string {
 
 // parseSettings reads a settings script.
 func parseSettings(src string, kotlin bool) settingsInfo {
-	si := settingsInfo{dirs: map[string]string{}}
+	si := settingsInfo{dirs: map[string]string{}, pluginBuilds: map[string]bool{}}
 	toks, ok := lexGradle(src, kotlin)
 	if !ok {
 		si.dynamic = append(si.dynamic, "settings script cannot be tokenized")
@@ -145,8 +146,21 @@ func parseSettings(src string, kotlin bool) settingsInfo {
 	}
 	consumedDirs := 0
 	totalDirs := 0
+	depth, pmDepth := 0, -1 // brace depth; depth inside the pluginManagement { } block (-1 outside)
 	for i := 0; i < len(toks); i++ {
 		t := toks[i]
+		switch {
+		case isPunct(t, "{"):
+			if pmDepth < 0 && i > 0 && isIdent(toks[i-1], "pluginManagement") {
+				pmDepth = depth + 1
+			}
+			depth++
+		case isPunct(t, "}"):
+			if depth == pmDepth {
+				pmDepth = -1
+			}
+			depth--
+		}
 		if t.kind != tIdent {
 			continue
 		}
@@ -172,6 +186,11 @@ func parseSettings(src string, kotlin bool) settingsInfo {
 				si.flat = append(si.flat, vals...)
 			default:
 				si.includeBuilds = append(si.includeBuilds, vals...)
+				if pmDepth >= 0 {
+					for _, v := range vals {
+						si.pluginBuilds[v] = true
+					}
+				}
 			}
 			i = next - 1
 		case "setProjectDir", "setName":

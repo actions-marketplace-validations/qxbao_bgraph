@@ -29,8 +29,12 @@ type gbuild struct {
 	order    []*gproj
 	included []*gbuild
 	incDirs  []string
-	rootName string
-	dynamic  []string
+	// libIncluded are the included builds not declared only as plugin builds (pluginManagement { includeBuild(..) }): they take
+	// part in dependency substitution, by coordinates, with each other and with this build.
+	libIncluded []*gbuild
+	libDirs     map[string]bool
+	rootName    string
+	dynamic     []string
 }
 
 // gradleModel is the Gradle part of one tree.
@@ -124,6 +128,9 @@ func loadGradle(t tree.Tree) *gradleModel {
 					si.includes = append(si.includes, sub.includes...)
 					si.flat = append(si.flat, sub.flat...)
 					si.includeBuilds = append(si.includeBuilds, sub.includeBuilds...)
+					for k := range sub.pluginBuilds {
+						si.pluginBuilds[k] = true
+					}
 					for k, v := range sub.dirs {
 						si.dirs[k] = v
 					}
@@ -160,6 +167,9 @@ func loadGradle(t tree.Tree) *gradleModel {
 		for _, d := range b.incDirs {
 			if ib, ok := m.byDir[d]; ok && ib != b {
 				b.included = append(b.included, ib)
+				if b.libDirs[d] {
+					b.libIncluded = append(b.libIncluded, ib)
+				}
 			}
 		}
 		for _, pr := range b.order {
@@ -261,9 +271,14 @@ func (m *gradleModel) buildProjects(b *gbuild, si settingsInfo) {
 		b.projects[pp] = pr
 		b.order = append(b.order, pr)
 	}
+	b.libDirs = map[string]bool{}
 	for _, ib := range si.includeBuilds {
 		if r, ok := stripRootDir(ib); ok {
-			b.incDirs = append(b.incDirs, path.Join(b.dir, cleanRel(r)))
+			d := path.Join(b.dir, cleanRel(r))
+			b.incDirs = append(b.incDirs, d)
+			if !si.pluginBuilds[ib] {
+				b.libDirs[d] = true
+			}
 		}
 	}
 }
@@ -411,6 +426,22 @@ func (m *gradleModel) analyze(b *builder) []*unit {
 		}
 	}
 	for _, gb := range m.builds {
+		// A library build of a composite can consume the including build and its sibling library builds by coordinates
+		// (dependency substitution), which a text read cannot see: it depends on every project of them.
+		for _, lb := range gb.libIncluded {
+			for _, other := range append([]*gbuild{gb}, gb.libIncluded...) {
+				if other == lb {
+					continue
+				}
+				for _, lp := range lb.order {
+					for _, op := range other.order {
+						if lu, ou := byProj[lp], byProj[op]; lu != nil && ou != nil {
+							b.edge(lu.node, ou.node, model.EdgeProjectRef, "composite build "+gb.dir+": substitution from "+other.dir)
+						}
+					}
+				}
+			}
+		}
 		for _, pr := range gb.order {
 			u := byProj[pr]
 			if u == nil {
