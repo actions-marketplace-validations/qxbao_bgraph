@@ -32,6 +32,9 @@ type DynReplayConfig struct {
 	// Fresh: also evaluate records made at each P (the parent of the replayed commit) with trust_native_env, as a CI that
 	// records the base branch would provide; only for widened commits whose guards pass (mode "fresh").
 	Fresh bool
+	// FreshMax: at most this many fresh commits, spread over the eligible ones (0: all). For suites whose recording takes
+	// minutes (Node repos with hundreds of units).
+	FreshMax int
 }
 
 // DynVerify is the test-run check of one replayed commit.
@@ -306,12 +309,25 @@ func freshPass(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult, r
 	wt := filepath.Join(cfg.T2.Dir, "dyn-wt", r.Dir+"-fresh")
 	state := filepath.Join(cfg.T2.Dir, "dyn-state-fresh", r.Dir)
 	n := 0
+	var eligible []int
 	for i := range res.Commits {
 		c := &res.Commits[i]
 		h, ok := c.Hybrid["trust"]
 		if c.Err != "" || c.Widened == 0 || !ok || (h.Skip != "" && SkipClass(h.Skip) != "no records") {
 			continue
 		}
+		eligible = append(eligible, i)
+	}
+	if cfg.FreshMax > 0 && len(eligible) > cfg.FreshMax {
+		var pick []int
+		for k := 0; k < cfg.FreshMax; k++ {
+			pick = append(pick, eligible[k*len(eligible)/cfg.FreshMax])
+		}
+		cfg.T2.logf("%s replay: fresh records for %d of %d eligible commits (--fresh-max)", r.Name, len(pick), len(eligible))
+		eligible = pick
+	}
+	for _, i := range eligible {
+		c := &res.Commits[i]
 		if ctx.Err() != nil {
 			return
 		}

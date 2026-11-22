@@ -119,6 +119,7 @@ func cmdReplayDyn(ctx context.Context, args []string) (int, error) {
 	sample := fs.Int("sample", 8, "commits per repo verified by running the removed units")
 	rerecord := fs.Bool("rerecord", false, "record again at R0")
 	fresh := fs.Bool("fresh", false, "also record at each P of a widened commit whose guards pass and select it again (mode fresh)")
+	freshMax := fs.Int("fresh-max", 0, "with --fresh: at most this many fresh commits, spread over the eligible ones (0: all)")
 	jobs := fs.Int("jobs", 8, "record parallelism")
 	out := fs.String("out", "D:/bench/bgraph-eval/out/phase6-replay", "report directory")
 	render := fs.String("render", "", "only render the report from these replaydyn.json files (comma-separated; a later file's repo replaces an earlier one)")
@@ -148,7 +149,7 @@ func cmdReplayDyn(ctx context.Context, args []string) (int, error) {
 				continue
 			}
 			res := evalkit.RunDynReplay(ctx, evalkit.DynReplayConfig{T2: evalkit.T2Config{Dir: dir, Manifest: man, Log: lg}, Repo: r,
-				Commits: *commits, Modes: splitList(*modes), Sample: *sample, Jobs: *jobs, Rerecord: *rerecord, Fresh: *fresh})
+				Commits: *commits, Modes: splitList(*modes), Sample: *sample, Jobs: *jobs, Rerecord: *rerecord, Fresh: *fresh, FreshMax: *freshMax})
 			if res.Error != "" {
 				lg("%s replay: %s", r.Name, res.Error)
 			}
