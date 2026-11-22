@@ -213,7 +213,7 @@ func cmdDotnetProvider(ctx context.Context, args []string) error {
 		cfg := evalkit.DotnetProviderConfig{Work: *work, Tools: *tools, MaxCommits: n, MaxProjects: mp, Timeout: *timeout, Jobs: *jobs}
 		r := evalkit.DotnetProviderRepo(ctx, cfg, evalkit.RustRepoDir(*work, repo), repo, bs)
 		rows = append(rows, r)
-		lg("%-40s commits=%d projects=%d failed=%d msbuild-edges=%d covered=%d missing=%d %dms", r.Repo, r.Commits, r.Projects, r.Failed, r.Edges, r.Covered, len(r.Missing), r.ElapsedMs)
+		lg("%-40s commits=%d projects=%d failed=%d msbuild-edges=%d covered=%d missing=%d unresolved-covered=%d %dms", r.Repo, r.Commits, r.Projects, r.Failed, r.Edges, r.Covered, len(r.Missing), len(r.MissingUnresolved), r.ElapsedMs)
 		b, _ := json.MarshalIndent(rows, "", " ")
 		os.WriteFile(filepath.Join(*out, "dotnet-provider.json"), b, 0o644)
 	}

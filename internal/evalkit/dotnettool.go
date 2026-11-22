@@ -304,16 +304,19 @@ func tail(s string, n int) string {
 
 // DotnetProviderRow is the provider comparison of one repo at the sampled base commits.
 type DotnetProviderRow struct {
-	Repo      string   `json:"repo"`
-	Commits   int      `json:"commits"`
-	Projects  int      `json:"projects"` // projects compared (msbuild evaluation succeeded)
-	Failed    int      `json:"failed"`   // msbuild evaluation failed
-	Edges     int      `json:"msbuild_edges"`
-	Covered   int      `json:"covered"` // msbuild edges that bgraph has too
-	Missing   []string `json:"missing"` // "commit:from -> to" edges msbuild has and bgraph lacks
-	Errors    []string `json:"errors,omitempty"`
-	Commit    []string `json:"commit_list,omitempty"`
-	ElapsedMs int64    `json:"elapsed_ms"`
+	Repo     string   `json:"repo"`
+	Commits  int      `json:"commits"`
+	Projects int      `json:"projects"` // projects compared (msbuild evaluation succeeded)
+	Failed   int      `json:"failed"`   // msbuild evaluation failed
+	Edges    int      `json:"msbuild_edges"`
+	Covered  int      `json:"covered"` // msbuild edges that bgraph has too
+	Missing  []string `json:"missing"` // "commit:from -> to" edges msbuild has and bgraph lacks, with no Unresolved to widen for them
+	// MissingUnresolved: edges msbuild has and bgraph lacks, but the project (or a props/targets above it) carries an Unresolved, so a
+	// change anywhere in the project's scope still selects it (the fail-closed path of the plan, not a silent miss).
+	MissingUnresolved []string `json:"missing_unresolved,omitempty"`
+	Errors            []string `json:"errors,omitempty"`
+	Commit            []string `json:"commit_list,omitempty"`
+	ElapsedMs         int64    `json:"elapsed_ms"`
 }
 
 // DotnetProviderConfig configures DotnetProviderRepo.
@@ -354,6 +357,25 @@ func DotnetProviderRepo(ctx context.Context, cfg DotnetProviderConfig, mirror, r
 		if err != nil {
 			row.Errors = append(row.Errors, base[:10]+": analyze: "+err.Error())
 			continue
+		}
+		unres := map[string]bool{} // files that carry an Unresolved
+		for _, u := range a.Unresolved {
+			unres[u.File] = true
+		}
+		covered := func(proj string) bool { // the project file or an implicit props/targets above it carries an Unresolved
+			if unres[proj] {
+				return true
+			}
+			for d := path.Dir(proj); ; d = path.Dir(d) {
+				for _, n := range []string{"Directory.Build.props", "Directory.Build.targets", "Directory.Packages.props"} {
+					if unres[path.Join(d, n)] {
+						return true
+					}
+				}
+				if d == "." || d == "/" {
+					return false
+				}
+			}
 		}
 		refs := map[string]map[string]bool{} // project file -> referenced node / path
 		var projects []string
@@ -429,6 +451,8 @@ func DotnetProviderRepo(ctx context.Context, cfg DotnetProviderConfig, mirror, r
 				row.Edges++
 				if have[dotnet.Node(to)] || have[to] {
 					row.Covered++
+				} else if covered(r.proj) {
+					row.MissingUnresolved = append(row.MissingUnresolved, fmt.Sprintf("%s:%s -> %s", base[:8], r.proj, to))
 				} else {
 					row.Missing = append(row.Missing, fmt.Sprintf("%s:%s -> %s", base[:8], r.proj, to))
 				}
