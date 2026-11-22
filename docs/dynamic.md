@@ -149,12 +149,12 @@ Clarifications (implementation, `internal/dynamic/pydyn`):
 of installed distributions (`importlib.metadata`, name==version) of the interpreter; and, for every pytest configuration file at B
 (pytest.ini, .pytest.ini, pytest.toml, .pytest.toml, tox.ini, setup.cfg, pyproject.toml), a digest of the part that configures pytest:
 the `[tool.pytest]` table of pyproject.toml (`ini_options` and the native table; re-encoded canonically), the `[tool:pytest]` section
-of setup.cfg, the whole file otherwise and whenever the part cannot be extracted (a pyproject.toml that does not parse). At selection
+of setup.cfg, the `[pytest]` section of tox.ini, the whole file for pytest.ini/pytest.toml and whenever the part cannot be extracted (a pyproject.toml that does not parse). At selection
 time bgraph computes the same fingerprint by running the configured interpreter once (`[dynamic_layer] python = "..."`, default
 `python` on PATH; cached per Index by executable path+mtime). If the interpreter cannot run → no narrowing (note).
 
 Decision (2026-11-22, Phase 6 evaluation): manifests, lockfiles, requirements files and toolchain pins are **not** in the fingerprint
-(version 2; records of version 1 no longer match). The installed distributions already fingerprint the environment the tests actually
+(fingerprint version 3; older records no longer match). The installed distributions already fingerprint the environment the tests actually
 ran in, and with lockfiles in it every routine lock bump invalidated every record (replay: all records unusable after 26–60 of 150
 commits). A diff that changes a manifest, lockfile or configuration still blocks narrowing through §2. conftest.py files are
 dependencies in the records, not part of the fingerprint.

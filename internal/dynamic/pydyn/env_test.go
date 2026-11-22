@@ -62,6 +62,7 @@ testpaths = tests
 		"requirements":      {"requirements-dev.txt": "c2"},
 		"setup.py":          {"setup.py": "s2"},
 		"pyproject project": {"pyproject.toml": strings.Replace(pyproject, `["a"]`, `["a", "b"]`, 1)},
+		"tox.ini envs":      {"tox.ini": "[tox]\nenvlist = py\n"},
 		"setup.cfg meta":    {"sub/setup.cfg": strings.Replace(setupCfg, "name = x", "name = y", 1)},
 	} {
 		if fp(over) != a {
@@ -72,7 +73,7 @@ testpaths = tests
 	for name, over := range map[string]map[string]string{
 		"pyproject pytest":  {"pyproject.toml": strings.Replace(pyproject, `"-q"`, `"-x"`, 1)},
 		"setup.cfg pytest":  {"sub/setup.cfg": strings.Replace(setupCfg, "testpaths = tests", "testpaths = t", 1)},
-		"tox.ini":           {"tox.ini": "e2"},
+		"tox.ini pytest":    {"tox.ini": "[pytest]\naddopts = -x\n"},
 		"pytest.ini":        {"pytest.ini": "[pytest]\naddopts = -x\n"},
 		"broken pyproject":  {"pyproject.toml": pyproject + "[[[\n"},
 		"new pytest config": {"tests/pytest.ini": "[pytest]\n"},

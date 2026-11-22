@@ -304,7 +304,8 @@ func RunnerConfigFile(p string) bool {
 }
 
 // RunnerConfigPart returns the part of runner config file p (RunnerConfigFile) that configures pytest: the [tool.pytest] table
-// of pyproject.toml (re-encoded canonically) and the [tool:pytest] section of setup.cfg; the whole content for the other files,
+// of pyproject.toml (re-encoded canonically), the [tool:pytest] section of setup.cfg and the [pytest] section of tox.ini; the
+// whole content for the pytest.ini/pytest.toml files,
 // and whenever the part cannot be extracted reliably (pyproject.toml that does not parse).
 func RunnerConfigPart(p string, content []byte) string {
 	switch path.Base(p) {
@@ -322,13 +323,17 @@ func RunnerConfigPart(p string, content []byte) string {
 			return "whole:" + string(content)
 		}
 		return "tool.pytest:" + string(b)
-	case "setup.cfg":
+	case "setup.cfg", "tox.ini":
+		section := "tool:pytest"
+		if path.Base(p) == "tox.ini" {
+			section = "pytest"
+		}
 		var out []string
 		in := false
 		for _, l := range strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n") {
 			t := strings.TrimSpace(l)
 			if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
-				in = strings.EqualFold(strings.TrimSpace(t[1:len(t)-1]), "tool:pytest")
+				in = strings.EqualFold(strings.TrimSpace(t[1:len(t)-1]), section)
 				continue
 			}
 			if in {
@@ -338,7 +343,7 @@ func RunnerConfigPart(p string, content []byte) string {
 		if len(out) == 0 {
 			return ""
 		}
-		return "tool:pytest:" + strings.Join(out, "\n")
+		return section + ":" + strings.Join(out, "\n")
 	}
 	return "whole:" + string(content)
 }
