@@ -1,0 +1,25 @@
+A convention plugin of a build included through pluginManagement { includeBuild(...) } under a directory not named build-logic adds project(':testutil'): a change in testutil selects the projects of the including build.
+-- base/settings.gradle.kts --
+pluginManagement { includeBuild("gradle/plugins") }
+include(":testutil", ":app")
+-- base/gradle/plugins/settings.gradle.kts --
+rootProject.name = "plugins"
+-- base/gradle/plugins/build.gradle.kts --
+plugins { `kotlin-dsl` }
+-- base/gradle/plugins/src/main/kotlin/my.conventions.gradle.kts --
+plugins { java }
+dependencies { "testImplementation"(project(":testutil")) }
+-- base/app/build.gradle.kts --
+plugins { id("my.conventions") }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/testutil/build.gradle.kts --
+plugins { java }
+-- base/testutil/src/main/java/T.java --
+class T {}
+-- head/testutil/src/main/java/T.java --
+class T { int a; }
+-- want --
+notfull
+select gradle::testutil
+select gradle::app

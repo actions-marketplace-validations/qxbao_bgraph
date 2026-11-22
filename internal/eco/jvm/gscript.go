@@ -37,7 +37,20 @@ type gref struct {
 	sc      scopeInfo
 	rootRel bool // val is relative to the build (settings) directory instead of the project directory
 	line    int
+	// strict: a refPath that must name a project (project(..), evaluationDependsOn(..)): when it names none the project model is
+	// wrong, so it depends on every project. findProject(..) may legitimately name an absent project.
+	strict bool
+	// mustExist: a refFile found by a heuristic (a string near rootProject/rootDir): an edge only when the path exists.
+	mustExist bool
 }
+
+// projectSets are the Project properties that hold a collection of projects: navigating them (rootProject.subprojects.forEach
+// { implementation(it) }) can reach any project.
+var projectSets = map[string]bool{"allprojects": true, "subprojects": true, "childProjects": true}
+
+// rootDirIdents name the root (settings) directory or project; a string literal following them in a call chain
+// (rootProject.file("x"), File(rootDir, "x"), rootDir.resolve("x"), layout.settingsDirectory.file("x")) is relative to it.
+var rootDirIdents = map[string]bool{"rootProject": true, "rootDir": true, "settingsDir": true, "settingsDirectory": true}
 
 // scriptRefs is what a build script says about other projects and files.
 type scriptRefs struct {
@@ -165,6 +178,15 @@ func (sr *scriptRefs) scan(toks []token) {
 		case isPunct(t, ";"):
 			stmtStart = i + 1
 		case t.kind == tIdent:
+			nextDot := i+1 < len(toks) && isPunct(toks[i+1], ".")
+			switch {
+			case t.text == "rootProject" && !nextDot && !(i+1 < len(toks) && isPunct(toks[i+1], "{")):
+				// rootProject used as a value: implementation(rootProject), testImplementation rootProject.
+				add(gref{kind: refPath, val: ":", line: t.line})
+			case projectSets[t.text] && nextDot, t.text == "getAllprojects" || t.text == "getSubprojects" || t.text == "getChildProjects",
+				t.text == "evaluationDependsOnChildren":
+				add(gref{kind: refUnplaceable, val: t.text + " used as a collection at line " + itoa(t.line), line: t.line})
+			}
 			switch t.text {
 			case "beforeProject", "afterProject", "projectsEvaluated":
 				if sr.cross == "" {
@@ -178,7 +200,7 @@ func (sr *scriptRefs) scan(toks []token) {
 					continue
 				}
 				if v, _, ok := projectArg(toks, i); ok {
-					add(gref{kind: refPath, val: v, line: t.line})
+					add(gref{kind: refPath, val: v, line: t.line, strict: t.text != "findProject"})
 				} else {
 					add(gref{kind: refUnplaceable, val: t.text + "(...) at line " + itoa(t.line), line: t.line})
 				}
@@ -199,7 +221,7 @@ func (sr *scriptRefs) scan(toks []token) {
 				sr.scanApply(toks, i, add)
 			}
 		case t.kind == tStr:
-			sr.scanString(t, add)
+			sr.scanString(toks, i, add)
 		}
 	}
 }
@@ -246,7 +268,22 @@ func (sr *scriptRefs) scanApply(toks []token, i int, add func(gref)) {
 	}
 }
 
-func (sr *scriptRefs) scanString(t token, add func(gref)) {
+// afterRootDir: the string toks[k] follows a root-directory identifier in the same call chain on its line.
+func afterRootDir(toks []token, k int) bool {
+	for j := k - 1; j >= 0 && j >= k-10; j-- {
+		t := toks[j]
+		if t.line != toks[k].line || isPunct(t, ";") || isPunct(t, "{") || isPunct(t, "}") || isPunct(t, "=") {
+			return false
+		}
+		if t.kind == tIdent && rootDirIdents[t.text] {
+			return true
+		}
+	}
+	return false
+}
+
+func (sr *scriptRefs) scanString(toks []token, k int, add func(gref)) {
+	t := toks[k]
 	s := t.text
 	if n := len(sr.refs); n > 0 && sr.refs[n-1].line == t.line {
 		// The argument of the project(...) / apply from: call just recorded.
@@ -272,6 +309,10 @@ func (sr *scriptRefs) scanString(t token, add func(gref)) {
 		if !strings.Contains(s, "$") {
 			add(gref{kind: refFile, val: cleanRel(s), line: t.line})
 		}
+		return
+	}
+	if !t.dyn && s != "" && !strings.ContainsAny(s, "$:*?\n") && afterRootDir(toks, k) {
+		add(gref{kind: refFile, val: cleanRel(s), rootRel: true, mustExist: true, line: t.line})
 	}
 }
 

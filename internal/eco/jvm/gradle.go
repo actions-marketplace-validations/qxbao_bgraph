@@ -42,6 +42,8 @@ type gradleModel struct {
 	cross map[string]string
 	// refs caches the lexed references of each script.
 	refs map[string]*scriptRefs
+	// projDirs: the directories of every project (built lazily by ownerDir).
+	projDirs map[string]bool
 }
 
 func isGradleScript(base string) bool {
@@ -444,6 +446,8 @@ func (m *gradleModel) pluginEdges(b *builder, gb *gbuild, byProj map[*gproj]*uni
 	for _, d := range []string{"buildSrc", "build-logic"} {
 		dirs = append(dirs, path.Join(gb.dir, d))
 	}
+	// Included builds (pluginManagement { includeBuild(..) } or a plain includeBuild) can provide convention plugins too.
+	dirs = append(dirs, gb.incDirs...)
 	root := gb.projects[":"]
 	var to []*gproj
 	all := false
@@ -590,7 +594,13 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 	for _, r := range sr.refs {
 		switch r.kind {
 		case refPath:
-			addEdges(r.sc, gb.lookup(r.val, pr), "project("+r.val+")")
+			ts := gb.lookup(r.val, pr)
+			if len(ts) == 0 && r.strict {
+				// A literal project path that names no project of the model: the settings were misread.
+				addEdges(r.sc, gb.order, "project("+r.val+") names no known project: depends on every project of the build")
+				continue
+			}
+			addEdges(r.sc, ts, "project("+r.val+")")
 		case refStrPath:
 			addEdges(r.sc, gb.resolveStrPath(r.val), "reference "+r.val)
 		case refAccessor:
@@ -616,12 +626,16 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 				if r.rootRel {
 					target = path.Join(gb.dir, r.val)
 				}
-				if eco.Within(target, from.dir) || target == ".." || strings.HasPrefix(target, "../") {
-					continue
+				if target == ".." || strings.HasPrefix(target, "../") || m.ownerDir(target) == from.dir {
+					continue // outside the repository, or owned by the project anyway
 				}
-				if m.t.Has(target) {
+				if r.mustExist && eco.Within(from.dir, target) {
+					continue // an ancestor directory used as a base (rootProject.file(".")): its shared files reach the project anyway
+				}
+				switch {
+				case m.t.Has(target):
 					b.edge(fu.node, target, model.EdgeInclude, "file "+r.val)
-				} else {
+				case !r.mustExist || m.t.IsDir(target):
 					b.edge(fu.node, escapeGlob(target)+"/**", model.EdgePattern, "directory "+r.val)
 				}
 			}
@@ -646,6 +660,27 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 			if depth < 3 {
 				m.scriptEdges(b, gb, pr, full, byProj, depth+1)
 			}
+		}
+	}
+}
+
+// ownerDir returns the directory of the project that owns file or directory p: the nearest project directory at or above it (""
+// when none).
+func (m *gradleModel) ownerDir(p string) string {
+	if m.projDirs == nil {
+		m.projDirs = map[string]bool{}
+		for _, gb := range m.builds {
+			for _, pr := range gb.order {
+				m.projDirs[pr.dir] = true
+			}
+		}
+	}
+	for d := p; ; d = path.Dir(d) {
+		if m.projDirs[d] {
+			return d
+		}
+		if d == "." || d == "/" || d == "" {
+			return ""
 		}
 	}
 }

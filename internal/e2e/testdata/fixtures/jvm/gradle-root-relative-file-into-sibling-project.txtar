@@ -1,0 +1,31 @@
+A test input named relative to the root directory (rootProject.file("data/src/test/resources/..."), "${project.rootDir}/...") that lies in another project's directory: a change there selects the reading project.
+-- base/settings.gradle.kts --
+include(":data", ":app", ":svc", ":other")
+-- base/data/build.gradle.kts --
+plugins { java }
+-- base/data/src/test/resources/users.json --
+{}
+-- base/data/src/test/resources/orders.json --
+{}
+-- base/app/build.gradle.kts --
+plugins { java }
+tasks.test { inputs.file(rootProject.file("data/src/test/resources/users.json")) }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/svc/build.gradle --
+plugins { id 'java' }
+test { systemProperty 'orders', "${project.rootDir}/data/src/test/resources/orders.json" }
+-- base/svc/src/test/java/SvcTest.java --
+class SvcTest {}
+-- base/other/build.gradle.kts --
+plugins { java }
+-- head/data/src/test/resources/users.json --
+{"a":1}
+-- head/data/src/test/resources/orders.json --
+{"a":1}
+-- want --
+notfull
+select gradle::data
+select gradle::app
+select gradle::svc
+noselect gradle::other

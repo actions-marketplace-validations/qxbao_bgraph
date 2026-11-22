@@ -1,0 +1,20 @@
+An aggregating project that depends on every subproject through a collection (rootProject.subprojects.forEach { implementation(it) }) is selected when any subproject changes.
+-- base/settings.gradle.kts --
+include(":lib", ":report")
+-- base/lib/build.gradle.kts --
+plugins { java }
+-- base/lib/src/main/java/L.java --
+class L {}
+-- base/report/build.gradle.kts --
+plugins { java }
+dependencies {
+    rootProject.subprojects.filter { it.name != "report" }.forEach { testImplementation(it) }
+}
+-- base/report/src/test/java/ReportTest.java --
+class ReportTest {}
+-- head/lib/src/main/java/L.java --
+class L { int a; }
+-- want --
+notfull
+select gradle::lib
+select gradle::report

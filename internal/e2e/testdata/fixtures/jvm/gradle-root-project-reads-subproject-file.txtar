@@ -1,0 +1,23 @@
+The root project's tests read a file inside a subproject's directory ("$rootDir/data/..."): the file lies under the root directory but is owned by the subproject, so it is still a dependency of the root project.
+-- base/settings.gradle --
+include ':data', ':other'
+-- base/build.gradle --
+plugins { id 'java' }
+test { inputs.dir("$rootDir/data/src/test/resources") }
+-- base/src/test/java/RootTest.java --
+class RootTest {}
+-- base/data/build.gradle --
+plugins { id 'java' }
+-- base/data/src/test/resources/x.json --
+{}
+-- base/other/build.gradle --
+plugins { id 'java' }
+-- base/other/src/main/java/O.java --
+class O {}
+-- head/data/src/test/resources/x.json --
+{"a":1}
+-- want --
+notfull
+select gradle::data
+select gradle::
+noselect gradle::other

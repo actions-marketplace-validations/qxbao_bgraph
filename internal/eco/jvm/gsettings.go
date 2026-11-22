@@ -31,7 +31,8 @@ func normProjectPath(s string) string {
 
 // rootDirPrefixes are the leading forms that denote the settings/root directory inside a path string.
 var rootDirPrefixes = []string{"${rootDir}/", "$rootDir/", "${settingsDir}/", "$settingsDir/", "${rootProject.projectDir}/",
-	"${settings.rootDir}/", "${settings.settingsDir}/"}
+	"$rootProject.projectDir/", "${project.rootDir}/", "$project.rootDir/", "${rootProject.rootDir}/", "$rootProject.rootDir/",
+	"${project.rootProject.projectDir}/", "${settings.rootDir}/", "${settings.settingsDir}/"}
 
 // stripRootDir removes a leading root-directory reference. ok=false when the string still has an interpolation or is absolute.
 func stripRootDir(s string) (string, bool) {
@@ -173,9 +174,22 @@ func parseSettings(src string, kotlin bool) settingsInfo {
 				si.includeBuilds = append(si.includeBuilds, vals...)
 			}
 			i = next - 1
+		case "setProjectDir", "setName":
+			si.dynamic = append(si.dynamic, t.text+" on a project descriptor (line "+itoa(t.line)+")")
+		case "name":
+			// project(":x").name = "y" / it.name = ...: the project path changes. rootProject.name only names the build, and a bare
+			// `name = ` inside a block is the name of a repository or cache.
+			if prevDot && i+1 < len(toks) && isPunct(toks[i+1], "=") && !(i+2 < len(toks) && isPunct(toks[i+2], "=")) &&
+				!(i > 1 && isIdent(toks[i-2], "rootProject")) {
+				si.dynamic = append(si.dynamic, "a project is renamed (line "+itoa(t.line)+")")
+			}
 		case "projectDir":
-			if i+1 < len(toks) && isPunct(toks[i+1], "=") && !(i+2 < len(toks) && isPunct(toks[i+2], "=")) && prevDot {
+			if i+1 < len(toks) && isPunct(toks[i+1], "=") && !(i+2 < len(toks) && isPunct(toks[i+2], "=")) {
+				// Without a receiver (inside apply { } / with(..) { }) the assignment cannot be attributed: counted, not consumed.
 				totalDirs++
+				if !prevDot {
+					continue
+				}
 				// project(":x").projectDir = ... / findProject(":x")?.projectDir = ...
 				k := i - 2 // token before '.'
 				if k >= 0 && isPunct(toks[k], "?") {

@@ -1,0 +1,12 @@
+A projectDir assigned inside a scope function (project(":x").apply { projectDir = ... }) cannot be read as a literal assignment: the project layout is unknown and the change widens instead of being attributed to the wrong directory.
+-- base/settings.gradle.kts --
+include(":core")
+project(":core").apply { projectDir = file("libs/core") }
+-- base/libs/core/build.gradle.kts --
+plugins { java }
+-- base/libs/core/src/main/java/C.java --
+class C {}
+-- head/libs/core/src/main/java/C.java --
+class C { int a; }
+-- want --
+full

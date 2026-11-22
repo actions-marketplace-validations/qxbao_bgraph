@@ -1,0 +1,23 @@
+A subproject that depends on the root project through implementation(rootProject) (a benchmark next to a root library) is selected when the root project's sources change.
+-- base/settings.gradle.kts --
+include(":bench", ":other")
+-- base/build.gradle.kts --
+plugins { java }
+-- base/src/main/java/Lib.java --
+class Lib {}
+-- base/bench/build.gradle.kts --
+plugins { java }
+dependencies { implementation(rootProject) }
+-- base/bench/src/test/java/BenchTest.java --
+class BenchTest {}
+-- base/other/build.gradle.kts --
+plugins { java }
+-- base/other/src/main/java/O.java --
+class O {}
+-- head/src/main/java/Lib.java --
+class Lib { int a; }
+-- want --
+notfull
+select gradle::
+select gradle::bench
+noselect gradle::other

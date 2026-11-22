@@ -1,0 +1,17 @@
+A project renamed in settings (project(":x").name = "y") changes its path: the build structure is not literal and a change widens rather than missing the projects that reference the new path.
+-- base/settings.gradle --
+include ':core-impl', ':app'
+project(':core-impl').name = 'core'
+-- base/core-impl/build.gradle --
+plugins { id 'java' }
+-- base/core-impl/src/main/java/C.java --
+class C {}
+-- base/app/build.gradle --
+plugins { id 'java' }
+dependencies { implementation project(':core') }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- head/core-impl/src/main/java/C.java --
+class C { int a; }
+-- want --
+select gradle::app
