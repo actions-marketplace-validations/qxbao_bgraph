@@ -146,6 +146,22 @@ func TestPnpmEnvDocument(t *testing.T) {
 	}
 }
 
+// A catalog bump is visible in the importers that use it: it is not a settings change.
+func TestPnpmCatalogsNotExtra(t *testing.T) {
+	cat := func(v string) string {
+		return strings.Replace(pnpm9, "importers:", "catalogs:\n  default:\n    ms:\n      specifier: ^2\n      version: "+v+"\n\nimporters:", 1)
+	}
+	base := mustParse(t, "pnpm-lock.yaml", ".", cat("2.1.3"))
+	head := mustParse(t, "pnpm-lock.yaml", ".", strings.Replace(cat("2.1.2"), "        version: 2.1.3", "        version: 2.1.2", 1))
+	d, err := Compare(base, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := d.ChangedProjects(); !slices.Equal(got, []string{"packages/a", "packages/b"}) {
+		t.Fatalf("changed = %v", got)
+	}
+}
+
 const npm3 = `{
   "name": "root", "lockfileVersion": 3, "requires": true,
   "packages": {

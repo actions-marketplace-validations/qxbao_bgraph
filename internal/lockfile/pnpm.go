@@ -20,7 +20,9 @@ var pnpmIdentSkip = map[string]bool{"dev": true, "optional": true, "dependencies
 // pnpmGraphKeys are the top-level keys that make up the package graph; every other key is Extra.
 var pnpmGraphKeys = map[string]bool{"importers": true, "packages": true, "snapshots": true,
 	// a lockfile without importers (single project) lists the root's dependencies at the top level
-	"dependencies": true, "devDependencies": true, "optionalDependencies": true, "dependenciesMeta": true, "specifiers": true}
+	"dependencies": true, "devDependencies": true, "optionalDependencies": true, "dependenciesMeta": true, "specifiers": true,
+	// catalog resolutions are mirrored in every importer's dependency versions, which the closures compare
+	"catalogs": true}
 
 // ParsePnpm reads a pnpm-lock.yaml with lockfileVersion 6.x or 9.0.
 func ParsePnpm(dir string, data []byte) (*Graph, error) {
