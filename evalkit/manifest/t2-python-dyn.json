@@ -1,0 +1,52 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "Phase 6 (docs/dynamic.md section 7) Python T2 for the hybrid configuration: repos whose source edits make the static layer widen through name-based imports (Python-Markdown extensions by name, Pygments lexers/formatters/styles by name, Werkzeug's lazy imports). Root defaults to D:/bench/bgraph-eval/t2/python-dyn; same layout and oracle rules as t2-python.json (full clones, core.autocrlf=false, detached at R; venv-<dir> made with `uv venv --python 3.13` and the `install` command; oracle.jsonl). Mutants are generated only in source files whose modification widens (`bgraph-eval t2dyn --prepare` writes mutants-<dir>.json before `bgraph-eval t2 --ecosystem python --dir ... --manifest evalkit/manifest/t2-python-dyn.json --run-tests` builds the oracle). Every mutant modifies an existing .py file, so the dynamic layer's guards allow narrowing.",
+ "repos": [
+  {
+   "name": "Python-Markdown/markdown",
+   "dir": "markdown",
+   "eco": "python",
+   "runner": "pytest",
+   "venv": "venv-markdown",
+   "remote": "https://github.com/Python-Markdown/markdown.git",
+   "r": "5609061bd3359e882b745de184ebfe5ef1c08011",
+   "args": ["-p", "no:cacheprovider", "-q", "--continue-on-collection-errors", "-o", "junit_family=xunit1"],
+   "install": "uv pip install --python venv-markdown/Scripts/python.exe -e markdown pytest coverage pyyaml pygments",
+   "covers": "markdown/ (core + extensions loaded by name with importlib), tests/ (unittest suites collected by pytest; ~8 s)",
+   "mutants": 20,
+   "tries": 60,
+   "seed": "t2-python-dyn-v1"
+  },
+  {
+   "name": "pygments/pygments",
+   "dir": "pygments",
+   "eco": "python",
+   "runner": "pytest",
+   "venv": "venv-pygments",
+   "remote": "https://github.com/pygments/pygments.git",
+   "r": "156d85fdd18d34427fe893527e71da91dcfb0eb5",
+   "args": ["-p", "no:cacheprovider", "-q", "--continue-on-collection-errors", "-o", "junit_family=xunit1"],
+   "install": "uv pip install --python venv-pygments/Scripts/python.exe -e pygments \"pytest~=8.2\" wcag-contrast-ratio",
+   "covers": "pygments/ (lexers, formatters, styles and filters loaded by name), tests/ (34 test files incl. golden example files; ~50 s)",
+   "mutants": 20,
+   "tries": 60,
+   "seed": "t2-python-dyn-v1"
+  },
+  {
+   "name": "pallets/werkzeug",
+   "dir": "werkzeug",
+   "eco": "python",
+   "runner": "pytest",
+   "venv": "venv-werkzeug",
+   "remote": "https://github.com/pallets/werkzeug.git",
+   "r": "0f43c6ebd426039e4b99ec22535c2c8a2ec2f69f",
+   "args": ["-p", "no:cacheprovider", "-q", "--continue-on-collection-errors", "-o", "junit_family=xunit1"],
+   "install": "uv pip install --python venv-werkzeug/Scripts/python.exe -e werkzeug cffi cryptography ephemeral-port-reserve pytest pytest-timeout watchdog",
+   "covers": "src/werkzeug (routing, middleware: edits widen through lazy imports), tests/ (27 test files, dev-server tests spawn processes; ~27 s)",
+   "mutants": 20,
+   "tries": 60,
+   "seed": "t2-python-dyn-v1"
+  }
+ ]
+}

@@ -63,6 +63,17 @@ func main() {
 		}
 	case "replay":
 		err = cmdReplay(ctx, os.Args[2:])
+	case "t2dyn", "replaydyn":
+		cmd := cmdT2Dyn
+		if os.Args[1] == "replaydyn" {
+			cmd = cmdReplayDyn
+		}
+		var code int
+		code, err = cmd(ctx, os.Args[2:])
+		if err == nil && code != 0 {
+			stop()
+			os.Exit(code)
+		}
 	case "cargometa":
 		err = cmdCargoMeta(ctx, os.Args[2:])
 	case "rust-locate":
