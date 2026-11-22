@@ -75,6 +75,9 @@ changed file is:
   included); not `.pyi`, `.pyx`, `.pxd`, `.so` / `.pyd`, data files;
 - not a manifest, lockfile, build script, runner configuration or toolchain pin (any other role, any global-table file,
   any file a `[[config]]` or `[[dynamic]]` declaration names);
+- not a symbolic link, not seen through one (a path under a directory link), and not the target of a link that is
+  part of the change: a recorder may have logged the link path instead of the target's, so link changes are never
+  narrowed (the JVM class layer applies the same guard);
 
 and no widening of the selection comes from the global table or has tier `full`.
 

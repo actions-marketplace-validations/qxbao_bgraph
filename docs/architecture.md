@@ -146,6 +146,7 @@ a change to `To` can affect `From`.
 | `fixture_data` | a data file a Go test names in a string literal |
 | `pattern` | a glob edge (below), including `//go:embed` patterns and the edges of `[[generated]]` and `[[dynamic]]` declarations |
 | `mock` | `jest.mock("./a")`, `vi.mock(...)`, Python `mock.patch("a.b")` |
+| `symlink` | a path that reads a file through a symbolic link (a file link, or a file under a directory link) depends on the target file |
 
 The kinds `mod`, `probe`, `generated` and `rule` are defined but not emitted today.
 
