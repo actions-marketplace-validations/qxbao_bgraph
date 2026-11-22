@@ -97,7 +97,7 @@ func T2DynMarkdown(rs []DynRepoResult, modes []string) string {
 		}
 	}
 	b.WriteString("\n## Hybrid selection vs the mutation oracle\n\nsel = selected units / units (median). \"widened\" = mutants whose static selection has at least one widened unit.\n\n")
-	b.WriteString("| repo | mode | mutants (killed) | widened | static viol. | hybrid viol. | med sel static (all / widened) | med sel hybrid (all / widened) | narrowed mutants | units removed | guard skips | kept widened units |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| repo | mode | mutants (killed) | widened | static viol. | hybrid viol. | hybrid-only viol. | med sel static (all / widened) | med sel hybrid (all / widened) | narrowed mutants | units removed | guard skips | kept widened units |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	totalViol := 0
 	for _, r := range rs {
 		if r.Error != "" {
@@ -105,7 +105,7 @@ func T2DynMarkdown(rs []DynRepoResult, modes []string) string {
 			continue
 		}
 		for _, mode := range modes {
-			var n, killed, wid, sv, hv, nar, removed int
+			var n, killed, wid, sv, hv, ho, nar, removed int
 			var sAll, sWid, hAll, hWid []float64
 			skips, kept := map[string]int{}, map[string]int{}
 			for _, c := range r.Checks {
@@ -120,8 +120,15 @@ func T2DynMarkdown(rs []DynRepoResult, modes []string) string {
 				if c.Status == "killed" {
 					killed++
 				}
-				sv += len(c.Static.Missed)
-				hv += len(h.Missed)
+				if len(c.Static.Missed) > 0 {
+					sv++
+				}
+				if len(h.Missed) > 0 {
+					hv++
+				}
+				if len(hybridOnly(c.Static, h)) > 0 {
+					ho++
+				}
 				s, hy := ratio(c.Static.Selected, c.Units), ratio(h.Selected, c.Units)
 				if c.Static.Scope == "full" {
 					s = 1
@@ -145,17 +152,17 @@ func T2DynMarkdown(rs []DynRepoResult, modes []string) string {
 					kept[k] += v
 				}
 			}
-			totalViol += hv
-			fmt.Fprintf(&b, "| %s | %s | %d (%d) | %d | %d | %d | %s / %s | %s / %s | %d | %d | %s | %s |\n", r.Repo, mode, n, killed, wid, sv, hv,
+			totalViol += ho
+			fmt.Fprintf(&b, "| %s | %s | %d (%d) | %d | %d | %d | %d | %s / %s | %s / %s | %d | %d | %s | %s |\n", r.Repo, mode, n, killed, wid, sv, hv, ho,
 				med(sAll), med(sWid), med(hAll), med(hWid), nar, removed, histo(skips), histo(kept))
 		}
 	}
-	fmt.Fprintf(&b, "\nHybrid violations in total: **%d**\n", totalViol)
+	fmt.Fprintf(&b, "\nViolations are counted in mutants. Hybrid-only violations (a red file the static selection covers but the hybrid one does not): **%d**\n", totalViol)
 	for _, r := range rs {
 		for _, c := range r.Checks {
 			for mode, h := range c.Hybrid {
-				if len(h.Missed) > 0 {
-					fmt.Fprintf(&b, "- VIOLATION %s %s (%s): missed %v\n", r.Repo, c.Mutant, mode, h.Missed)
+				if ho := hybridOnly(c.Static, h); len(ho) > 0 {
+					fmt.Fprintf(&b, "- HYBRID VIOLATION %s %s (%s): missed %v\n", r.Repo, c.Mutant, mode, ho)
 				}
 			}
 		}
@@ -285,4 +292,30 @@ func WriteDynJSON(dir, name string, v any) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(dir, name), b, 0o644)
+}
+
+// hybridOnly lists the red files the hybrid selection misses although the static one covers them.
+func hybridOnly(static, hybrid DynSel) []string {
+	var out []string
+	for _, f := range hybrid.Missed {
+		if !slicesContains(static.Missed, f) {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// HybridViolations counts the mutant checks with a hybrid-only violation.
+func HybridViolations(rs []DynRepoResult) int {
+	n := 0
+	for _, r := range rs {
+		for _, c := range r.Checks {
+			for _, h := range c.Hybrid {
+				if len(hybridOnly(c.Static, h)) > 0 {
+					n++
+				}
+			}
+		}
+	}
+	return n
 }

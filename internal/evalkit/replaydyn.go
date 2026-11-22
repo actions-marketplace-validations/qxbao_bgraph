@@ -29,6 +29,9 @@ type DynReplayConfig struct {
 	Sample   int // commits to verify by running the removed units
 	Jobs     int
 	Rerecord bool
+	// Fresh: also evaluate records made at each P (the parent of the replayed commit) with trust_native_env, as a CI that
+	// records the base branch would provide; only for widened commits whose guards pass (mode "fresh").
+	Fresh bool
 }
 
 // DynVerify is the test-run check of one replayed commit.
@@ -172,6 +175,10 @@ func RunDynReplay(ctx context.Context, cfg DynReplayConfig) DynReplayResult {
 		res.Commits = append(res.Commits, c)
 	}
 	logf("%d commits selected", len(res.Commits))
+	if cfg.Fresh {
+		freshPass(ctx, cfg, &res, root, py)
+		modes = append(modes, "fresh")
+	}
 	if cfg.Sample > 0 {
 		verifySample(ctx, cfg, &res, modes)
 	}
@@ -213,22 +220,20 @@ func verifySample(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult
 	wt := filepath.Join(cfg.T2.Dir, "dyn-wt", r.Dir+"-verify")
 	vr := r
 	vr.Dir = r.Dir + "-dynverify" // scratch directory of pySuite: cfg.Dir/tmp/<Dir>
-	vr.Env = append(slices.Clone(r.Env), pyDynEnv(wt, nil)...)
 	for _, i := range pick {
 		c := &res.Commits[i]
 		v := &DynVerify{}
 		c.Verify = v
 		t0 := time.Now()
-		removed, err := removedUnits(ctx, cfg, root, c, modes)
-		if err != nil {
-			v.Err = err.Error()
-			continue
-		}
+		removed := removedUnits(c)
 		v.Removed = removed
 		run := func(rev string, files []string) (map[string]string, error) {
 			if err := localClone(ctx, root, wt, rev); err != nil {
 				return nil, err
 			}
+			// After the checkout: whether the layout has src/ decides PYTHONPATH (the clone's sources must shadow the editable
+			// install of the main checkout).
+			vr.Env = append(slices.Clone(r.Env), pyDynEnv(wt, nil)...)
 			pr, _, to, err := vr.pySuite(ctx, &cfg.T2, wt, 15*time.Minute, files, nil)
 			if err != nil {
 				return nil, err
@@ -252,7 +257,7 @@ func verifySample(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult
 			}
 		}
 		if len(v.FailC) > 0 {
-			atP, err := run(c.P, v.FailC)
+			atP, err := run(c.P, removed) // the same set: failures can depend on which files run together
 			if err != nil {
 				v.Err = err.Error()
 				continue
@@ -283,27 +288,61 @@ func verifySample(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult
 	}
 }
 
-// removedUnits re-selects c to list the units each mode removed (union).
-func removedUnits(ctx context.Context, cfg DynReplayConfig, root string, c *DynReplayCommit, modes []string) ([]string, error) {
+// removedUnits is the union of the units each mode removed on c.
+func removedUnits(c *DynReplayCommit) []string {
 	var out []string
-	state := filepath.Join(cfg.T2.Dir, "dyn-state-replay", cfg.Repo.Dir)
-	for _, mode := range modes {
-		if c.Hybrid[mode].Narrowed == 0 {
-			continue
-		}
-		ix, err := openDyn(ctx, root, state, cfg.Repo.pyPython(&cfg.T2), mode)
-		if err != nil {
-			return nil, err
-		}
-		sel, err := ix.Select(ctx, bgraph.Change{Base: c.P, Head: c.C, Dynamic: bgraph.DynamicOn})
-		ix.Close()
-		if err != nil {
-			return nil, err
-		}
-		for _, n := range sel.Narrowed {
-			out = append(out, n.Unit)
-		}
+	for _, h := range c.Hybrid {
+		out = append(out, h.Removed...)
 	}
 	slices.Sort(out)
-	return slices.Compact(out), nil
+	return slices.Compact(out)
+}
+
+// freshPass records at P (trust_native_env) for every widened commit whose guards pass and selects it again (mode "fresh").
+func freshPass(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult, root, py string) {
+	r := cfg.Repo
+	wt := filepath.Join(cfg.T2.Dir, "dyn-wt", r.Dir+"-fresh")
+	state := filepath.Join(cfg.T2.Dir, "dyn-state-fresh", r.Dir)
+	n := 0
+	for i := range res.Commits {
+		c := &res.Commits[i]
+		h, ok := c.Hybrid["trust"]
+		if c.Err != "" || c.Widened == 0 || !ok || (h.Skip != "" && SkipClass(h.Skip) != "no records") {
+			continue
+		}
+		if ctx.Err() != nil {
+			return
+		}
+		if err := localClone(ctx, root, wt, c.P); err != nil {
+			c.Err = "fresh clone: " + err.Error()
+			continue
+		}
+		rix, err := openDyn(ctx, wt, state, py, "trust")
+		if err != nil {
+			c.Err = err.Error()
+			continue
+		}
+		t0 := time.Now()
+		_, err = rix.Record(ctx, bgraph.RecordOptions{Jobs: cfg.Jobs, Timeout: 10 * time.Minute, Env: pyDynEnv(wt, r.Env)})
+		rix.Close()
+		if err != nil {
+			c.Err = "fresh record: " + err.Error()
+			continue
+		}
+		ix, err := openDyn(ctx, root, state, py, "trust")
+		if err != nil {
+			c.Err = err.Error()
+			continue
+		}
+		d, _, err := dynSelect(ctx, ix, bgraph.Change{Base: c.P, Head: c.C, Dynamic: bgraph.DynamicOn}, nil)
+		ix.Close()
+		if err != nil {
+			c.Err = err.Error()
+			continue
+		}
+		c.Hybrid["fresh"] = d
+		n++
+		cfg.T2.logf("%s replay: fresh %s recorded in %s, selected %d/%d (narrowed %d)", r.Name, short(c.C), time.Since(t0).Round(time.Second), d.Selected, c.Units, d.Narrowed)
+	}
+	cfg.T2.logf("%s replay: fresh records for %d commits", r.Name, n)
 }

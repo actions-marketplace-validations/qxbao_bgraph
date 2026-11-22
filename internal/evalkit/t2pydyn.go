@@ -92,9 +92,10 @@ type DynSel struct {
 	Scope    string         `json:"scope"`
 	Selected int            `json:"selected"`
 	Narrowed int            `json:"narrowed"`
-	Skip     string         `json:"skip,omitempty"`   // dynamic_skipped detail (guard, no records, interpreter)
-	Kept     map[string]int `json:"kept,omitempty"`   // why widened units were kept (reason class -> count)
-	Missed   []string       `json:"missed,omitempty"` // oracle-red files outside this selection (violation)
+	Removed  []string       `json:"removed,omitempty"` // the narrowed units
+	Skip     string         `json:"skip,omitempty"`    // dynamic_skipped detail (guard, no records, interpreter)
+	Kept     map[string]int `json:"kept,omitempty"`    // why widened units were kept (reason class -> count)
+	Missed   []string       `json:"missed,omitempty"`  // oracle-red files outside this selection (violation)
 }
 
 // keptClass reduces a SelectedTest.Dynamic note to a class for histograms.
@@ -126,6 +127,9 @@ func dynSelect(ctx context.Context, ix *bgraph.Index, ch bgraph.Change, red []st
 		return DynSel{}, sel, err
 	}
 	d := DynSel{Scope: string(sel.Scope), Selected: len(sel.Tests), Narrowed: len(sel.Narrowed)}
+	for _, n := range sel.Narrowed {
+		d.Removed = append(d.Removed, n.Unit)
+	}
 	for _, w := range sel.Warnings {
 		if w.Reason == model.ReasonDynamicSkipped {
 			if d.Skip != "" {
