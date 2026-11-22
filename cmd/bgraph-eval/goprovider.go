@@ -65,12 +65,19 @@ func cmdGoProvider(ctx context.Context, args []string) error {
 				}
 				mu.Lock()
 				all = append(all, res)
+				writeGoProvider(*out, all)
 				fmt.Printf("%-34s %.10s %-7s modules=%d failed=%d listed=%d units=%d edges=%d embeds=%d %s\n", res.Repo, res.Commit, res.GOOS, res.Modules, len(res.Failed), res.Listed, res.Units, res.Edges, res.Embeds, verdict)
 				mu.Unlock()
 			}
 		}(r)
 	}
 	wg.Wait()
+	return writeGoProvider(*out, all)
+}
+
+// writeGoProvider writes go-provider.json and go-provider.md (called after every result so a long run leaves partial output).
+func writeGoProvider(out string, all []evalkit.GoProviderResult) error {
+	all = append([]evalkit.GoProviderResult(nil), all...)
 	sort.Slice(all, func(i, j int) bool {
 		if all[i].Repo != all[j].Repo {
 			return all[i].Repo < all[j].Repo
@@ -108,13 +115,13 @@ func cmdGoProvider(ctx context.Context, args []string) error {
 			fmt.Fprintf(&md, "- MISMATCH %s\n", m)
 		}
 	}
-	if *out != "" {
-		if err := os.MkdirAll(*out, 0o755); err != nil {
+	if out != "" {
+		if err := os.MkdirAll(out, 0o755); err != nil {
 			return err
 		}
 		b, _ := json.MarshalIndent(all, "", " ")
-		os.WriteFile(filepath.Join(*out, "go-provider.json"), b, 0o644)
-		return os.WriteFile(filepath.Join(*out, "go-provider.md"), []byte(md.String()), 0o644)
+		os.WriteFile(filepath.Join(out, "go-provider.json"), b, 0o644)
+		return os.WriteFile(filepath.Join(out, "go-provider.md"), []byte(md.String()), 0o644)
 	}
 	return nil
 }
