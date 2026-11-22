@@ -37,8 +37,9 @@
 // //go:embed patterns and test string literals still reach files there (they do not depend on ownership). A Go test that reads such
 // a file through a path built at run time is not seen: the same gap class as run-time-built paths in general.
 //
-// A test that builds or runs another package of the repository by a literal path ("../cmd/x", "./cmd/...") depends on that
-// package's whole closure. A prebuilt binary referenced by a path that does not exist in the tree (e.g. "../../../alertmanager",
+// A test that builds or runs another package of the repository by a literal path or import path ("../cmd/x", "./cmd/...",
+// "example.com/m/cmd/x", also as a token of a longer literal such as "go run ./cmd/x"), or a testscript file under testdata/
+// (*.txtar, script/*.txt) whose `go` or `exec` lines name an in-repo import path, depends on that package's whole closure. A prebuilt binary referenced by a path that does not exist in the tree (e.g. "../../../alertmanager",
 // built by a Makefile before the tests run) is not seen: a gap, like run-time-built paths.
 //
 // # Known over-selection
@@ -69,7 +70,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-5"
+const AnalyzerVersion = "go-6"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -485,6 +486,9 @@ func (b *builder) analyzePackage(p *pkg) {
 			b.fixtures(p, unit, sr.Go.Strings)
 		}
 	}
+	if p.tests && !p.vendor {
+		b.scripts(p, unit)
+	}
 	for _, f := range p.owned {
 		b.edge(lib, f, model.EdgeImplicit, "package file", 0)
 		b.role(f, model.RoleData)
@@ -598,46 +602,122 @@ func embedGlob(pat string) string {
 	return sb.String()
 }
 
-// fixtures adds fixture_data edges for the string literals of a test file that name an existing path of the repository, relative to
-// the package directory (go test runs in it). The package's own directory and its ancestors are not data references.
+// fixtures adds the edges of the string literals of a test file. Each literal, and each of its white-space separated tokens (a
+// literal may hold a whole command line, "go run ./cmd/x"), is tried as:
 //
-// A literal naming a package directory ("../cmd/x", as in `go build ../cmd/x` or `go run`) also makes the unit depend on that
-// package's library node, so the whole closure of the program the test builds is an input. A "dir/..." literal (a go command
-// package pattern) makes the unit depend on every package below dir, its own directory and ancestors included.
+//   - a path relative to the package directory (go test runs in it) naming an existing file or directory: a fixture_data edge (a
+//     pattern edge for a directory). The package's own directory and its ancestors are not data references;
+//   - a package directory ("../cmd/x", as in `go build ../cmd/x` or `go run`): also the package's library node, so the whole closure
+//     of the program the test builds is an input; "dir/..." (a go command package pattern) names every package below dir;
+//   - an in-repo import path ("example.com/m/cmd/x", "example.com/m/cmd/..."): the library node of the package(s) it names.
 func (b *builder) fixtures(p *pkg, unit string, strs []string) {
 	for _, s := range strs {
 		s = strings.ReplaceAll(s, "\\", "/")
-		if strings.HasPrefix(s, "/") || strings.Contains(s, "://") || (len(s) > 1 && s[1] == ':') {
-			continue
-		}
-		all := false
-		if s == "..." {
-			s, all = ".", true
-		} else if t, ok := strings.CutSuffix(s, "/..."); ok {
-			s, all = t, true
-		}
-		target := path.Join(p.dir, s)
-		if target == ".." || strings.HasPrefix(target, "../") {
-			continue
-		}
-		if all {
-			for d := range b.pkgs {
-				if eco.Within(d, target) && d != p.dir && !b.pkgs[d].vendor {
-					b.edge(unit, LibNode(d), model.EdgeImplicit, "test builds packages "+s+"/...", 0)
-				}
+		b.pathLiteral(p, unit, s)
+		toks := strings.Fields(s)
+		if len(toks) > 1 {
+			for _, tok := range toks {
+				b.pathLiteral(p, unit, tok)
 			}
+		}
+		for _, tok := range toks {
+			b.importLiteral(unit, tok)
+		}
+	}
+}
+
+// pathLiteral handles one literal (or token) as a path relative to the package directory.
+func (b *builder) pathLiteral(p *pkg, unit, s string) {
+	if s == "" || strings.HasPrefix(s, "/") || strings.Contains(s, "://") || (len(s) > 1 && s[1] == ':') {
+		return
+	}
+	all := false
+	if s == "..." {
+		s, all = ".", true
+	} else if t, ok := strings.CutSuffix(s, "/..."); ok {
+		s, all = t, true
+	}
+	target := path.Join(p.dir, s)
+	if target == ".." || strings.HasPrefix(target, "../") {
+		return
+	}
+	if all {
+		b.packagesBelow(unit, target, p.dir, s+"/...")
+		return
+	}
+	if eco.Within(p.dir, target) {
+		return
+	}
+	switch {
+	case b.t.Has(target):
+		b.edge(unit, target, model.EdgeFixtureData, s, 0)
+	case b.t.IsDir(target):
+		b.edge(unit, dirGlob(target), model.EdgePattern, "fixture directory "+s, 0)
+		if b.pkgs[target] != nil {
+			b.edge(unit, LibNode(target), model.EdgeImplicit, "test may build package "+s, 0)
+		}
+	}
+}
+
+// importLiteral handles one token as an in-repo import path or "<import path>/..." pattern.
+func (b *builder) importLiteral(unit, tok string) {
+	if tok == "" || strings.ContainsAny(tok, "@\\") || tok[0] == '.' || tok[0] == '/' || tok[0] == '-' || !strings.Contains(tok, "/") {
+		return
+	}
+	pat, all := strings.CutSuffix(tok, "/...")
+	for _, c := range b.ms.candidates(pat) {
+		if all {
+			b.packagesBelow(unit, c, "", tok)
+		} else if b.pkgs[c] != nil && !b.pkgs[c].vendor {
+			b.edge(unit, LibNode(c), model.EdgeImplicit, "test may build package "+tok, 0)
+		}
+	}
+}
+
+// packagesBelow makes unit depend on the library node of every non-vendored package in directory dir or below it, except self.
+func (b *builder) packagesBelow(unit, dir, self, spec string) {
+	for d, q := range b.pkgs {
+		if eco.Within(d, dir) && d != self && !q.vendor {
+			b.edge(unit, LibNode(d), model.EdgeImplicit, "test builds packages "+spec, 0)
+		}
+	}
+}
+
+// scriptExt: testscript files (txtar archives of shell-like commands run by rsc.io/script / testscript).
+func isScript(f string) bool {
+	switch path.Ext(f) {
+	case ".txtar":
+		return true
+	case ".txt":
+		switch path.Base(path.Dir(f)) {
+		case "script", "scripts", "testscript", "testscripts":
+			return true
+		}
+	}
+	return false
+}
+
+// scripts reads the testscript files under testdata/ owned by package p: the in-repo import paths named on `go ...` and `exec ...`
+// command lines make the unit depend on those packages (a script may build and run them).
+func (b *builder) scripts(p *pkg, unit string) {
+	for _, f := range p.owned {
+		if !hasTestdata(f) || !isScript(f) {
 			continue
 		}
-		if eco.Within(p.dir, target) {
+		src, err := b.t.Read(f)
+		if err != nil {
 			continue
 		}
-		switch {
-		case b.t.Has(target):
-			b.edge(unit, target, model.EdgeFixtureData, s, 0)
-		case b.t.IsDir(target):
-			b.edge(unit, dirGlob(target), model.EdgePattern, "fixture directory "+s, 0)
-			if b.pkgs[target] != nil {
-				b.edge(unit, LibNode(target), model.EdgeImplicit, "test may build package "+s, 0)
+		for _, line := range strings.Split(string(src), "\n") {
+			fs := strings.Fields(line)
+			for len(fs) > 0 && (fs[0] == "!" || fs[0] == "?" || strings.HasPrefix(fs[0], "[")) {
+				fs = fs[1:]
+			}
+			if len(fs) < 2 || (fs[0] != "go" && fs[0] != "exec") {
+				continue
+			}
+			for _, tok := range fs[1:] {
+				b.importLiteral(unit, strings.Trim(tok, "'\""))
 			}
 		}
 	}
