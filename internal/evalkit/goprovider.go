@@ -264,7 +264,16 @@ func compareGoList(root string, pkgs []goListPkg, mods []string, a *eco.Analysis
 	for _, u := range a.Tests {
 		units[u.ID] = true
 	}
-	byImp := map[string]string{} // import path -> repo-relative dir
+	byImp := map[string][]string{} // import path -> repo-relative dirs (several when two modules declare the same path)
+	modOf := func(dir string) string {
+		best := ""
+		for _, m := range mods {
+			if (m == "." || dir == m || strings.HasPrefix(dir, m+"/")) && len(m) >= len(best) {
+				best = m
+			}
+		}
+		return best
+	}
 	var inRepo []goListPkg
 	for _, p := range pkgs {
 		if p.Standard || p.Dir == "" {
@@ -280,7 +289,7 @@ func compareGoList(root string, pkgs []goListPkg, mods []string, a *eco.Analysis
 		if p.Error != nil {
 			r.PkgErrs++
 		}
-		byImp[p.ImportPath] = d
+		byImp[p.ImportPath] = append(byImp[p.ImportPath], d)
 		inRepo = append(inRepo, p)
 	}
 	modPaths := map[string]bool{}
@@ -298,7 +307,10 @@ func compareGoList(root string, pkgs []goListPkg, mods []string, a *eco.Analysis
 	r.Listed = len(inRepo)
 	listedDirs := map[string]bool{}
 	for _, p := range inRepo {
-		d := byImp[p.ImportPath]
+		d := rel(p.Dir)
+		if d == "" {
+			d = "."
+		}
 		listedDirs[d] = true
 		if len(p.TestGoFiles)+len(p.XTestGoFiles) > 0 {
 			r.WithTst++
@@ -308,16 +320,30 @@ func compareGoList(root string, pkgs []goListPkg, mods []string, a *eco.Analysis
 		}
 		check := func(kind string, start string, imps []string) {
 			for _, imp := range imps {
-				dq, ok := byImp[imp]
-				if !ok {
+				dqs := byImp[imp]
+				if len(dqs) == 0 {
 					if inRepoPath(imp) {
 						r.Unlisted++
 					}
 					continue
 				}
+				// Prefer the declaration in the importer's own module; with several candidates reaching any of them is enough.
+				var same []string
+				for _, dq := range dqs {
+					if modOf(dq) == modOf(d) {
+						same = append(same, dq)
+					}
+				}
+				if len(same) > 0 {
+					dqs = same
+				}
 				r.Edges++
-				if !g.from(start)[golang.LibNode(dq)] {
-					diffs = append(diffs, fmt.Sprintf("%s edge %s -> %s (%s) not reachable from %s", kind, d, dq, imp, start))
+				ok := false
+				for _, dq := range dqs {
+					ok = ok || g.from(start)[golang.LibNode(dq)]
+				}
+				if !ok {
+					diffs = append(diffs, fmt.Sprintf("%s edge %s -> %v (%s) not reachable from %s", kind, d, dqs, imp, start))
 				}
 			}
 		}
