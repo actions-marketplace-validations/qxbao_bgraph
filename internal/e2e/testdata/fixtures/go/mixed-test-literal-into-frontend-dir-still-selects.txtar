@@ -1,0 +1,80 @@
+A Go test naming a file of the Node project in a string literal depends on it: literal edges do not depend on ownership.
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+	"os"
+)
+
+func TestX(t *testing.T) { os.ReadFile("../web/src/a.ts") }
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/go.sum --
+golang.org/x/text v0.3.0 h1:abc=
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/web/src/a.ts --
+export const a = 2
+-- want --
+select web/src/a.test.ts
+select go:c
+noselect go:a
+noselect go:b

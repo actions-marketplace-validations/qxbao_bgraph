@@ -147,3 +147,15 @@ func TestParseModFile(t *testing.T) {
 		t.Fatalf("uses %v", got)
 	}
 }
+
+func TestForeignRoots(t *testing.T) {
+	got := foreignRoots([]string{"go.mod", "main.go", "package.json", "web/package.json", "web/src/a.ts", "py/pyproject.toml",
+		"svc/App.csproj", "mixed/package.json", "mixed/tools/gen.go", "node_modules/x/package.json"})
+	want := map[string]bool{"web": true, "py": true, "svc": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("foreign roots %v, want %v", got, want)
+	}
+	if !underForeign("web/src", got) || underForeign("mixed/tools", got) || underForeign(".", got) {
+		t.Fatal("underForeign")
+	}
+}

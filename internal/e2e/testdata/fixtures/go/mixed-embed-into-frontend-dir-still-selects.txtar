@@ -1,0 +1,99 @@
+A Go package embedding checked-in files under a package.json directory still depends on them: embed edges do not depend on ownership.
+-- base/a/a.go --
+package a
+
+import (
+	"example.com/m/b"
+)
+
+func A() { b.B() }
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/c/c.go --
+package c
+
+func F() {}
+-- base/c/c_test.go --
+package c
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/d/d.go --
+package d
+
+import (
+	"example.com/m/a"
+)
+
+func D() { a.A() }
+-- base/d/d_test.go --
+package d
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/go.sum --
+golang.org/x/text v0.3.0 h1:abc=
+-- base/ui/ui.go --
+package ui
+
+import (
+	"embed"
+)
+
+//go:embed web/dist
+var dist embed.FS
+-- base/ui/ui_test.go --
+package ui
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/ui/web/dist/index.js --
+console.log(1)
+-- base/ui/web/package.json --
+{"name":"ui"}
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.test.ts --
+import { a } from './a'
+void a
+-- base/web/src/a.ts --
+export const a = 1
+-- head/ui/web/dist/index.js --
+console.log(2)
+-- want --
+select go:ui
+noselect go:a
+noselect go:c

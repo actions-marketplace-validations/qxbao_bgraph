@@ -30,6 +30,17 @@
 // two modules depends on both), then against the module's vendor/ directory. An in-repo path with no package becomes a virtual node
 // "<goimp:path>" with a pattern edge to the .go files of the directory a package would live in, so a package added later is caught.
 // Paths no module claims are the standard library (no dot) or external (go.sum widens their changes).
+//
+// A directory subtree that holds another ecosystem's project manifest (package.json, pyproject.toml, setup.py, setup.cfg, Cargo.toml,
+// pom.xml, build.gradle(.kts), settings.gradle(.kts), *.csproj/*.fsproj/*.vbproj) and no .go file anywhere below it is not owned by
+// Go: its files are neither package files nor module-level files, so a frontend change under a root go.mod selects no Go unit.
+// //go:embed patterns and test string literals still reach files there (they do not depend on ownership). A Go test that reads such
+// a file through a path built at run time is not seen: the same gap class as run-time-built paths in general.
+//
+// # Known over-selection
+//
+// A module-level widening (go.mod, go.sum, vendor/ change) and an unresolved import that fires on any change in a module are scoped
+// to the module directory, and a scope cannot exclude sub-directories: modules nested inside it are selected (or fire) too.
 package golang
 
 import (
@@ -54,7 +65,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-3"
+const AnalyzerVersion = "go-4"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -287,6 +298,7 @@ func (b *builder) assign() {
 		ownerOf[d] = p
 		return p
 	}
+	foreign := foreignRoots(files)
 	b.orphans = map[string][]string{}
 	b.hidden = map[string]string{}
 	for _, f := range files {
@@ -301,7 +313,7 @@ func (b *builder) assign() {
 		if q := b.pkgs[d]; q != nil && strings.HasSuffix(f, ".go") {
 			continue // a .go file of a package: analyzed with the package
 		}
-		if b.excluded(f, m) {
+		if b.excluded(f, m) || underForeign(d, foreign) {
 			continue
 		}
 		if strings.HasSuffix(f, ".go") && b.hidden[d] == "" {
@@ -322,6 +334,57 @@ func (b *builder) assign() {
 			continue
 		}
 		b.orphans[m.dir] = append(b.orphans[m.dir], f)
+	}
+}
+
+// foreignManifests are the project manifests of the other ecosystems.
+var foreignManifests = map[string]bool{"package.json": true, "pyproject.toml": true, "setup.py": true, "setup.cfg": true,
+	"Cargo.toml": true, "pom.xml": true, "build.gradle": true, "build.gradle.kts": true, "settings.gradle": true,
+	"settings.gradle.kts": true}
+
+func isForeignManifest(base string) bool {
+	switch path.Ext(base) {
+	case ".csproj", ".fsproj", ".vbproj":
+		return true
+	}
+	return foreignManifests[base]
+}
+
+// foreignRoots returns the directories that hold another ecosystem's project manifest and no .go file anywhere below them.
+func foreignRoots(files []string) map[string]bool {
+	hasGo := map[string]bool{}
+	for _, f := range files {
+		if !strings.HasSuffix(f, ".go") {
+			continue
+		}
+		for d := path.Dir(f); !hasGo[d]; d = path.Dir(d) {
+			hasGo[d] = true
+			if d == "." || d == "/" || d == "" {
+				break
+			}
+		}
+	}
+	out := map[string]bool{}
+	for _, f := range files {
+		if d := path.Dir(f); isForeignManifest(path.Base(f)) && !hasGo[d] && !underNodeModules(f) {
+			out[d] = true
+		}
+	}
+	return out
+}
+
+// underForeign: directory d lies in the subtree of a foreign root.
+func underForeign(d string, roots map[string]bool) bool {
+	if len(roots) == 0 {
+		return false
+	}
+	for ; ; d = path.Dir(d) {
+		if roots[d] {
+			return true
+		}
+		if d == "." || d == "/" || d == "" {
+			return false
+		}
 	}
 }
 

@@ -30,6 +30,9 @@
 #               "none"         -> the change affects no test                            (NARROWING)
 #                                 Only accepted for files nothing imports: if a file in `paths` is part of the
 #                                 import graph, the rule is ignored and reported as rule_rejected.
+#             Go units are addressed by their module: a directory target selects the Go packages of every module whose
+#             directory (the one holding go.mod) lies under it, so name a module directory, "." or "all". A package
+#             directory inside a module (e.g. "internal/api") or a glob over .go files selects no Go unit.
 #   reason  : free text, shown in explanations. Strongly recommended; nothing checks it.
 # ---------------------------------------------------------------------------------------------------------------------
 

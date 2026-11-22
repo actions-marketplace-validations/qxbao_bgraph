@@ -1,4 +1,4 @@
-A Node project inside the Go module's directory (and under no Go package) is module-level data for Go: a Go test may read it at run time, so every package of the module is selected (over-selection, sound).
+A Node project inside the Go module's directory with no .go file below it is not owned by Go: a frontend change selects no Go unit.
 -- base/a/a.go --
 package a
 
@@ -74,7 +74,6 @@ export const a = 1
 export const a = 2
 -- want --
 select web/src/a.test.ts
-select go:a
-select go:c
+noselect go:a
+noselect go:c
 notfull
-nowiden manifest_changed

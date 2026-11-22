@@ -51,7 +51,12 @@ Status: six ecosystems.
   imports do not parse is selected on any change in its module. `go.mod` changes are
   diffed structurally (comments and `retract` are harmless; `module` widens every Go unit; other directives widen the module and
   the modules that build with it through `go.work` or a local `replace`); `go.sum` and `vendor/` widen their module; `.go` files
-  under no `go.mod` widen to full. `bgraph command` emits one `go test ./a ./b/c` per module, run in the module directory.
+  under no `go.mod` widen to full. A sub-tree holding another ecosystem's manifest (`package.json`, `pyproject.toml`, `Cargo.toml`,
+  `pom.xml`, Gradle scripts, .NET project files...) and no `.go` file is not owned by Go, so a frontend change under a root `go.mod`
+  selects no Go unit; `//go:embed` patterns and test string literals still reach files there (a Go test reading them through a
+  path built at run time is not seen). A module-level widening also selects modules nested in the module's directory. In
+  `bgraph.toml` rules, Go units are addressed by module directory (or `"."` / `"all"`), not by package directory.
+  `bgraph command` emits one `go test ./a ./b/c` per module, run in the module directory.
 
 Other ecosystems are not supported yet: changes there widen to `full`.
 
