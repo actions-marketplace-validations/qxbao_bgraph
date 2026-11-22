@@ -155,6 +155,9 @@ func ParsePnpm(dir string, data []byte) (*Graph, error) {
 		} else {
 			n.Scripts = meta["requiresBuild"] == true
 		}
+		if meta["hasBin"] == true {
+			n.Bins = []string{"*"}
+		}
 		if pd, ok := meta["peerDependencies"].(map[string]any); ok && len(pd) > 0 {
 			n.Peer = true
 		}

@@ -211,6 +211,14 @@ func l2Seeds(d *lockfile.Diff, pr string, edges []model.Edge, mentions func(stri
 	if len(dc.Deps) == 0 {
 		return nil, "no direct dependency carries the change"
 	}
+	for _, b := range dc.Bins {
+		if b == "*" {
+			return nil, "a changed package installs executables whose names the lockfile does not record"
+		}
+		if f := mentions(b); f != "" {
+			return nil, fmt.Sprintf("executable %q of a changed package is named in %s", b, f)
+		}
+	}
 	// Imports from files whose nearest lockfile project is pr (a nested workspace package resolves its own copy).
 	var lockProjects []eco.Project
 	for dir := range d.Head.Projects {

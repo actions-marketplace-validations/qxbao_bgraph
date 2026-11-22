@@ -122,6 +122,15 @@ func ParseNpm(dir string, data []byte) (*Graph, error) {
 			}
 		}
 		n.Scripts = e["hasInstallScript"] == true
+		switch b := e["bin"].(type) {
+		case map[string]any:
+			for k := range b {
+				n.Bins = append(n.Bins, k)
+			}
+			sort.Strings(n.Bins)
+		case string:
+			n.Bins = []string{n.Name}
+		}
 		if pd, ok := e["peerDependencies"].(map[string]any); ok && len(pd) > 0 {
 			n.Peer = true
 		}

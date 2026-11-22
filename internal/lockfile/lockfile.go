@@ -44,6 +44,8 @@ type Node struct {
 	Scripts bool
 	// Peer: the package has peer dependencies (its resolution depends on its dependents).
 	Peer bool
+	// Bins: the executables the package installs (npm "bin"); "*" when it has some whose names are not recorded (pnpm hasBin).
+	Bins []string
 	// Local: a local (non-registry) package: a workspace link, a file: or path dependency.
 	Local bool
 }
@@ -237,6 +239,9 @@ type Direct struct {
 	Deps []string
 	// Risky: when not empty, the change cannot be narrowed to importers of Deps (level L2 falls back to L1) and says why.
 	Risky string
+	// Bins: executables installed by the packages that differ in the project's closure ("*": names not recorded); a script
+	// that runs one is not an import.
+	Bins []string
 }
 
 // DirectChanges computes the direct dependencies of project dir whose closure changed.
@@ -284,11 +289,15 @@ func (d *Diff) DirectChanges(dir string) Direct {
 	for _, id := range hc {
 		hIdent[d.Head.ident(id)] = true
 	}
+	bins := map[string]bool{}
 	check := func(g *Graph, ids []string, other map[string]bool) string {
 		for _, id := range ids {
 			n, ok := g.Nodes[id]
 			if !ok || other[n.Ident] {
 				continue
+			}
+			for _, b := range n.Bins {
+				bins[b] = true
 			}
 			switch {
 			case n.Scripts && g.ScriptsKnown:
@@ -307,6 +316,10 @@ func (d *Diff) DirectChanges(dir string) Direct {
 	if r := check(d.Head, hc, bIdent); r != "" {
 		return Direct{Deps: out.Deps, Risky: r}
 	}
+	for b := range bins {
+		out.Bins = append(out.Bins, b)
+	}
+	slices.Sort(out.Bins)
 	return out
 }
 
