@@ -1,6 +1,9 @@
 package evalkit
 
 import (
+	"os"
+	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -24,5 +27,19 @@ func TestDynEco(t *testing.T) {
 		if got := dynEco(T2Repo{Eco: eco}); got != want {
 			t.Errorf("%q: %q", eco, got)
 		}
+	}
+}
+
+func TestNodeModulesDirs(t *testing.T) {
+	root := t.TempDir()
+	for _, d := range []string{"node_modules/a/node_modules", "packages/x/node_modules/y", "packages/x/src", ".git/node_modules", "a/b/c/d/node_modules"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(d)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got := nodeModulesDirs(root)
+	want := []string{"node_modules", filepath.FromSlash("packages/x/node_modules")}
+	if !slices.Equal(got, want) {
+		t.Errorf("%v, want %v", got, want)
 	}
 }

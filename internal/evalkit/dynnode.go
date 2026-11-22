@@ -3,9 +3,11 @@ package evalkit
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/qxbao/bgraph"
@@ -48,25 +50,62 @@ func isLink(p string) bool {
 	return err == nil
 }
 
-// dynClone is localClone for r: a Node clone's node_modules link is removed before `git clean -fdx` (which must never walk into
-// the main checkout's packages) and made again afterwards.
+// nodeModulesDirs lists the node_modules directories (or links) of root, relative, down to a few levels (workspace packages
+// have their own), without descending into any of them or into .git.
+func nodeModulesDirs(root string) []string {
+	var out []string
+	filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil || p == root {
+			return nil
+		}
+		rel, _ := filepath.Rel(root, p)
+		name := d.Name()
+		switch {
+		case name == "node_modules":
+			out = append(out, rel)
+			return filepath.SkipDir
+		case name == ".git":
+			return filepath.SkipDir
+		case d.IsDir() && strings.Count(rel, string(filepath.Separator)) >= 3:
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	return out
+}
+
+// dynClone is localClone for r: a Node clone's node_modules links (one per node_modules directory of the main checkout: the root
+// and each workspace package) are removed before `git clean -fdx`, which must never walk into the main checkout's packages, and
+// made again afterwards, so that the clone sees the same installed packages (and environment fingerprint) as the checkout.
 func dynClone(ctx context.Context, r T2Repo, src, dst, rev string) error {
 	if dynEco(r) != "node" {
 		return localClone(ctx, src, dst, rev)
 	}
-	link := filepath.Join(dst, "node_modules")
-	if isLink(link) {
-		if err := os.Remove(link); err != nil || isLink(link) {
-			return fmt.Errorf("cannot unlink %s before cleaning the clone: %v", link, err)
+	if _, err := os.Stat(dst); err == nil {
+		for _, rel := range nodeModulesDirs(dst) {
+			link := filepath.Join(dst, rel)
+			if isLink(link) {
+				if err := os.Remove(link); err != nil || isLink(link) {
+					return fmt.Errorf("cannot unlink %s before cleaning the clone: %v", link, err)
+				}
+			}
 		}
 	}
 	if err := localClone(ctx, src, dst, rev); err != nil {
 		return err
 	}
-	target := filepath.Join(src, "node_modules")
-	if err := os.Symlink(target, link); err != nil {
-		if out, err2 := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err2 != nil {
-			return fmt.Errorf("link node_modules: %v / %v %s", err, err2, out)
+	for _, rel := range nodeModulesDirs(src) {
+		link, target := filepath.Join(dst, rel), filepath.Join(src, rel)
+		if _, err := os.Stat(filepath.Dir(link)); err != nil {
+			continue // the package does not exist at rev
+		}
+		if _, err := os.Lstat(link); err == nil {
+			continue
+		}
+		if err := os.Symlink(target, link); err != nil {
+			if out, err2 := exec.Command("cmd", "/c", "mklink", "/J", link, target).CombinedOutput(); err2 != nil {
+				return fmt.Errorf("link node_modules: %v / %v %s", err, err2, out)
+			}
 		}
 	}
 	return nil
