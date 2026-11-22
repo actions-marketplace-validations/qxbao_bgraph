@@ -35,6 +35,9 @@ type Record struct {
 	Incomplete string            `json:"incomplete,omitempty"` // why not complete
 	Pass       bool              `json:"pass"`                 // the unit's run passed (exit 0)
 	Recorded   time.Time         `json:"recorded"`
+	// Toolchain: native addons of the Node toolchain allowlist the run loaded ("name@version", docs/dynamic.md §8.3), for
+	// transparency only.
+	Toolchain []string `json:"toolchain,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.
