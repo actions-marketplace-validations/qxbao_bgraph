@@ -28,6 +28,7 @@ __pycache__/
 # Editors and OS
 .idea/
 .vscode/
+.claude/worktrees/
 *.swp
 .DS_Store
 Thumbs.db
