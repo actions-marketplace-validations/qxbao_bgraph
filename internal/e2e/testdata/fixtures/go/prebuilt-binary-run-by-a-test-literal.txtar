@@ -1,0 +1,44 @@
+A test runs "../bin/tool.exe", a program built from cmd/tool before the tests; the path is not in the tree. A change to cmd/tool
+selects the test. A literal naming an existing file, or a bare program name looked up on PATH, adds no such edge.
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/cmd/tool/main.go --
+package main
+
+func main() {}
+-- base/cmd/git/main.go --
+package main
+
+func main() {}
+-- base/e2e/e2e_test.go --
+package e2e
+
+import (
+	"os/exec"
+	"testing"
+)
+
+func TestTool(t *testing.T) {
+	_ = exec.Command("../bin/tool.exe", "x")
+	_ = exec.Command("git", "status")
+}
+-- base/lib/lib.go --
+package lib
+
+func L() {}
+-- base/lib/lib_test.go --
+package lib
+
+import "testing"
+
+func TestL(t *testing.T) {}
+-- head/cmd/tool/main.go --
+package main
+
+func main() { println("v2") }
+-- want --
+select go:e2e
+noselect go:lib
+notfull

@@ -149,8 +149,8 @@ type ScanResult struct {
 type GoScan struct {
 	Package string    `json:"package,omitempty"`
 	Embeds  []GoEmbed `json:"embeds,omitempty"`
-	// Strings: in _test.go files only, the string literals that may name a path (they contain '/', '\' or '.'), plus the joined
-	// literal leading arguments of X.Join("a", "b", ...) calls ("a/b").
+	// Strings: in _test.go files, the string literals that may name a path (they contain '/', '\' or '.'), plus the joined
+	// literal leading arguments of X.Join("a", "b", ...) calls ("a/b"); in other files, only those starting with "./" or "../".
 	Strings []string `json:"strings,omitempty"`
 }
 

@@ -1,0 +1,50 @@
+An acceptance test runs a program the Makefile builds at the repository root ("../../../alertmanager" from the helper package
+it imports, a path that is not in the tree). A change to the program's main package (or anything it imports) selects the test.
+-- base/go.mod --
+module example.com/am
+
+go 1.22
+-- base/cmd/alertmanager/main.go --
+package main
+
+import "example.com/am/notify"
+
+func main() { notify.Send() }
+-- base/notify/notify.go --
+package notify
+
+func Send() {}
+-- base/test/testutils/acceptance.go --
+package testutils
+
+import "os/exec"
+
+func Run(args ...string) *exec.Cmd { return exec.Command("../../../alertmanager", args...) }
+-- base/test/with_api/acceptance/api_test.go --
+package acceptance
+
+import (
+	"testing"
+
+	"example.com/am/test/testutils"
+)
+
+func TestAPI(t *testing.T) { _ = testutils.Run("--version") }
+-- base/other/other.go --
+package other
+
+func O() {}
+-- base/other/other_test.go --
+package other
+
+import "testing"
+
+func TestO(t *testing.T) {}
+-- head/notify/notify.go --
+package notify
+
+func Send() { println("v2") }
+-- want --
+select go:test/with_api/acceptance
+noselect go:other
+notfull

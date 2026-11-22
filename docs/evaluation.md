@@ -88,7 +88,7 @@ All numbers come from single runs on Windows 11. Median selection is selected un
 | Python | 270 (holdout 86) | 0 | 0 % | 1.000 (dev 0.992) | 1.1 % (holdout 3.5 %) |
 | JVM | 243 (holdout 81) | 0 | 5 % (dev 7 %, holdout 1 %) | 0.94 (holdout 0.82) | holdout 3.7 % |
 | .NET | 248 (holdout 75) | 0 (6 oracle artefacts) | 5 % | 0.89 (holdout 0.80) | holdout 4.0 % |
-| Go | 243 (dev 169, holdout 74) | 1 (dev; 27 hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
+| Go | 243 (dev 169, holdout 74) | 0 (26 oracle artefacts, hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
 
 Notes per ecosystem:
 
@@ -107,11 +107,11 @@ Notes per ecosystem:
 - **.NET** (SWE-Sharp-Bench and SWE-bench-Live, 55 repositories). The 6 violations were classified as oracle artefacts:
   the required test's file is untouched by the test patch and the gold patch changes a project outside the test
   project's transitive `ProjectReference` closure, or only documentation.
-- **Go** (Multi-SWE-bench, SWE-bench-Live MultiLang, SWE-bench Multilingual; 97 repositories). All 27 violations were
-  checked against `go list -deps -test` at C: 10 are name-ambiguity artefacts, 16 are FAIL_TO_PASS entries whose packages
-  have no changed file in their closure (flaky or timing tests), and 1 is a real gap: an acceptance test executes a binary
-  built by a Makefile through a relative path (`../../../alertmanager`), which no import or literal names. Median
-  selection time 46 ms.
+- **Go** (Multi-SWE-bench, SWE-bench-Live MultiLang, SWE-bench Multilingual; 97 repositories). All 26 violations were
+  checked against `go list -deps -test` at C: 10 are name-ambiguity artefacts and 16 are FAIL_TO_PASS entries whose
+  packages have no changed file in their closure (flaky or timing tests). An acceptance test that executes a binary built
+  by a Makefile through a relative path (`../../../alertmanager`, from a helper package) was a real gap; it is now covered
+  by tying such paths to the main package of that name. Median selection time 46 ms.
 
 ### T2 mutation summary
 

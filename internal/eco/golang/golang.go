@@ -39,8 +39,10 @@
 //
 // A test that builds or runs another package of the repository by a literal path or import path ("../cmd/x", "./cmd/...",
 // "example.com/m/cmd/x", also as a token of a longer literal such as "go run ./cmd/x"), or a testscript file under testdata/
-// (*.txtar, script/*.txt) whose `go` or `exec` lines name an in-repo import path, depends on that package's whole closure. A prebuilt binary referenced by a path that does not exist in the tree (e.g. "../../../alertmanager",
-// built by a Makefile before the tests run) is not seen: a gap, like run-time-built paths.
+// (*.txtar, script/*.txt) whose `go` or `exec` lines name an in-repo import path, depends on that package's whole closure. A
+// program built before the tests run (by a Makefile) and run by a relative path that does not exist in the tree
+// ("../../../alertmanager", in a test or in a helper package the test imports) is tied to the main packages `go build` names
+// after the path's last element (binaryLiteral); a program found by another name or by a path built at run time is a gap.
 //
 // # Known over-selection
 //
@@ -72,7 +74,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-8"
+const AnalyzerVersion = "go-9"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -206,6 +208,8 @@ type builder struct {
 	// hidden: directory holding .go files that the go command does not match with ./... (under testdata/, _x/, .x/) → the node
 	// that owns them. Such a directory can still be imported by an explicit path.
 	hidden map[string]string
+	// bins: program name → directories of the main packages `go build` names so (see binaries); nil until first needed.
+	bins map[string][]string
 }
 
 func (b *builder) edge(from, to string, kind model.EdgeKind, spec string, line int) {
@@ -486,6 +490,10 @@ func (b *builder) analyzePackage(p *pkg) {
 		}
 		if test {
 			b.fixtures(p, unit, sr.Go.Strings)
+		} else {
+			for _, s := range sr.Go.Strings {
+				b.binaryLiteral(p, from, s)
+			}
 		}
 	}
 	if p.tests && !p.vendor {
@@ -650,6 +658,7 @@ func (b *builder) pathLiteral(p *pkg, unit, s string) {
 	if eco.Within(p.dir, target) {
 		return
 	}
+	b.binaryLiteral(p, unit, s)
 	switch {
 	case b.t.Has(target):
 		b.edge(unit, target, model.EdgeFixtureData, s, 0)
@@ -659,6 +668,71 @@ func (b *builder) pathLiteral(p *pkg, unit, s string) {
 			b.edge(unit, LibNode(target), model.EdgeImplicit, "test may build package "+s, 0)
 		}
 	}
+}
+
+// binaryLiteral handles a relative path literal that names no file or directory of the tree but whose last element is the name of
+// a program built from the repository ("../../../alertmanager", "./bin/amtool.exe"; not a bare "./x"), typically built by a Makefile before the
+// tests run): from (a test unit, or the library node of a helper package that runs the program for the tests) depends on the
+// closure of every main package `go build` would name so. The literal's directory is not resolved: a helper runs it relative to
+// the directory of whichever test calls it.
+func (b *builder) binaryLiteral(p *pkg, from, s string) {
+	// "../x" (up from the package directory) or "./dir/x"; a bare "./x" is as often a working-directory data path ("./caddy").
+	if rest, ok := strings.CutPrefix(s, "./"); ok && !strings.Contains(strings.TrimPrefix(rest, "./"), "/") {
+		return
+	} else if !ok && !strings.HasPrefix(s, "../") {
+		return
+	}
+	if t := path.Join(p.dir, s); b.t.Has(t) || b.t.IsDir(t) {
+		return
+	}
+	name := strings.TrimSuffix(path.Base(s), ".exe")
+	if name == "" || name == "." || name == ".." {
+		return
+	}
+	for _, d := range b.binaries()[name] {
+		if d != p.dir {
+			b.edge(from, LibNode(d), model.EdgeImplicit, "may run the program built from "+d+" ("+s+")", 0)
+		}
+	}
+}
+
+// binaries maps a program name to the directories of the non-vendored main packages `go build` names so: the directory's last
+// element, or for a module's root directory the last element of the module path (before a /vN major-version suffix).
+func (b *builder) binaries() map[string][]string {
+	if b.bins != nil {
+		return b.bins
+	}
+	b.bins = map[string][]string{}
+	for d, q := range b.pkgs {
+		if q.vendor {
+			continue
+		}
+		for _, f := range q.gofs {
+			if strings.HasSuffix(f, "_test.go") {
+				continue
+			}
+			sr, err := b.sc.Scan(b.t, f)
+			if err != nil || sr.Go == nil {
+				continue
+			}
+			if sr.Go.Package == "main" {
+				name := path.Base(d)
+				if d == q.mod.dir && q.mod.path != "" {
+					elems := strings.Split(q.mod.path, "/")
+					name = elems[len(elems)-1]
+					if len(elems) > 1 && len(name) > 1 && name[0] == 'v' && strings.Trim(name[1:], "0123456789") == "" {
+						name = elems[len(elems)-2]
+					}
+				}
+				b.bins[name] = append(b.bins[name], d)
+			}
+			break
+		}
+	}
+	for _, ds := range b.bins {
+		slices.Sort(ds)
+	}
+	return b.bins
 }
 
 // importLiteral handles one token as an in-repo import path or "<import path>/..." pattern.

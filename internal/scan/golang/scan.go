@@ -8,6 +8,7 @@
 package golang
 
 import (
+	"bytes"
 	"go/parser"
 	"go/scanner"
 	"go/token"
@@ -46,10 +47,22 @@ func Scan(p string, src []byte) model.ScanResult {
 		r.Imports = append(r.Imports, model.ImportRef{Spec: v, Kind: model.ImportStatic, Line: fset.Position(im.Path.Pos()).Line})
 	}
 	isTest := strings.HasSuffix(path.Base(p), "_test.go")
-	if !isTest && !strings.Contains(string(src), "go:embed") {
+	if isTest {
+		r.Go.Embeds, r.Go.Strings = tokens(src, true)
 		return r
 	}
-	r.Go.Embeds, r.Go.Strings = tokens(src, isTest)
+	// Other files: embeds, and the relative-path literals ("../../bin/x", "./cmd/x") a helper may run a built program by.
+	rel := bytes.Contains(src, []byte(`"./`)) || bytes.Contains(src, []byte(`"../`)) || bytes.Contains(src, []byte(`".."`))
+	if !rel && !bytes.Contains(src, []byte("go:embed")) {
+		return r
+	}
+	var strs []string
+	r.Go.Embeds, strs = tokens(src, rel)
+	for _, v := range strs {
+		if strings.HasPrefix(v, "./") || strings.HasPrefix(v, "../") {
+			r.Go.Strings = append(r.Go.Strings, v)
+		}
+	}
 	return r
 }
 

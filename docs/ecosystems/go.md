@@ -88,6 +88,11 @@ The **unit** of a package depends on its library and on:
   - each white-space separated token of a longer literal (`"go run ../cmd/x -v"`),
   - import paths on `go` and `exec` lines of testscript files under the package's `testdata/` (`*.txtar`, and `*.txt` under
     `script/`, `scripts/`, `testscript/`, `testscripts/`).
+- programs built from the repository before the tests run (by a Makefile) and run by a relative path that is not in the tree,
+  such as `exec.Command("../../../server")`: the main packages whose `go build` output has that name (the directory name, or for
+  a module's root package the last element of the module path), with their whole import closure. The literal may sit in a test
+  file or in a non-test helper package the test imports (the helper's library then depends on the program, so every test
+  importing it does). A bare name (`"git"`) is looked up on `PATH` and adds nothing.
 
 Imports resolve as follows:
 
@@ -224,8 +229,9 @@ Go has no `[[dynamic]]` or `[[config]]` declarations. See [configuration](../con
 - **Paths built at run time** are not seen, beyond `X.Join` calls whose leading arguments are literals: a test (or a non-test helper
   package) reading a file through a computed path, including a file in another ecosystem's sub-tree or documentation in a package
   directory, may be missed.
-- **Prebuilt binaries**: a test that executes a binary by a path that does not exist in the tree (built by a Makefile before the
-  tests run, such as `"../../../server"`) does not depend on that binary's sources.
+- **Prebuilt binaries under another name**: a program run by a relative path is tied to its sources only when the path's last
+  element is the name `go build` gives a main package; a binary renamed by the build (`go build -o bin/srv ./cmd/server`) or found
+  through a path built at run time is not seen.
 - **GOPATH layout** is not analyzed: such files widen to `full`.
 
 ## See also

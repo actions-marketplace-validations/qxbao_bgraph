@@ -57,8 +57,10 @@ func FuzzScan(f *testing.F) {
 				t.Fatalf("bad embed %+v", e)
 			}
 		}
-		if !test && len(a.Go.Strings) != 0 {
-			t.Fatalf("strings in a non-test file: %q", a.Go.Strings)
+		for _, s := range a.Go.Strings {
+			if !test && !strings.HasPrefix(s, "./") && !strings.HasPrefix(s, "../") {
+				t.Fatalf("non-relative string in a non-test file: %q", s)
+			}
 		}
 		for _, s := range a.Go.Strings {
 			if s == "" || strings.ContainsAny(s, "\n\r\x00") || !strings.ContainsAny(s, "/\\.") {

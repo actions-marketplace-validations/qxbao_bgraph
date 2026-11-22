@@ -1,0 +1,37 @@
+A library's "./caddy" literal (a fallback data directory relative to the working directory) names no built program, although
+cmd/caddy is a main package: a change to cmd/caddy does not select the library's importers.
+-- base/go.mod --
+module example.com/caddy
+
+go 1.22
+-- base/storage.go --
+package caddy
+
+func DataDir() string { return "./caddy" }
+-- base/cmd/caddy/main.go --
+package main
+
+import "example.com/caddy"
+
+func main() { _ = caddy.DataDir() }
+-- base/modules/http/http.go --
+package http
+
+import "example.com/caddy"
+
+func H() string { return caddy.DataDir() }
+-- base/modules/http/http_test.go --
+package http
+
+import "testing"
+
+func TestH(t *testing.T) { _ = H() }
+-- head/cmd/caddy/main.go --
+package main
+
+import "example.com/caddy"
+
+func main() { println(caddy.DataDir()) }
+-- want --
+noselect go:modules/http
+notfull
