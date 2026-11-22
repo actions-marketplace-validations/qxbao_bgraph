@@ -13,9 +13,8 @@
   <a href="https://github.com/qxbao/bgraph/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/qxbao/bgraph/ci.yml?branch=main&style=flat&labelColor=0F172A&color=14B8A6&logo=githubactions&logoColor=white&label=CI" alt="CI"></a>
   <a href="https://github.com/qxbao/bgraph/releases/latest"><img src="https://img.shields.io/github/v/release/qxbao/bgraph?style=flat&labelColor=0F172A&color=14B8A6&label=release" alt="Latest release"></a>
   <a href="https://github.com/qxbao/bgraph/releases"><img src="https://img.shields.io/github/downloads/qxbao/bgraph/total?style=flat&labelColor=0F172A&color=14B8A6" alt="Downloads"></a>
-  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/qxbao/bgraph?style=flat&labelColor=0F172A&color=14B8A6&logo=go&logoColor=white" alt="Go version"></a>
-  <a href="https://pkg.go.dev/github.com/qxbao/bgraph"><img src="https://img.shields.io/badge/go-reference-14B8A6?style=flat&labelColor=0F172A&logo=go&logoColor=white" alt="Go Reference"></a>
-  <a href="https://goreportcard.com/report/github.com/qxbao/bgraph"><img src="https://goreportcard.com/badge/github.com/qxbao/bgraph" alt="Go Report Card"></a>
+  <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/qxbao/bgraph?style=flat&labelColor=0F172A&color=14B8A6&logo=go&logoColor=white&label=built%20with%20Go" alt="Built with Go"></a>
+  <a href="https://pkg.go.dev/github.com/qxbao/bgraph"><img src="https://img.shields.io/badge/API%20docs-pkg.go.dev-14B8A6?style=flat&labelColor=0F172A" alt="API docs on pkg.go.dev"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-F59E0B?style=flat&labelColor=0F172A" alt="License: Apache-2.0"></a>
   <br>
   <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go"></a>
