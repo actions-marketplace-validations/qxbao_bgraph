@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: bump whenever the analysis/resolution rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "node-22"
+const AnalyzerVersion = "node-23"
 
 // Eco is the Node ecosystem.
 type Eco struct {
@@ -399,6 +399,11 @@ func (e *Eco) addImport(a *eco.Analysis, r *resolve.Resolver, t tree.Tree, from,
 			a.Edges = append(a.Edges, model.Edge{From: from, To: f, Kind: model.EdgeMock, Line: imp.Line, Spec: imp.Spec, Provenance: model.ProvScan})
 		}
 		if res.Class != resolve.ClassInternal {
+			// L2: the mock may load the real package (jest.requireActual, which resolves to the mock path here too).
+			if res.Class == resolve.ClassExternal && res.Package != "" && e.lockLevel() == rules.LockL2 {
+				a.Edges = append(a.Edges, model.Edge{From: from, To: pkgNode(res.Package), Kind: edgeKind(imp.Kind), Line: imp.Line, Spec: imp.Spec,
+					Provenance: model.ProvScan})
+			}
 			return // external/generated/unknown: at test run time Jest loads the mock, not this module
 		}
 		res.AlsoGenerated = false
