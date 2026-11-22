@@ -64,10 +64,13 @@ func main() {
 		}
 	case "replay":
 		err = cmdReplay(ctx, os.Args[2:])
-	case "t2dyn", "replaydyn":
+	case "t2dyn", "replaydyn", "jvmdyn":
 		cmd := cmdT2Dyn
 		if os.Args[1] == "replaydyn" {
 			cmd = cmdReplayDyn
+		}
+		if os.Args[1] == "jvmdyn" {
+			cmd = cmdJVMDyn
 		}
 		var code int
 		code, err = cmd(ctx, os.Args[2:])
