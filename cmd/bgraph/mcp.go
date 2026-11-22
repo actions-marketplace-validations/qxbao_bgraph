@@ -36,7 +36,7 @@ func runMCP(args []string, stderr io.Writer) int {
 		return 1
 	}
 	defer ix.Close()
-	if err := mcpserver.Run(ctx, ix, version); err != nil && ctx.Err() == nil {
+	if err := mcpserver.Run(ctx, ix, buildVersion()); err != nil && ctx.Err() == nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}

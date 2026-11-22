@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -22,7 +23,19 @@ import (
 	"github.com/qxbao/bgraph/internal/runner"
 )
 
-const version = "0.1.0-dev"
+// version is set at release time (-ldflags "-X main.version=..."); see buildVersion for other builds.
+var version = "dev"
+
+// buildVersion returns the release version, else the module version recorded by `go install module@version`, else "dev".
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if bi, ok := debug.ReadBuildInfo(); ok && bi.Main.Version != "" && bi.Main.Version != "(devel)" {
+		return strings.TrimPrefix(bi.Main.Version, "v")
+	}
+	return version
+}
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -42,7 +55,7 @@ Usage:
   bgraph dynamic import [--root DIR] FILE
   bgraph dynamic status [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--json]
   bgraph doctor                (not implemented)
-  bgraph version | help
+  bgraph version | --version | help
 `
 
 // run is the testable entry point: it returns the exit code.
@@ -57,7 +70,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprint(stdout, usage)
 		return 0
 	case "version", "--version":
-		fmt.Fprintln(stdout, "bgraph", version)
+		fmt.Fprintln(stdout, "bgraph", buildVersion())
 		return 0
 	case "mcp":
 		return runMCP(rest, stderr)

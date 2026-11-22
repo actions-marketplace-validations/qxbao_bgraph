@@ -14,7 +14,7 @@ repository; default `.`).
 | [`record`](#record) | record per-test dependencies for the dynamic layer |
 | [`dynamic import`, `dynamic status`](#dynamic) | manage dynamic-layer records |
 | [`mcp`](#mcp) | MCP server on stdio |
-| `version`, `help` | print the version or the usage |
+| [`version`](#version), `help` | print the version or the usage |
 
 `bgraph doctor` is reserved: it prints "not implemented" and exits with code `2`.
 
@@ -272,3 +272,10 @@ counts give the real size. The `widening`, `warnings`, `narrowed` and `unresolve
 ```
 
 With Claude Code: `claude mcp add bgraph -- bgraph mcp --root /path/to/repo`.
+
+## `version`
+
+`bgraph version` (or `bgraph --version`) prints `bgraph <version>`. Release binaries carry the release version (for
+example `bgraph 0.1.0`); a binary built with `go install github.com/qxbao/bgraph/cmd/bgraph@<version>` reports the module
+version; other source builds report the version Go stamps from the checkout, or `dev`. The MCP server announces the
+same version.

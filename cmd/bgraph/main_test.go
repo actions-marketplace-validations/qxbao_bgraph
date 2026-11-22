@@ -120,3 +120,12 @@ func TestCLIDynamicUsage(t *testing.T) {
 		}
 	}
 }
+
+func TestCLIVersion(t *testing.T) {
+	for _, arg := range []string{"version", "--version"} {
+		var o, e bytes.Buffer
+		if code := run([]string{arg}, &o, &e); code != 0 || !strings.HasPrefix(o.String(), "bgraph ") || strings.TrimSpace(o.String()) == "bgraph" {
+			t.Errorf("%s: exit %d, output %q", arg, code, o.String())
+		}
+	}
+}

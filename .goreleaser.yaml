@@ -1,0 +1,49 @@
+# GoReleaser configuration (https://goreleaser.com). Run by .github/workflows/release.yml on a v* tag.
+# Local check: goreleaser check && goreleaser release --snapshot --clean
+version: 2
+
+project_name: bgraph
+
+builds:
+  - id: bgraph
+    main: ./cmd/bgraph
+    binary: bgraph
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: bgraph
+    ids: [bgraph]
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - THIRD_PARTY_LICENSES
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  # GitHub-generated release notes (merged pull requests and new contributors since the previous tag).
+  use: github-native
+
+release:
+  github:
+    owner: qxbao
+    name: bgraph
+  prerelease: auto
