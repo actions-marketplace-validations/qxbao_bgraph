@@ -330,7 +330,7 @@ its arguments; each only receives contents or lists files):
 |---|---|---|
 | `esbuild` | `esbuild --service=<v> --ping` | vite's transform service: code is passed over stdin; its `build` (config bundling) is covered by rule 4 |
 | `vite` (Windows) | `cmd /d /s /c "net use"` | maps network drives for `realpath` |
-| `jest-haste-map` | `watchman ...`, `find ...` | file crawl (existence) |
+| `jest-haste-map` | `watchman ...`, `find ...` (also as an `execSync` command line, when it is one plain command: jest 22 runs `execSync('watchman --version')` even with `--no-watchman`) | file crawl (existence) |
 
 Not incomplete by themselves: `vm` contexts (jest's sandbox and `vm.runInContext` get their code from observed reads, and the
 `fs` they see is the patched module), worker threads and child Node processes that are observed, transform caches disabled by

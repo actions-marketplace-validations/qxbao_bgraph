@@ -117,9 +117,17 @@ func repoCode(root, caller string) bool {
 // or list files).
 func runnerSpawn(e event) bool {
 	pkg, _ := pkgOf(e.Caller)
-	base := strings.ToLower(filepath.Base(strings.ReplaceAll(e.File, "\\", "/")))
+	file, args := e.File, strings.Join(e.Args, " ")
+	if len(e.Args) == 0 && strings.ContainsAny(file, " \t") {
+		// execSync("watchman --version"): a shell command line; only a single plain command qualifies.
+		if strings.ContainsAny(file, ";&|<>`$()\n") {
+			return false
+		}
+		f := strings.Fields(file)
+		file, args = f[0], strings.Join(f[1:], " ")
+	}
+	base := strings.ToLower(filepath.Base(strings.ReplaceAll(file, "\\", "/")))
 	base = strings.TrimSuffix(base, ".exe")
-	args := strings.Join(e.Args, " ")
 	switch pkg {
 	case "esbuild":
 		return strings.HasPrefix(base, "esbuild") && strings.Contains(args, "--service=")

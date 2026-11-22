@@ -120,6 +120,8 @@ func TestAnalyzeIncomplete(t *testing.T) {
 		{"vite net use", []map[string]any{{"ev": "spawn", "token": "100-0-1", "pid": 300, "file": `C:\Windows\system32\cmd.exe`, "args": []string{"/d", "/s", "/c", `"net use"`}, "caller": vite}}, false, ""},
 		{"other cmd from vite", []map[string]any{{"ev": "spawn", "token": "100-0-1", "pid": 300, "file": `C:\Windows\system32\cmd.exe`, "args": []string{"/c", "tsc"}, "caller": vite}}, false, "spawns"},
 		{"jest watchman", []map[string]any{{"ev": "spawn", "token": "100-0-1", "sync": true, "file": "watchman", "args": []string{"--version"}, "caller": haste}}, false, ""},
+		{"jest 22 execSync watchman", []map[string]any{{"ev": "spawn", "token": "100-0-1", "sync": true, "file": "watchman --version", "caller": haste}}, false, ""},
+		{"shell command line with a pipe", []map[string]any{{"ev": "spawn", "token": "100-0-1", "sync": true, "file": "watchman --version | sh", "caller": haste}}, false, "spawns"},
 		{"worker without collector", []map[string]any{{"ev": "worker", "tid": 3, "caller": test}}, false, "worker thread without the collector"},
 		{"no hooks", []map[string]any{{"ev": "nohooks", "msg": "module.register is missing"}}, false, "no ESM loader hooks"},
 	}
