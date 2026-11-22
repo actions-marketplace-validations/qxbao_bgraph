@@ -5,17 +5,23 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"slices"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
+	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
+	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/node"
 	"github.com/qxbao/bgraph/internal/eco/python"
 	"github.com/qxbao/bgraph/internal/glob"
 	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/rules"
 	"github.com/qxbao/bgraph/internal/selector"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // DynamicRecord is one record of the dynamic layer (docs/dynamic.md §3).
@@ -23,8 +29,11 @@ type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
 type RecordOptions struct {
+	// Eco: the ecosystem to record ("python" or "node"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
+	// set, otherwise every ecosystem with a dynamic layer that has test units.
+	Eco        string
 	Units      string        // glob on unit IDs (test files); empty: every unit
-	Jobs       int           // parallel units; <= 0: half the CPUs
+	Jobs       int           // parallel units; <= 0: half the CPUs (Python), a quarter (Node)
 	Timeout    time.Duration // per unit; <= 0: 10 minutes
 	AllowDirty bool          // record a working tree that differs from HEAD (dependencies keyed by the content on disk)
 	// Out: write the records to this JSONL file (to import elsewhere with ImportRecords) instead of the state directory.
@@ -38,6 +47,7 @@ type RecordOptions struct {
 
 // RecordSummary is the outcome of Index.Record.
 type RecordSummary struct {
+	Ecos       []string       `json:"ecos"`
 	Units      int            `json:"units"`
 	Recorded   int            `json:"recorded"`
 	Complete   int            `json:"complete"`   // complete and passed: usable at the recorded commit
@@ -46,18 +56,17 @@ type RecordSummary struct {
 	Reasons    map[string]int `json:"reasons"`    // incomplete reasons (one count per record and reason)
 	Skipped    []string       `json:"skipped,omitempty"`
 	Commit     string         `json:"commit"`
-	Env        string         `json:"env"`
+	Env        string         `json:"env"` // fingerprint of the last recorded ecosystem
 	Store      string         `json:"store"`
 	Elapsed    time.Duration  `json:"elapsed"`
 	Warnings   []string       `json:"warnings,omitempty"`
+	// Toolchain: allowlisted native addons loaded by the recorded Node units, with their number of records
+	// (docs/dynamic.md §8.3).
+	Toolchain map[string]int `json:"toolchain,omitempty"`
 }
 
 // recordUnits lists the Python test units of the working tree.
-func (ix *Index) recordUnits(ctx context.Context) ([]pydyn.Unit, []string, *analyzed, error) {
-	an, err := ix.analyzeRev(ctx, "")
-	if err != nil {
-		return nil, nil, nil, err
-	}
+func (ix *Index) recordUnits(an *analyzed) ([]pydyn.Unit, []string) {
 	var units []model.TestUnit
 	for _, a := range an.Analyses {
 		for _, u := range a.Tests {
@@ -79,14 +88,93 @@ func (ix *Index) recordUnits(ctx context.Context) ([]pydyn.Unit, []string, *anal
 		}
 		out = append(out, pydyn.Unit{ID: u.ID, Project: u.Project, Runner: u.Runner, Config: u.Config, Files: u.Files})
 	}
-	return out, skipped, an, nil
+	return out, skipped
 }
 
-// Record runs every Python test unit of the working tree in its own process with the collector and stores the records
-// (docs/dynamic.md §4). It refuses a working tree that differs from HEAD unless AllowDirty.
+// nodeRecordUnits lists the Node test units of the working tree, with the incomplete reasons known before running them
+// (docs/dynamic.md §8.3 rule 4: a vite/vitest config with an import bgraph cannot resolve; a jest config naming a hasteImpl).
+func (ix *Index) nodeRecordUnits(an *analyzed) ([]nodedyn.Unit, []string) {
+	var units []model.TestUnit
+	var badVite, hasteImpl []string // directories of such configs
+	for _, a := range an.Analyses {
+		for _, u := range a.Tests {
+			if u.Eco == node.Name {
+				units = append(units, u)
+			}
+		}
+		for _, un := range a.Unresolved {
+			if node.ViteConfig(un.File) {
+				badVite = append(badVite, path.Dir(un.File))
+			}
+		}
+	}
+	for _, p := range an.Tree.Files() {
+		if node.InNodeModules(p) || !(node.JestConfigFile(p) || path.Base(p) == "package.json") {
+			continue
+		}
+		if b, err := an.Tree.Read(p); err == nil && strings.Contains(string(b), "hasteImplModulePath") {
+			hasteImpl = append(hasteImpl, path.Dir(p))
+		}
+	}
+	related := func(proj string, dirs []string) bool {
+		for _, d := range dirs {
+			if eco.Within(proj, d) || eco.Within(d, proj) {
+				return true
+			}
+		}
+		return false
+	}
+	var out []nodedyn.Unit
+	var skipped []string
+	for _, u := range selector.DedupUnits(units) {
+		switch {
+		case u.Whole:
+			skipped = append(skipped, u.ID+": whole-project unit (test files unknown)")
+			continue
+		case u.Runner == "playwright":
+			skipped = append(skipped, u.ID+": browser runner (playwright)")
+			continue
+		}
+		nu := nodedyn.Unit{ID: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files}
+		if u.Runner == "vitest" && related(u.Project, badVite) {
+			nu.Incomplete = append(nu.Incomplete, "the vite/vitest configuration has imports bgraph cannot resolve (bundled natively)")
+		}
+		if u.Runner == "jest" && related(u.Project, hasteImpl) {
+			nu.Incomplete = append(nu.Incomplete, "jest hasteImplModulePath (content-derived haste names)")
+		}
+		out = append(out, nu)
+	}
+	return out, skipped
+}
+
+// recordEcos returns the ecosystems Record records.
+func recordEcos(opt RecordOptions, rf *rules.File, an *analyzed) ([]string, error) {
+	if opt.Eco != "" {
+		if !dynamic.Supported(opt.Eco) {
+			return nil, fmt.Errorf("ecosystem %q has no dynamic layer", opt.Eco)
+		}
+		return []string{opt.Eco}, nil
+	}
+	if rf != nil && len(rf.Dynamic.Ecosystems) > 0 {
+		return rf.Dynamic.Ecosystems, nil
+	}
+	var ecos []string
+	for _, e := range rules.DynamicEcosystems {
+		for _, a := range an.Analyses {
+			if slices.ContainsFunc(a.Tests, func(u model.TestUnit) bool { return u.Eco == e }) {
+				ecos = append(ecos, e)
+				break
+			}
+		}
+	}
+	return ecos, nil
+}
+
+// Record runs every test unit of the working tree in its own process (tree) with the collector of its ecosystem and stores the
+// records (docs/dynamic.md §4, §8). It refuses a working tree that differs from HEAD unless AllowDirty.
 func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, error) {
 	t0 := time.Now()
-	var sum RecordSummary
+	sum := RecordSummary{Reasons: map[string]int{}}
 	head, err := ix.repo.RevParse(ctx, "HEAD")
 	if err != nil {
 		return sum, err
@@ -113,56 +201,49 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 	if err != nil {
 		return sum, err
 	}
-	py, trust := ix.dynamicConfig(rf)
-	exe, err := pydyn.ResolvePython(ix.repo.Root, py)
-	if err != nil {
-		return sum, fmt.Errorf("python interpreter: %w", err)
-	}
-	in, err := ix.probes.Get(ctx, exe, ix.repo.Root, ix.tmpDir())
-	if err != nil {
-		return sum, fmt.Errorf("python interpreter: %w", err)
-	}
-	collector := pydyn.Collector(trust)
-	env := pydyn.Fingerprint(collector, in.Lines, wt)
-	units, skipped, _, err := ix.recordUnits(ctx)
+	an, err := ix.analyzeRev(ctx, "")
 	if err != nil {
 		return sum, err
 	}
+	keep := func(string) bool { return true }
 	if opt.Units != "" {
 		pat, err := glob.Compile(opt.Units)
 		if err != nil {
 			return sum, fmt.Errorf("--units: %w", err)
 		}
-		units = slices.DeleteFunc(units, func(u pydyn.Unit) bool { return !pat.Match(u.ID) })
+		keep = pat.Match
 	}
-	sum.Units, sum.Skipped, sum.Commit, sum.Env = len(units), skipped, head, env
-	if len(units) == 0 {
-		return sum, errors.New("no Python test unit to record")
-	}
-	jobs := opt.Jobs
-	if jobs <= 0 {
-		jobs = pydyn.DefaultJobs()
-	}
-	now := time.Now()
-	byID := map[string]pydyn.Unit{}
-	for _, u := range units {
-		byID[u.ID] = u
-	}
-	ropt := pydyn.RunOptions{Python: exe, Root: ix.repo.Root, TmpDir: ix.tmpDir(), Timeout: opt.Timeout, Jobs: jobs, TrustNative: trust, Env: opt.Env}
-	if opt.Progress != nil {
-		ropt.Progress = func(done, total int, o pydyn.Outcome) {
-			opt.Progress(done, total, pydyn.RecordOf(o, byID[o.Unit], wt, ix.repo.Root, env, collector, head, now), o.Elapsed, o.Tail)
-		}
-	}
-	outs, err := pydyn.Collect(ctx, ropt, units)
+	ecos, err := recordEcos(opt, rf, an)
 	if err != nil {
 		return sum, err
 	}
-	sum.Reasons = map[string]int{}
-	var recs []dynamic.Record
-	for i, o := range outs {
-		r := pydyn.RecordOf(o, units[i], wt, ix.repo.Root, env, collector, head, now)
-		recs = append(recs, r)
+	sum.Commit = head
+	now := time.Now()
+	stores := map[string][]dynamic.Record{}
+	var all []dynamic.Record
+	for _, e := range ecos {
+		var recs []dynamic.Record
+		var skipped []string
+		switch e {
+		case python.Name:
+			recs, skipped, err = ix.recordPython(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		case node.Name:
+			recs, skipped, err = ix.recordNode(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		}
+		sum.Skipped = append(sum.Skipped, skipped...)
+		if err != nil {
+			return sum, err
+		}
+		if len(recs) > 0 {
+			sum.Ecos = append(sum.Ecos, e)
+			stores[e] = recs
+			all = append(all, recs...)
+		}
+	}
+	if sum.Units == 0 {
+		return sum, errors.New("no test unit to record")
+	}
+	for _, r := range all {
 		sum.Recorded++
 		if !r.Pass {
 			sum.Failed++
@@ -175,21 +256,132 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 		} else if r.Pass {
 			sum.Complete++
 		}
+		for _, t := range r.Toolchain {
+			if sum.Toolchain == nil {
+				sum.Toolchain = map[string]int{}
+			}
+			sum.Toolchain[t]++
+		}
 	}
 	if opt.Out != "" {
 		sum.Store = opt.Out
-		err = dynamic.Save(opt.Out, dynamic.Merge(nil, recs))
+		err = dynamic.Save(opt.Out, dynamic.Merge(nil, all))
 	} else {
-		sum.Store = dynamic.StorePath(ix.stateDir, python.Name)
-		sum.Warnings, err = dynamic.Add(sum.Store, recs)
+		var paths []string
+		for _, e := range sum.Ecos {
+			p := dynamic.StorePath(ix.stateDir, e)
+			paths = append(paths, p)
+			w, aerr := dynamic.Add(p, stores[e])
+			sum.Warnings = append(sum.Warnings, w...)
+			if aerr != nil && err == nil {
+				err = aerr
+			}
+		}
+		sum.Store = strings.Join(paths, ", ")
 	}
 	sum.Elapsed = time.Since(t0)
 	return sum, err
 }
 
+// recordPython records the Python units (docs/dynamic.md §4).
+func (ix *Index) recordPython(ctx context.Context, opt RecordOptions, rf *rules.File, an *analyzed, wt tree.Tree, head string,
+	now time.Time, keep func(string) bool, sum *RecordSummary) ([]dynamic.Record, []string, error) {
+	units, skipped := ix.recordUnits(an)
+	units = slices.DeleteFunc(units, func(u pydyn.Unit) bool { return !keep(u.ID) })
+	if len(units) == 0 {
+		return nil, skipped, nil
+	}
+	py, _, trust := ix.dynamicConfig(rf)
+	exe, err := pydyn.ResolvePython(ix.repo.Root, py)
+	if err != nil {
+		return nil, skipped, fmt.Errorf("python interpreter: %w", err)
+	}
+	in, err := ix.probes.Get(ctx, exe, ix.repo.Root, ix.tmpDir())
+	if err != nil {
+		return nil, skipped, fmt.Errorf("python interpreter: %w", err)
+	}
+	collector := pydyn.Collector(trust)
+	env := pydyn.Fingerprint(collector, in.Lines, wt)
+	sum.Units += len(units)
+	sum.Env = env
+	jobs := opt.Jobs
+	if jobs <= 0 {
+		jobs = pydyn.DefaultJobs()
+	}
+	byID := map[string]pydyn.Unit{}
+	for _, u := range units {
+		byID[u.ID] = u
+	}
+	ropt := pydyn.RunOptions{Python: exe, Root: ix.repo.Root, TmpDir: ix.tmpDir(), Timeout: opt.Timeout, Jobs: jobs, TrustNative: trust, Env: opt.Env}
+	if opt.Progress != nil {
+		ropt.Progress = func(done, total int, o pydyn.Outcome) {
+			opt.Progress(done, total, pydyn.RecordOf(o, byID[o.Unit], wt, ix.repo.Root, env, collector, head, now), o.Elapsed, o.Tail)
+		}
+	}
+	outs, err := pydyn.Collect(ctx, ropt, units)
+	if err != nil {
+		return nil, skipped, err
+	}
+	recs := make([]dynamic.Record, 0, len(outs))
+	for i, o := range outs {
+		recs = append(recs, pydyn.RecordOf(o, units[i], wt, ix.repo.Root, env, collector, head, now))
+	}
+	return recs, skipped, nil
+}
+
+// recordNode records the Node units (docs/dynamic.md §8).
+func (ix *Index) recordNode(ctx context.Context, opt RecordOptions, rf *rules.File, an *analyzed, wt tree.Tree, head string,
+	now time.Time, keep func(string) bool, sum *RecordSummary) ([]dynamic.Record, []string, error) {
+	units, skipped := ix.nodeRecordUnits(an)
+	units = slices.DeleteFunc(units, func(u nodedyn.Unit) bool { return !keep(u.ID) })
+	if len(units) == 0 {
+		return nil, skipped, nil
+	}
+	_, nodeCfg, trust := ix.dynamicConfig(rf)
+	exe, err := nodedyn.ResolveNode(ix.repo.Root, nodeCfg)
+	if err != nil {
+		return nil, skipped, fmt.Errorf("node: %w", err)
+	}
+	probe, err := ix.nodeProbes.Get(ctx, exe, ix.repo.Root)
+	if err != nil {
+		return nil, skipped, fmt.Errorf("node: %w", err)
+	}
+	installed, _, err := nodedyn.Installed(ix.repo.Root, wt)
+	if err != nil {
+		return nil, skipped, err
+	}
+	collector := nodedyn.Collector(trust)
+	env := nodedyn.Fingerprint(collector, probe, installed, wt)
+	sum.Units += len(units)
+	sum.Env = env
+	jobs := opt.Jobs
+	if jobs <= 0 {
+		jobs = nodedyn.DefaultJobs()
+	}
+	byID := map[string]nodedyn.Unit{}
+	for _, u := range units {
+		byID[u.ID] = u
+	}
+	ropt := nodedyn.RunOptions{Node: exe, Root: ix.repo.Root, TmpDir: ix.tmpDir(), Timeout: opt.Timeout, Jobs: jobs, Trust: trust, Env: opt.Env}
+	if opt.Progress != nil {
+		ropt.Progress = func(done, total int, o nodedyn.Outcome) {
+			opt.Progress(done, total, nodedyn.RecordOf(o, byID[o.Unit], wt, ix.repo.Root, env, collector, head, now), o.Elapsed, o.Tail)
+		}
+	}
+	outs, err := nodedyn.Collect(ctx, ropt, units)
+	if err != nil {
+		return nil, skipped, err
+	}
+	recs := make([]dynamic.Record, 0, len(outs))
+	for i, o := range outs {
+		recs = append(recs, nodedyn.RecordOf(o, units[i], wt, ix.repo.Root, env, collector, head, now))
+	}
+	return recs, skipped, nil
+}
+
 // reasonKey drops the file name from per-file reasons so that the histogram groups them.
 func reasonKey(why string) string {
-	for _, pre := range []string{"reads untracked file ", "cannot hash ", "the unit's own file "} {
+	for _, pre := range []string{"reads untracked file ", "cannot hash ", "the unit's own file ", "native addon in the repository: "} {
 		if strings.HasPrefix(why, pre) {
 			return strings.TrimSpace(pre)
 		}
@@ -242,13 +434,21 @@ type DynamicStatus struct {
 	Warnings   []string       `json:"warnings,omitempty"`
 }
 
-// DynamicStatus reports the Python record store: records, how many are usable at HEAD, incomplete reasons.
+// DynamicStatus reports the Python record store (see DynamicStatusOf).
 func (ix *Index) DynamicStatus(ctx context.Context) (DynamicStatus, error) {
-	st := DynamicStatus{Eco: python.Name, Unusable: map[string]int{}, Reasons: map[string]int{}}
+	return ix.DynamicStatusOf(ctx, python.Name)
+}
+
+// DynamicStatusOf reports the record store of ecosystem eco: records, how many are usable at HEAD, incomplete reasons.
+func (ix *Index) DynamicStatusOf(ctx context.Context, eco string) (DynamicStatus, error) {
+	st := DynamicStatus{Eco: eco, Unusable: map[string]int{}, Reasons: map[string]int{}}
+	if !dynamic.Supported(eco) {
+		return st, fmt.Errorf("ecosystem %q has no dynamic layer", eco)
+	}
 	if ix.stateDir == "" {
 		return st, errors.New("no state directory")
 	}
-	st.Store = dynamic.StorePath(ix.stateDir, python.Name)
+	st.Store = dynamic.StorePath(ix.stateDir, eco)
 	recs, warn := dynamic.Load(st.Store)
 	st.Warnings = warn
 	st.Records = len(recs)
@@ -266,18 +466,18 @@ func (ix *Index) DynamicStatus(ctx context.Context) (DynamicStatus, error) {
 	}
 	for _, a := range an.Analyses {
 		for _, u := range a.Tests {
-			if u.Eco == python.Name && !u.Whole {
+			if u.Eco == eco && !u.Whole {
 				st.TestUnits++
 			}
 		}
 	}
-	env, collector, err := ix.pythonEnv(ctx, an.Rules, ht)
+	env, collector, err := ix.ecoEnv(ctx, eco, an.Rules, ht)
 	if err != nil {
 		st.EnvError = err.Error()
 	}
 	st.Env = env
 	units := map[string]bool{}
-	p := dynamic.Params{Eco: python.Name, Collector: collector, Env: env, BaseOID: func(p string) string {
+	p := dynamic.Params{Eco: eco, Collector: collector, Env: env, BaseOID: func(p string) string {
 		if !ht.Has(p) {
 			return ""
 		}

@@ -195,7 +195,7 @@ Report in `research/phase-6-<date>/README.md`.
 
 ## 8. Node
 
-Status: design (2026-11-22), not implemented yet. Sections 1–3 and 6 apply unchanged (eco `node`, unit ID = the test file path,
+Status: implemented (2026-11-22, `internal/dynamic/nodedyn`; evaluation in `research/phase-6-20261122/README.md`). Sections 1–3 and 6 apply unchanged (eco `node`, unit ID = the test file path,
 `TestUnit.Project` = the directory the runner adapter runs from). This section gives the Node counterparts of §2 (source files),
 §4 (collector), §5 (fingerprint) and §7 (evaluation). The experiments behind every assumption are listed in §8.7.
 
@@ -276,10 +276,12 @@ frame that is neither `node:` internal nor a traversal helper** (`graceful-fs`, 
   (haste names come from paths). A config naming `haste.hasteImplModulePath` (content-derived haste names) makes the record
   incomplete.
 - a listing is a dependency (every tracked file under the directory, recursively, as in §4) only when that frame is a repository
-  file outside `node_modules` (test code, sources, helpers). Listings by the runner, the resolver, config lookups or any package
-  decide which files exist; additions, deletions and renames are refused by §2. A listing whose frames are all helpers (fdir and
-  tinyglobby crawl through callbacks and lose the caller: vitest's test discovery and `import.meta.glob`) is not a dependency:
-  its result is names, and the content of what is then imported is read and observed.
+  file outside `node_modules` (test code, sources, helpers). Decision (2026-11-22, lead): the result of a listing changes only
+  through additions, deletions and renames, which §2 refuses, and reads of the listed files are observed separately (as reads,
+  loads or, for metadata, stats of repository code). So listings by the runner, the resolver, config lookups or any package are
+  not dependencies, nor are listings whose frames are all helpers (fdir and tinyglobby crawl through callbacks and lose the
+  caller: vitest's test discovery and `import.meta.glob`). This differs from §4, where listings by any non-import, non-pytest
+  code count: Python has no stat hook. `fs.glob` called by repository code adds every file under its `cwd`.
 - a stat is a dependency (the stat'ed file) only when that frame is a repository file; resolvers and config lookups stat
   candidates for existence.
 
@@ -306,8 +308,8 @@ A record is incomplete (never used) when:
 2. **a worker thread is not observed**: a `Worker` construction without a start event for its thread id (an explicit `env`
    without `NODE_OPTIONS` that the wrapper could not extend, `env: SHARE_ENV` with a stripped variable...).
 3. **native code**: a `.node` addon that is a repository file, always; an addon from the environment (`node_modules`, global
-   installs) unless `trust_native_env = true` **or it is on the toolchain list** (decision requested, below); a `node:wasi` instance
-   with a preopened directory inside the repository.
+   installs) unless `trust_native_env = true` or it is on the toolchain list (below); a `node:wasi` instance with a preopened
+   directory inside the repository.
 4. **the runner configuration has imports bgraph cannot resolve**: vite ≥ 8 bundles `vite.config.*`/`vitest.config.*` (and
    project configs) with rolldown natively, vite ≤ 7 with esbuild's `build`: their reads are not observed. Their static imports are
    graph edges config → file, and every test of the project has an edge to its config, so a change to such a file is reached by
@@ -334,16 +336,27 @@ Not incomplete by themselves: `vm` contexts (jest's sandbox and `vm.runInContext
 `fs` they see is the patched module), worker threads and child Node processes that are observed, transform caches disabled by
 §8.1's flags, Node's own `process.report` probe (`node -p` from rollup, observed like any Node child).
 
-**Decision requested — the native toolchain list.** Every vitest run loads a native addon from `node_modules` (vite 8: the
-rolldown binding; vite 7: `@rollup/rollup-<platform>`) and jest 30 loads `@unrs/resolver-binding-<platform>`. With the Python
-rule as written (strict default: any environment addon → incomplete) no vitest or jest ≥ 30 record is ever complete on any OS
-(jest 22 and mocha are). Proposed: in the strict default, addons of these packages are accepted without `trust_native_env`
-because they only parse or transform contents handed to them by JS, resolve paths, or bundle the runner config (rule 4):
-`@rollup/rollup-*` (parser), `@rolldown/binding-*` (config bundling, optimizer: rules 4, 5), `@oxc-parser/*`,
-`@oxc-transform/*`, `@oxc-resolver/*`/`@unrs/resolver-binding-*` (resolution: existence and manifests), `@swc/core-*` (its
-`.swcrc` lookup reads a configuration file: refused by §2 and fingerprinted), `lightningcss-*`, `@esbuild/*` (a binary, not an
-addon; the service row above), `fsevents`, `@parcel/watcher-*` (watchers, unused in `run` mode). Anything else needs
-`trust_native_env`. The alternative is the Python rule unchanged (and `trust_native_env = true` recommended for Node on every OS).
+**Native toolchain list** (decision 2026-11-22, lead). Every vitest run loads a native addon from `node_modules` (vite 8: the
+rolldown binding; vite 7: `@rollup/rollup-<platform>`) and jest 30 loads `@unrs/resolver-binding-<platform>`: with the Python rule
+as written no vitest or jest ≥ 30 record would ever be complete. The addons of these packages are accepted without
+`trust_native_env`:
+
+| packages | assumption |
+|---|---|
+| `@rollup/rollup-*` | rollup's parser: parses the code JS hands it |
+| `@rolldown/binding-*`, `rolldown` | vite 8's bundler: bundles the runner configuration (reads covered by rule 4: its static imports are precise graph edges, configs with unresolvable imports make the record incomplete) and the dependency optimizer (rule 5); vite's transforms hand it the code |
+| `@oxc-parser/*`, `@oxc-transform/*`, `oxc-parser`, `oxc-transform` | parse/transform the code handed to them |
+| `@oxc-resolver/*`, `oxc-resolver`, `@unrs/resolver-binding-*`, `unrs-resolver` | module resolution: existence checks and reads of `package.json`/`tsconfig.json`, which are manifest/config changes that §2 refuses and §8.4 fingerprints |
+| `@swc/core`, `@swc/core-*` | transform the code handed to them; the `.swcrc` lookup reads a configuration file (refused by §2, fingerprinted) |
+| `lightningcss`, `lightningcss-*` | transform the CSS handed to them |
+| `fsevents`, `@parcel/watcher`, `@parcel/watcher-*` | file watchers, unused by the recording commands (`run` modes) |
+
+Conditions: the addon is matched by the package it lives in (the last `node_modules/<name>` of its realpath), that directory's
+`package.json` names that package, and the addon is not a repository file — a renamed copy or an allowlisted name loaded from
+anywhere else is an ordinary environment addon. The loaded allowlisted addons are recorded (`Record.Toolchain`, `name@version`)
+and summed up by `bgraph record`. Any other native addon makes the record incomplete unless `trust_native_env = true`; under
+`trust_native_env` the record carries the trusting collector ID, as for Python. (`@esbuild/*` is a binary, not an addon: its
+service is the spawn row above.)
 
 ### 8.4 Source files (§2) and environment fingerprint (§5)
 
@@ -361,8 +374,8 @@ refused by the existing role check), not snapshots. The documentation-file rule 
   directory that has a `node_modules`, the digest of the package manager's record of the installed tree — npm
   `node_modules/.package-lock.json`, pnpm `node_modules/.pnpm/lock.yaml`, Yarn `node_modules/.yarn-state.yml` or
   `node_modules/.yarn-integrity`; without one, the sorted `name@version` of `node_modules/*/package.json` and
-  `node_modules/@*/*/package.json`. Not pnpm's `.modules.yaml` (it holds timestamps). The probe cache is dropped when one of these
-  files' mtime changes.
+  `node_modules/@*/*/package.json`. Not pnpm's `.modules.yaml` (it holds timestamps). Computed at every selection (not cached);
+  Yarn Plug'n'Play (`.pnp.cjs`) is an error (no fingerprint, no narrowing).
 - **runner configuration at the base** (Node's loader and the native bundlers read these unobserved): the content digest of every
   file with the config role in the Node analysis (vitest/vite/jest/babel/mocha/ava/swc configs, `tsconfig*.json`/`jsconfig*.json`,
   `.babelrc*`, `.mocharc*`, `.swcrc`, `.browserslistrc`...), and of every `package.json` outside `node_modules` with the keys that
@@ -376,9 +389,27 @@ Lockfiles are not in the fingerprint (installed state instead); a diff changing 
 ### 8.5 Configuration and CLI
 
 `[dynamic_layer] ecosystems = ["python", "node"]`; `node = "..."` (executable); `trust_native_env` applies to both ecosystems
-(collector ID `node-hook-1` / `node-hook-1+trust-native`). `bgraph record` records every enabled ecosystem with units (`--eco`
-to pick one); `bgraph dynamic status` reports per ecosystem. Records of each ecosystem go to their own store
+(collector ID `node-hook-1` / `node-hook-1+trust-native`). `--node`/`Options.Node` override the executable. `bgraph record`
+records the ecosystems of `[dynamic_layer] ecosystems`, else every ecosystem with test units (`--eco python|node` to pick one;
+Node default `--jobs` is a quarter of the CPUs); `bgraph dynamic status` reports every ecosystem with records or units
+(`--eco` for one; JSON: an object with `--eco`, else an array). Records of each ecosystem go to their own store
 (`dynamic/node.jsonl`).
+
+Clarifications (implementation):
+
+- The collector files (`bgraph_collect.cjs`, `bgraph_hooks.mjs`, `config.json` with the root, the log directory and the exact
+  `NODE_OPTIONS` entry) are written per unit; `NODE_OPTIONS` of the user is kept and the entry appended (quoted when the path has
+  spaces). Spawned processes get the entry added to their `NODE_OPTIONS` when the caller passed an `env` without it, and
+  `Worker`s with a plain-object `env` likewise, so that a test that builds its own environment is still observed.
+- Each log line is written synchronously; reads, listings and stats of the same path are deduplicated per (event, path, caller,
+  haste). Only repository paths outside `node_modules` are logged (after `realpath`), plus vite optimized-deps reads, addons,
+  spawns and workers.
+- A spawn whose asynchronous `spawn` failed (no pid) ran nothing and is ignored. A synchronous spawn is observed when a start
+  event carries its token with the spawning process as parent.
+- The runner's JS entry point is the `bin` of `vitest`/`jest`/`mocha`/`ava` found in `node_modules` from the unit's project up to
+  the repository root; `node --test` needs none. vitest ≥ 4.1 gets `--update=none` and the fs module cache off
+  (`--experimental.fsModuleCache=false` in 4.1, `--fsModuleCache=false` from 5); older versions get neither (a new snapshot file
+  then makes the record incomplete as an untracked file).
 
 ### 8.6 Evaluation
 

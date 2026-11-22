@@ -323,7 +323,7 @@ func freshPass(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult, r
 			continue
 		}
 		t0 := time.Now()
-		_, err = rix.Record(ctx, bgraph.RecordOptions{Jobs: cfg.Jobs, Timeout: 10 * time.Minute, Env: pyDynEnv(wt, r.Env)})
+		_, err = rix.Record(ctx, bgraph.RecordOptions{Eco: "python", Jobs: cfg.Jobs, Timeout: 10 * time.Minute, Env: pyDynEnv(wt, r.Env)})
 		rix.Close()
 		if err != nil {
 			c.Err = "fresh record: " + err.Error()

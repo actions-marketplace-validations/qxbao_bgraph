@@ -2,9 +2,11 @@ package bgraph
 
 import (
 	"context"
+	"errors"
 	"slices"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
+	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
@@ -39,22 +41,55 @@ func dynamicEcos(mode DynamicMode, rf *rules.File) []string {
 }
 
 // dynamicConfig is the [dynamic_layer] configuration in effect (bgraph.toml of the given tree, then Options).
-func (ix *Index) dynamicConfig(rf *rules.File) (python string, trust bool) {
+func (ix *Index) dynamicConfig(rf *rules.File) (python, nodeExe string, trust bool) {
 	if rf != nil {
-		python, trust = rf.Dynamic.Python, rf.Dynamic.TrustNativeEnv
+		python, nodeExe, trust = rf.Dynamic.Python, rf.Dynamic.Node, rf.Dynamic.TrustNativeEnv
 	}
 	if ix.opt.Python != "" {
 		python = ix.opt.Python
 	}
+	if ix.opt.Node != "" {
+		nodeExe = ix.opt.Node
+	}
 	if ix.opt.TrustNativeEnv {
 		trust = true
 	}
-	return python, trust
+	return python, nodeExe, trust
+}
+
+// ecoEnv computes the environment fingerprint and collector ID of ecosystem eco for tree t.
+func (ix *Index) ecoEnv(ctx context.Context, eco string, rf *rules.File, t tree.Tree) (env, collector string, err error) {
+	switch eco {
+	case "python":
+		return ix.pythonEnv(ctx, rf, t)
+	case "node":
+		return ix.nodeEnv(ctx, rf, t)
+	}
+	return "", "", errors.New("no dynamic layer for ecosystem " + eco)
+}
+
+// nodeEnv computes the Node environment fingerprint for tree t (docs/dynamic.md §8.4).
+func (ix *Index) nodeEnv(ctx context.Context, rf *rules.File, t tree.Tree) (env, collector string, err error) {
+	_, nodeExe, trust := ix.dynamicConfig(rf)
+	exe, err := nodedyn.ResolveNode(ix.repo.Root, nodeExe)
+	if err != nil {
+		return "", "", err
+	}
+	probe, err := ix.nodeProbes.Get(ctx, exe, ix.repo.Root)
+	if err != nil {
+		return "", "", err
+	}
+	installed, _, err := nodedyn.Installed(ix.repo.Root, t)
+	if err != nil {
+		return "", "", err
+	}
+	collector = nodedyn.Collector(trust)
+	return nodedyn.Fingerprint(collector, probe, installed, t), collector, nil
 }
 
 // pythonEnv computes the Python environment fingerprint for tree t (docs/dynamic.md §5).
 func (ix *Index) pythonEnv(ctx context.Context, rf *rules.File, t tree.Tree) (env, collector string, err error) {
-	py, trust := ix.dynamicConfig(rf)
+	py, _, trust := ix.dynamicConfig(rf)
 	exe, err := pydyn.ResolvePython(ix.repo.Root, py)
 	if err != nil {
 		return "", "", err
@@ -117,12 +152,7 @@ func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input,
 			sel = dynamic.Skip(sel, eco, "no records (run `bgraph record`)")
 			continue
 		}
-		var env, collector string
-		var err error
-		switch eco {
-		case "python":
-			env, collector, err = ix.pythonEnv(ctx, in.Rules, in.BaseTree)
-		}
+		env, collector, err := ix.ecoEnv(ctx, eco, in.Rules, in.BaseTree)
 		if err != nil || env == "" {
 			msg := "no environment fingerprint"
 			if err != nil {

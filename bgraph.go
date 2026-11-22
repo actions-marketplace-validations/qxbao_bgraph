@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/eco/dotnet"
@@ -45,6 +46,8 @@ type Options struct {
 	Python string
 	// TrustNativeEnv forces [dynamic_layer] trust_native_env = true (records and fingerprints use the trusting collector ID).
 	TrustNativeEnv bool
+	// Node: node executable of the dynamic layer (docs/dynamic.md §8), overriding bgraph.toml [dynamic_layer] node.
+	Node string
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
@@ -56,6 +59,8 @@ type Index struct {
 	// stateDir: where the dynamic layer keeps its records (empty: none, the layer cannot narrow).
 	stateDir string
 	probes   pydyn.ProbeCache
+	// nodeProbes caches the node executable's description (docs/dynamic.md §8.4).
+	nodeProbes nodedyn.ProbeCache
 }
 
 // Open opens the repo containing root.

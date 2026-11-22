@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/classify"
+	"github.com/qxbao/bgraph/internal/eco/node"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
 )
@@ -37,9 +38,11 @@ type Params struct {
 }
 
 // sourceFile reports whether p is a source file kind the ecosystem's collector observes when it is loaded (docs/dynamic.md §2).
-// Python: .py only (not .pyi stubs, .pyx/.pxd sources compiled to extensions, .so/.pyd, data files).
+// Python: .py only (not .pyi stubs, .pyx/.pxd sources compiled to extensions, .so/.pyd, data files). Node: JS/TS modules, not
+// declaration files or embedded-script formats (docs/dynamic.md §8.4).
 var sourceFile = map[string]func(p string) bool{
 	"python": func(p string) bool { return strings.HasSuffix(p, ".py") },
+	"node":   node.DynamicSource,
 }
 
 // Supported reports whether eco has a dynamic layer.

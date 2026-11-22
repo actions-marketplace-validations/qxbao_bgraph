@@ -63,14 +63,16 @@ sys_path_only = true
 reason = "r"
 
 [dynamic_layer]
-ecosystems = ["python", "python"]
+ecosystems = ["python", "python", "node"]
 python = ".venv/Scripts/python.exe"
+node = "tools/node.exe"
 trust_native_env = true
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := f.Dynamic; len(d.Ecosystems) != 1 || d.Ecosystems[0] != "python" || d.Python != ".venv/Scripts/python.exe" || !d.TrustNativeEnv || len(f.Dynamics) != 1 {
+	if d := f.Dynamic; len(d.Ecosystems) != 2 || d.Ecosystems[0] != "python" || d.Ecosystems[1] != "node" || d.Python != ".venv/Scripts/python.exe" ||
+		d.Node != "tools/node.exe" || !d.TrustNativeEnv || len(f.Dynamics) != 1 {
 		t.Fatalf("%+v", f)
 	}
 	f, err = Parse("x", nil)
@@ -78,7 +80,8 @@ trust_native_env = true
 		t.Fatalf("default: %v %+v", err, f.Dynamic)
 	}
 	for src, want := range map[string]string{
-		"[dynamic_layer]\necosystems = [\"node\"]": "node",
+		"[dynamic_layer]\necosystems = [\"rust\"]": "rust",
+		"[dynamic_layer]\nnode = \"node \"":        "node",
 		"[dynamic_layer]\nbogus = 1":               "bogus",
 		"[dynamic_layer]\npython = \" python\"":    "python",
 	} {

@@ -96,7 +96,7 @@ type Options struct {
 }
 
 // DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic.md).
-var DynamicEcosystems = []string{"python"}
+var DynamicEcosystems = []string{"python", "node"}
 
 // DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic.md), off by default. It is a table of its own,
 // not [dynamic], because [[dynamic]] is already the array of dynamic-import declarations and TOML cannot hold both.
@@ -107,6 +107,9 @@ type DynamicLayer struct {
 	// Python: the interpreter used by `bgraph record` and for the environment fingerprint at selection time. A path with a
 	// separator is relative to the repo root; a bare name is looked up on PATH. Empty: "python".
 	Python string
+	// Node: the node executable used by `bgraph record` and for the Node environment fingerprint (same rules as Python).
+	// Empty: "node".
+	Node string
 	// TrustNativeEnv: native extension modules installed in the environment (not CPython's own) do not make a record
 	// incomplete; the environment fingerprint covers their versions.
 	TrustNativeEnv bool
@@ -158,6 +161,7 @@ type rawFile struct {
 	DynamicLayer struct {
 		Ecosystems     []string `toml:"ecosystems"`
 		Python         string   `toml:"python"`
+		Node           string   `toml:"node"`
 		TrustNativeEnv bool     `toml:"trust_native_env"`
 	} `toml:"dynamic_layer"`
 }
@@ -385,7 +389,10 @@ func Parse(name string, data []byte) (*File, error) {
 	if strings.ContainsRune(dl.Python, 0) || dl.Python != strings.TrimSpace(dl.Python) {
 		return nil, fmt.Errorf("%s: dynamic_layer.python: invalid interpreter %q", name, dl.Python)
 	}
-	f.Dynamic.Python, f.Dynamic.TrustNativeEnv = dl.Python, dl.TrustNativeEnv
+	if strings.ContainsRune(dl.Node, 0) || dl.Node != strings.TrimSpace(dl.Node) {
+		return nil, fmt.Errorf("%s: dynamic_layer.node: invalid executable %q", name, dl.Node)
+	}
+	f.Dynamic.Python, f.Dynamic.Node, f.Dynamic.TrustNativeEnv = dl.Python, dl.Node, dl.TrustNativeEnv
 	return f, nil
 }
 

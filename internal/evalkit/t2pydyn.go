@@ -72,7 +72,7 @@ func ensureRecords(ctx context.Context, ix *bgraph.Index, mode string, rerecord 
 		return st
 	}
 	t0 := time.Now()
-	sum, err := ix.Record(ctx, bgraph.RecordOptions{Jobs: jobs, Timeout: 10 * time.Minute, Env: env})
+	sum, err := ix.Record(ctx, bgraph.RecordOptions{Eco: "python", Jobs: jobs, Timeout: 10 * time.Minute, Env: env})
 	st.RecordMs = time.Since(t0).Milliseconds()
 	if err != nil {
 		st.Error = err.Error()

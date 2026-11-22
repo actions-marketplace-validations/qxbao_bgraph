@@ -12,16 +12,18 @@ import (
 	"github.com/qxbao/bgraph"
 )
 
-// runRecord implements `bgraph record` (docs/dynamic.md §4): run every Python test file in its own process with the collector
-// and store what it loaded/opened. Exit codes: 0 done (even when some units failed or are incomplete), 1 error, 2 usage.
+// runRecord implements `bgraph record` (docs/dynamic.md §4, §8): run every test file (Python, Node) in its own process (tree)
+// with the collector and store what it loaded/opened. Exit codes: 0 done (even when some units failed or are incomplete), 1 error, 2 usage.
 func runRecord(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("bgraph record", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
 	python := fs.String("python", "", "interpreter (overrides bgraph.toml [dynamic_layer] python; default python on PATH)")
+	nodeExe := fs.String("node", "", "node executable (overrides bgraph.toml [dynamic_layer] node; default node on PATH)")
+	ecoName := fs.String("eco", "", "record only this ecosystem: python or node (default: [dynamic_layer] ecosystems, else every one with test units)")
 	trust := fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	units := fs.String("units", "", "only the test units (files) matching this glob")
-	jobs := fs.Int("jobs", 0, "units run in parallel (default: half the CPUs)")
+	jobs := fs.Int("jobs", 0, "units run in parallel (default: half the CPUs for Python, a quarter for Node)")
 	timeout := fs.Duration("timeout", 10*time.Minute, "per-unit timeout (a unit that times out gets an incomplete record)")
 	allowDirty := fs.Bool("allow-dirty", false, "record a working tree that differs from HEAD")
 	out := fs.String("out", "", "write the records to this JSONL file instead of the state directory (import elsewhere with `bgraph dynamic import`)")
@@ -38,13 +40,13 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, TrustNativeEnv: *trust})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, Node: *nodeExe, TrustNativeEnv: *trust})
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
 	}
 	defer ix.Close()
-	opt := bgraph.RecordOptions{Units: *units, Jobs: *jobs, Timeout: *timeout, AllowDirty: *allowDirty, Out: *out}
+	opt := bgraph.RecordOptions{Eco: *ecoName, Units: *units, Jobs: *jobs, Timeout: *timeout, AllowDirty: *allowDirty, Out: *out}
 	if !*quiet {
 		opt.Progress = func(done, total int, r bgraph.DynamicRecord, elapsed time.Duration, tail string) {
 			state := "complete"
@@ -81,6 +83,12 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 	}
 	fmt.Fprintf(stdout, "commit: %s\nunits: %d\nrecorded: %d\ncomplete (and passed): %d\nincomplete: %d\nfailed: %d\nstore: %s\nelapsed: %s\n",
 		sum.Commit, sum.Units, sum.Recorded, sum.Complete, sum.Incomplete, sum.Failed, sum.Store, sum.Elapsed.Round(time.Millisecond))
+	if len(sum.Toolchain) > 0 {
+		fmt.Fprintln(stdout, "native toolchain addons loaded (accepted, docs/dynamic.md §8.3):")
+		for _, k := range bgraph.SortedReasons(sum.Toolchain) {
+			fmt.Fprintf(stdout, "  %4d  %s\n", sum.Toolchain[k], k)
+		}
+	}
 	if len(sum.Reasons) > 0 {
 		fmt.Fprintln(stdout, "incomplete reasons:")
 		for _, k := range bgraph.SortedReasons(sum.Reasons) {
@@ -96,19 +104,21 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 // runDynamic implements `bgraph dynamic import FILE` and `bgraph dynamic status`.
 func runDynamic(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--python EXE] [--trust-native-env] [--json]")
+		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--eco python|node] [--python EXE] [--node EXE] [--trust-native-env] [--json]")
 		return 2
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("bgraph dynamic "+sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
-	var python *string
+	var python, nodeExe, ecoName *string
 	var asJSON, trust *bool
 	switch sub {
 	case "import":
 	case "status":
 		python = fs.String("python", "", "interpreter (overrides bgraph.toml [dynamic_layer] python)")
+		nodeExe = fs.String("node", "", "node executable (overrides bgraph.toml [dynamic_layer] node)")
+		ecoName = fs.String("eco", "", "only this ecosystem (python or node); default: every one with records or test units; JSON: an object with --eco, else an array")
 		trust = fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 		asJSON = fs.Bool("json", false, "in JSON")
 	default:
@@ -127,7 +137,7 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 	}
 	opt := bgraph.Options{}
 	if python != nil {
-		opt.Python, opt.TrustNativeEnv = *python, *trust
+		opt.Python, opt.Node, opt.TrustNativeEnv = *python, *nodeExe, *trust
 	}
 	ctx := context.Background()
 	ix, err := bgraph.Open(ctx, *root, opt)
@@ -148,17 +158,44 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "imported %d records\n", n)
 		return 0
 	}
-	st, err := ix.DynamicStatus(ctx)
-	if err != nil {
-		fmt.Fprintln(stderr, "error:", err)
-		return 1
+	ecos := []string{*ecoName}
+	if *ecoName == "" {
+		ecos = []string{"python", "node"}
 	}
-	for _, w := range st.Warnings {
-		fmt.Fprintln(stderr, "warning:", w)
+	var sts []bgraph.DynamicStatus
+	for _, e := range ecos {
+		st, err := ix.DynamicStatusOf(ctx, e)
+		if err != nil {
+			fmt.Fprintln(stderr, "error:", err)
+			return 1
+		}
+		if *ecoName == "" && st.Records == 0 && st.TestUnits == 0 {
+			continue
+		}
+		for _, w := range st.Warnings {
+			fmt.Fprintln(stderr, "warning:", w)
+		}
+		sts = append(sts, st)
 	}
 	if *asJSON {
-		return printJSON(stdout, stderr, st)
+		if *ecoName != "" {
+			return printJSON(stdout, stderr, sts[0])
+		}
+		if sts == nil {
+			sts = []bgraph.DynamicStatus{}
+		}
+		return printJSON(stdout, stderr, sts)
 	}
+	for i, st := range sts {
+		if i > 0 {
+			fmt.Fprintln(stdout)
+		}
+		printStatus(stdout, st)
+	}
+	return 0
+}
+
+func printStatus(stdout io.Writer, st bgraph.DynamicStatus) {
 	fmt.Fprintf(stdout, "%s: %s\nrecords: %d (units %d of %d test units)\ncurrent environment: %d records\nusable at HEAD: %d\n",
 		st.Eco, st.Store, st.Records, st.Units, st.TestUnits, st.CurrentEnv, st.Usable)
 	if st.EnvError != "" {
@@ -176,5 +213,4 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stdout, "  %4d  %s\n", st.Reasons[k], k)
 		}
 	}
-	return 0
 }

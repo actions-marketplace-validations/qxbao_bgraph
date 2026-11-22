@@ -496,3 +496,35 @@ func TestGuardDocFile(t *testing.T) {
 		assertSkipped(t, Narrow(sel, ch, params(goodRecords()...)))
 	}
 }
+
+// TestGuardNodeSources: the source kinds the Node collector observes (docs/dynamic.md §8.4); every other kind is refused.
+func TestGuardNodeSources(t *testing.T) {
+	sel := model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{{Unit: "test/a.test.ts", Widened: true}}}
+	for p, ok := range map[string]bool{
+		"src/a.js": true, "src/a.mjs": true, "src/a.cjs": true, "src/a.jsx": true, "src/a.ts": true, "src/a.tsx": true,
+		"src/a.mts": true, "src/a.cts": true,
+		"src/a.d.ts": false, "src/a.d.mts": false, "src/a.d.cts": false, "src/A.vue": false, "src/A.svelte": false,
+		"src/A.astro": false, "src/a.mdx": false, "src/data.json": false, "src/a.py": false,
+	} {
+		sel.Changed = []string{p}
+		why := Guard(sel, []Change{mod(p)}, "node")
+		if (why == "") != ok {
+			t.Errorf("%s: guard %q, want pass=%v", p, why, ok)
+		}
+	}
+	// A config, manifest or lockfile role is refused even with a JS extension.
+	for _, c := range []Change{
+		{Path: "vitest.config.ts", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleConfig, HeadRole: model.RoleConfig},
+		{Path: "babel.config.js", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleConfig, HeadRole: model.RoleConfig},
+		{Path: "package.json", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleManifest, HeadRole: model.RoleManifest},
+		{Path: "package-lock.json", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleLock, HeadRole: model.RoleLock},
+		{Path: "tsconfig.json", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleConfig, HeadRole: model.RoleConfig},
+		{Path: "src/new.ts", Status: 'A', NewMode: "100644", HeadRole: model.RoleSource},
+		{Path: "src/old.ts", Status: 'D', OldMode: "100644", BaseRole: model.RoleSource},
+	} {
+		sel.Changed = []string{c.Path}
+		if why := Guard(sel, []Change{c}, "node"); why == "" {
+			t.Errorf("%s (%c): guard passed", c.Path, c.Status)
+		}
+	}
+}
