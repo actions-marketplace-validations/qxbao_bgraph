@@ -243,22 +243,34 @@ const errNotPom = constErr("root element is not <project>")
 // findParent resolves the local parent POM path of pi ("" when the parent is remote or absent).
 func (m *mvnModel) findParent(pi *pomInfo) string {
 	pr := pi.parent
-	cand := parentCandidate(pi)
-	if cand == "" {
+	if pr == nil {
 		return ""
 	}
-	c := m.pom(cand)
-	if c == nil || c == pi || c.err != nil {
-		return ""
+	if cand := parentCandidate(pi); cand != "" {
+		if c := m.pom(cand); c != nil && c != pi && c.err == nil && parentMatches(c, pr) {
+			return cand
+		}
 	}
-	// Maven accepts the file only when its coordinates match the declared parent.
-	if c.a != pr.a {
-		return ""
+	// Maven accepts the file only when its coordinates match the declared parent; otherwise (and for <relativePath/>) the parent
+	// is resolved through the reactor model pool before the repositories: a reactor module with the parent's coordinates is it.
+	for _, c := range m.order {
+		if c != pi && c.err == nil && parentMatches(c, pr) {
+			return c.path
+		}
 	}
-	if g := c.g; g != "" && pr.g != "" && g != pr.g && !strings.Contains(g, "${") && !strings.Contains(pr.g, "${") {
-		return ""
+	return ""
+}
+
+// parentMatches: the POM c has the coordinates the <parent> element pr declares (groupId compared only when both are literal).
+func parentMatches(c *pomInfo, pr *parentRef) bool {
+	if c.a != pr.a || pr.a == "" {
+		return false
 	}
-	return cand
+	g := c.g
+	if g == "" && c.parent != nil {
+		g = c.parent.g
+	}
+	return g == "" || pr.g == "" || g == pr.g || strings.Contains(g, "${") || strings.Contains(pr.g, "${")
 }
 
 // parentCandidate is the path of the file the <parent> of pi points to ("" when it is looked up in repositories only).

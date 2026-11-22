@@ -1,0 +1,21 @@
+A change that widens an included build (its gradle.properties) also selects the projects of the including build, which depend on every project of the included build.
+-- base/settings.gradle --
+include ':app'
+includeBuild('tools/shared')
+-- base/app/build.gradle --
+plugins { id 'java' }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/tools/shared/settings.gradle --
+include ':lib'
+-- base/tools/shared/gradle.properties --
+org.gradle.jvmargs=-Xmx1g
+-- base/tools/shared/lib/build.gradle --
+plugins { id 'java' }
+-- base/tools/shared/lib/src/main/java/Lib.java --
+class Lib {}
+-- head/tools/shared/gradle.properties --
+org.gradle.jvmargs=-Xmx2g
+-- want --
+select gradle:tools/shared:lib
+select gradle::app
