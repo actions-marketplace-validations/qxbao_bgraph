@@ -249,6 +249,21 @@ func TestCargoMembers(t *testing.T) {
 	if !slices.Equal(changed, []string{"app", "core"}) {
 		t.Fatalf("changed = %v", changed)
 	}
+	// A workspace crate with the same name and version as a registry crate: the reference without a source is the
+	// path package, the registry one carries its source.
+	dup := cargo4 + `
+[[package]]
+name = "core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ddd"
+`
+	dup = strings.Replace(dup, `dependencies = ["core", "serde"]`, `dependencies = ["core 0.1.0", "core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)", "serde"]`, 1)
+	g := mustParse(t, "Cargo.lock", ".", dup)
+	app := g.Nodes[g.Projects["app 0.1.0"]]
+	if app.Deps["core 0.1.0"] != "cargo:core 0.1.0 " || app.Deps["core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)"] == "cargo:core 0.1.0 " {
+		t.Fatalf("deps = %v", app.Deps)
+	}
 	if _, err := Parse("Cargo.lock", ".", []byte(strings.Replace(cargo4, "version = 4", "version = 2", 1))); err == nil {
 		t.Fatal("version 2 must not parse")
 	}

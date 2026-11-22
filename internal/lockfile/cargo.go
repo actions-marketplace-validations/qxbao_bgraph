@@ -66,6 +66,19 @@ func ParseCargo(dir string, data []byte) (*Graph, error) {
 			}
 			hits = append(hits, c)
 		}
+		if len(hits) > 1 && len(f) == 2 {
+			// Cargo writes the source of an ambiguous name+version reference except for a path source (it encodes as
+			// none): the reference is the one source-less package.
+			var local []*cargoPkg
+			for _, c := range hits {
+				if c.Source == "" {
+					local = append(local, c)
+				}
+			}
+			if len(local) == 1 {
+				hits = local
+			}
+		}
 		if len(hits) != 1 {
 			return "", fmt.Errorf("Cargo.lock: dependency %q matches %d packages", ref, len(hits))
 		}
