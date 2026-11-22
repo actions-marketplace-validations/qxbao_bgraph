@@ -19,9 +19,18 @@ import (
 type Repo struct {
 	// Root is the absolute working directory root, in OS-native form.
 	Root string
+	// LinkCache, when set, remembers symbolic-link targets by blob OID across runs, so that building a commit tree with links
+	// does not start a `git cat-file` process once the targets are known. Set it before the first use.
+	LinkCache LinkCache
 
 	spawns atomic.Int64
 	cat    catFile
+}
+
+// LinkCache stores symbolic-link targets by blob OID (blobs are content-addressed: an entry never goes stale).
+type LinkCache interface {
+	LinkTarget(oid string) (string, bool)
+	PutLinkTarget(oid, target string)
 }
 
 // Open finds the working root of the repo containing dir (git rev-parse --show-toplevel).

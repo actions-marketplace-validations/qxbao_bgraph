@@ -298,11 +298,21 @@ func (r *Repo) CommitTree(ctx context.Context, rev string) (*CommitTree, error) 
 		}
 	}
 	for p := range links {
-		b, err := r.cat.get(ctx, t.ents[p].oid)
+		oid := t.ents[p].oid
+		if r.LinkCache != nil {
+			if tg, ok := r.LinkCache.LinkTarget(oid); ok {
+				links[p] = tg
+				continue
+			}
+		}
+		b, err := r.cat.get(ctx, oid)
 		if err != nil {
 			return nil, err
 		}
 		links[p] = string(b)
+		if r.LinkCache != nil {
+			r.LinkCache.PutLinkTarget(oid, links[p])
+		}
 	}
 	slices.Sort(t.subs)
 	t.pathSet = newPathSet(files, links, func(p string) bool { _, ok := t.ents[p]; return ok })

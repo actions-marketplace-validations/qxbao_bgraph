@@ -85,6 +85,7 @@ func Open(ctx context.Context, root string, opt Options) (*Index, error) {
 			ix.stateDir = dir
 		}
 	}
+	r.LinkCache = ix.cache
 	return ix, nil
 }
 

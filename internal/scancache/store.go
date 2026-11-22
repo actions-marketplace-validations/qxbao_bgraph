@@ -118,6 +118,14 @@ func (c *Cache) attach(file string) error {
 		return err
 	}
 	c.get, err = db.Prepare(`SELECT result FROM scan WHERE key=?`)
+	if err != nil {
+		return err
+	}
+	// Symbolic-link targets by blob OID: content-addressed, kept across scanner versions.
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS links(oid TEXT PRIMARY KEY, target TEXT) WITHOUT ROWID`); err != nil {
+		return err
+	}
+	c.getLink, err = db.Prepare(`SELECT target FROM links WHERE oid=?`)
 	return err
 }
 
@@ -125,6 +133,10 @@ func (c *Cache) closeDB() {
 	if c.get != nil {
 		c.get.Close()
 		c.get = nil
+	}
+	if c.getLink != nil {
+		c.getLink.Close()
+		c.getLink = nil
 	}
 	if c.db != nil {
 		c.db.Close()
@@ -144,7 +156,7 @@ func (c *Cache) disableDB(err error) {
 // Flush writes all new results to the store in ONE transaction. Does nothing without a store. Write errors become warnings only.
 func (c *Cache) Flush() error {
 	c.mu.Lock()
-	if c.db == nil || len(c.dirty) == 0 {
+	if c.db == nil || len(c.dirty) == 0 && len(c.newLinks) == 0 {
 		c.mu.Unlock()
 		return nil
 	}
@@ -153,7 +165,12 @@ func (c *Cache) Flush() error {
 	for k := range c.dirty {
 		rows[k] = c.m[k]
 	}
+	links := make(map[string]string, len(c.newLinks))
+	for k := range c.newLinks {
+		links[k] = c.links[k]
+	}
 	c.dirty = map[string]struct{}{}
+	c.newLinks = map[string]struct{}{}
 	c.mu.Unlock()
 
 	err := func() error {
@@ -170,6 +187,18 @@ func (c *Cache) Flush() error {
 		for k, r := range rows {
 			if _, err := st.Exec(k, encode(r)); err != nil {
 				return err
+			}
+		}
+		if len(links) > 0 {
+			ls, err := tx.Prepare(`INSERT OR REPLACE INTO links(oid,target) VALUES(?,?)`)
+			if err != nil {
+				return err
+			}
+			defer ls.Close()
+			for k, t := range links {
+				if _, err := ls.Exec(k, t); err != nil {
+					return err
+				}
 			}
 		}
 		return tx.Commit()

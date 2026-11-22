@@ -501,3 +501,27 @@ func BenchmarkPrefetchWarm(b *testing.B) {
 		b.Fatalf("warm run read %d files", ct.reads.Load())
 	}
 }
+
+func TestLinkTargetsPersist(t *testing.T) {
+	dir := t.TempDir()
+	c, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := c.LinkTarget("abc"); ok {
+		t.Fatal("unknown link found")
+	}
+	c.PutLinkTarget("abc", "../shared")
+	if tg, ok := c.LinkTarget("abc"); !ok || tg != "../shared" {
+		t.Fatalf("memory: %q %v", tg, ok)
+	}
+	c.Close()
+	c2, err := Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c2.Close()
+	if tg, ok := c2.LinkTarget("abc"); !ok || tg != "../shared" {
+		t.Fatalf("store: %q %v", tg, ok)
+	}
+}

@@ -37,13 +37,51 @@ type Cache struct {
 	dirty    map[string]struct{} // keys in m not yet written to the store
 	db       *sql.DB             // nil: memory-only
 	get      *sql.Stmt
+	getLink  *sql.Stmt
+	links    map[string]string   // blob OID of a symbolic link → its target (see LinkTarget)
+	newLinks map[string]struct{} // links not yet written to the store
 	warnings []string
 	Hits     int
 	Misses   int
 }
 
 // New creates an empty, memory-only cache.
-func New() *Cache { return &Cache{m: map[string]model.ScanResult{}, dirty: map[string]struct{}{}} }
+func New() *Cache {
+	return &Cache{m: map[string]model.ScanResult{}, dirty: map[string]struct{}{}, links: map[string]string{}, newLinks: map[string]struct{}{}}
+}
+
+// LinkTarget returns the target stored in the symbolic-link blob oid, if known (gitx.LinkCache). Blobs are content-addressed,
+// so an entry never goes stale and does not depend on the scanner version.
+func (c *Cache) LinkTarget(oid string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if t, ok := c.links[oid]; ok {
+		return t, true
+	}
+	if c.getLink == nil {
+		return "", false
+	}
+	var t string
+	if err := c.getLink.QueryRow(oid).Scan(&t); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			c.disableDB(err)
+		}
+		return "", false
+	}
+	c.links[oid] = t
+	return t, true
+}
+
+// PutLinkTarget remembers the target of the symbolic-link blob oid; Flush writes it to the store.
+func (c *Cache) PutLinkTarget(oid, target string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, ok := c.links[oid]; ok {
+		return
+	}
+	c.links[oid] = target
+	c.newLinks[oid] = struct{}{}
+}
 
 // DefaultDir returns the repo's cache directory: os.UserCacheDir()/bgraph/<first 16 hex of sha256(absolute path)>.
 // Never inside the repo.
