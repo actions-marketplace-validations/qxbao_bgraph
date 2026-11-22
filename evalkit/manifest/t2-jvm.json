@@ -1,0 +1,38 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "JVM T2 (`bgraph-eval t2 --ecosystem jvm`). Root directory defaults to D:/bench/bgraph-eval/t2/jvm: full clones <dir> detached at R (core.autocrlf=false), oracle.jsonl. All tools and caches live on D: (JDKs, Maven 3.9.9 with -Dmaven.repo.local=D:/bench/tools/m2, GRADLE_USER_HOME=D:/bench/tools/gradle-home, TEMP/TMP=D:/bench/tools/tmp). Suite: Maven `mvn -B -ntp -Dmaven.test.failure.ignore=true -pl <targets> test`, Gradle `gradlew --continue cleanTest test`; the unit is the Maven module / Gradle project and is red when any surefire / Gradle JUnit report of it has a failure or error. Baseline = 2 runs at R; red/differing units are excluded; each red unit is re-run alone (Maven `-pl <unit> -am`, Gradle `:p:test`) once to confirm. `mutants` = killed mutants aimed at, `tries` = mutants generated at most. Mutants are one-token operator flips (==/!=, <//>=, >//<=, &&/||, + / -, true/false) in non-test Java/Kotlin source under `include`; a mutant that does not compile is recorded as nocompile and not counted.",
+ "repos": [
+  {
+   "name": "google/gson",
+   "dir": "gson",
+   "eco": "jvm",
+   "runner": "maven",
+   "jdk": "17",
+   "remote": "https://github.com/google/gson.git",
+   "r": "d9b5079eaa4567219771bba6d04289cf45c7589b",
+   "args": [],
+   "targets": ["gson", "extras", "metrics", "proto"],
+   "include": ["gson/src/main", "extras/src/main", "metrics/src/main", "proto/src/main"],
+   "covers": "Maven reactor: gson (core, ~1.5 min of tests), extras, metrics, proto (modules depending on gson); test-jpms / graal / shrinker need package and are not part of the suite",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-jvm-v1"
+  },
+  {
+   "name": "square/moshi",
+   "dir": "moshi",
+   "eco": "jvm",
+   "runner": "gradle",
+   "jdk": "21",
+   "remote": "https://github.com/square/moshi.git",
+   "r": "889013ec2edb8d8034902662a1dc8c4f3b3f8111",
+   "args": [],
+   "include": ["moshi/src/main", "moshi-adapters/src/main", "moshi-kotlin/src/main", "moshi-kotlin-codegen/src/main"],
+   "covers": "Gradle projects :moshi, :moshi-adapters, :moshi-kotlin, :moshi-kotlin-codegen, :moshi-kotlin-tests (+ :codegen-only); Java and Kotlin sources",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-jvm-v1"
+  }
+ ]
+}

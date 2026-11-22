@@ -47,9 +47,11 @@ type T2Repo struct {
 	Mutants    int      `json:"mutants"`
 	Seed       string   `json:"seed"`
 	Env        []string `json:"env,omitempty"`
-	Eco        string   `json:"eco,omitempty"`   // "rust" for Cargo repos, "python" for pytest repos; empty = Node
-	Tries      int      `json:"tries,omitempty"` // rust/python: how many mutants are generated at most (default 3x Mutants); Mutants is the number of killed mutants aimed at
-	Venv       string   `json:"venv,omitempty"`  // python: virtual environment directory, relative to the T2 root (holds the repo's dependencies and the editable install)
+	Eco        string   `json:"eco,omitempty"`     // "rust" for Cargo repos, "python" for pytest repos; empty = Node
+	Tries      int      `json:"tries,omitempty"`   // rust/python: how many mutants are generated at most (default 3x Mutants); Mutants is the number of killed mutants aimed at
+	Targets    []string `json:"targets,omitempty"` // dotnet: test project files, relative to the checkout (one `dotnet test` each; the unit is the project)
+	Jdk        string   `json:"jdk,omitempty"`     // jvm: "17" (default) or "21"
+	Venv       string   `json:"venv,omitempty"`    // python: virtual environment directory, relative to the T2 root (holds the repo's dependencies and the editable install)
 }
 
 // T2Manifest is the T2 repo manifest.
@@ -589,6 +591,8 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		return r.buildOracleRust(ctx, cfg, store, have)
 	case "python":
 		return r.buildOraclePython(ctx, cfg, store, have)
+	case "jvm", "dotnet":
+		return r.buildOracleJD(ctx, cfg, store, have)
 	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -795,6 +799,10 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 		ck.Changed = sel.Changed
 		ck.Near = pyNear(sel, ck.Missed)
 		return ck
+	case "jvm", "dotnet":
+		ck.Changed = sel.Changed
+		ck.Near = jdNear(sel, ck.Missed)
+		return ck
 	}
 	diagFor := ck.Missed
 	if len(diagFor) == 0 && len(ck.NativeOnly) > 0 {
@@ -921,7 +929,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" || r.Eco == "python" {
+	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`

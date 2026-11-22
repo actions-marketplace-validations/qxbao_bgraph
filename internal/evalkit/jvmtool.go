@@ -143,8 +143,8 @@ type JVMGibRow struct {
 	GIB      int      `json:"gib_impacted"`
 	GIBList  []string `json:"gib_modules,omitempty"` // the impacted modules, kept for violations
 	GIBOut   string   `json:"gib_log,omitempty"`     // the GIB lines of the Maven output, kept for violations
-	Missing  []string `json:"missing,omitempty"` // impacted by GIB, not selected by bgraph
-	Extra    int      `json:"extra"`             // selected by bgraph, not impacted by GIB
+	Missing  []string `json:"missing,omitempty"`     // impacted by GIB, not selected by bgraph
+	Extra    int      `json:"extra"`                 // selected by bgraph, not impacted by GIB
 	Changed  []string `json:"changed,omitempty"`
 	ToolMs   int64    `json:"tool_ms,omitempty"`
 }

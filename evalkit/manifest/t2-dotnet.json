@@ -1,0 +1,48 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "dotnet T2 (`bgraph-eval t2 --ecosystem dotnet`). Root directory defaults to D:/bench/bgraph-eval/t2/dotnet: full clones <dir> detached at R (core.autocrlf=false; global.json rolled forward to the installed SDK 10.0.100 and marked skip-worktree so the tree stays clean), oracle.jsonl. Tools: portable SDK D:/bench/tools/dotnet (DOTNET_ROOT, DOTNET_ROLL_FORWARD=Major, NUGET_PACKAGES=D:/bench/tools/nuget, TEMP/TMP=D:/bench/tools/tmp). Suite: one `dotnet test <project> -f net8.0 -p:CollectCoverage=false --logger trx` per entry of `targets`; the unit is the test project (`dotnet:<project file>`), red when any test of its trx is Failed/Error/Timeout. Baseline = 2 runs at R; red/differing units are excluded; each red project is re-run alone once to confirm. `mutants` = killed mutants aimed at, `tries` = mutants generated at most. Mutants are one-token operator flips (==/!=, <//>=, >//<=, &&/||, + / -, true/false) in non-test C# source under `include`; a mutant that does not compile is recorded as nocompile and not counted.",
+ "repos": [
+  {
+   "name": "App-vNext/Polly",
+   "dir": "polly",
+   "eco": "dotnet",
+   "runner": "dotnet",
+   "remote": "https://github.com/App-vNext/Polly.git",
+   "r": "5d81f99ef5f523032c17b6b59b32d575ec9dfb06",
+   "args": ["-f", "net8.0", "-p:CollectCoverage=false"],
+   "targets": [
+    "test/Polly.Core.Tests/Polly.Core.Tests.csproj",
+    "test/Polly.Specs/Polly.Specs.csproj",
+    "test/Polly.Extensions.Tests/Polly.Extensions.Tests.csproj",
+    "test/Polly.RateLimiting.Tests/Polly.RateLimiting.Tests.csproj",
+    "test/Polly.Testing.Tests/Polly.Testing.Tests.csproj"
+   ],
+   "include": ["src/Polly.Core/", "src/Polly/", "src/Polly.Extensions/", "src/Polly.RateLimiting/", "src/Polly.Testing/"],
+   "covers": "src/Polly.Core, Polly (legacy), Polly.Extensions, Polly.RateLimiting, Polly.Testing with their five test projects (SDK pin 8.0.302 at R)",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-dotnet-v1"
+  },
+  {
+   "name": "restsharp/RestSharp",
+   "dir": "restsharp",
+   "eco": "dotnet",
+   "runner": "dotnet",
+   "remote": "https://github.com/restsharp/RestSharp.git",
+   "r": "dd52ff6cd18cce2a74475f97374d431280ac10cf",
+   "args": ["-f", "net8.0", "-p:CollectCoverage=false"],
+   "targets": [
+    "test/RestSharp.Tests/RestSharp.Tests.csproj",
+    "test/RestSharp.Tests.Serializers.Csv/RestSharp.Tests.Serializers.Csv.csproj",
+    "test/RestSharp.Tests.Serializers.Json/RestSharp.Tests.Serializers.Json.csproj",
+    "test/RestSharp.Tests.Serializers.Xml/RestSharp.Tests.Serializers.Xml.csproj"
+   ],
+   "include": ["src/RestSharp/", "src/RestSharp.Serializers.CsvHelper/", "src/RestSharp.Serializers.NewtonsoftJson/", "src/RestSharp.Serializers.Xml/"],
+   "covers": "src/RestSharp and its CsvHelper / NewtonsoftJson / Xml serializer packages with four test projects; RestSharp.Tests.Integrated (HTTP server, network) is not part of the suite",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-dotnet-v1"
+  }
+ ]
+}

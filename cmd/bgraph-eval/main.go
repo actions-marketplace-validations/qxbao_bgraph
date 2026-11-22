@@ -466,10 +466,10 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
 	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
-	eco := fs.String("ecosystem", "node", "node | rust | python (rust/python default --dir D:/bench/bgraph-eval/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet (rust/python/jvm/dotnet default --dir D:/bench/bgraph-eval/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
 	budget := fs.Duration("budget", 0, "rust/python: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
-	if *eco == "rust" || *eco == "python" {
+	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" {
 		dirSet, manSet := false, false
 		fs.Visit(func(f *flag.Flag) {
 			dirSet = dirSet || f.Name == "dir"
