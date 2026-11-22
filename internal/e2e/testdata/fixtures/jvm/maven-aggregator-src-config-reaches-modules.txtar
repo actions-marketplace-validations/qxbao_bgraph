@@ -1,0 +1,30 @@
+An aggregator (packaging pom) compiles nothing, so files under its src/ are build configuration its modules read (here a checkstyle file named through a property set by a plugin at build time): a change there selects the nested modules.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>app</module></modules>
+<build><plugins><plugin>
+<artifactId>maven-checkstyle-plugin</artifactId>
+<configuration><configLocation>${main.basedir}/src/checkstyle/checkstyle.xml</configLocation><failOnViolation>true</failOnViolation></configuration>
+</plugin></plugins></build>
+</project>
+-- base/src/checkstyle/checkstyle.xml --
+<module name="Checker"/>
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- head/src/checkstyle/checkstyle.xml --
+<module name="Checker"><module name="TreeWalker"/></module>
+-- want --
+notfull
+select maven:.
+select maven:app

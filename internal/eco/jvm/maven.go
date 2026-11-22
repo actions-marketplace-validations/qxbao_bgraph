@@ -652,7 +652,8 @@ func (m *mvnModel) analyze(b *builder) []*unit {
 		root := m.reactorRoot(pi)
 		buildFile := root.path
 		u := &unit{kind: RunnerMaven, id: id, dir: pi.dir, node: Node(id), pkg: pkg, own: []string{pi.path},
-			config: LaunchConfig(buildFile, wrapperFor(m.t, root.dir, "mvnw"))}
+			config:   LaunchConfig(buildFile, wrapperFor(m.t, root.dir, "mvnw")),
+			shareSrc: m.interp(pi, pi.packaging) == "pom" || strings.Contains(m.interp(pi, pi.packaging), "${")}
 		units = append(units, u)
 		byPath[pi.path] = u
 		b.a.Roles[pi.path] = model.RoleManifest

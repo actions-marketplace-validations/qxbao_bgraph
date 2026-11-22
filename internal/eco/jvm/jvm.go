@@ -138,6 +138,9 @@ type unit struct {
 	config string
 	// own: the build definition files of the unit (pom.xml, build script); their role is manifest.
 	own []string
+	// shareSrc: the unit compiles nothing from src/ (a Maven aggregator/parent with packaging pom), so the non-code files there
+	// are build configuration (checkstyle, license headers, assembly descriptors) that nested units may read.
+	shareSrc bool
 }
 
 type edgeKey struct {
@@ -299,8 +302,12 @@ func (b *builder) own(units []*unit) {
 				b.edge(u.node, f, model.EdgeImplicit, "module file")
 			}
 			b.role(f, role)
-			// Shared with nested units: not under src/, not a build definition of the enclosing unit, not documentation.
-			if rel == "src" || strings.HasPrefix(rel, "src/") || isScript(base) && path.Dir(rel) == "." || classify.Doc(f) || classify.Harmless(f) {
+			// Shared with nested units: not under src/ (unless the unit compiles nothing from there and the file is no code), not a
+			// build definition of the enclosing unit, not documentation.
+			inSrc := rel == "src" || strings.HasPrefix(rel, "src/")
+			srcConfig := role == model.RoleData && slices.ContainsFunc(byDir[ud], func(u *unit) bool { return u.shareSrc })
+			if inSrc && !srcConfig || isScript(base) && path.Dir(rel) == "." ||
+				classify.Doc(f) || classify.Harmless(f) {
 				continue
 			}
 			for _, d := range descendants[ud] {
