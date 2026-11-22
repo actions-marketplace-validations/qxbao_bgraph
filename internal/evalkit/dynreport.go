@@ -12,7 +12,7 @@ import (
 
 // Reports of the Phase 6 evaluation (hybrid T2 and replay).
 
-var skipPathRe = regexp.MustCompile(`^python: [^ ]+: `)
+var skipPathRe = regexp.MustCompile(`^(?:python|node): [^ ]+: `)
 
 // SkipClass reduces a dynamic_skipped detail to a class for histograms.
 func SkipClass(d string) string {
@@ -21,7 +21,7 @@ func SkipClass(d string) string {
 	}
 	first := strings.Split(d, "; ")[0]
 	why := skipPathRe.ReplaceAllString(first, "")
-	why = strings.TrimPrefix(why, "python: ")
+	why = strings.TrimPrefix(strings.TrimPrefix(why, "python: "), "node: ")
 	switch {
 	case strings.HasPrefix(why, "status A"):
 		return "file added"
@@ -33,6 +33,8 @@ func SkipClass(d string) string {
 		return "mode change"
 	case strings.HasPrefix(why, "not a python source"):
 		return "non-.py file changed"
+	case strings.HasPrefix(why, "not a node source"):
+		return "non-JS/TS file changed"
 	case strings.HasPrefix(why, "role"):
 		return "changed .py is not source/test"
 	case strings.HasPrefix(why, "claimed"):

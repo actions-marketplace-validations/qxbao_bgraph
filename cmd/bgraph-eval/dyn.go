@@ -29,7 +29,9 @@ func splitList(s string) []string {
 	return strings.Split(s, ",")
 }
 
-// cmdT2Dyn runs the hybrid pass against the cached Python T2 oracles (or, with --prepare, writes the widening-targeted mutants).
+// cmdT2Dyn runs the hybrid pass against the cached Python and Node T2 oracles (or, with --prepare, writes the widening-targeted
+// Python mutants). Node sets: --set D:/bench/bgraph-eval/t2=evalkit/manifest/t2.json (hono, dayjs) and
+// --set D:/bench/bgraph-eval/t2/node-dyn=evalkit/manifest/t2-node-dyn.json (express).
 func cmdT2Dyn(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("t2dyn", flag.ExitOnError)
 	var sets multiFlag
@@ -106,7 +108,7 @@ func containsFold(list []string, names ...string) bool {
 	return false
 }
 
-// cmdReplayDyn replays recent commits of Python repos with records made once at R0.
+// cmdReplayDyn replays recent commits of Python or Node repos with records made once at R0.
 func cmdReplayDyn(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("replaydyn", flag.ExitOnError)
 	var sets multiFlag

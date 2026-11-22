@@ -115,23 +115,22 @@ func RunDynReplay(ctx context.Context, cfg DynReplayConfig) DynReplayResult {
 	}
 	res.R0 = strings.TrimSpace(r0)
 	wtR0 := filepath.Join(cfg.T2.Dir, "dyn-wt", r.Dir+"-r0")
-	if err := localClone(ctx, root, wtR0, res.R0); err != nil {
+	if err := dynClone(ctx, r, root, wtR0, res.R0); err != nil {
 		res.Error = "clone at R0: " + err.Error()
 		return res
 	}
 	state := filepath.Join(cfg.T2.Dir, "dyn-state-replay", r.Dir)
-	py := r.pyPython(&cfg.T2)
 	logf := func(f string, a ...any) { cfg.T2.logf("%s replay: "+f, append([]any{r.Name}, a...)...) }
 	ixs := map[string]*bgraph.Index{}
 	for _, mode := range modes {
-		rix, err := openDyn(ctx, wtR0, state, py, mode)
+		rix, err := openDynRepo(ctx, &cfg.T2, r, wtR0, state, mode)
 		if err != nil {
 			res.Error = err.Error()
 			return res
 		}
-		res.Records = append(res.Records, ensureRecords(ctx, rix, mode, cfg.Rerecord, cfg.Jobs, pyDynEnv(wtR0, r.Env), logf))
+		res.Records = append(res.Records, ensureRecords(ctx, rix, dynEco(r), mode, cfg.Rerecord, cfg.Jobs, dynRecordEnv(r, wtR0), logf))
 		rix.Close()
-		ix, err := openDyn(ctx, root, state, py, mode)
+		ix, err := openDynRepo(ctx, &cfg.T2, r, root, state, mode)
 		if err != nil {
 			res.Error = err.Error()
 			return res
@@ -176,7 +175,7 @@ func RunDynReplay(ctx context.Context, cfg DynReplayConfig) DynReplayResult {
 	}
 	logf("%d commits selected", len(res.Commits))
 	if cfg.Fresh {
-		freshPass(ctx, cfg, &res, root, py)
+		freshPass(ctx, cfg, &res, root)
 		modes = append(modes, "fresh")
 	}
 	if cfg.Sample > 0 {
@@ -228,8 +227,11 @@ func verifySample(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult
 		removed := removedUnits(c)
 		v.Removed = removed
 		run := func(rev string, files []string) (map[string]string, error) {
-			if err := localClone(ctx, root, wt, rev); err != nil {
+			if err := dynClone(ctx, r, root, wt, rev); err != nil {
 				return nil, err
+			}
+			if dynEco(r) == "node" {
+				return dynSuite(ctx, &cfg.T2, r, wt, files)
 			}
 			// After the checkout: whether the layout has src/ decides PYTHONPATH (the clone's sources must shadow the editable
 			// install of the main checkout).
@@ -299,7 +301,7 @@ func removedUnits(c *DynReplayCommit) []string {
 }
 
 // freshPass records at P (trust_native_env) for every widened commit whose guards pass and selects it again (mode "fresh").
-func freshPass(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult, root, py string) {
+func freshPass(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult, root string) {
 	r := cfg.Repo
 	wt := filepath.Join(cfg.T2.Dir, "dyn-wt", r.Dir+"-fresh")
 	state := filepath.Join(cfg.T2.Dir, "dyn-state-fresh", r.Dir)
@@ -313,23 +315,23 @@ func freshPass(ctx context.Context, cfg DynReplayConfig, res *DynReplayResult, r
 		if ctx.Err() != nil {
 			return
 		}
-		if err := localClone(ctx, root, wt, c.P); err != nil {
+		if err := dynClone(ctx, r, root, wt, c.P); err != nil {
 			c.Err = "fresh clone: " + err.Error()
 			continue
 		}
-		rix, err := openDyn(ctx, wt, state, py, "trust")
+		rix, err := openDynRepo(ctx, &cfg.T2, r, wt, state, "trust")
 		if err != nil {
 			c.Err = err.Error()
 			continue
 		}
 		t0 := time.Now()
-		_, err = rix.Record(ctx, bgraph.RecordOptions{Eco: "python", Jobs: cfg.Jobs, Timeout: 10 * time.Minute, Env: pyDynEnv(wt, r.Env)})
+		_, err = rix.Record(ctx, bgraph.RecordOptions{Eco: dynEco(r), Jobs: cfg.Jobs, Timeout: 10 * time.Minute, Env: dynRecordEnv(r, wt)})
 		rix.Close()
 		if err != nil {
 			c.Err = "fresh record: " + err.Error()
 			continue
 		}
-		ix, err := openDyn(ctx, root, state, py, "trust")
+		ix, err := openDynRepo(ctx, &cfg.T2, r, root, state, "trust")
 		if err != nil {
 			c.Err = err.Error()
 			continue

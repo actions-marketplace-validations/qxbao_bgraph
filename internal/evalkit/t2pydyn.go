@@ -64,15 +64,15 @@ func openDyn(ctx context.Context, root, stateDir, python, mode string) (*bgraph.
 }
 
 // ensureRecords records root (HEAD) for mode unless usable records of the current environment exist.
-func ensureRecords(ctx context.Context, ix *bgraph.Index, mode string, rerecord bool, jobs int, env []string, logf func(string, ...any)) DynRecordStat {
+func ensureRecords(ctx context.Context, ix *bgraph.Index, eco, mode string, rerecord bool, jobs int, env []string, logf func(string, ...any)) DynRecordStat {
 	st := DynRecordStat{Mode: mode}
-	cur, err := ix.DynamicStatus(ctx)
+	cur, err := ix.DynamicStatusOf(ctx, eco)
 	if err == nil && cur.CurrentEnv > 0 && !rerecord {
 		st.Reused, st.Status = true, cur
 		return st
 	}
 	t0 := time.Now()
-	sum, err := ix.Record(ctx, bgraph.RecordOptions{Eco: "python", Jobs: jobs, Timeout: 10 * time.Minute, Env: env})
+	sum, err := ix.Record(ctx, bgraph.RecordOptions{Eco: eco, Jobs: jobs, Timeout: 10 * time.Minute, Env: env})
 	st.RecordMs = time.Since(t0).Milliseconds()
 	if err != nil {
 		st.Error = err.Error()
@@ -83,7 +83,7 @@ func ensureRecords(ctx context.Context, ix *bgraph.Index, mode string, rerecord 
 		logf("record %s: %d units, %d complete, %d incomplete, %d failed in %s", mode, sum.Units, sum.Complete, sum.Incomplete, sum.Failed,
 			time.Duration(st.RecordMs)*time.Millisecond)
 	}
-	st.Status, _ = ix.DynamicStatus(ctx)
+	st.Status, _ = ix.DynamicStatusOf(ctx, eco)
 	return st
 }
 
@@ -206,7 +206,7 @@ func RunT2Dyn(ctx context.Context, cfg T2Config, opt DynOptions) ([]DynRepoResul
 		if ctx.Err() != nil {
 			return out, ctx.Err()
 		}
-		if r.Eco != "python" {
+		if dynEco(r) == "" {
 			continue
 		}
 		rr := DynRepoResult{Repo: r.Name, Set: cfg.Dir, R: r.R}
@@ -224,10 +224,9 @@ func RunT2Dyn(ctx context.Context, cfg T2Config, opt DynOptions) ([]DynRepoResul
 		}
 		sort.Slice(mine, func(i, j int) bool { return mine[i].Mutant.ID < mine[j].Mutant.ID })
 		state := dynStateDir(cfg.Dir, r.Dir)
-		py := r.pyPython(&cfg)
 		ixs := map[string]*bgraph.Index{}
 		for _, mode := range opt.modes() {
-			ix, err := openDyn(ctx, root, state, py, mode)
+			ix, err := openDynRepo(ctx, &cfg, r, root, state, mode)
 			if err != nil {
 				rr.Error = err.Error()
 				break
@@ -235,7 +234,7 @@ func RunT2Dyn(ctx context.Context, cfg T2Config, opt DynOptions) ([]DynRepoResul
 			defer ix.Close()
 			ixs[mode] = ix
 			logf := func(f string, a ...any) { cfg.logf("%s: "+f, append([]any{r.Name}, a...)...) }
-			rr.Records = append(rr.Records, ensureRecords(ctx, ix, mode, opt.Rerecord, opt.Jobs, pyDynEnv(root, r.Env), logf))
+			rr.Records = append(rr.Records, ensureRecords(ctx, ix, dynEco(r), mode, opt.Rerecord, opt.Jobs, dynRecordEnv(r, root), logf))
 		}
 		if rr.Error == "" {
 			static := ixs[opt.modes()[0]]

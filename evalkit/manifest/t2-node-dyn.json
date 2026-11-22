@@ -1,0 +1,61 @@
+{
+ "version": 1,
+ "ts": "../tools/node_modules/typescript",
+ "notes": "Phase 6 Node set (docs/dynamic.md §8.6), root D:\\bench\\bgraph-eval\\t2\\node-dyn. Full clones (history for the replay) at the same R as the T2 set for hono and dayjs; express and immutable-js at the commit of the Phase 1 checkouts. Installs: hono `pnpm install --frozen-lockfile --ignore-scripts` (pnpm from <t2>/tools), dayjs and immutable-js `npm ci --ignore-scripts`, express `npm install --ignore-scripts --no-package-lock`. The hybrid T2 of hono and dayjs uses the T2 set's oracle (D:\\bench\\bgraph-eval\\t2, manifest t2.json); express has its own oracle here; immutable-js is the replay control.",
+ "repos": [
+  {
+   "name": "honojs/hono",
+   "dir": "hono",
+   "remote": "https://github.com/honojs/hono.git",
+   "r": "75ff8e3ea18485589816881c6278bc9783e56602",
+   "runner": "vitest",
+   "bin": "node_modules/vitest/vitest.mjs",
+   "args": ["run", "--project", "main", "--project", "jsx-runtime-default", "--project", "jsx-runtime-dom", "--project", "node", "--coverage.enabled=false"],
+   "include": ["^src/.*\\.tsx?$"],
+   "exclude": ["\\.test\\.tsx?$", "\\.d\\.ts$", "/test-utils/", "/sandbox/", "/types\\.ts$"],
+   "mutants": 24,
+   "seed": "t2-v1"
+  },
+  {
+   "name": "iamkun/dayjs",
+   "dir": "dayjs",
+   "remote": "https://github.com/iamkun/dayjs.git",
+   "r": "d3e43be0489ff1d010aca42b3115b6059215ed60",
+   "runner": "jest",
+   "bin": "node_modules/jest/bin/jest.js",
+   "args": ["--coverage=false"],
+   "include": ["^src/.*\\.js$"],
+   "exclude": ["^src/locale/"],
+   "mutants": 24,
+   "seed": "t2-v1"
+  },
+  {
+   "name": "expressjs/express",
+   "dir": "express",
+   "remote": "https://github.com/expressjs/express.git",
+   "r": "43fca52d28a422c8be48fd489cbd4f2d6152bab6",
+   "runner": "mocha",
+   "bin": "node_modules/mocha/bin/mocha.js",
+   "args": ["--require", "test/support/env", "--check-leaks"],
+   "spec": ["test/", "test/acceptance/"],
+   "covers": "mocha 11, the npm test command (test/ and test/acceptance/, --require test/support/env --check-leaks), JSON reporter",
+   "include": ["^lib/.*\\.js$"],
+   "exclude": [],
+   "mutants": 24,
+   "seed": "t2-v1"
+  },
+  {
+   "name": "immutable-js/immutable-js",
+   "dir": "immutable-js",
+   "remote": "https://github.com/immutable-js/immutable-js.git",
+   "r": "a6c7429e096bf9900a591626ca009b6a8baa860e",
+   "runner": "jest",
+   "bin": "node_modules/jest/bin/jest.js",
+   "args": [],
+   "include": ["^src/.*\\.(js|ts)$"],
+   "exclude": ["\\.d\\.ts$"],
+   "mutants": 24,
+   "seed": "t2-v1"
+  }
+ ]
+}

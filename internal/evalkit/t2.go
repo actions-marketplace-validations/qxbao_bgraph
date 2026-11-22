@@ -52,6 +52,7 @@ type T2Repo struct {
 	Targets    []string `json:"targets,omitempty"` // dotnet: test project files, relative to the checkout (one `dotnet test` each; the unit is the project)
 	Jdk        string   `json:"jdk,omitempty"`     // jvm: "17" (default) or "21"
 	Venv       string   `json:"venv,omitempty"`    // python: virtual environment directory, relative to the T2 root (holds the repo's dependencies and the editable install)
+	Spec       []string `json:"spec,omitempty"`    // mocha: spec paths of the whole suite (Args hold the other options)
 }
 
 // T2Manifest is the T2 repo manifest.
@@ -239,6 +240,9 @@ func ParseRunJSON(root string, b []byte) (map[string]string, int, error) {
 
 // runSuite runs the whole test suite and returns each file's status.
 func (r T2Repo) runSuite(ctx context.Context, root, tmp string, timeout time.Duration, only []string) (map[string]string, int, time.Duration, bool, string, error) {
+	if r.Runner == "mocha" {
+		return r.runMocha(ctx, root, tmp, timeout, only)
+	}
 	os.MkdirAll(tmp, 0o755)
 	of := filepath.Join(tmp, "run.json")
 	os.Remove(of)
@@ -275,6 +279,9 @@ func (r T2Repo) runSuite(ctx context.Context, root, tmp string, timeout time.Dur
 
 // runNative computes the original tool's "related" set for the current change in the working tree, without running tests.
 func (r T2Repo) runNative(ctx context.Context, root, tmp, file string) ([]string, error) {
+	if r.Runner == "mocha" {
+		return nil, fmt.Errorf("mocha has no related-tests mode")
+	}
 	os.MkdirAll(tmp, 0o755)
 	args := []string{r.Bin}
 	args = append(args, r.NativeArgs...)
