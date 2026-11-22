@@ -93,6 +93,40 @@ corrupt store → ignore + warning, never an error. `bgraph record --out FILE` /
   `git hash-object --stdin-paths` or the existing gitx helpers); `bgraph record` refuses a dirty tree unless `--allow-dirty`.
 - Parallel `--jobs N`, `--units glob`, `--timeout`. Output summary: recorded / complete / incomplete by reason / failed.
 
+Clarifications (implementation, `internal/dynamic/pydyn`):
+
+- Command: `python -m pytest -p bgraph_collect -p no:cacheprovider -q --rootdir R [-c CONFIG] FILE` from `TestUnit.Project`, exactly
+  as the runner adapter pins rootdir/config, with `PYTHONDONTWRITEBYTECODE=1` (no cache writes into the checkout; parallel units do
+  not share `.pytest_cache`). A config whose addopts needs the cache provider makes the run fail, so its records are never used.
+  Django units run their driver through a bootstrap script that imports the plugin and `runpy`s the driver as `__main__`.
+- Files read before the plugin is imported are not observed: pytest's own ini/pyproject.toml/setup.cfg/tox.ini discovery. Those are
+  environment files (§5) and changing them is refused by §2, so no narrowing depends on them.
+- Directory listings made by the import system (`<frozen importlib...>` frames) or by pytest's collection (`_pytest`, `pluggy`
+  frames, standard-library helpers skipped when looking for the caller) are not dependencies: they only decide which modules and
+  test files exist, and that set changes only by additions, deletions and renames, which §2 refuses. Listings by any other code add
+  every tracked file under the listed directory (recursively) at record time.
+- In-repository paths that are not tracked: a `__pycache__/*.pyc` stands for its source `.py`; caches and build metadata derived
+  from tracked files or the environment (`__pycache__`, `.pytest_cache`, `.hypothesis`, `.mypy_cache`, `.ruff_cache`, `.tox`,
+  `.nox`, `.eggs`, `.git`, `*.egg-info`, `*.dist-info`) are dropped; paths that do not exist are dropped (negative dependencies are
+  covered by §2's refusal of additions); devices (`nul`...) are ignored; any other existing untracked file makes the record
+  incomplete ("reads untracked file").
+- `sqlite3.connect` counts as an open. ctypes usage is the audit events `ctypes.dlopen`, `ctypes.dlsym*`, `ctypes.call_function`,
+  `ctypes.cdata*`, `ctypes.string_at`, `ctypes.wstring_at`, `ctypes.seh_exception`; the reason names the first non-standard-library
+  frame. With `trust_native_env = true`, ctypes usage with no repository frame on the stack is environment native code like an
+  installed extension module and does not make the record incomplete; with a repository frame it always does. Finding: on Windows
+  pytest's terminal setup imports colorama, which calls kernel32 through ctypes, so with the strict default every Windows record is
+  incomplete.
+- Extension modules are seen through `importlib.machinery.ExtensionFileLoader.create_module` (wrapped when the plugin loads) and
+  the final `sys.modules` sweep; CPython's own are those under the base installation outside any `site-packages`.
+- A run whose collector output is missing or unreadable, or that timed out, is recorded with `Complete=false, Pass=false`; exit 5
+  sets `Pass=false` and adds "no tests ran (exit 5)" to the reasons.
+- Blob OIDs come from the working tree snapshot at HEAD (`git` index OIDs for unmodified files). With `--allow-dirty`, a modified
+  file is keyed by the blob hash of its bytes on disk without eol/filter conversion: if that differs from what git would store the
+  record is only stale (unusable), never wrong.
+- `--out FILE` writes the records to FILE instead of the state directory; `bgraph dynamic import FILE` merges them into the store.
+  `bgraph dynamic status` counts records, records of the current environment, records usable at HEAD (and why the others are
+  not) and incomplete reasons. `--trust-native-env` on the CLI (and `Options.TrustNativeEnv`) forces `trust_native_env = true`.
+
 ## 5. Environment fingerprint
 
 `sha256` of: collector version; OS + arch; Python `sys.version` + `sys.implementation` + platform tag; the sorted list of installed

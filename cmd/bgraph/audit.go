@@ -60,6 +60,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	var dyn dynamicFlag
 	dyn.register(fs)
 	python := fs.String("python", "", "interpreter of the dynamic layer (overrides bgraph.toml [dynamic_layer] python)")
+	trust := fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
@@ -90,7 +91,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, TrustNativeEnv: *trust})
 	if err != nil {
 		return fail(err)
 	}

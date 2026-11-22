@@ -46,6 +46,9 @@ func (ix *Index) dynamicConfig(rf *rules.File) (python string, trust bool) {
 	if ix.opt.Python != "" {
 		python = ix.opt.Python
 	}
+	if ix.opt.TrustNativeEnv {
+		trust = true
+	}
 	return python, trust
 }
 

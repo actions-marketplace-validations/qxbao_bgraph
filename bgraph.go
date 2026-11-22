@@ -43,6 +43,8 @@ type Options struct {
 	// Python: interpreter of the dynamic layer (docs/dynamic.md §5), overriding bgraph.toml [dynamic_layer] python. A path with
 	// a separator is relative to the repo root; a bare name is looked up on PATH.
 	Python string
+	// TrustNativeEnv forces [dynamic_layer] trust_native_env = true (records and fingerprints use the trusting collector ID).
+	TrustNativeEnv bool
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).

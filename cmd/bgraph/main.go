@@ -31,13 +31,16 @@ func main() {
 const usage = `bgraph - select affected tests from the file-level import graph (fail-closed)
 
 Usage:
-  bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...] [--dynamic[=false]] [--python EXE]
-  bgraph explain   [--root DIR] [--base REF] [--dynamic[=false]] [--python EXE] <test|file>
+  bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...] [--dynamic[=false]] [--python EXE] [--trust-native-env]
+  bgraph explain   [--root DIR] [--base REF] [--dynamic[=false]] [--python EXE] [--trust-native-env] <test|file>
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
-  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json] [--dynamic[=false]] [--python EXE]
+  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json] [--dynamic[=false]] [--python EXE] [--trust-native-env]
   bgraph index     [--root DIR]
   bgraph mcp       [--root DIR]        (MCP server on stdio)
-  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE]
+  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE] [--trust-native-env]
+  bgraph record    [--root DIR] [--python EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--json]
+  bgraph dynamic import [--root DIR] FILE
+  bgraph dynamic status [--root DIR] [--python EXE] [--trust-native-env] [--json]
   bgraph doctor                (not implemented)
   bgraph version | help
 `
@@ -60,6 +63,10 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runMCP(rest, stderr)
 	case "audit":
 		return runAudit(rest, stdout, stderr)
+	case "record":
+		return runRecord(rest, stdout, stderr)
+	case "dynamic":
+		return runDynamic(rest, stdout, stderr)
 	case "doctor":
 		fmt.Fprintf(stderr, "bgraph %s: not implemented (later phase)\n", cmd)
 		return 2
@@ -75,10 +82,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	var base, head, failed, class, listDir, python string
 	var asJSON bool
 	var dyn dynamicFlag
+	var trust bool
 	switch cmd {
 	case "affected", "explain", "command":
 		dyn.register(fs)
 		fs.StringVar(&python, "python", "", "interpreter of the dynamic layer (overrides bgraph.toml [dynamic_layer] python)")
+		fs.BoolVar(&trust, "trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	}
 	switch cmd {
 	case "affected":
@@ -115,7 +124,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: python})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: python, TrustNativeEnv: trust})
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
