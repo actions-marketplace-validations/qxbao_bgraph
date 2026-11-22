@@ -1,0 +1,40 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "Go T2 (`bgraph-eval t2 --ecosystem go`). Root directory defaults to D:/bench/bgraph-eval/t2/go: full clones <dir> (core.autocrlf=false) at R, oracle.jsonl, GOCACHE gocache-<dir> per repo (incremental builds), GOMODCACHE=D:/cache/go-mod, GOFLAGS=-mod=mod, CGO_ENABLED=0, TEMP/TMP/GOTMPDIR=<dir root>/tmp, GOTOOLCHAIN=auto (go1.26 toolchains come from the module cache). Suite: `go test -json -count=1 ./...` in every module of the repo (every go.mod outside vendor/testdata/./_ dirs); the unit is the package directory `go:<dir>` and is red when its package-level event is `fail` (failed test, crashed binary, or the package / its tests failed to build or vet). A mutant is nocompile when `go build` of the mutated package fails (no suite run). Baseline = 2 runs at R; a unit failing in both runs is excluded unless a top-level test outside its baseline failing set fails; differing units are excluded. Red units are re-run once (`go test` of just those packages) to confirm. Mutants: one-token flips (==/!=, </>=, >/<=, <=/>, >=/<, &&/||, +/-, true/false) found with go/parser in non-test, non-generated .go files that match the host build context (windows/amd64, cgo off). `mutants` = killed mutants aimed at, `tries` = mutants generated at most. Candidates dropped: go-chi/chi and BurntSushi/toml (fewer than 5 package units with tests), spf13/afero (7 units but most code sits in the root package, whose symlink tests fail at R on this host).",
+ "repos": [
+  {
+   "name": "hashicorp/hcl",
+   "dir": "hcl",
+   "eco": "go",
+   "remote": "https://github.com/hashicorp/hcl.git",
+   "r": "94e232b58b12531a80299e3aa7566f345e17c21b",
+   "covers": "single module, ~18 packages with tests (hclsyntax, hclwrite, gohcl, json, ext/*, cmd/*)",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-go-v1"
+  },
+  {
+   "name": "prometheus/common",
+   "dir": "common",
+   "eco": "go",
+   "remote": "https://github.com/prometheus/common.git",
+   "r": "0675c9eff1ec4c23616e2998b9faf3c85d090224",
+   "covers": "two modules (root, assets): config, expfmt, model, promslog, route, version, helpers/templates...; config's TestMissingBearerAuthFile fails at R on Windows (name-level baseline)",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-go-v1"
+  },
+  {
+   "name": "connectrpc/connect-go",
+   "dir": "connect-go",
+   "eco": "go",
+   "remote": "https://github.com/connectrpc/connect-go.git",
+   "r": "dfd241af47b06f4b87c18165af66a0d4b3b0e505",
+   "covers": "four modules: root (connect, internal/*), cmd/connect-go-v2-migrate (its script tests fail at R on Windows), internal/example, internal/conformance (no package under the default build tags)",
+   "mutants": 20,
+   "tries": 70,
+   "seed": "t2-go-v1"
+  }
+ ]
+}

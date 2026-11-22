@@ -62,6 +62,7 @@ func T2Markdown(q T2Result) string {
 	}
 	rustReport(&b, q)
 	pythonReport(&b, q)
+	goReport(&b, q)
 	b.WriteString("\n## native⊄ bgraph\n\n")
 	n = 0
 	for _, r := range q.Repos {

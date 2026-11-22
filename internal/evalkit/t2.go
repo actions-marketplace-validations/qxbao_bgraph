@@ -600,6 +600,8 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		return r.buildOraclePython(ctx, cfg, store, have)
 	case "jvm", "dotnet":
 		return r.buildOracleJD(ctx, cfg, store, have)
+	case "go":
+		return r.buildOracleGo(ctx, cfg, store, have)
 	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -810,6 +812,10 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 		ck.Changed = sel.Changed
 		ck.Near = jdNear(sel, ck.Missed)
 		return ck
+	case "go":
+		ck.Changed = sel.Changed
+		ck.Near = goNear(sel, ck.Missed)
+		return ck
 	}
 	diagFor := ck.Missed
 	if len(diagFor) == 0 && len(ck.NativeOnly) > 0 {
@@ -936,7 +942,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" {
+	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`
