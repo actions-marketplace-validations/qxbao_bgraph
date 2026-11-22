@@ -1,6 +1,7 @@
 package python
 
 import (
+	"encoding/json"
 	"path"
 	"regexp"
 	"strings"
@@ -289,18 +290,55 @@ func splitLines(s string) []string {
 	return out
 }
 
-// EnvFile reports whether p is part of the Python environment of a repository for the dynamic layer's fingerprint
-// (docs/dynamic.md §5): a manifest, lockfile, requirements file, runner configuration or toolchain pin. A change to one of these
-// changes what is installed or how tests are launched, so records made with other contents are not used.
-func EnvFile(p string) bool {
+// RunnerConfigFile reports whether p is a file pytest may read its configuration from, part of the dynamic layer's environment
+// fingerprint (docs/dynamic.md §5). Manifests and lockfiles are not: the installed distributions fingerprint the environment.
+func RunnerConfigFile(p string) bool {
 	if skipPath(p) {
 		return false
 	}
-	base := path.Base(p)
-	switch base {
-	case "pyproject.toml", "setup.cfg", "setup.py", "tox.ini", "pytest.ini", ".pytest.ini", "pytest.toml", ".pytest.toml",
-		"Pipfile", "noxfile.py", ".python-version":
+	switch path.Base(p) {
+	case "pytest.ini", ".pytest.ini", "pytest.toml", ".pytest.toml", "tox.ini", "setup.cfg", "pyproject.toml":
 		return true
 	}
-	return isLockfile(base) || isRequirementsFile(p) || path.Ext(base) == ".lock"
+	return false
+}
+
+// RunnerConfigPart returns the part of runner config file p (RunnerConfigFile) that configures pytest: the [tool.pytest] table
+// of pyproject.toml (re-encoded canonically) and the [tool:pytest] section of setup.cfg; the whole content for the other files,
+// and whenever the part cannot be extracted reliably (pyproject.toml that does not parse).
+func RunnerConfigPart(p string, content []byte) string {
+	switch path.Base(p) {
+	case "pyproject.toml":
+		var doc map[string]any
+		if err := toml.Unmarshal(content, &doc); err != nil {
+			return "whole:" + string(content)
+		}
+		t := tbl(tbl(doc["tool"])["pytest"])
+		if len(t) == 0 {
+			return ""
+		}
+		b, err := json.Marshal(t) // map keys are sorted: canonical
+		if err != nil {
+			return "whole:" + string(content)
+		}
+		return "tool.pytest:" + string(b)
+	case "setup.cfg":
+		var out []string
+		in := false
+		for _, l := range strings.Split(strings.ReplaceAll(string(content), "\r\n", "\n"), "\n") {
+			t := strings.TrimSpace(l)
+			if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
+				in = strings.EqualFold(strings.TrimSpace(t[1:len(t)-1]), "tool:pytest")
+				continue
+			}
+			if in {
+				out = append(out, strings.TrimRight(l, " \t"))
+			}
+		}
+		if len(out) == 0 {
+			return ""
+		}
+		return "tool:pytest:" + strings.Join(out, "\n")
+	}
+	return "whole:" + string(content)
 }

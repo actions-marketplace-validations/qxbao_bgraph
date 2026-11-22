@@ -99,8 +99,8 @@ Clarifications (implementation, `internal/dynamic/pydyn`):
   as the runner adapter pins rootdir/config, with `PYTHONDONTWRITEBYTECODE=1` (no cache writes into the checkout; parallel units do
   not share `.pytest_cache`). A config whose addopts needs the cache provider makes the run fail, so its records are never used.
   Django units run their driver through a bootstrap script that imports the plugin and `runpy`s the driver as `__main__`.
-- Files read before the plugin is imported are not observed: pytest's own ini/pyproject.toml/setup.cfg/tox.ini discovery. Those are
-  environment files (§5) and changing them is refused by §2, so no narrowing depends on them.
+- Files read before the plugin is imported are not observed: pytest's own ini/pyproject.toml/setup.cfg/tox.ini discovery. Their
+  pytest sections are in the fingerprint (§5) and changing those files is refused by §2, so no narrowing depends on them.
 - Directory listings made by the import system (`<frozen importlib...>` frames) or by pytest's collection (`_pytest`, `pluggy`
   frames, standard-library helpers skipped when looking for the caller) are not dependencies: they only decide which modules and
   test files exist, and that set changes only by additions, deletions and renames, which §2 refuses. Listings by any other code add
@@ -135,19 +135,25 @@ Clarifications (implementation, `internal/dynamic/pydyn`):
 
 ## 5. Environment fingerprint
 
-`sha256` of: collector version; OS + arch; Python `sys.version` + `sys.implementation` + platform tag; the sorted list of installed
-distributions (`importlib.metadata`, name==version) of the interpreter; and the blob OIDs at B of the ecosystem's manifests, lockfiles and runner
-configs (pyproject.toml, setup.cfg, setup.py, tox.ini, pytest.ini, requirements*.txt, *.lock...). At selection time bgraph computes the same
-fingerprint by running the configured interpreter once (`[dynamic] python = "..."`, default `python` on PATH; cached per Index by executable
-path+mtime). If the interpreter cannot run → no narrowing (note).
+`sha256` of: fingerprint version; collector version; OS + arch; Python `sys.version` + `sys.implementation` + platform tag; the sorted list
+of installed distributions (`importlib.metadata`, name==version) of the interpreter; and, for every pytest configuration file at B
+(pytest.ini, .pytest.ini, pytest.toml, .pytest.toml, tox.ini, setup.cfg, pyproject.toml), a digest of the part that configures pytest:
+the `[tool.pytest]` table of pyproject.toml (`ini_options` and the native table; re-encoded canonically), the `[tool:pytest]` section
+of setup.cfg, the whole file otherwise and whenever the part cannot be extracted (a pyproject.toml that does not parse). At selection
+time bgraph computes the same fingerprint by running the configured interpreter once (`[dynamic_layer] python = "..."`, default
+`python` on PATH; cached per Index by executable path+mtime). If the interpreter cannot run → no narrowing (note).
+
+Decision (2026-11-22, Phase 6 evaluation): manifests, lockfiles, requirements files and toolchain pins are **not** in the fingerprint
+(version 2; records of version 1 no longer match). The installed distributions already fingerprint the environment the tests actually
+ran in, and with lockfiles in it every routine lock bump invalidated every record (replay: all records unusable after 26–60 of 150
+commits). A diff that changes a manifest, lockfile or configuration still blocks narrowing through §2. conftest.py files are
+dependencies in the records, not part of the fingerprint.
 
 Clarification (implementation): the probe runs a script from an otherwise empty temporary directory (no repository module can shadow
 what it imports), from the repo root, without isolation flags (PYTHONPATH and user site count, as for the tests). The cached probe is
 also dropped when the modification time of one of the interpreter's `sys.path` directories changes, so that an install into the same
-interpreter during a long-lived session (MCP) is seen. Distribution names are normalized (PEP 503). The environment files are, at any
-depth outside `node_modules`/`site-packages`: pyproject.toml, setup.cfg, setup.py, tox.ini, pytest.ini, .pytest.ini, pytest.toml,
-.pytest.toml, Pipfile, noxfile.py, .python-version, requirements/constraints files and every `*.lock` / pylock file.
-`trust_native_env = true` changes the collector ID (`python-audit-1+trust-native`), so records made under one setting are not
+interpreter during a long-lived session (MCP) is seen. Distribution names are normalized (PEP 503). Configuration files are found at
+any depth outside `node_modules`/`site-packages`. `trust_native_env = true` changes the collector ID (`python-audit-1+trust-native`), so records made under one setting are not
 used under the other.
 
 ## 6. Output and tooling

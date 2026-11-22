@@ -5,6 +5,8 @@ package pydyn
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	_ "embed"
 	"errors"
 	"fmt"
@@ -109,13 +111,21 @@ func Probe(ctx context.Context, exe, cwd, tmpDir string) (Interp, error) {
 	return in, nil
 }
 
-// EnvFiles returns the blob OIDs of the Python environment files of t (python.EnvFile).
+// EnvFiles returns, for every pytest configuration file of t (python.RunnerConfigFile), a digest of the part that configures
+// pytest (python.RunnerConfigPart). Manifests and lockfiles are not included: the installed distributions are.
 func EnvFiles(t tree.Tree) map[string]string {
 	out := map[string]string{}
 	for _, p := range t.Files() {
-		if python.EnvFile(p) {
-			out[p] = t.Key(p)
+		if !python.RunnerConfigFile(p) {
+			continue
 		}
+		b, err := t.Read(p)
+		if err != nil {
+			out[p] = "unreadable:" + t.Key(p)
+			continue
+		}
+		h := sha256.Sum256([]byte(python.RunnerConfigPart(p, b)))
+		out[p] = hex.EncodeToString(h[:])
 	}
 	return out
 }

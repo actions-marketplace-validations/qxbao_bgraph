@@ -13,30 +13,73 @@ import (
 )
 
 func TestEnvFiles(t *testing.T) {
-	tr := tree.NewMapTree(map[string]string{
-		"pyproject.toml": "a", "sub/setup.cfg": "b", "requirements-dev.txt": "c", "uv.lock": "d", "tox.ini": "e", ".python-version": "f",
-		"pkg/a.py": "", "conftest.py": "", "node_modules/x/pyproject.toml": "", "README.md": "", "docs/requirements/base.txt": "g",
-	})
+	pyproject := `[project]
+name = "x"
+version = "1"
+dependencies = ["a"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+`
+	setupCfg := `[metadata]
+name = x
+
+[tool:pytest]
+testpaths = tests
+`
+	base := map[string]string{
+		"pyproject.toml": pyproject, "sub/setup.cfg": setupCfg, "requirements-dev.txt": "c", "uv.lock": "d", "tox.ini": "e",
+		".python-version": "f", "pytest.ini": "[pytest]\n", "pkg/a.py": "", "conftest.py": "", "node_modules/x/pyproject.toml": "",
+		"README.md": "", "setup.py": "s",
+	}
+	tr := tree.NewMapTree(base)
 	got := EnvFiles(tr)
 	var keys []string
 	for k := range got {
 		keys = append(keys, k)
 	}
 	slices.Sort(keys)
-	want := []string{".python-version", "docs/requirements/base.txt", "pyproject.toml", "requirements-dev.txt", "sub/setup.cfg", "tox.ini", "uv.lock"}
-	if !slices.Equal(keys, want) {
+	if want := []string{"pyproject.toml", "pytest.ini", "sub/setup.cfg", "tox.ini"}; !slices.Equal(keys, want) {
 		t.Fatalf("%v", keys)
 	}
-	if got["uv.lock"] != tr.Key("uv.lock") {
-		t.Error("key")
+	fp := func(over map[string]string) string {
+		m := map[string]string{}
+		for k, v := range base {
+			m[k] = v
+		}
+		for k, v := range over {
+			m[k] = v
+		}
+		return Fingerprint(Collector(false), []string{"x"}, tree.NewMapTree(m))
 	}
-	a := Fingerprint(Collector(false), []string{"x"}, tr)
+	a := fp(nil)
 	if a == Fingerprint(Collector(true), []string{"x"}, tr) {
 		t.Error("trust setting not in the fingerprint")
 	}
-	tr2 := tree.NewMapTree(map[string]string{"pyproject.toml": "a2"})
-	if a == Fingerprint(Collector(false), []string{"x"}, tr2) {
-		t.Error("manifest content not in the fingerprint")
+	// Lockfiles, requirements, setup.py and the non-pytest parts of pyproject.toml/setup.cfg do not change it.
+	for name, over := range map[string]map[string]string{
+		"lockfile":          {"uv.lock": "d2"},
+		"requirements":      {"requirements-dev.txt": "c2"},
+		"setup.py":          {"setup.py": "s2"},
+		"pyproject project": {"pyproject.toml": strings.Replace(pyproject, `["a"]`, `["a", "b"]`, 1)},
+		"setup.cfg meta":    {"sub/setup.cfg": strings.Replace(setupCfg, "name = x", "name = y", 1)},
+	} {
+		if fp(over) != a {
+			t.Errorf("%s changes the fingerprint", name)
+		}
+	}
+	// The pytest configuration does.
+	for name, over := range map[string]map[string]string{
+		"pyproject pytest":  {"pyproject.toml": strings.Replace(pyproject, `"-q"`, `"-x"`, 1)},
+		"setup.cfg pytest":  {"sub/setup.cfg": strings.Replace(setupCfg, "testpaths = tests", "testpaths = t", 1)},
+		"tox.ini":           {"tox.ini": "e2"},
+		"pytest.ini":        {"pytest.ini": "[pytest]\naddopts = -x\n"},
+		"broken pyproject":  {"pyproject.toml": pyproject + "[[[\n"},
+		"new pytest config": {"tests/pytest.ini": "[pytest]\n"},
+	} {
+		if fp(over) == a {
+			t.Errorf("%s does not change the fingerprint", name)
+		}
 	}
 }
 

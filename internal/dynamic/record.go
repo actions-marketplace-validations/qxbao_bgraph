@@ -219,11 +219,12 @@ func Add(file string, add []Record) ([]string, error) {
 }
 
 // Fingerprint combines the parts of an environment into the fingerprint stored in records (docs/dynamic.md §5): the collector,
-// the interpreter description lines (OS, arch, version, installed distributions...; order-insensitive) and the blob OIDs of the
-// ecosystem's manifests, lockfiles and runner configs (path → OID). Callers compute it the same way at record and select time.
+// the interpreter description lines (OS, arch, version, installed distributions...; order-insensitive) and a digest of each runner
+// configuration file (path → digest). Callers compute it the same way at record and select time. Version 2: manifests and
+// lockfiles left the file list (records of version 1 no longer match).
 func Fingerprint(collector string, interp []string, files map[string]string) string {
 	h := sha256.New()
-	fmt.Fprintf(h, "bgraph-env-1\ncollector %s\n", collector)
+	fmt.Fprintf(h, "bgraph-env-2\ncollector %s\n", collector)
 	lines := slices.Clone(interp)
 	slices.Sort(lines)
 	for _, l := range lines {
