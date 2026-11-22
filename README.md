@@ -11,11 +11,17 @@
 
 <p align="center">
   <a href="https://github.com/qxbao/bgraph/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/qxbao/bgraph/ci.yml?branch=main&style=flat&labelColor=0F172A&color=14B8A6&logo=githubactions&logoColor=white&label=CI" alt="CI"></a>
+  <a href="https://github.com/qxbao/bgraph/releases/latest"><img src="https://img.shields.io/github/v/release/qxbao/bgraph?style=flat&labelColor=0F172A&color=14B8A6&label=release" alt="Latest release"></a>
+  <a href="https://github.com/qxbao/bgraph/releases"><img src="https://img.shields.io/github/downloads/qxbao/bgraph/total?style=flat&labelColor=0F172A&color=14B8A6" alt="Downloads"></a>
   <a href="go.mod"><img src="https://img.shields.io/github/go-mod/go-version/qxbao/bgraph?style=flat&labelColor=0F172A&color=14B8A6&logo=go&logoColor=white" alt="Go version"></a>
+  <a href="https://pkg.go.dev/github.com/qxbao/bgraph"><img src="https://img.shields.io/badge/go-reference-14B8A6?style=flat&labelColor=0F172A&logo=go&logoColor=white" alt="Go Reference"></a>
+  <a href="https://goreportcard.com/report/github.com/qxbao/bgraph"><img src="https://goreportcard.com/badge/github.com/qxbao/bgraph" alt="Go Report Card"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-F59E0B?style=flat&labelColor=0F172A" alt="License: Apache-2.0"></a>
+  <br>
   <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go"></a>
   <a href="#built-for-coding-agents"><img src="https://img.shields.io/badge/MCP-server%20included-white?style=flat&labelColor=0F172A" alt="MCP server included"></a>
-  <img src="https://img.shields.io/badge/tested%20on-Linux%20%C2%B7%20Windows-white?style=flat&labelColor=0F172A" alt="Tested on Linux and Windows">
+  <a href="#github-action"><img src="https://img.shields.io/badge/GitHub%20Action-qxbao%2Fbgraph%40v0-white?style=flat&labelColor=0F172A&logo=githubactions&logoColor=white" alt="GitHub Action: qxbao/bgraph@v0"></a>
+  <img src="https://img.shields.io/badge/tested%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-white?style=flat&labelColor=0F172A" alt="Tested on Linux, macOS and Windows">
 </p>
 
 ---
@@ -147,13 +153,43 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 | 🤖 **MCP server** | `bgraph mcp` gives coding agents `affected_tests`, `dependents_of` and `explain_selection`. [MCP](docs/cli.md#mcp) |
 | 🧩 **Go library** | Embed the selector in your own tooling with `bgraph.Open` and `Index.Select`. |
 
-## Quick start
+## Install
+
+**Prebuilt binaries** for Linux, macOS and Windows (amd64 and arm64) are on the
+[releases page](https://github.com/qxbao/bgraph/releases/latest), with a `checksums.txt` (SHA-256) for each release.
+
+Linux and macOS:
+
+```sh
+v=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/qxbao/bgraph/releases/latest | sed 's|.*/tag/v||')
+os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
+curl -fsSL "https://github.com/qxbao/bgraph/releases/download/v$v/bgraph_${v}_${os}_${arch}.tar.gz" | tar -xz bgraph
+sudo mv bgraph /usr/local/bin/
+```
+
+Windows (PowerShell; use `windows_arm64` on ARM):
+
+```powershell
+$v = (Invoke-RestMethod https://api.github.com/repos/qxbao/bgraph/releases/latest).tag_name.TrimStart('v')
+Invoke-WebRequest "https://github.com/qxbao/bgraph/releases/download/v$v/bgraph_${v}_windows_amd64.zip" -OutFile bgraph.zip
+Expand-Archive bgraph.zip -DestinationPath "$env:LOCALAPPDATA\bgraph" -Force
+# then add $env:LOCALAPPDATA\bgraph to your PATH
+```
+
+**From source** (Go 1.25 or later):
 
 ```sh
 go install github.com/qxbao/bgraph/cmd/bgraph@latest
 ```
 
-bgraph needs `git` on `PATH`. Then, in any repository:
+**In GitHub Actions:** `uses: qxbao/bgraph@v0` installs a release and computes the selection; see
+[GitHub Action](#github-action).
+
+`bgraph version` prints the installed version.
+
+## Quick start
+
+bgraph needs `git` on `PATH`. In any repository:
 
 ```sh
 bgraph affected --base origin/main          # tests affected by your working tree
@@ -191,9 +227,58 @@ Adopt it in two steps:
 1. **Shadow mode.** Keep the full suite; add `bgraph audit` after it. Every failure the selection would have skipped is
    reported, nothing is ever skipped. See the [GitHub Actions example](docs/ci/shadow-github-actions.yml).
 2. **Selection.** Once the shadow runs are clean, run `bgraph command --base origin/${{ github.base_ref }}` and execute
-   its output. A `full` scope tells you to run everything, so the job is never less safe than before.
+   its output, or use the [GitHub Action](#github-action). A `full` scope tells you to run everything, so the job is never
+   less safe than before. See the [selection example](docs/ci/select-github-actions.yml).
 
 Check out with `fetch-depth: 0`: bgraph needs the base commit.
+
+### GitHub Action
+
+`qxbao/bgraph@v0` downloads a release binary for the runner (Linux, macOS or Windows; verified against the release's
+`checksums.txt`), adds it to `PATH` and runs the selection:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+    with:
+      fetch-depth: 0 # required: without the base commit every selection is "full"
+
+  - id: bgraph
+    uses: qxbao/bgraph@v0
+
+  - name: Affected tests
+    if: steps.bgraph.outputs.full != 'true'
+    env:
+      SCRIPT: ${{ steps.bgraph.outputs.script }}
+    run: bash "$SCRIPT"
+
+  - name: Full suite
+    if: steps.bgraph.outputs.full == 'true'
+    run: npm test
+```
+
+| Input | Default | Meaning |
+|---|---|---|
+| `version` | `latest` | release to install, e.g. `v0.1.0` |
+| `base` | see below | base ref or commit |
+| `mode` | `command` | `command` (runner commands), `affected` (selection JSON) or `audit` (shadow mode; pass `--results FILE` in `args`) |
+| `root` | `.` | directory inside the repository |
+| `args` | | extra flags for the bgraph command, split on whitespace |
+
+The default base is `origin/<base branch>` on `pull_request`, the merge group's base on `merge_group`, and the commit
+before the push on `push` (`HEAD~1` when that commit is unknown, e.g. for a new branch).
+
+| Output | Meaning |
+|---|---|
+| `scope` | `none`, `graph`, `package`, `module` or `full` |
+| `full` | `'true'` when the full suite must run |
+| `commands` | the runner commands, one shell line each (mode `command`) |
+| `script` | path to a bash script that runs them with `set -e` (mode `command`) |
+| `json` | path to bgraph's JSON output (plan, selection or audit report) |
+| `clean` | mode `audit`: `'true'` when no failed test lies outside the selection |
+
+A `full` selection is not an error: the step fails only when bgraph itself fails. Complete workflows:
+[selection](docs/ci/select-github-actions.yml) and [shadow mode](docs/ci/shadow-github-actions.yml).
 
 ## Documentation
 

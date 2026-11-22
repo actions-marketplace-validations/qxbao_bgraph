@@ -11,6 +11,7 @@
 | [Evaluation](evaluation.md) | How soundness is tested (fixtures, FAIL_TO_PASS, mutation, provider checks) and the results |
 | [Benchmarks](benchmarks.md) | Comparison with general code-graph tools (codegraph, GitNexus, graphify) |
 | [Shadow-mode workflow](ci/shadow-github-actions.yml) | A GitHub Actions workflow that audits selections against full runs |
+| [Selection workflow](ci/select-github-actions.yml) | A GitHub Actions workflow that runs only the affected tests with the `qxbao/bgraph` action |
 
 ## Ecosystems
 

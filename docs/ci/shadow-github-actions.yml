@@ -53,38 +53,21 @@ jobs:
         continue-on-error: true
         run: npx vitest run --reporter=junit --outputFile=test-results/junit.xml
 
-      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
-        with:
-          go-version: stable
-          cache: false
-
-      - name: Install bgraph
-        run: go install github.com/qxbao/bgraph/cmd/bgraph@latest # pin a version once you adopt it
-
-      # 2. Audit. The base is the PR target on pull_request; on push, the commit before the push (all of its commits,
-      #    not only the last one), falling back to HEAD~1 for a new branch.
-      #    Several --results files may be given (e.g. one per shard or per runner); --format defaults to auto-detection.
-      #    Event values go through env, never straight into the script (script-injection hygiene).
+      # 2. Audit with the qxbao/bgraph action: it installs a release binary (pin one, e.g. version: v0.1.0, once you
+      #    adopt it) and runs `bgraph audit --json` against HEAD. The base is the PR target on pull_request; on push,
+      #    the commit before the push (all of its commits, not only the last one), falling back to HEAD~1 for a new
+      #    branch. Several --results files may be given (e.g. one per shard or per runner); --format defaults to
+      #    auto-detection. A missed failure (audit exit 3) is a warning annotation and the output clean = 'false'; the
+      #    step fails only when the audit cannot run (e.g. the results file is missing).
+      #    Without the action: install the binary (see the README) and run
+      #    bgraph audit --results test-results/junit.xml --base "$BASE" --head HEAD --log test-results/bgraph-shadow.jsonl
       - name: bgraph audit (shadow, never blocks)
         id: audit
         continue-on-error: true
-        env:
-          EVENT: ${{ github.event_name }}
-          BASE_REF: ${{ github.base_ref }}
-          BEFORE: ${{ github.event.before }}
-        run: |
-          if [ "$EVENT" = "pull_request" ]; then
-            BASE="origin/$BASE_REF"
-          elif [ -n "$BEFORE" ] && [ "$BEFORE" != "0000000000000000000000000000000000000000" ]; then
-            BASE="$BEFORE"
-          else
-            BASE="HEAD~1"
-          fi
-          "$(go env GOPATH)/bin/bgraph" audit \
-            --results test-results/junit.xml \
-            --base "$BASE" \
-            --head HEAD \
-            --log test-results/bgraph-shadow.jsonl
+        uses: qxbao/bgraph@v0
+        with:
+          mode: audit
+          args: --results test-results/junit.xml --log test-results/bgraph-shadow.jsonl
 
       # 3. Keep the log: it holds one JSON line per run. Persist it across runs (cache, a branch, an object store) to
       #    make the "clean shadow runs in a row" counter meaningful; an artifact alone only shows this run.
@@ -97,11 +80,16 @@ jobs:
             test-results/junit.xml
           if-no-files-found: ignore
 
-      # The job itself only fails when the shadow could not run (e.g. the results file is missing: audit exit 1).
-      # Exit 3 (missed failure) is reported as a warning annotation and never blocks the merge.
+      # Nothing here blocks the merge: a missed failure and an audit that could not run are both warning annotations.
       - name: Report
         if: always()
+        env:
+          OUTCOME: ${{ steps.audit.outcome }}
+          CLEAN: ${{ steps.audit.outputs.clean }}
+          REPORT: ${{ steps.audit.outputs.json }}
         run: |
-          if [ "${{ steps.audit.outcome }}" = "failure" ]; then
-            echo "::warning title=bgraph shadow::audit reported a missed failure or could not run; see the step log"
+          if [ "$OUTCOME" = "failure" ]; then
+            echo "::warning title=bgraph shadow::the audit could not run; see the step log"
+          elif [ "$CLEAN" = "false" ]; then
+            echo "::warning title=bgraph shadow::a failed test lies outside the selection; see $REPORT"
           fi
