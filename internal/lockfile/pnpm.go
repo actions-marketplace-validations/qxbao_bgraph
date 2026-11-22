@@ -1,7 +1,10 @@
 package lockfile
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
 	"path"
 	"sort"
 	"strings"
@@ -21,9 +24,9 @@ var pnpmGraphKeys = map[string]bool{"importers": true, "packages": true, "snapsh
 
 // ParsePnpm reads a pnpm-lock.yaml with lockfileVersion 6.x or 9.0.
 func ParsePnpm(dir string, data []byte) (*Graph, error) {
-	var top map[string]any
-	if err := yaml.Unmarshal(data, &top); err != nil {
-		return nil, fmt.Errorf("pnpm-lock.yaml: %w", err)
+	top, env, err := pnpmDocuments(data)
+	if err != nil {
+		return nil, err
 	}
 	ver := fmt.Sprint(top["lockfileVersion"])
 	v9 := ver == "9.0"
@@ -36,6 +39,9 @@ func ParsePnpm(dir string, data []byte) (*Graph, error) {
 		if !pnpmGraphKeys[k] {
 			extra[k] = v
 		}
+	}
+	if env != nil {
+		extra["<env lockfile>"] = env // the package manager's own pinned version: a change is outside the graph
 	}
 	g.Extra = canon(extra)
 
@@ -212,6 +218,62 @@ func ParsePnpm(dir string, data []byte) (*Graph, error) {
 		return nil, perr
 	}
 	return g, nil
+}
+
+// pnpmDocuments splits a pnpm-lock.yaml into its main document and, when present, the leading "env lockfile" document
+// (recent pnpm writes the package manager's own pinned version and config dependencies as a first YAML document,
+// followed by the project lockfile). Any other multi-document layout is an error.
+func pnpmDocuments(data []byte) (main, env map[string]any, err error) {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	var docs []map[string]any
+	for {
+		var d map[string]any
+		if err := dec.Decode(&d); err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return nil, nil, fmt.Errorf("pnpm-lock.yaml: %w", err)
+		}
+		docs = append(docs, d)
+	}
+	switch len(docs) {
+	case 0:
+		return nil, nil, fmt.Errorf("pnpm-lock.yaml: empty")
+	case 1:
+		return docs[0], nil, nil
+	case 2:
+		if !pnpmEnvDocument(docs[0]) {
+			return nil, nil, fmt.Errorf("pnpm-lock.yaml: unrecognised first document of two")
+		}
+		return docs[1], docs[0], nil
+	}
+	return nil, nil, fmt.Errorf("pnpm-lock.yaml: %d YAML documents", len(docs))
+}
+
+// pnpmEnvDocument reports whether d is an env lockfile: its only importer is "." and it records nothing but
+// configDependencies and packageManagerDependencies.
+func pnpmEnvDocument(d map[string]any) bool {
+	imps, ok := d["importers"].(map[string]any)
+	if !ok || len(imps) != 1 {
+		return false
+	}
+	root, ok := imps["."].(map[string]any)
+	if !ok && imps["."] != nil {
+		return false
+	}
+	for k := range root {
+		if k != "configDependencies" && k != "packageManagerDependencies" {
+			return false
+		}
+	}
+	for k := range d {
+		switch k {
+		case "lockfileVersion", "importers", "packages", "snapshots":
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 func startsDigit(s string) bool { return s != "" && s[0] >= '0' && s[0] <= '9' }

@@ -95,6 +95,57 @@ func TestPnpmWorkspaceClosure(t *testing.T) {
 	}
 }
 
+// Recent pnpm writes an "env lockfile" (the package manager's pinned version) as a first YAML document; the project
+// lockfile is the second document. Reading only the first document would see no project dependencies at all.
+const pnpmEnvDoc = `---
+lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    configDependencies: {}
+    packageManagerDependencies:
+      pnpm:
+        specifier: 10.0.0
+        version: 10.0.0
+
+packages:
+
+  pnpm@10.0.0:
+    resolution: {integrity: sha512-pnpm}
+
+snapshots:
+
+  pnpm@10.0.0: {}
+
+---
+`
+
+func TestPnpmEnvDocument(t *testing.T) {
+	g := mustParse(t, "pnpm-lock.yaml", ".", pnpmEnvDoc+pnpm9)
+	if got := len(g.Projects); got != 3 {
+		t.Fatalf("projects = %d", got)
+	}
+	var got []string
+	for _, id := range g.Packages(g.Projects["packages/a"]) {
+		if n := g.Nodes[id]; n.Project == "" {
+			got = append(got, n.Package+"@"+n.Version)
+		}
+	}
+	if !slices.Equal(got, []string{"lodash@4.17.21", "ms@2.1.3"}) {
+		t.Fatalf("closure of a = %v", got)
+	}
+	// A package manager version bump is outside the graph: not comparable.
+	plain := mustParse(t, "pnpm-lock.yaml", ".", pnpm9)
+	if _, err := Compare(plain, g); err == nil {
+		t.Fatal("env lockfile change must not compare")
+	}
+	// An unknown first document is an error.
+	if _, err := Parse("pnpm-lock.yaml", ".", []byte("---\nfoo: 1\n---\n"+pnpm9)); err == nil {
+		t.Fatal("unknown multi-document layout must not parse")
+	}
+}
+
 const npm3 = `{
   "name": "root", "lockfileVersion": 3, "requires": true,
   "packages": {
