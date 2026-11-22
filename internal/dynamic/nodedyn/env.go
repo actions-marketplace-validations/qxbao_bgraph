@@ -1,4 +1,4 @@
-// Package nodedyn is the Node part of the dynamic layer (docs/dynamic.md §8): the --require collector behind `bgraph record`,
+// Package nodedyn is the Node part of the dynamic layer (docs/dynamic-layer.md §8): the --require collector behind `bgraph record`,
 // the merging of its per-process logs, and the environment fingerprint.
 package nodedyn
 
@@ -86,7 +86,7 @@ func Probe(ctx context.Context, exe, cwd string) ([]string, error) {
 	return lines, nil
 }
 
-// stateFiles are the package managers' records of the installed tree, in order of preference (docs/dynamic.md §8.4).
+// stateFiles are the package managers' records of the installed tree, in order of preference (docs/dynamic-layer.md §8.4).
 var stateFiles = []string{".package-lock.json", ".pnpm/lock.yaml", ".yarn-state.yml", ".yarn-integrity"}
 
 // projectDirs: the repository root and every directory of t with a package.json outside node_modules.
@@ -199,7 +199,7 @@ func PackageJSONPart(b []byte) string {
 	return string(out)
 }
 
-// EnvFiles returns the configuration digests of tree t that enter the fingerprint (docs/dynamic.md §8.4).
+// EnvFiles returns the configuration digests of tree t that enter the fingerprint (docs/dynamic-layer.md §8.4).
 func EnvFiles(t tree.Tree) map[string]string {
 	out := map[string]string{}
 	for _, p := range t.Files() {
@@ -221,7 +221,7 @@ func EnvFiles(t tree.Tree) map[string]string {
 	return out
 }
 
-// Fingerprint is the environment fingerprint of docs/dynamic.md §8.4.
+// Fingerprint is the environment fingerprint of docs/dynamic-layer.md §8.4.
 func Fingerprint(collector string, probe, installed []string, t tree.Tree) string {
 	return dynamic.Fingerprint(collector, append(slices.Clone(probe), installed...), EnvFiles(t))
 }

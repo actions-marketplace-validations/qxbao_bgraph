@@ -291,7 +291,7 @@ func splitLines(s string) []string {
 }
 
 // RunnerConfigFile reports whether p is a file pytest may read its configuration from, part of the dynamic layer's environment
-// fingerprint (docs/dynamic.md §5). Manifests and lockfiles are not: the installed distributions fingerprint the environment.
+// fingerprint (docs/dynamic-layer.md §5). Manifests and lockfiles are not: the installed distributions fingerprint the environment.
 func RunnerConfigFile(p string) bool {
 	if skipPath(p) {
 		return false

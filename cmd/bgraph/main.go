@@ -1,4 +1,4 @@
-// Command bgraph is the CLI that selects affected tests (docs/plan.md §7.2).
+// Command bgraph is the CLI that selects affected tests (docs/cli.md).
 //
 // Exit codes: 0 success, 1 tool error, 2 usage error.
 package main
@@ -282,7 +282,7 @@ func printSelection(w io.Writer, sel model.Selection) {
 type dynamicFlag struct{ mode bgraph.DynamicMode }
 
 func (d *dynamicFlag) register(fs *flag.FlagSet) {
-	fs.Var(d, "dynamic", "narrow widened tests with recorded dependencies (docs/dynamic.md); =false disables it even if bgraph.toml enables it")
+	fs.Var(d, "dynamic", "narrow widened tests with recorded dependencies (docs/dynamic-layer.md); =false disables it even if bgraph.toml enables it")
 }
 func (d *dynamicFlag) IsBoolFlag() bool { return true }
 func (d *dynamicFlag) String() string   { return string(d.mode) }

@@ -30,7 +30,7 @@ type Unit struct {
 	Project string // the directory the runner runs from (repo-relative)
 	Runner  string // vitest, jest, mocha, node-test, ava
 	Files   []string
-	// Incomplete: reasons known before running (docs/dynamic.md §8.3 rule 4, jest hasteImpl); the unit still runs.
+	// Incomplete: reasons known before running (docs/dynamic-layer.md §8.3 rule 4, jest hasteImpl); the unit still runs.
 	Incomplete []string
 }
 
@@ -169,7 +169,7 @@ func versionAtLeast(v string, major, minor int) bool {
 	return ma > major || (ma == major && mi >= minor)
 }
 
-// Args returns the arguments after the node executable that run unit u alone (docs/dynamic.md §8.1). bin is the runner's JS
+// Args returns the arguments after the node executable that run unit u alone (docs/dynamic-layer.md §8.1). bin is the runner's JS
 // entry point and version its package version (unused for node-test). file is the unit's file relative to the project.
 func Args(runner, bin, version, file string) ([]string, error) {
 	if strings.HasPrefix(file, "-") {

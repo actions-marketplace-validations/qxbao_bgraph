@@ -1,7 +1,7 @@
 {
  "version": 1,
  "ts": "../tools/node_modules/typescript",
- "notes": "Phase 6 Node set (docs/dynamic.md §8.6), root D:\\bench\\bgraph-eval\\t2\\node-dyn. Full clones (history for the replay) at the same R as the T2 set for hono and dayjs; express and immutable-js at the commit of the Phase 1 checkouts. Installs: hono `pnpm install --frozen-lockfile --ignore-scripts` (pnpm from <t2>/tools), dayjs and immutable-js `npm ci --ignore-scripts`, express `npm install --ignore-scripts --no-package-lock`. The hybrid T2 of hono and dayjs uses the T2 set's oracle (D:\\bench\\bgraph-eval\\t2, manifest t2.json); express has its own oracle here; immutable-js is the replay control.",
+ "notes": "Phase 6 Node set (docs/dynamic-layer.md §8.6), root D:\\bench\\bgraph-eval\\t2\\node-dyn. Full clones (history for the replay) at the same R as the T2 set for hono and dayjs; express and immutable-js at the commit of the Phase 1 checkouts. Installs: hono `pnpm install --frozen-lockfile --ignore-scripts` (pnpm from <t2>/tools), dayjs and immutable-js `npm ci --ignore-scripts`, express `npm install --ignore-scripts --no-package-lock`. The hybrid T2 of hono and dayjs uses the T2 set's oracle (D:\\bench\\bgraph-eval\\t2, manifest t2.json); express has its own oracle here; immutable-js is the replay control.",
  "repos": [
   {
    "name": "honojs/hono",

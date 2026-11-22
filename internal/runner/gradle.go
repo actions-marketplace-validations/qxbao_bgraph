@@ -35,7 +35,7 @@ func gradleCommands(k jvmKey, tests []model.SelectedTest, opt Options) ([]Comman
 		case t.ClassFilter && opt.ListDir == "":
 			notes = append(notes, "gradle: the dynamic class layer narrowed "+pp+" but a class filter needs an init script (--list-dir): running all its tests")
 		case t.ClassFilter && len(t.Classes) == 0:
-			// The class layer kept no class: compile the tests, run nothing (docs/dynamic.md §9.1).
+			// The class layer kept no class: compile the tests, run nothing (docs/dynamic-layer.md §9.1).
 			task = strings.TrimSuffix(task, "test") + "testClasses"
 		case t.ClassFilter:
 			filters[pp] = append(filters[pp], t.Classes...)
@@ -60,14 +60,14 @@ func gradleCommands(k jvmKey, tests []model.SelectedTest, opt Options) ([]Comman
 }
 
 // gradleFilterScript writes an init script that restricts the Test tasks of each narrowed project to its kept classes and
-// their nested classes (docs/dynamic.md §9.6), with failOnNoMatchingTests = false (a kept type of a changed test file may be
+// their nested classes (docs/dynamic-layer.md §9.6), with failOnNoMatchingTests = false (a kept type of a changed test file may be
 // no test class).
 func gradleFilterScript(dir, root string, filters map[string][]string) (string, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
 	var b strings.Builder
-	b.WriteString("// bgraph: test classes kept by the dynamic class layer (docs/dynamic.md §9.6)\ndef bgraphFilters = [\n")
+	b.WriteString("// bgraph: test classes kept by the dynamic class layer (docs/dynamic-layer.md §9.6)\ndef bgraphFilters = [\n")
 	paths := make([]string, 0, len(filters))
 	for p := range filters {
 		paths = append(paths, p)

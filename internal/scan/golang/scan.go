@@ -1,4 +1,4 @@
-// Package golang scans Go source for what the Go ecosystem needs (docs/plan.md §6.6): the import paths (from go/parser with
+// Package golang scans Go source for what the Go ecosystem needs (docs/ecosystems/go.md): the import paths (from go/parser with
 // ImportsOnly, so build constraints are ignored and every file contributes: the union of every configuration), the //go:embed
 // patterns, and, in _test.go files, the string literals that may name a fixture path.
 //

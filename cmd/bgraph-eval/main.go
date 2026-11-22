@@ -1,4 +1,4 @@
-// Command bgraph-eval is the external evaluation suite (docs/plan.md §10.2).
+// Command bgraph-eval is the external evaluation suite (docs/evaluation.md).
 //
 //	bgraph-eval manifest --tasks tasks.jsonl [--meta meta.json] --replay zod,hono --out evalkit/manifest/node.json
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
@@ -420,7 +420,7 @@ func cmdManifest(args []string) error {
 // cmdBaseline: control comparison of external graph tools on the T1 sample of `quick`.
 //
 //	prep:  build P/C, oracle, test units and bgraph's selection for each task → <out>/tasks.json
-//	score: read <out>/runs/<tool>/<id>.json (written by the script research/baseline-*/run_tools.py), score with CheckRequired → scores.json + baseline.md
+//	score: read <out>/runs/<tool>/<id>.json (written by the baseline tool-runner script), score with CheckRequired → scores.json + baseline.md
 func cmdBaseline(ctx context.Context, args []string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("usage: baseline prep|score")
@@ -484,7 +484,7 @@ func cmdBaseline(ctx context.Context, args []string) error {
 	return fmt.Errorf("unknown subcommand: %s", sub)
 }
 
-// cmdT2 runs the mutation oracle (§10.2): --run-tests builds/refreshes oracle.jsonl; by default it only re-checks bgraph on the cached oracle.
+// cmdT2 runs the mutation oracle (docs/evaluation.md): --run-tests builds/refreshes oracle.jsonl; by default it only re-checks bgraph on the cached oracle.
 func cmdT2(ctx context.Context, args []string) (int, error) {
 	fs := flag.NewFlagSet("t2", flag.ExitOnError)
 	dir := fs.String("dir", "D:/bench/bgraph-eval/t2", "T2 root directory (checkout, tools, state, oracle.jsonl)")

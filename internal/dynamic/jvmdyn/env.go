@@ -1,4 +1,4 @@
-// Package jvmdyn is the JVM part of the dynamic layer (docs/dynamic.md §9): per-test-class records made by a java agent in one
+// Package jvmdyn is the JVM part of the dynamic layer (docs/dynamic-layer.md §9): per-test-class records made by a java agent in one
 // fresh test JVM per class, the guards that decide whether a selection may be narrowed below the module, and the narrowing
 // itself (a selected Maven module / Gradle project runs only the test classes whose records reach a changed file).
 package jvmdyn
@@ -22,7 +22,7 @@ import (
 // Eco is the ecosystem name of the records.
 const Eco = "jvm"
 
-// Collector returns the collector ID (docs/dynamic.md §9.3); trust_native_env changes it, as for Python and Node. Version 2:
+// Collector returns the collector ID (docs/dynamic-layer.md §9.3); trust_native_env changes it, as for Python and Node. Version 2:
 // class records list their external artifacts (records without them are not usable).
 func Collector(trust bool) string {
 	if trust {
@@ -81,7 +81,7 @@ func BuildFile(p string) bool {
 	return false
 }
 
-// Fingerprint is the JVM environment fingerprint (docs/dynamic.md §9.3): the collector, OS and architecture, the JDK's
+// Fingerprint is the JVM environment fingerprint (docs/dynamic-layer.md §9.3): the collector, OS and architecture, the JDK's
 // `release` file, the build tool found outside the repository (when no wrapper pins it) and the content of every build
 // definition file of t.
 func Fingerprint(collector, javaHome string, env []string, t tree.Tree) string {
@@ -156,7 +156,7 @@ func toolVersion(env []string, homeVar, exe, jarPrefix string) string {
 	return strings.Join(names, ",")
 }
 
-// Lombok returns why the repository is not narrowed because of Lombok (docs/dynamic.md §9.2): a build file that mentions
+// Lombok returns why the repository is not narrowed because of Lombok (docs/dynamic-layer.md §9.2): a build file that mentions
 // lombok or a lombok.config file. Lombok rewrites declarations (it can create constants) where the lexical guard cannot see
 // them. The check is repository-wide (a changed file of a Lombok module reaches the tests of every downstream module).
 func Lombok(t tree.Tree) string {

@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph/internal/rules"
 )
 
-// Change is one changed file as the guards of docs/dynamic.md §2 see it.
+// Change is one changed file as the guards of docs/dynamic-layer.md §2 see it.
 type Change struct {
 	Path             string
 	Status           byte // 'A','M','D','T' (renames and copies arrive as D+A)
@@ -31,20 +31,20 @@ type Change struct {
 type Params struct {
 	Eco       string // the narrowed ecosystem
 	Collector string // the current collector ID: a record made by another collector (or version) is not usable
-	Env       string // the current environment fingerprint, computed at the base (docs/dynamic.md §5)
+	Env       string // the current environment fingerprint, computed at the base (docs/dynamic-layer.md §5)
 	// BaseOID returns the blob OID of a repo-relative file at the base, "" when the base has no such file.
 	BaseOID func(p string) string
 	Records []Record          // records of any ecosystem/environment: Narrow picks the ones for (Eco, unit, Env)
 	UnitEco map[string]string // selected unit ID → ecosystem (selector.Result.UnitEco)
 }
 
-// sourceFile reports whether p is a source file kind the ecosystem's collector observes when it is loaded (docs/dynamic.md §2).
+// sourceFile reports whether p is a source file kind the ecosystem's collector observes when it is loaded (docs/dynamic-layer.md §2).
 // Python: .py only (not .pyi stubs, .pyx/.pxd sources compiled to extensions, .so/.pyd, data files). Node: JS/TS modules, not
-// declaration files or embedded-script formats (docs/dynamic.md §8.4).
+// declaration files or embedded-script formats (docs/dynamic-layer.md §8.4).
 var sourceFile = map[string]func(p string) bool{
 	"python": func(p string) bool { return strings.HasSuffix(p, ".py") },
 	"node":   node.DynamicSource,
-	// jvm: the per-test-class layer (docs/dynamic.md §9) has its own guards and narrowing (package jvmdyn); this entry only
+	// jvm: the per-test-class layer (docs/dynamic-layer.md §9) has its own guards and narrowing (package jvmdyn); this entry only
 	// makes the ecosystem known to the record store, import and status.
 	"jvm": jvm.DynamicSource,
 }
@@ -70,7 +70,7 @@ func Declared(rf *rules.File, p string) bool {
 	return false
 }
 
-// Guard returns "" when sel may be narrowed for eco at all (docs/dynamic.md §2), or the reason it may not.
+// Guard returns "" when sel may be narrowed for eco at all (docs/dynamic-layer.md §2), or the reason it may not.
 func Guard(sel model.Selection, changes []Change, eco string) string {
 	isSource, ok := sourceFile[eco]
 	if !ok {
@@ -117,7 +117,7 @@ func Guard(sel model.Selection, changes []Change, eco string) string {
 }
 
 // docFile: a modified documentation or harmless file (classify.Doc / classify.Harmless) that nothing in the graph references, that
-// no ecosystem gives a role, and that no bgraph.toml entry names (docs/dynamic.md §2). Tests can only see it by reading it, which
+// no ecosystem gives a role, and that no bgraph.toml entry names (docs/dynamic-layer.md §2). Tests can only see it by reading it, which
 // the collector observes: like a source file, it stays a changed file for the per-unit check.
 func docFile(c Change) bool {
 	return (classify.Doc(c.Path) || classify.Harmless(c.Path)) && !c.Referenced && !c.OtherRole && !c.Rule && !c.Declared &&
@@ -151,7 +151,7 @@ func Pick(recs []Record, eco, unit, env string) (rec Record, ok bool, others int
 	return rec, ok, others
 }
 
-// Usable returns "" when r may be used for unit u at the base (docs/dynamic.md §3), or why not.
+// Usable returns "" when r may be used for unit u at the base (docs/dynamic-layer.md §3), or why not.
 func Usable(r Record, files []string, p Params) string {
 	switch {
 	case r.Collector != p.Collector:
@@ -184,7 +184,7 @@ func Usable(r Record, files []string, p Params) string {
 	return ""
 }
 
-// Narrow applies the dynamic layer to sel (docs/dynamic.md): every widened unit of p.Eco with a usable record whose
+// Narrow applies the dynamic layer to sel (docs/dynamic-layer.md): every widened unit of p.Eco with a usable record whose
 // dependencies contain no changed file is moved from Tests to Narrowed. Other kept widened units of p.Eco get a Dynamic note
 // saying why. When a guard forbids narrowing the selection is returned with a dynamic_skipped warning and nothing else changes.
 func Narrow(sel model.Selection, changes []Change, p Params) model.Selection {

@@ -14,7 +14,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Phase 6 (docs/dynamic.md §7): the hybrid configuration (static graph + dynamic records) checked against the Python T2 mutation
+// Phase 6 (docs/dynamic-layer.md §7): the hybrid configuration (static graph + dynamic records) checked against the Python T2 mutation
 // oracle. The oracle (oracle.jsonl, the whole suite run on R+mutant) never uses the collector; the records are made once at R with
 // `bgraph record` (strict default and trust_native_env) and every mutant is selected statically and with the dynamic layer on.
 

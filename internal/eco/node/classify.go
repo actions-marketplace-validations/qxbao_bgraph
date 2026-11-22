@@ -16,7 +16,7 @@ import (
 var harmlessPkgKeys = map[string]bool{"version": true, "description": true, "keywords": true, "author": true, "contributors": true,
 	"homepage": true, "repository": true, "bugs": true, "license": true, "funding": true, "maintainers": true, "publishConfig": true}
 
-// ClassifyChange classifies Node manifests/configs/lockfiles (plan §6.1 "Widening", §6.8 lockfile levels, see classifyLock).
+// ClassifyChange classifies Node manifests/configs/lockfiles (docs/ecosystems/node.md; lockfile levels in docs/lockfiles.md, see classifyLock).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if inNodeModules(p) {
 		return nil, false

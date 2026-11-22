@@ -142,7 +142,7 @@ func TestRecordIntegration(t *testing.T) {
 	}
 	write("pkg/b.py", "Y = 1\n")
 
-	// A data file is not a source file the guards accept (docs/dynamic.md §2): no narrowing at all, with a note.
+	// A data file is not a source file the guards accept (docs/dynamic-layer.md §2): no narrowing at all, with a note.
 	write("pkg/data.txt", "bye\n")
 	s := sel()
 	if len(s.Narrowed) != 0 || len(s.Warnings) == 0 || !strings.Contains(s.Warnings[len(s.Warnings)-1].Detail, "pkg/data.txt") {

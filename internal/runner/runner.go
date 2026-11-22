@@ -1,4 +1,4 @@
-// Package runner turns a Selection into test-run commands for each test runner (docs/plan.md §7.4).
+// Package runner turns a Selection into test-run commands for each test runner (docs/cli.md, command).
 //
 // Principle 11: NEVER emit a command with an empty list. scope none → no command; scope full → no selective command.
 //

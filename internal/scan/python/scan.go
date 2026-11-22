@@ -1,4 +1,4 @@
-// Package python is bgraph's Python import scanner (docs/plan.md §5, §6.2). It is a lexer plus a token-level extractor, not a parser:
+// Package python is bgraph's Python import scanner (docs/ecosystems/python.md). It is a lexer plus a token-level extractor, not a parser:
 // it finds what the resolver needs, and reports Uncertain only when the token stream cannot be trusted (unterminated string,
 // unbalanced brackets).
 //

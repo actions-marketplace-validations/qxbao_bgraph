@@ -1,4 +1,4 @@
-// Package js scans import/require/mock... references from JS/TS source with a hand-written single-pass lexer (docs/plan.md §5).
+// Package js scans import/require/mock... references from JS/TS source with a hand-written single-pass lexer.
 //
 // FAIL-CLOSED principle: when the lexer is not sure it understood the file, it returns Uncertain=true with an UncertainReason ("code: detail"),
 // and never silently returns a partial list. An extra import is acceptable; a missed import is a bug.

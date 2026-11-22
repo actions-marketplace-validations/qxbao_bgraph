@@ -172,7 +172,7 @@ func TestDynamicWiring(t *testing.T) {
 		t.Fatalf("stale record used: %+v", s.Tests)
 	}
 
-	// An unreferenced documentation file changed with the source does not prevent narrowing (docs/dynamic.md §2).
+	// An unreferenced documentation file changed with the source does not prevent narrowing (docs/dynamic-layer.md §2).
 	write("CHANGES.md", "# changes\n")
 	git("add", "CHANGES.md")
 	git("commit", "-q", "-m", "changes")

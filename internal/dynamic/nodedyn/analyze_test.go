@@ -83,7 +83,7 @@ func TestAnalyzeClassification(t *testing.T) {
 	}
 }
 
-// TestAnalyzeIncomplete: every reason of docs/dynamic.md §8.3 that the logs can show.
+// TestAnalyzeIncomplete: every reason of docs/dynamic-layer.md §8.3 that the logs can show.
 func TestAnalyzeIncomplete(t *testing.T) {
 	root := t.TempDir()
 	j := func(p ...string) string { return filepath.Join(append([]string{root}, p...)...) }

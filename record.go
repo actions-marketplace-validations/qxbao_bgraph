@@ -25,7 +25,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// DynamicRecord is one record of the dynamic layer (docs/dynamic.md §3).
+// DynamicRecord is one record of the dynamic layer (docs/dynamic-layer.md §3).
 type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
@@ -66,7 +66,7 @@ type RecordSummary struct {
 	Elapsed    time.Duration  `json:"elapsed"`
 	Warnings   []string       `json:"warnings,omitempty"`
 	// Toolchain: allowlisted native addons loaded by the recorded Node units, with their number of records
-	// (docs/dynamic.md §8.3).
+	// (docs/dynamic-layer.md §8.3).
 	Toolchain map[string]int `json:"toolchain,omitempty"`
 }
 
@@ -97,7 +97,7 @@ func (ix *Index) recordUnits(an *analyzed) ([]pydyn.Unit, []string) {
 }
 
 // nodeRecordUnits lists the Node test units of the working tree, with the incomplete reasons known before running them
-// (docs/dynamic.md §8.3 rule 4: a vite/vitest config with an import bgraph cannot resolve; a jest config naming a hasteImpl).
+// (docs/dynamic-layer.md §8.3 rule 4: a vite/vitest config with an import bgraph cannot resolve; a jest config naming a hasteImpl).
 func (ix *Index) nodeRecordUnits(an *analyzed) ([]nodedyn.Unit, []string) {
 	var units []model.TestUnit
 	var badVite, hasteImpl []string // directories of such configs
@@ -176,7 +176,7 @@ func recordEcos(opt RecordOptions, rf *rules.File, an *analyzed) ([]string, erro
 }
 
 // Record runs every test unit of the working tree in its own process (tree) with the collector of its ecosystem and stores the
-// records (docs/dynamic.md §4, §8). It refuses a working tree that differs from HEAD unless AllowDirty.
+// records (docs/dynamic-layer.md §4, §8). It refuses a working tree that differs from HEAD unless AllowDirty.
 func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, error) {
 	t0 := time.Now()
 	sum := RecordSummary{Reasons: map[string]int{}}
@@ -290,7 +290,7 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 	return sum, err
 }
 
-// recordPython records the Python units (docs/dynamic.md §4).
+// recordPython records the Python units (docs/dynamic-layer.md §4).
 func (ix *Index) recordPython(ctx context.Context, opt RecordOptions, rf *rules.File, an *analyzed, wt tree.Tree, head string,
 	now time.Time, keep func(string) bool, sum *RecordSummary) ([]dynamic.Record, []string, error) {
 	units, skipped := ix.recordUnits(an)
@@ -336,7 +336,7 @@ func (ix *Index) recordPython(ctx context.Context, opt RecordOptions, rf *rules.
 	return recs, skipped, nil
 }
 
-// recordNode records the Node units (docs/dynamic.md §8).
+// recordNode records the Node units (docs/dynamic-layer.md §8).
 func (ix *Index) recordNode(ctx context.Context, opt RecordOptions, rf *rules.File, an *analyzed, wt tree.Tree, head string,
 	now time.Time, keep func(string) bool, sum *RecordSummary) ([]dynamic.Record, []string, error) {
 	units, skipped := ix.nodeRecordUnits(an)

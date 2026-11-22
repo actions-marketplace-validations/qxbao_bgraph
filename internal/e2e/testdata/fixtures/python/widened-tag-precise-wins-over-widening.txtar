@@ -1,4 +1,4 @@
-docs/dynamic.md §1: a unit reached both from a changed file and through a widening is precise; a unit chosen only by a project
+docs/dynamic-layer.md §1: a unit reached both from a changed file and through a widening is precise; a unit chosen only by a project
 widening (unreferenced file), the dynamic import seed or a previously failed run is tagged accordingly.
 -- base/pyproject.toml --
 [project]

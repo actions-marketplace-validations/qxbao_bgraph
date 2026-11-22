@@ -1,4 +1,4 @@
-// Package rust is bgraph's Rust ecosystem, at Cargo-target granularity (docs/plan.md §6.3).
+// Package rust is bgraph's Rust ecosystem, at Cargo-target granularity (docs/ecosystems/rust.md).
 //
 // Inside a crate the mod/use graph is not a sound dependency relation (trait impls are crate-global, macro_rules! is textually scoped,
 // inventory/linkme register at link time, #[cfg] changes the module tree), so the safe unit is the Cargo target. The module tree is used

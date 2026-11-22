@@ -1,4 +1,4 @@
-// Package mcpserver exposes bgraph over the Model Context Protocol (docs/plan.md §7.3): affected_tests, dependents_of and
+// Package mcpserver exposes bgraph over the Model Context Protocol (docs/cli.md, mcp): affected_tests, dependents_of and
 // explain_selection. The server keeps one *bgraph.Index open for the whole session, so the scan cache and the analysis memo stay warm.
 //
 // Output is size-bounded: the long lists (changed, tests, dependents) are capped at a per-call limit. The fail-closed sections

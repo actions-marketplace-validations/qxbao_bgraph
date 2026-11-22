@@ -1,4 +1,4 @@
-// Package classify holds the built-in global widening table and the list of harmless files (docs/plan.md §6.7).
+// Package classify holds the built-in global widening table and the list of harmless files (docs/architecture.md, "Global inputs and harmless files").
 //
 // The table is data (a slice of {pattern, category}) so it is easy to inspect. Rules in bgraph.toml can override this table at the
 // caller level (classify does not read bgraph.toml): the caller checks rules first and calls Global only when no rule matches.
@@ -46,7 +46,7 @@ var globalTable = []entry{
 	{"**/.env", "env"},
 	{"**/.env.*", "env"},
 	{"**/.envrc", "env"},
-	// ghim toolchain
+	// toolchain pins
 	{"**/.nvmrc", "toolchain_pin"},
 	{"**/.node-version", "toolchain_pin"},
 	{"**/.python-version", "toolchain_pin"},

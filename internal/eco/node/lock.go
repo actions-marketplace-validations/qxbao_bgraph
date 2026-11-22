@@ -14,7 +14,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// l1Formats are the lockfiles whose closure passed the differential check against the package manager (docs/plan.md §6.8);
+// l1Formats are the lockfiles whose closure passed the differential check against the package manager (docs/lockfiles.md);
 // every other lockfile stays at level L0.
 var l1Formats = map[string]bool{"pnpm-lock.yaml": true, "package-lock.json": true}
 
@@ -78,7 +78,7 @@ func readLock(t tree.Tree, p string) (*lockfile.Graph, error) {
 	return lockfile.Parse(p, path.Dir(p), b)
 }
 
-// classifyLock compares the resolved dependency closure of every project of the lockfile p (docs/plan.md §6.8).
+// classifyLock compares the resolved dependency closure of every project of the lockfile p (docs/lockfiles.md).
 //
 // L1: a project whose closure changed → every test of the project, and every file of the project counts as changed so
 // that the tests of other projects importing it are selected too (dependents through workspace links are already in

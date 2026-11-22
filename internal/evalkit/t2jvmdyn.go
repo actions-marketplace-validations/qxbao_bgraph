@@ -18,7 +18,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Phase 7 (docs/dynamic.md §9.8): the JVM class layer checked against the Phase 5 JVM T2 oracle. The oracle (unit verdicts of
+// Phase 7 (docs/dynamic-layer.md §9.8): the JVM class layer checked against the Phase 5 JVM T2 oracle. The oracle (unit verdicts of
 // the whole suite on R+mutant, oracle.jsonl of the T2 set, never the collector) gives the killed mutants and their red units;
 // for every killed mutant whose hybrid selection removes classes from a red unit, the red units are run again whole on the
 // mutated tree in a shared clone and their class verdicts are read from the JUnit reports. A violation is a red class the

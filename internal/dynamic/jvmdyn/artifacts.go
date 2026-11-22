@@ -11,7 +11,7 @@ import (
 	"sync"
 )
 
-// External artifacts (docs/dynamic.md §9.9): the build-definition digest of the fingerprint does not see an external
+// External artifacts (docs/dynamic-layer.md §9.9): the build-definition digest of the fingerprint does not see an external
 // dependency that changes without a file change (a SNAPSHOT, a version range, a rewritten local repository). Each class record
 // therefore lists the archives outside the repository and the JDK that its JVM loaded classes from or read (the resolved
 // external class path as the agent observed it), with their size and SHA-1; at selection time every listed archive must still

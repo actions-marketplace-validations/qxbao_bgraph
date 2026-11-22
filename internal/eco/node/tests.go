@@ -8,7 +8,7 @@ import (
 // jsExts are the JS/TS source file extensions the scanner understands.
 var jsExts = []string{".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs"}
 
-// sfcExts are embedded-script formats: the first version treats them as uncertain_scan (plan §5).
+// sfcExts are embedded-script formats: the first version treats them as uncertain_scan.
 var sfcExts = []string{".vue", ".svelte", ".astro", ".mdx"}
 
 func hasExt(p string, exts []string) bool {

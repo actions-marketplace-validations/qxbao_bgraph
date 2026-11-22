@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// jvmKinds and dotnetKinds give the manifest kind (library | framework | application; plan section 6.2 reports selectivity per kind) of
+// jvmKinds and dotnetKinds give the manifest kind (library | framework | application; selectivity is reported per kind) of
 // every repo in tasks-jvm.jsonl / tasks-dotnet.jsonl. Unknown repos default to "library". Fixed before looking at any result.
 var jvmKinds = map[string]string{
 	"gradleup/shadow": "library", "hannah-sten/texify-idea": "application", "kotlin/dataframe": "library",

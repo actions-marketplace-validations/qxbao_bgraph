@@ -11,8 +11,9 @@
 #                        can make bgraph SKIP A TEST THAT THE CHANGE BREAKS. These entries require a `reason`;
 #                        review them like code and re-check them when the config they describe changes.
 #
-# Changing this file is itself a change: the run that changes it selects the full suite (user_rule).
-# A file that does not parse also selects the full suite, and the error says where. Unknown keys are errors.
+# Changing this file is itself a change: like any unclaimed file it widens to the project at the repository root
+# (unknown_file), or to the full suite when no project sits there. A file that does not parse selects the full suite
+# (user_rule), and the error says where. Unknown keys are errors. Reference: docs/configuration.md.
 #
 # Paths are repo-relative with forward slashes. Globs: `*` (one segment), `**` (any depth), `?`, `[abc]`, `{a,b}`.
 #
@@ -188,7 +189,7 @@ none = true
 reason = "load_plugins() imports entry points of installed packages, never a module of this repo"
 
 # ---------------------------------------------------------------------------------------------------------------------
-# [dynamic_layer]: narrow widened selections with recorded test dependencies (docs/dynamic.md).        (NARROWING)
+# [dynamic_layer]: narrow widened selections with recorded test dependencies (docs/dynamic-layer.md).        (NARROWING)
 #
 # Off by default. When the static graph widens (a dynamic import, an unreferenced file...), the dynamic layer may remove
 # a WIDENED test whose recorded run (`bgraph record`: each test file in its own process with an audit hook (Python) or a
@@ -201,7 +202,7 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # config, manifest or lockfile). It is not proven safe by research: enable it per
 # ecosystem after evaluating it on your repository. `bgraph affected --dynamic` enables it for one run.
 #
-#   ecosystems       : ecosystems to narrow: "python", "node", "jvm". "jvm" is different (docs/dynamic.md §9): it narrows
+#   ecosystems       : ecosystems to narrow: "python", "node", "jvm". "jvm" is different (docs/dynamic-layer.md §9): it narrows
 #                      the selected Maven modules / Gradle projects to the test classes whose recorded run (one fresh
 #                      test JVM per class with a java agent, `bgraph record --eco jvm`) reaches a changed file; the
 #                      modules are still built. Only when every changed file is a modified .java/.kt file of a compiled
@@ -212,7 +213,7 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 #   node             : node executable for `bgraph record` and the Node fingerprint ("node" on PATH by default).
 #   trust_native_env : native extension modules installed in the environment (not CPython's own) do not make a
 #                      record incomplete; their versions are part of the fingerprint. Default false. (Node: the
-#                      toolchain addons of docs/dynamic.md §8.3 are accepted without it.)
+#                      toolchain addons of docs/dynamic-layer.md §8.3 are accepted without it.)
 #                      Records made with another setting are not used.
 #
 # Not a [dynamic] table: [[dynamic]] above is the list of dynamic-import declarations.
@@ -225,7 +226,7 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # trust_native_env = false
 
 # ---------------------------------------------------------------------------------------------------------------------
-# [lockfile]: how a lockfile change is classified (docs/plan.md §6.8).                         (NARROWING at L2)
+# [lockfile]: how a lockfile change is classified (docs/lockfiles.md).                         (NARROWING at L2)
 #
 #   level : "L1" (default) — pnpm-lock.yaml, package-lock.json and Cargo.lock: the projects whose resolved dependency
 #                            closure changed, plus the tests that import their files; the lockfile's root project

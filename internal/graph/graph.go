@@ -1,5 +1,5 @@
 // Package graph holds the file-level graph as the UNION of the Analyses (base tree and current tree, every ecosystem) and walks backwards
-// with no depth limit from the set of changed files (docs/plan.md §3.4, §3.5, §4.3 steps 3–4).
+// with no depth limit from the set of changed files (docs/architecture.md, "The file graph").
 package graph
 
 import (

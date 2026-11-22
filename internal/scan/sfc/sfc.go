@@ -1,5 +1,5 @@
 // Package sfc extracts embedded code from Single-File-Component files (.vue, .svelte, .astro) and .mdx and hands it to the JS/TS scanner
-// (bgraph/internal/scan/js) and the CSS @import scanner (docs/plan.md §5).
+// (bgraph/internal/scan/js) and the CSS @import scanner.
 //
 // FAIL-CLOSED principle (same as the JS scanner): if it is not sure the blocks were split correctly (unclosed block, unclosed comment,
 // stray closing tag, duplicate script/setup, unknown lang...) it returns Uncertain=true with a reason "block-kind: code: detail", and never

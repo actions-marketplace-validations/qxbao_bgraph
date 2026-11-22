@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph/internal/evalkit"
 )
 
-// Phase 7 evaluation of the JVM class layer (docs/dynamic.md §9.8), one repo per invocation (the JDK and build tool come from
+// Phase 7 evaluation of the JVM class layer (docs/dynamic-layer.md §9.8), one repo per invocation (the JDK and build tool come from
 // the environment, as for `bgraph record --eco jvm`, so that the fingerprints match):
 //
 //	bgraph-eval jvmdyn --repo gson --clone DIR --state DIR [--mutants id,...] [--replay N --units GLOB --commits 300] [--out DIR]

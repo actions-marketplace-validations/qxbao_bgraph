@@ -303,7 +303,7 @@ func pycSource(p string) (string, bool) {
 	return path.Join(path.Dir(strings.TrimSuffix(dir, "/")), name+".py"), true
 }
 
-// RecordOf turns an outcome into a record (docs/dynamic.md §3). t is the working tree at the recorded commit (its keys are the
+// RecordOf turns an outcome into a record (docs/dynamic-layer.md §3). t is the working tree at the recorded commit (its keys are the
 // blob OIDs of the content the test saw); root is the repository root on disk (to tell untracked files from absent ones).
 func RecordOf(o Outcome, u Unit, t tree.Tree, root, env, collector, commit string, now time.Time) dynamic.Record {
 	r := dynamic.Record{Eco: "python", Unit: u.ID, Collector: collector, Commit: commit, Deps: map[string]string{}, Env: env,

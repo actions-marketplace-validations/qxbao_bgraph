@@ -6,7 +6,7 @@ import (
 )
 
 // DynamicSource reports whether p is a Java or Kotlin file in a compiled source root whose classes the JVM collector maps back
-// to their file (docs/dynamic.md §9.2 rule 1): src/{main,test}/{java,kotlin}/** and the Kotlin Multiplatform roots
+// to their file (docs/dynamic-layer.md §9.2 rule 1): src/{main,test}/{java,kotlin}/** and the Kotlin Multiplatform roots
 // src/<target>{Main,Test}/kotlin/**. Not module-info.java, templates (src/main/java-templates), generated or build-output
 // directories, nor the build logic in buildSrc/ and build-logic/.
 func DynamicSource(p string) bool {
@@ -41,7 +41,7 @@ func lowerStart(s string) bool { return s != "" && s[0] >= 'a' && s[0] <= 'z' }
 
 // TestRoot reports whether rel (relative to the unit directory) lies under a test source set of the unit: src/test*/**,
 // src/*Test*/**, src/it/**, src/testFixtures/** (any file, code or resource). The class list of a unit is trusted only while
-// these files are unchanged (docs/dynamic.md §9.1).
+// these files are unchanged (docs/dynamic-layer.md §9.1).
 func TestRoot(rel string) bool {
 	r, ok := strings.CutPrefix(rel, "src/")
 	if !ok {

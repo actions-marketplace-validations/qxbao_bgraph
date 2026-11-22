@@ -163,7 +163,7 @@ func TestNarrowConftestInDeps(t *testing.T) {
 	}
 }
 
-// Guards of docs/dynamic.md §2: each forbidden change kind skips narrowing for the whole selection.
+// Guards of docs/dynamic-layer.md §2: each forbidden change kind skips narrowing for the whole selection.
 func TestGuards(t *testing.T) {
 	stub := mod("pkg/a.pyi")
 	config := Change{Path: "pytest.ini", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleConfig, HeadRole: model.RoleConfig, Claimed: true}
@@ -276,7 +276,7 @@ func assertSkipped(t *testing.T, out model.Selection) {
 	}
 }
 
-// Record usability (docs/dynamic.md §3): each defect keeps test_b.
+// Record usability (docs/dynamic-layer.md §3): each defect keeps test_b.
 func TestUnusableRecords(t *testing.T) {
 	mk := func(f func(r *Record)) []Record {
 		recs := goodRecords()
@@ -448,7 +448,7 @@ func docChange(p string) Change {
 	return Change{Path: p, Status: 'M', OldMode: "100644", NewMode: "100644"}
 }
 
-// docs/dynamic.md §2: a modified, unreferenced documentation file next to a modified .py file allows narrowing, and still counts
+// docs/dynamic-layer.md §2: a modified, unreferenced documentation file next to a modified .py file allows narrowing, and still counts
 // as a changed file for the per-unit check.
 func TestGuardDocFile(t *testing.T) {
 	sel, ch := fixture(mod("pkg/a.py"), docChange("CHANGES.rst"), docChange("docs/usage.md"))
@@ -497,7 +497,7 @@ func TestGuardDocFile(t *testing.T) {
 	}
 }
 
-// TestGuardNodeSources: the source kinds the Node collector observes (docs/dynamic.md §8.4); every other kind is refused.
+// TestGuardNodeSources: the source kinds the Node collector observes (docs/dynamic-layer.md §8.4); every other kind is refused.
 func TestGuardNodeSources(t *testing.T) {
 	sel := model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{{Unit: "test/a.test.ts", Widened: true}}}
 	for p, ok := range map[string]bool{

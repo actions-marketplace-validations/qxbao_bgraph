@@ -1,4 +1,4 @@
-// Package jvm is bgraph's JVM ecosystem (Maven and Gradle), at module/project granularity (docs/plan.md §6.4).
+// Package jvm is bgraph's JVM ecosystem (Maven and Gradle), at module/project granularity (docs/ecosystems/jvm.md).
 //
 // Below the module the class graph is not a sound dependency relation (reflection, ServiceLoader, annotation processors, Spring
 // component scanning, generated sources), so the safe unit is the Maven module or Gradle project; file-level knowledge is used only
@@ -417,7 +417,7 @@ func scopeWiden(reason, p, root, detail string) model.Widening {
 	return model.Widening{Tier: model.TierModule, Reason: reason, Path: p, Scope: root, Eco: Name, Detail: detail}
 }
 
-// ClassifyChange classifies Maven POMs/.mvn and Gradle build definitions (plan §6.4).
+// ClassifyChange classifies Maven POMs/.mvn and Gradle build definitions (docs/ecosystems/jvm.md).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if ws, ok := e.classifyMaven(p, base, head); ok {
 		return ws, true

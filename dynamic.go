@@ -15,7 +15,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// DynamicMode switches the dynamic layer (docs/dynamic.md) for one selection.
+// DynamicMode switches the dynamic layer (docs/dynamic-layer.md) for one selection.
 type DynamicMode string
 
 const (
@@ -72,7 +72,7 @@ func (ix *Index) ecoEnv(ctx context.Context, eco string, rf *rules.File, t tree.
 	return "", "", errors.New("no dynamic layer for ecosystem " + eco)
 }
 
-// nodeEnv computes the Node environment fingerprint for tree t (docs/dynamic.md §8.4).
+// nodeEnv computes the Node environment fingerprint for tree t (docs/dynamic-layer.md §8.4).
 func (ix *Index) nodeEnv(ctx context.Context, rf *rules.File, t tree.Tree) (env, collector string, err error) {
 	_, nodeExe, trust := ix.dynamicConfig(rf)
 	exe, err := nodedyn.ResolveNode(ix.repo.Root, nodeExe)
@@ -91,7 +91,7 @@ func (ix *Index) nodeEnv(ctx context.Context, rf *rules.File, t tree.Tree) (env,
 	return nodedyn.Fingerprint(collector, probe, installed, t), collector, nil
 }
 
-// pythonEnv computes the Python environment fingerprint for tree t (docs/dynamic.md §5).
+// pythonEnv computes the Python environment fingerprint for tree t (docs/dynamic-layer.md §5).
 func (ix *Index) pythonEnv(ctx context.Context, rf *rules.File, t tree.Tree) (env, collector string, err error) {
 	py, _, trust := ix.dynamicConfig(rf)
 	exe, err := pydyn.ResolvePython(ix.repo.Root, py)
@@ -114,13 +114,13 @@ func (ix *Index) tmpDir() string {
 	return ""
 }
 
-// applyDynamic runs the dynamic layer on a selection (docs/dynamic.md §2, §3). Anything that prevents it (no state directory,
+// applyDynamic runs the dynamic layer on a selection (docs/dynamic-layer.md §2, §3). Anything that prevents it (no state directory,
 // interpreter that cannot run, a guard) leaves the selection unchanged with a dynamic_skipped warning.
 func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input, res selector.Result) Selection {
 	sel := res.Selection
 	for _, eco := range dynamicEcos(ch.Dynamic, in.Rules) {
 		if eco == jvmdyn.Eco {
-			sel = ix.applyJVMClasses(ctx, in, res, sel) // per-test-class layer: narrows precise units (docs/dynamic.md §9)
+			sel = ix.applyJVMClasses(ctx, in, res, sel) // per-test-class layer: narrows precise units (docs/dynamic-layer.md §9)
 			continue
 		}
 		candidate := false

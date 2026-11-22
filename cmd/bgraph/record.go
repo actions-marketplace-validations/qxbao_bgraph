@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph"
 )
 
-// runRecord implements `bgraph record` (docs/dynamic.md §4, §8): run every test file (Python, Node) in its own process (tree)
+// runRecord implements `bgraph record` (docs/dynamic-layer.md §4, §8): run every test file (Python, Node) in its own process (tree)
 // with the collector and store what it loaded/opened. Exit codes: 0 done (even when some units failed or are incomplete), 1 error, 2 usage.
 func runRecord(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("bgraph record", flag.ContinueOnError)
@@ -87,7 +87,7 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 	fmt.Fprintf(stdout, "commit: %s\nunits: %d\nrecorded: %d\ncomplete (and passed): %d\nincomplete: %d\nfailed: %d\nstore: %s\nelapsed: %s\n",
 		sum.Commit, sum.Units, sum.Recorded, sum.Complete, sum.Incomplete, sum.Failed, sum.Store, sum.Elapsed.Round(time.Millisecond))
 	if len(sum.Toolchain) > 0 {
-		fmt.Fprintln(stdout, "native toolchain addons loaded (accepted, docs/dynamic.md §8.3):")
+		fmt.Fprintln(stdout, "native toolchain addons loaded (accepted, docs/dynamic-layer.md §8.3):")
 		for _, k := range bgraph.SortedReasons(sum.Toolchain) {
 			fmt.Fprintf(stdout, "  %4d  %s\n", sum.Toolchain[k], k)
 		}

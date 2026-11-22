@@ -55,7 +55,7 @@ func NewSourceIndex(t tree.Tree) SourceIndex {
 // Lookup returns the files of a class in package pkg (dotted) whose SourceFile is name.
 func (ix SourceIndex) Lookup(pkg, name string) []string { return ix[[2]string{pkg, name}] }
 
-// Mapper turns the forks of one recording into dependencies (docs/dynamic.md §9.5).
+// Mapper turns the forks of one recording into dependencies (docs/dynamic-layer.md §9.5).
 type Mapper struct {
 	Root  string // repository root on disk (absolute, cleaned)
 	Tree  tree.Tree
@@ -423,7 +423,7 @@ type UnitResult struct {
 	BuildWhy string  // why not
 }
 
-// Records builds the class records and the class-list record of every unit (docs/dynamic.md §9.1, §9.3) from the forks of
+// Records builds the class records and the class-list record of every unit (docs/dynamic-layer.md §9.1, §9.3) from the forks of
 // one recording session.
 func Records(m *Mapper, units []UnitResult, forks []*Fork, env, collector, commit string, now time.Time) []dynamic.Record {
 	type key struct{ dir, class string }

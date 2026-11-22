@@ -1,4 +1,4 @@
-// Package rules reads bgraph.toml (docs/plan.md §6.7): user-declared rules and declarations of generated-code outputs.
+// Package rules reads bgraph.toml (docs/configuration.md): user-declared rules and declarations of generated-code outputs.
 //
 // Strict decoding: unknown keys are an error. A bgraph.toml error is NEVER ignored; callers widen to full (user_rule).
 package rules
@@ -95,10 +95,10 @@ type Options struct {
 	MaxChanged int
 }
 
-// DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic.md).
+// DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic-layer.md).
 var DynamicEcosystems = []string{"python", "node", "jvm"}
 
-// DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic.md), off by default. It is a table of its own,
+// DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic-layer.md), off by default. It is a table of its own,
 // not [dynamic], because [[dynamic]] is already the array of dynamic-import declarations and TOML cannot hold both.
 type DynamicLayer struct {
 	// Ecosystems narrowed by recorded dependencies (subset of DynamicEcosystems). Empty: the layer is off unless the caller
@@ -127,7 +127,7 @@ type File struct {
 	Path      string       // path of the file read; empty if there is no file
 }
 
-// Lockfile levels (docs/plan.md §6.8).
+// Lockfile levels (docs/lockfiles.md).
 const (
 	LockL0 = "L0" // every project of the lockfile's directory
 	LockL1 = "L1" // projects whose resolved dependency closure changed, and their reverse dependents (default)

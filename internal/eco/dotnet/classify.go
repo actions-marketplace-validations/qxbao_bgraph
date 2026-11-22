@@ -10,12 +10,12 @@ import (
 )
 
 // everyUnit widens to every .NET unit of the repository and to no other ecosystem's (module scope "." restricted to Eco "dotnet"):
-// the plan's "full" for inputs that only .NET reads.
+// a "full" run restricted to .NET, for inputs that only .NET reads.
 func everyUnit(reason, p, detail string) []model.Widening {
 	return []model.Widening{{Tier: model.TierModule, Reason: reason, Path: p, Scope: ".", Eco: Name, Detail: detail}}
 }
 
-// ClassifyChange classifies .NET configuration (plan §6.5, §6.8 level L0). Project files, props/targets and the files they name are graph
+// ClassifyChange classifies .NET configuration (docs/ecosystems/dotnet.md; lockfile level L0). Project files, props/targets and the files they name are graph
 // nodes: a change to them selects the projects that depend on them without any widening. global.json is in the global table
 // (internal/classify) and never reaches here.
 func (e *Eco) ClassifyChange(p string, _, _ tree.Tree, _ *eco.Analysis) ([]model.Widening, bool) {

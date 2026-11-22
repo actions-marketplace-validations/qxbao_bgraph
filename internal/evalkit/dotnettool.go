@@ -312,7 +312,7 @@ type DotnetProviderRow struct {
 	Covered  int      `json:"covered"` // msbuild edges that bgraph has too
 	Missing  []string `json:"missing"` // "commit:from -> to" edges msbuild has and bgraph lacks, with no Unresolved to widen for them
 	// MissingUnresolved: edges msbuild has and bgraph lacks, but the project (or a props/targets above it) carries an Unresolved, so a
-	// change anywhere in the project's scope still selects it (the fail-closed path of the plan, not a silent miss).
+	// change anywhere in the project's scope still selects it (the fail-closed path, not a silent miss).
 	MissingUnresolved []string `json:"missing_unresolved,omitempty"`
 	Errors            []string `json:"errors,omitempty"`
 	Commit            []string `json:"commit_list,omitempty"`

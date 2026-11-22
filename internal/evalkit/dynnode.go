@@ -13,7 +13,7 @@ import (
 	"github.com/qxbao/bgraph"
 )
 
-// Node in the Phase 6 harness (docs/dynamic.md §8.6): the hybrid T2 pass and the replay run on Node T2 repos too (Eco "" in the
+// Node in the Phase 6 harness (docs/dynamic-layer.md §8.6): the hybrid T2 pass and the replay run on Node T2 repos too (Eco "" in the
 // manifest: vitest, jest, mocha). Records are made with `bgraph record --eco node`; clones get a link to the main checkout's
 // node_modules.
 

@@ -1,4 +1,4 @@
-// Package model holds the data types shared between bgraph's packages (docs/plan.md §4.2).
+// Package model holds the data types shared between bgraph's packages (docs/architecture.md).
 //
 // Path convention: every path is relative to the repo root, uses forward slashes, is path.Clean'ed, has no leading "./"; the repo root is ".".
 package model
@@ -39,7 +39,7 @@ func Max(a, b Tier) Tier {
 	return a
 }
 
-// Widening reasons (stable, machine-readable codes). Kept compatible with bint/internal/affected, plus the reasons from docs/plan.md §7.1.
+// Widening reasons (stable, machine-readable codes; documented in docs/architecture.md, "Widening reasons").
 const (
 	ReasonUnknownImport   = "unknown_import"
 	ReasonDynamicImport   = "dynamic_import"
@@ -103,7 +103,7 @@ const (
 type ImportKind string
 
 const (
-	ImportStatic      ImportKind = "import"          // import ... from "x"; import "x"; export ... from "x" (xem ReExport)
+	ImportStatic      ImportKind = "import"          // import ... from "x"; import "x"; export ... from "x" (see ReExport)
 	ImportTypeOnly    ImportKind = "type_only"       // import type / export type ... from
 	ImportDynamic     ImportKind = "dynamic"         // import("x")
 	ImportRequire     ImportKind = "require"         // require("x"), import x = require("x")
@@ -259,7 +259,7 @@ type Unresolved struct {
 	TriggerGlobs []string `json:"trigger_globs,omitempty"`
 }
 
-// TestUnit is a unit a test runner can run on its own (docs/plan.md §2.3).
+// TestUnit is a unit a test runner can run on its own (docs/architecture.md).
 type TestUnit struct {
 	Eco     string   `json:"eco"`
 	ID      string   `json:"id"`      // stable identifier: test file (JS/Python), "crate::target"...
@@ -288,18 +288,18 @@ type SelectedTest struct {
 	Config  string   `json:"config,omitempty"`  // see TestUnit.Config
 	// Widened: the unit is selected only because of a widening (unresolved import seed, module/package scope widening, "whole
 	// project" unit), not by the backward walk from the changed files, a [[rule]] target, previously_failed or as a new test
-	// (docs/dynamic.md §1). Only widened units can be removed by the dynamic layer.
+	// (docs/dynamic-layer.md §1). Only widened units can be removed by the dynamic layer.
 	Widened bool `json:"widened,omitempty"`
 	// Dynamic: why the dynamic layer kept this widened unit (a changed file is among its recorded dependencies, or its record
 	// is not usable). Empty when the dynamic layer did not run or the unit is precise.
 	Dynamic string `json:"dynamic,omitempty"`
-	// ClassFilter: the JVM class layer narrowed the unit (docs/dynamic.md §9): the unit is still built, but only the test classes
+	// ClassFilter: the JVM class layer narrowed the unit (docs/dynamic-layer.md §9): the unit is still built, but only the test classes
 	// in Classes run (none when Classes is empty).
 	ClassFilter bool     `json:"class_filter,omitempty"`
 	Classes     []string `json:"classes,omitempty"` // binary names of the top-level test classes to run (with ClassFilter)
 }
 
-// NarrowedTest is a widened unit the dynamic layer removed from the selection (docs/dynamic.md §6).
+// NarrowedTest is a widened unit the dynamic layer removed from the selection (docs/dynamic-layer.md §6).
 type NarrowedTest struct {
 	Unit     string    `json:"unit"`
 	Recorded time.Time `json:"recorded"`         // when the record that justified the removal was made
@@ -307,7 +307,7 @@ type NarrowedTest struct {
 	Reason   string    `json:"reason"`
 }
 
-// Selection is the selection result (semantically compatible with bint/internal/affected.Selection).
+// Selection is the selection result (its JSON form is documented in docs/cli.md).
 type Selection struct {
 	Scope     Tier           `json:"scope"`
 	Base      string         `json:"base,omitempty"`
@@ -317,7 +317,7 @@ type Selection struct {
 	Widening  []Widening     `json:"widening,omitempty"`
 	Warnings  []Widening     `json:"warnings,omitempty"` // do not change the scope (case_mismatch, rule_rejected...)
 	AlwaysRun []string       `json:"always_run,omitempty"`
-	// Narrowed: widened units removed by the dynamic layer (docs/dynamic.md); they are not in Tests.
+	// Narrowed: widened units removed by the dynamic layer (docs/dynamic-layer.md); they are not in Tests.
 	Narrowed   []NarrowedTest `json:"narrowed,omitempty"`
 	IndexStats map[string]int `json:"index_stats,omitempty"`
 }

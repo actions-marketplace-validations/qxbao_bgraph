@@ -1,4 +1,4 @@
-// Package pydyn is the Python part of the dynamic layer (docs/dynamic.md §4, §5): the environment fingerprint and the
+// Package pydyn is the Python part of the dynamic layer (docs/dynamic-layer.md §4, §5): the environment fingerprint and the
 // audit-hook collector behind `bgraph record`.
 package pydyn
 
@@ -130,7 +130,7 @@ func EnvFiles(t tree.Tree) map[string]string {
 	return out
 }
 
-// Fingerprint is the environment fingerprint of docs/dynamic.md §5 for interpreter description interp and tree t (the base
+// Fingerprint is the environment fingerprint of docs/dynamic-layer.md §5 for interpreter description interp and tree t (the base
 // at selection time, the recorded commit at record time).
 func Fingerprint(collector string, interp []string, t tree.Tree) string {
 	return dynamic.Fingerprint(collector, interp, EnvFiles(t))

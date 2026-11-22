@@ -1,4 +1,4 @@
-# bgraph: describes the Python environment for the dynamic layer's fingerprint (docs/dynamic.md section 5).
+# bgraph: describes the Python environment for the dynamic layer's fingerprint (docs/dynamic-layer.md section 5).
 # Run as a script from a directory that holds nothing else, so that no repository module can shadow what it imports.
 # Prints one "key=value" line per fact; the order does not matter.
 import platform

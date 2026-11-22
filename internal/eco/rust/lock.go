@@ -13,7 +13,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// l1Cargo: Cargo.lock passed the differential check against cargo (docs/plan.md §6.8); false keeps it at level L0.
+// l1Cargo: Cargo.lock passed the differential check against cargo (docs/lockfiles.md); false keeps it at level L0.
 var l1Cargo = true
 
 func readLock(t tree.Tree, p string) (*lockfile.Graph, error) {

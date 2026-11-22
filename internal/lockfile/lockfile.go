@@ -1,5 +1,5 @@
 // Package lockfile reads lockfiles into a resolved dependency graph and compares the dependency closure of every project
-// between two trees (docs/plan.md §6.8, levels L1 and L2).
+// between two trees (docs/lockfiles.md, levels L1 and L2).
 //
 // Supported formats: pnpm-lock.yaml (lockfile versions 6.x and 9.0), package-lock.json (lockfileVersion 2 and 3, the
 // "packages" section) and Cargo.lock (version 3 and 4). Anything else, or a file that does not parse, is an error: the

@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// derived: paths whose content is derived from tracked files or the environment (docs/dynamic.md §8.2 merging): installed
+// derived: paths whose content is derived from tracked files or the environment (docs/dynamic-layer.md §8.2 merging): installed
 // packages, git metadata, vite's bundled configs and caches.
 func derived(p string) bool {
 	for _, seg := range strings.Split(p, "/") {
@@ -26,7 +26,7 @@ func derived(p string) bool {
 		strings.HasSuffix(base, ".js"))
 }
 
-// RecordOf turns an outcome into a record (docs/dynamic.md §3, §8). t is the working tree at the recorded commit; root is the
+// RecordOf turns an outcome into a record (docs/dynamic-layer.md §3, §8). t is the working tree at the recorded commit; root is the
 // repository root on disk (to tell untracked files from absent ones).
 func RecordOf(o Outcome, u Unit, t tree.Tree, root, env, collector, commit string, now time.Time) dynamic.Record {
 	r := dynamic.Record{Eco: "node", Unit: u.ID, Collector: collector, Commit: commit, Deps: map[string]string{}, Env: env,

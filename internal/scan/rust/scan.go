@@ -1,4 +1,4 @@
-// Package rust scans Rust source for what decides Cargo-target ownership (docs/plan.md §6.3): `mod name;` declarations (with their
+// Package rust scans Rust source for what decides Cargo-target ownership (docs/ecosystems/rust.md): `mod name;` declarations (with their
 // #[path] attributes and the context they appear in) and include!/include_str!/include_bytes! invocations.
 //
 // It is a lexer plus a flat token pass, not a parser. FAIL-CLOSED principle: whenever the token pass sees something it cannot interpret

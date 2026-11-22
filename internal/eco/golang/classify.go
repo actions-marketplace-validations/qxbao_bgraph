@@ -14,7 +14,7 @@ import (
 var harmlessVerbs = map[string]bool{"retract": true}
 
 // ClassifyChange classifies go.mod, go.sum, go.work, vendored code, linter configuration, and .go files outside every module
-// (plan §6.6, §6.8 level L0).
+// (docs/ecosystems/go.md; go.sum is at lockfile level L0).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if underNodeModules(p) {
 		return nil, false

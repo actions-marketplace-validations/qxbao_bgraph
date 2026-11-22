@@ -1,4 +1,4 @@
-// ESM load hook of bgraph's Node collector (docs/dynamic.md §8.2): logs the file: URL of every module Node's ESM loader loads.
+// ESM load hook of bgraph's Node collector (docs/dynamic-layer.md §8.2): logs the file: URL of every module Node's ESM loader loads.
 // The Go side keeps the ones inside the repository.
 import fs from 'node:fs';
 

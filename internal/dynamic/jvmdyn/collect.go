@@ -21,7 +21,7 @@ import (
 // DefaultJobs is the default number of parallel test JVMs of a recording (forkCount / maxParallelForks).
 func DefaultJobs() int { return max(1, min(4, runtime.NumCPU()/2)) }
 
-// RunOptions configures one recording session (docs/dynamic.md §9.4).
+// RunOptions configures one recording session (docs/dynamic-layer.md §9.4).
 type RunOptions struct {
 	Root      string // repository root (absolute)
 	TmpDir    string // where the logs are written (a fresh subdirectory is used)
@@ -82,7 +82,7 @@ type Outcome struct {
 	Units    []UnitResult
 }
 
-const gradleInit = `// bgraph record (docs/dynamic.md §9.4): one fresh test JVM per test class, with the collector agent.
+const gradleInit = `// bgraph record (docs/dynamic-layer.md §9.4): one fresh test JVM per test class, with the collector agent.
 allprojects {
   tasks.withType(Test).configureEach {
     forkEvery = 1

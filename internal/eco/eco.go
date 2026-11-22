@@ -1,4 +1,4 @@
-// Package eco defines the interface of an ecosystem (node, python, rust...) towards the selector (docs/plan.md §4.1, §4.3).
+// Package eco defines the interface of an ecosystem (node, python, rust...) towards the selector (docs/architecture.md).
 //
 // An ecosystem analyzes ONE tree (base or current) into an Analysis; the selector takes the union of the Analyses of both trees.
 // It also classifies a changed file as its own manifest/config (widened by its own rules), based on both trees.

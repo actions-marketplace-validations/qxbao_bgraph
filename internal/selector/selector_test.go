@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// TestWidenedTag checks the precise/widened classification of docs/dynamic.md §1 and the classification details of Run.
+// TestWidenedTag checks the precise/widened classification of docs/dynamic-layer.md §1 and the classification details of Run.
 func TestWidenedTag(t *testing.T) {
 	base := map[string]string{
 		"pyproject.toml":          "[project]\nname = \"x\"\nversion = \"1\"\n",

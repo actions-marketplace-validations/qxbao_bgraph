@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// Mocha support of the Node T2 harness (Phase 6, docs/dynamic.md §8.6): the whole suite or a list of files with mocha's JSON
+// Mocha support of the Node T2 harness (Phase 6, docs/dynamic-layer.md §8.6): the whole suite or a list of files with mocha's JSON
 // reporter written to a file. T2Repo.Spec are the spec paths of the whole suite (mocha's default is ./test, not recursive);
 // Args are the remaining options (--require, --check-leaks...).
 

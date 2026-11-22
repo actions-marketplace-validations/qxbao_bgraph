@@ -1,4 +1,4 @@
-// Package e2e runs the trap fixtures (docs/plan.md §10.1): each testdata/fixtures/**/*.txtar file describes a base tree, a change and hand-written expected answers.
+// Package e2e runs the trap fixtures (docs/evaluation.md): each testdata/fixtures/**/*.txtar file describes a base tree, a change and hand-written expected answers.
 //
 // Format (txtar style):
 //
@@ -15,7 +15,7 @@
 //	    full                 scope must be full
 //	    notfull              scope must not be full
 //	    warn <reason>        there must be a warning with this reason
-//	    precise <unit>       must be selected and not tagged widened (docs/dynamic.md §1)
+//	    precise <unit>       must be selected and not tagged widened (docs/dynamic-layer.md §1)
 //	    widened <unit>       must be selected and tagged widened
 //
 // A "# ..." line in want is a comment.

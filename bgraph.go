@@ -1,4 +1,4 @@
-// Package bgraph is the stable library API (docs/plan.md §7.1): multi-language affected-test selection, fail-closed.
+// Package bgraph is the library API for Go programs embedding bgraph: multi-language affected-test selection, fail-closed.
 //
 //	idx, err := bgraph.Open(root, bgraph.Options{})
 //	sel, err := idx.Select(ctx, bgraph.Change{Base: "origin/main", Worktree: true})
@@ -36,18 +36,18 @@ type (
 
 // Options configures Index.
 type Options struct {
-	// StateDir: durable index directory (Bint passes its state directory). Empty → the user's cache directory
+	// StateDir: durable index directory (an embedding program may pass its own state directory). Empty → the user's cache directory
 	// (scancache.DefaultDir), never inside the repo.
 	StateDir string
 	// MemoryOnly: do not write the durable cache (tests, one-shot runs). The dynamic layer still reads and writes its records
 	// under StateDir when one is given.
 	MemoryOnly bool
-	// Python: interpreter of the dynamic layer (docs/dynamic.md §5), overriding bgraph.toml [dynamic_layer] python. A path with
+	// Python: interpreter of the dynamic layer (docs/dynamic-layer.md §5), overriding bgraph.toml [dynamic_layer] python. A path with
 	// a separator is relative to the repo root; a bare name is looked up on PATH.
 	Python string
 	// TrustNativeEnv forces [dynamic_layer] trust_native_env = true (records and fingerprints use the trusting collector ID).
 	TrustNativeEnv bool
-	// Node: node executable of the dynamic layer (docs/dynamic.md §8), overriding bgraph.toml [dynamic_layer] node.
+	// Node: node executable of the dynamic layer (docs/dynamic-layer.md §8), overriding bgraph.toml [dynamic_layer] node.
 	Node string
 }
 
@@ -60,7 +60,7 @@ type Index struct {
 	// stateDir: where the dynamic layer keeps its records (empty: none, the layer cannot narrow).
 	stateDir string
 	probes   pydyn.ProbeCache
-	// nodeProbes caches the node executable's description (docs/dynamic.md §8.4).
+	// nodeProbes caches the node executable's description (docs/dynamic-layer.md §8.4).
 	nodeProbes nodedyn.ProbeCache
 }
 
@@ -106,7 +106,7 @@ type Change struct {
 	Head             string
 	Worktree         bool
 	PreviouslyFailed []string
-	// Dynamic: whether the dynamic layer (docs/dynamic.md) narrows widened units. DynamicDefault follows bgraph.toml
+	// Dynamic: whether the dynamic layer (docs/dynamic-layer.md) narrows widened units. DynamicDefault follows bgraph.toml
 	// [dynamic_layer] ecosystems.
 	Dynamic DynamicMode
 }

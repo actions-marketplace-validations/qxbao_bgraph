@@ -13,7 +13,7 @@ func BuildRustManifest(t1 map[string]*ManifestRepo, ds []DatasetInfo, capPer int
 	return BuildCountManifest("rust", t1, ds, capPer)
 }
 
-// PythonRepoKind is the manifest kind of a Python repo (plan section 6.2: selectivity is reported separately for libraries and
+// PythonRepoKind is the manifest kind of a Python repo (selectivity is reported separately for libraries and
 // applications). All SWE-bench Verified repos are libraries; django is a framework. Unknown repos default to "library".
 func PythonRepoKind(repo string) string {
 	if strings.EqualFold(repo, "django/django") {

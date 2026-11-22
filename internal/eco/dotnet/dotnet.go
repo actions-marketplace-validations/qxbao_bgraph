@@ -1,4 +1,4 @@
-// Package dotnet is bgraph's .NET ecosystem, at MSBuild-project granularity (docs/plan.md §6.5).
+// Package dotnet is bgraph's .NET ecosystem, at MSBuild-project granularity (docs/ecosystems/dotnet.md).
 //
 // Inside a project the file/namespace graph is not a sound dependency relation (partial classes, source generators, globbed items,
 // reflection), so the safe unit is the project. File-level information is used only to decide which projects OWN a file.
@@ -40,16 +40,16 @@
 // a segment glued to a name ($(RepositoryEngineeringDir)x.targets); a whole-segment one stays Unresolved. When the nearest global.json
 // names the Arcade SDK, its layout properties are known: $(RepoRoot) is the global.json directory, $(RepositoryEngineeringDir) its eng/
 // and $(ArtifactsDir) and the like are build output. A Condition is never evaluated: every
-// conditional ProjectReference, Import and item counts as present. The plan (§6.5) forces a full run for a Condition on a
-// ProjectReference/Import; the union is a superset of every branch, so it cannot miss a dependency and keeps conditional references
+// conditional ProjectReference, Import and item counts as present. Forcing a full run for a Condition on a
+// ProjectReference/Import would be sound too; the union is a superset of every branch, so it cannot miss a dependency and keeps conditional references
 // (TargetFramework-specific ones are everywhere) from widening everything.
 //
 // # Widening
 //
 //   - an expression that cannot be evaluated, an import or ProjectReference that names no file (without a Condition) and a path
 //     outside the repository are Unresolved (reason unknown_import) seeded at the file that contains them, for ANY change in the
-//     repository: the project (or, for a props file, every project that imports it) and its dependents are selected. This is the
-//     "full" of the plan restricted to the .NET ecosystem and to the projects the unknown construct belongs to: a project that does not
+//     repository: the project (or, for a props file, every project that imports it) and its dependents are selected. This is a
+//     "full" run restricted to the .NET ecosystem and to the projects the unknown construct belongs to: a project that does not
 //     contain it cannot depend on what it names;
 //   - global.json (classify's global table), nuget.config, .config/dotnet-tools.json, Directory.Solution.props/targets and
 //     *.runsettings widen to every .NET unit (module scope "." restricted to Eco "dotnet");

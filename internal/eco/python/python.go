@@ -1,4 +1,4 @@
-// Package python is bgraph's Python ecosystem, at test-file granularity (docs/plan.md §6.2).
+// Package python is bgraph's Python ecosystem, at test-file granularity (docs/ecosystems/python.md).
 //
 // # Test units
 //

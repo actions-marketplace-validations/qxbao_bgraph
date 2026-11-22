@@ -22,7 +22,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// T2 (section 10.2 of docs/plan.md): mutation oracle. Seeds ONE bug into one line of a source file at R (commit M = R + bug, built with a temporary index,
+// T2 (docs/evaluation.md): mutation oracle. Seeds ONE bug into one line of a source file at R (commit M = R + bug, built with a temporary index,
 // no checkout), runs the whole unit-test suite on the buggy working tree, and collects the set of RED test files (minus files already broken/flaky at R). Every red file must be
 // in the selection of Select(R→M). The oracle does NOT depend on bgraph; results are cached (oracle.jsonl) so later runs only re-run bgraph.
 

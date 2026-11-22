@@ -9,10 +9,11 @@ bgraph is a **fail-closed** affected-test selector: for every change the output 
 affected, or it widens (package/module/full) with a machine-readable reason. Every decision below serves that
 invariant first and selectivity second. A silent miss is the only unacceptable outcome.
 
-The design source for each ecosystem is `docs/plan.md` §6.x (in Vietnamese; gitignored, local). Read the ecosystem's
-section plus §6.7 (general rules), §6.8 (lockfiles), §10 (evaluation) and §11 (phase table: "done when") before
-planning. The phase's done-criteria are usually "as Phase 1": 0 T1/T2 violations on the dev set, trap fixtures green,
-widening rates reported by reason, plus an ecosystem-specific check (e.g. Rust: match `cargo metadata --no-deps`).
+Read the public docs before designing: `docs/architecture.md` (contract, graph, widening reasons, global table),
+`docs/configuration.md`, `docs/lockfiles.md`, `docs/evaluation.md` (method and the bar each ecosystem met) and the
+existing `docs/ecosystems/*.md` pages as models for the new one. The phase's done-criteria are usually: 0 T1/T2
+violations on the dev set, trap fixtures green, widening rates reported by reason, plus an ecosystem-specific check
+(e.g. Rust: match `cargo metadata --no-deps`).
 
 ## 0. Working mode
 
@@ -137,9 +138,10 @@ submodule in both trees counted as changed → bat always full; fixed by compari
 
 ## 4. Closing the phase
 
-- Write `research/phase-<n>-<date>/README.md` (gitignored, local): tables for T1 (dev/holdout), provider check, T2,
-  smoke numbers, every violation with its classification, widening reasons, and the exact paths of raw outputs under
-  `D:\bench\bgraph-eval`.
-- Update README (status, supported runners, `bgraph.toml` additions documented in `docs/bgraph.example.toml`, which a
-  test keeps parseable).
+- Write `docs/private/eval/phase-<n>-<date>/README.md` (gitignored, local): tables for T1 (dev/holdout), provider
+  check, T2, smoke numbers, every violation with its classification, widening reasons, and the exact paths of raw
+  outputs under `D:\bench\bgraph-eval`.
+- Update the public docs: a new `docs/ecosystems/<lang>.md`, the ecosystem table of the root README and `docs/README.md`,
+  the results in `docs/evaluation.md`, and `bgraph.toml` additions in `docs/configuration.md` and
+  `docs/bgraph.example.toml` (a test keeps it parseable).
 - Ask the user: keep or delete the phase's eval data; proceed to the next phase.

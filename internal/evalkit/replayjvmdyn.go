@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph/internal/eco/jvm"
 )
 
-// JVM class-layer replay (docs/dynamic.md §9.8): first-parent commits C whose diff from its parent P only modifies Java/Kotlin
+// JVM class-layer replay (docs/dynamic-layer.md §9.8): first-parent commits C whose diff from its parent P only modifies Java/Kotlin
 // files of compiled source roots; records made fresh at P (`bgraph record --eco jvm`), the selection P→C with the class layer,
 // and every removed class run at C (and at P when it fails at C) to verify that removing it was right.
 

@@ -1,6 +1,6 @@
 package jvmdyn
 
-// Constant guard of the JVM class layer (docs/dynamic.md §9.2). Compilers copy the value of a constant variable (Java: a final
+// Constant guard of the JVM class layer (docs/dynamic-layer.md §9.2). Compilers copy the value of a constant variable (Java: a final
 // field of primitive or String type with a constant initializer, any interface field; Kotlin: const val) and annotation element
 // defaults into the class files that use them, so a test using A.CONST never loads A and its record does not list A's file.
 // The guard is lexical and fail-closed: a changed hunk that touches a declaration that may be such a constant, or a file the

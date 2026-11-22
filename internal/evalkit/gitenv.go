@@ -1,4 +1,4 @@
-// Package evalkit is bgraph's external evaluation kit (section 10.2 of docs/plan.md): the hard T1 oracle (FAIL_TO_PASS) and commit-history replay
+// Package evalkit is bgraph's external evaluation kit (docs/evaluation.md): the hard T1 oracle (FAIL_TO_PASS) and commit-history replay
 // with the RTSCheck invariants. The oracle does NOT depend on bgraph: it only uses git and file contents.
 package evalkit
 

@@ -1,4 +1,4 @@
-// Package selector ties everything into one Selection (docs/plan.md §4.3): change set → classification → union graph of base/current →
+// Package selector ties everything into one Selection (docs/architecture.md, "Pipeline"): change set → classification → union graph of base/current →
 // backward walk → test units → widening. Every "don't know" branch widens and never returns empty.
 package selector
 
@@ -18,7 +18,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// DefaultMaxChanged is the default threshold for an oversized diff (docs/plan.md §4.3 step 1).
+// DefaultMaxChanged is the default threshold for an oversized diff ([options] max_changed, docs/configuration.md).
 const DefaultMaxChanged = 5000
 
 // Changed is a file that changed between the base and the current tree. Status: 'A','M','D','T'. Mode follows git ("100644", "120000", "160000").
@@ -57,7 +57,7 @@ func (s *state) widen(w model.Widening) {
 	}
 }
 
-// ChangeInfo is how the selector classified one changed file; the dynamic layer's guards (docs/dynamic.md §2) read it.
+// ChangeInfo is how the selector classified one changed file; the dynamic layer's guards (docs/dynamic-layer.md §2) read it.
 type ChangeInfo struct {
 	Changed
 	// Roles: ecosystem name → the file's role in that ecosystem's analysis of the base and of the head tree ("" when unclaimed).
@@ -203,7 +203,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		if skip {
 			continue
 		}
-		// A rule with targets already declared the file's impact (docs/plan.md §6.7: rules override the widening table): no further widening; still walk backwards if it is a node.
+		// A rule with targets already declared the file's impact (docs/architecture.md, "Rules come first": rules override the widening table): no further widening; still walk backwards if it is a node.
 		if ruled {
 			if g.IsNode(p) {
 				seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
@@ -235,7 +235,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		if g.IsNode(p) {
 			seeds = append(seeds, graph.Seed{Path: p, Reason: "changed"})
 			// Code/data file that nothing depends on: walking backwards reaches no test, but a test may still use it outside the graph
-			// (read via fs, run via child_process). Nobody known → widen to the project (docs/plan.md §4.3 step 2, §6.7).
+			// (read via fs, run via child_process). Nobody known → widen to the project (unreferenced_file, docs/architecture.md).
 			if r := g.Role(p); !claimed && r != model.RoleTest && r != model.RoleConfig && r != model.RoleManifest && r != model.RoleLock &&
 				!g.HasDependents(p) {
 				if pr, ok := eco.NearestProject(projects, p); ok {
@@ -291,7 +291,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	}
 
 	reach := g.Walk(seeds)
-	// The precise walk: from the changed files only (docs/dynamic.md §1). Seeds of unresolved imports are added after every
+	// The precise walk: from the changed files only (docs/dynamic-layer.md §1). Seeds of unresolved imports are added after every
 	// changed-file seed, so the changed-file seeds are exactly those whose reason is "changed".
 	var changedSeeds []graph.Seed
 	for _, sd := range seeds {
@@ -314,7 +314,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	chosen := map[string]*model.SelectedTest{}
 	precise := map[string]bool{}
 	res.UnitEco = map[string]string{}
-	// choose selects u; exact: u is chosen precisely (docs/dynamic.md §1), not only because of a widening.
+	// choose selects u; exact: u is chosen precisely (docs/dynamic-layer.md §1), not only because of a widening.
 	choose := func(u model.TestUnit, reason string, exact bool) {
 		st, ok := chosen[u.ID]
 		if !ok {

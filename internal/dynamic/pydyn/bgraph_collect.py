@@ -1,4 +1,4 @@
-# bgraph dynamic-layer collector (docs/dynamic.md section 4). Loaded with `python -m pytest -p bgraph_collect ...` (or by the
+# bgraph dynamic-layer collector (docs/dynamic-layer.md section 4). Loaded with `python -m pytest -p bgraph_collect ...` (or by the
 # Django bootstrap) from a temporary directory on PYTHONPATH. It installs an audit hook as early as possible and, at exit, writes
 # what the run loaded, opened or listed inside the repository, and why the observation is not complete, to the JSON file named
 # by BGRAPH_COLLECT_OUT. Everything bgraph cannot see (subprocesses, native code, tracing tools, its own errors) makes the
@@ -164,7 +164,7 @@ def _repo_library(name):
 def _listing_counts(f):
     """A directory listing is a dependency unless the import system or pytest's own collection made it: those only decide which
     modules and test files exist, and the set of names changes only through additions, deletions and renames, which the
-    selection guards already refuse to narrow (docs/dynamic.md section 2)."""
+    selection guards already refuse to narrow (docs/dynamic-layer.md section 2)."""
     while f is not None:
         fn = f.f_code.co_filename or ""
         if fn.startswith("<frozen importlib") or fn.startswith("<frozen zipimport"):

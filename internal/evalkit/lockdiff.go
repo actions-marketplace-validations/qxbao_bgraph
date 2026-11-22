@@ -1,6 +1,6 @@
 package evalkit
 
-// Lockfile differential check (gate L1 of docs/plan.md §6.8): for every sampled lockfile commit, the dependency closure
+// Lockfile differential check (gate of level L1, docs/lockfiles.md): for every sampled lockfile commit, the dependency closure
 // that internal/lockfile computes for each project must be a superset of the package set the package manager itself
 // reports for that project (pnpm list, npm ls, cargo metadata).
 

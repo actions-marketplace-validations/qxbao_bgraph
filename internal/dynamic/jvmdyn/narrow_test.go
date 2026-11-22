@@ -52,7 +52,7 @@ func sel(changed ...string) model.Selection {
 		Tests: []model.SelectedTest{{Unit: "maven:core", Project: "core", Runner: "maven", Files: []string{"<jvm:maven:core>"}}}}
 }
 
-// TestGuard: one case per guard (docs/dynamic.md §9.2 and the lead decisions of Phase 7).
+// TestGuard: one case per guard (docs/dynamic-layer.md §9.2 and §9.9).
 func TestGuard(t *testing.T) {
 	base := tree.NewMapTree(baseFiles)
 	cases := []struct {

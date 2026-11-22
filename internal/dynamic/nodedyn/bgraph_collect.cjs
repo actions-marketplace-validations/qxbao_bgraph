@@ -1,4 +1,4 @@
-// bgraph's Node collector (docs/dynamic.md §8.2). Loaded with NODE_OPTIONS=--require into every Node process and thread of one
+// bgraph's Node collector (docs/dynamic-layer.md §8.2). Loaded with NODE_OPTIONS=--require into every Node process and thread of one
 // test unit's run. It logs, per process and thread, the repository files the code loads, reads, lists or stats (with the first
 // caller frame that is not Node-internal or a traversal helper), native addons, WASI instances, spawned processes and worker
 // threads. The Go side (collect.go) merges the logs and decides what is a dependency and what makes the record incomplete.

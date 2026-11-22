@@ -114,7 +114,7 @@ func mavenCommands(k jvmKey, tests []model.SelectedTest, opt Options) ([]Command
 		{Runner: jvm.RunnerMaven, Project: k.root, Argv: []string{tool, "-pl", list, "-am", "-DskipTests", "install"},
 			Note: "step 1 of 2: build and install the selected modules and their upstream modules without running tests"},
 	}
-	// The JVM class layer (docs/dynamic.md §9.6): modules narrowed to some test classes run in a separate invocation, because
+	// The JVM class layer (docs/dynamic-layer.md §9.6): modules narrowed to some test classes run in a separate invocation, because
 	// -Dtest applies to every module of an invocation. The class list goes through MAVEN_ARGS (Maven >= 3.9; the environment
 	// is not limited like cmd.exe's command line): an older Maven ignores it and runs every class, a harmless superset.
 	var plain, filtered, compileOnly, classes []string

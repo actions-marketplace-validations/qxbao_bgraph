@@ -87,7 +87,7 @@ func TestMapCompleteFork(t *testing.T) {
 	}
 }
 
-// TestMapIncomplete: one case per incomplete reason of a fork (docs/dynamic.md §9.5).
+// TestMapIncomplete: one case per incomplete reason of a fork (docs/dynamic-layer.md §9.5).
 func TestMapIncomplete(t *testing.T) {
 	root, mt := repoFixture(t)
 	os.MkdirAll(abs(root, "core/target/classes"), 0o755)

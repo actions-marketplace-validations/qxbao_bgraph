@@ -28,7 +28,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.jar.JarFile;
 
 /**
- * bgraph JVM collector (docs/dynamic.md section 9.5). Started with -javaagent:agent.jar=LOGDIR in every test JVM; writes
+ * bgraph JVM collector (docs/dynamic-layer.md section 9.5). Started with -javaagent:agent.jar=LOGDIR in every test JVM; writes
  * LOGDIR/STEM.log at exit (every class definition with its code source, SourceFile and SMAP files; FileChannel.map calls; a
  * cross-check of loaded classes) and LOGDIR/STEM.jfr (JFR file reads/writes, process starts, native libraries; turned into text
  * by Dump). The build tools' own JVMs are skipped.
@@ -97,7 +97,7 @@ public final class Agent implements ClassFileTransformer {
         installHook(in);
     }
 
-    /** Installs the FileChannelImpl.map hook (docs/dynamic.md section 9.5); any failure leaves hookStatus as a failure. */
+    /** Installs the FileChannelImpl.map hook (docs/dynamic-layer.md section 9.5); any failure leaves hookStatus as a failure. */
     static void installHook(Instrumentation in) {
         try {
             Path jar = Paths.get(Agent.class.getProtectionDomain().getCodeSource().getLocation().toURI());

@@ -1,4 +1,4 @@
-// Package golang is bgraph's Go ecosystem, at package granularity, with pure resolution (docs/plan.md §6.6): go.mod, go.work and
+// Package golang is bgraph's Go ecosystem, at package granularity, with pure resolution (docs/ecosystems/go.md): go.mod, go.work and
 // go/parser (ImportsOnly) only; the go command is never run.
 //
 // `go test` compiles a directory's package, its in-package _test.go files and its external _test package together, so selecting a
@@ -555,7 +555,7 @@ func (b *builder) resolveImport(p *pkg, f, from string, im model.ImportRef, comp
 		return
 	}
 	// A package the build needs but the tree does not hold: generated (ignored by git) or broken. Its generator inputs are unknown,
-	// so any change in the importer's module, or in the module the package would belong to, selects the importer (plan §6.7).
+	// so any change in the importer's module, or in the module the package would belong to, selects the importer (fail-closed).
 	scopes := []string{p.mod.dir}
 	for _, c := range cands {
 		d := ""

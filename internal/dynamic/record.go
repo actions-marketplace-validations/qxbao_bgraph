@@ -1,4 +1,4 @@
-// Package dynamic is bgraph's dynamic layer (docs/dynamic.md): per-unit records of what each test actually loaded or opened,
+// Package dynamic is bgraph's dynamic layer (docs/dynamic-layer.md): per-unit records of what each test actually loaded or opened,
 // and the narrowing that removes a WIDENED unit from a selection when its usable record proves that no changed file is among
 // its dependencies. It never adds units and never touches units the static graph reaches through ordinary edges.
 //
@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-// Record is what one isolated run of one test unit saw (docs/dynamic.md §3).
+// Record is what one isolated run of one test unit saw (docs/dynamic-layer.md §3).
 type Record struct {
 	Eco       string `json:"eco"`
 	Unit      string `json:"unit"`      // unit ID (Python: the test file path)
@@ -30,19 +30,19 @@ type Record struct {
 	Commit    string `json:"commit,omitempty"`
 	// Deps: repo-relative file → git blob OID of the content the test saw. The unit's own files are always in it.
 	Deps       map[string]string `json:"deps"`
-	Env        string            `json:"env"` // environment fingerprint (docs/dynamic.md §5)
+	Env        string            `json:"env"` // environment fingerprint (docs/dynamic-layer.md §5)
 	Complete   bool              `json:"complete"`
 	Incomplete string            `json:"incomplete,omitempty"` // why not complete
 	Pass       bool              `json:"pass"`                 // the unit's run passed (exit 0)
 	Recorded   time.Time         `json:"recorded"`
-	// Toolchain: native addons of the Node toolchain allowlist the run loaded ("name@version", docs/dynamic.md §8.3), for
+	// Toolchain: native addons of the Node toolchain allowlist the run loaded ("name@version", docs/dynamic-layer.md §8.3), for
 	// transparency only.
 	Toolchain []string `json:"toolchain,omitempty"`
-	// Classes: the test classes the runner reported for a JVM unit (the class-list record of docs/dynamic.md §9.1, whose Unit
+	// Classes: the test classes the runner reported for a JVM unit (the class-list record of docs/dynamic-layer.md §9.1, whose Unit
 	// is the module's unit ID and whose Deps are the files of its test roots).
 	Classes []string `json:"classes,omitempty"`
 	// Artifacts: JVM class records list the external archives their test JVM loaded classes from or read (absolute path →
-	// "size:sha1"); a missing or changed archive makes the record unusable (docs/dynamic.md §9.9).
+	// "size:sha1"); a missing or changed archive makes the record unusable (docs/dynamic-layer.md §9.9).
 	Artifacts map[string]string `json:"artifacts,omitempty"`
 }
 
@@ -227,7 +227,7 @@ func Add(file string, add []Record) ([]string, error) {
 	return warn, Save(file, Merge(old, add))
 }
 
-// Fingerprint combines the parts of an environment into the fingerprint stored in records (docs/dynamic.md §5): the collector,
+// Fingerprint combines the parts of an environment into the fingerprint stored in records (docs/dynamic-layer.md §5): the collector,
 // the interpreter description lines (OS, arch, version, installed distributions...; order-insensitive) and a digest of each runner
 // configuration file (path → digest). Callers compute it the same way at record and select time. Version 2 dropped manifests and
 // lockfiles; version 3 keeps only the [pytest] section of tox.ini.

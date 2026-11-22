@@ -1,4 +1,4 @@
-// Package node is bgraph's Node ecosystem (JS/TS, CJS/ESM) (docs/plan.md §6.1).
+// Package node is bgraph's Node ecosystem (JS/TS, CJS/ESM) (docs/ecosystems/node.md).
 package node
 
 import (

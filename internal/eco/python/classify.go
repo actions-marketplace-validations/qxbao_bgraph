@@ -86,7 +86,7 @@ func w(reason, p, scope, detail string) model.Widening {
 	return model.Widening{Tier: model.TierModule, Reason: reason, Path: p, Scope: scope, Eco: Name, Detail: detail}
 }
 
-// ClassifyChange classifies pytest and packaging configuration (plan §6.2, §6.8 level L0).
+// ClassifyChange classifies pytest and packaging configuration (docs/ecosystems/python.md; lockfile level L0).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if !hasPython(a) || skipPath(p) {
 		return nil, false

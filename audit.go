@@ -23,7 +23,7 @@ type FailedTest struct {
 	Reason string `json:"reason"`           // why it is missed / unmapped
 }
 
-// AuditReport is the outcome of shadow-mode auditing (docs/plan.md §7.2, §8.7).
+// AuditReport is the outcome of shadow-mode auditing (docs/cli.md, audit).
 type AuditReport struct {
 	Scope    Tier         `json:"scope"`
 	Base     string       `json:"base,omitempty"`

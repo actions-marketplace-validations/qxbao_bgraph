@@ -15,7 +15,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// Guard returns "" when the JVM class layer may narrow sel at all (docs/dynamic.md §9.2), otherwise the reason. changes are
+// Guard returns "" when the JVM class layer may narrow sel at all (docs/dynamic-layer.md §9.2), otherwise the reason. changes are
 // classified as for dynamic.Guard, with OtherRole meaning a role in an ecosystem other than jvm. base and head are the trees
 // of the selection (the constant guard reads both versions of every changed code file).
 func Guard(sel model.Selection, changes []dynamic.Change, base, head tree.Tree) string {
@@ -165,7 +165,7 @@ func unitDir(t model.SelectedTest) string {
 	return d
 }
 
-// Narrow applies the class layer to sel (docs/dynamic.md §9.1): every selected JVM unit with a usable class list runs only
+// Narrow applies the class layer to sel (docs/dynamic-layer.md §9.1): every selected JVM unit with a usable class list runs only
 // the classes without a usable record, the classes whose record reaches a changed file, and the top-level types declared by
 // its changed test files. The unit stays selected (it is still built); removed classes are listed in Narrowed as
 // "<unit>#<class>". Call it only after Guard passed.

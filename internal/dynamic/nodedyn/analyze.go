@@ -33,7 +33,7 @@ type event struct {
 	Msg    string   `json:"msg"`
 }
 
-// Analysis is what the logs of one unit's run say (docs/dynamic.md §8.2, §8.3).
+// Analysis is what the logs of one unit's run say (docs/dynamic-layer.md §8.2, §8.3).
 type Analysis struct {
 	Files      []string // repo-relative files loaded, read/opened (any mode) or stat'ed by repository code
 	Dirs       []string // repo-relative directories listed by repository code ("." is the root)
@@ -41,7 +41,7 @@ type Analysis struct {
 	Incomplete []string // why the collector could not see everything
 }
 
-// toolchainAddons are the packages whose native addons are accepted without trust_native_env (docs/dynamic.md §8.3): they parse
+// toolchainAddons are the packages whose native addons are accepted without trust_native_env (docs/dynamic-layer.md §8.3): they parse
 // or transform contents handed to them by JS, resolve paths, bundle the runner configuration (§8.3 rule 4), or watch files.
 var toolchainAddons = []string{
 	"@rollup/rollup-*", "@rolldown/binding-*", "rolldown",
@@ -113,7 +113,7 @@ func repoCode(root, caller string) bool {
 	return ok && r != "." && !strings.Contains("/"+r+"/", "/node_modules/")
 }
 
-// runnerSpawn reports whether a spawn is one of the runner-internal ones of docs/dynamic.md §8.3 (they only receive contents
+// runnerSpawn reports whether a spawn is one of the runner-internal ones of docs/dynamic-layer.md §8.3 (they only receive contents
 // or list files).
 func runnerSpawn(e event) bool {
 	pkg, _ := pkgOf(e.Caller)

@@ -165,7 +165,7 @@ type ManifestRepo struct {
 	Role   string `json:"role"` // dev | holdout
 	T1     int    `json:"t1_tasks"`
 	Replay bool   `json:"replay"`
-	// Kind is library | framework | application (set for Python; plan section 6.2 reports selectivity per kind).
+	// Kind is library | framework | application (set for Python; selectivity is reported per kind).
 	Kind    string   `json:"kind,omitempty"`
 	Sources []string `json:"sources,omitempty"`
 }

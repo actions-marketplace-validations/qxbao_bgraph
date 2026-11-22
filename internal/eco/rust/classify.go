@@ -128,7 +128,7 @@ func isCargoConfig(p string) bool {
 	return (b == "config" || b == "config.toml") && path.Base(path.Dir(p)) == ".cargo"
 }
 
-// ClassifyChange classifies Cargo manifests, Cargo.lock (see classifyLock) and cargo/tool configuration (plan §6.3, §6.8).
+// ClassifyChange classifies Cargo manifests, Cargo.lock (see classifyLock) and cargo/tool configuration (docs/ecosystems/rust.md, docs/lockfiles.md).
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	b := path.Base(p)
 	switch {

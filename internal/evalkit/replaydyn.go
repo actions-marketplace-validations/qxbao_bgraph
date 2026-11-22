@@ -13,7 +13,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 )
 
-// Phase 6 replay (docs/dynamic.md §7): recent first-parent commits of a Python repo, selected statically and with the dynamic
+// Phase 6 replay (docs/dynamic-layer.md §7): recent first-parent commits of a Python repo, selected statically and with the dynamic
 // layer. Records are made ONCE at R0 (the parent of the oldest replayed commit) in a separate local clone, and stay usable only
 // through content keying (every recorded dependency's blob unchanged at the base, same environment). On commits whose static
 // selection has no widened unit the hybrid selection must equal the static one (asserted). A sample of commits where the dynamic

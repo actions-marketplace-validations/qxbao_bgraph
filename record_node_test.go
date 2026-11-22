@@ -30,7 +30,7 @@ func testNode(t *testing.T) string {
 	return n
 }
 
-// TestRecordNodeIntegration runs the real Node collector with node:test on a tiny repository (docs/dynamic.md §8): a widening
+// TestRecordNodeIntegration runs the real Node collector with node:test on a tiny repository (docs/dynamic-layer.md §8): a widening
 // through a computed import() is narrowed for the tests that never load the changed module and kept for the one that does;
 // a test that spawns a non-Node process is incomplete; a Node child process and a worker thread are observed.
 func TestRecordNodeIntegration(t *testing.T) {
@@ -133,7 +133,7 @@ func TestRecordNodeIntegration(t *testing.T) {
 	}
 }
 
-// TestRecordNodeVitest records a vitest project (docs/dynamic.md §8.1): sources are read by vite in the runner process, fixture
+// TestRecordNodeVitest records a vitest project (docs/dynamic-layer.md §8.1): sources are read by vite in the runner process, fixture
 // reads happen in the pool workers. It needs a directory whose node_modules has vitest (BGRAPH_TEST_VITEST, linked into the
 // test repository) and is skipped otherwise.
 func TestRecordNodeVitest(t *testing.T) {

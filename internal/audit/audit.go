@@ -1,5 +1,5 @@
 // Package audit parses test-result files (JUnit XML, Jest/Vitest JSON, Playwright JSON) into a flat list of failed
-// test cases, and maps each failure to a repo-relative test file (docs/plan.md §7.2, §8.7).
+// test cases, and maps each failure to a repo-relative test file (docs/cli.md, audit).
 //
 // It only extracts facts from the results; deciding whether bgraph's selection covers a failure is done by the
 // root package (Index.Audit).

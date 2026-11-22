@@ -1,4 +1,4 @@
-// Package scancache scans imports with a cache keyed by content (docs/plan.md §4.4: the cache unit does not depend on the commit).
+// Package scancache scans imports with a cache keyed by content (docs/architecture.md, "Index and caches": the cache unit does not depend on the commit).
 //
 // Cache keeps an in-memory map and, if opened with Open, a durable SQLite store (<dir>/scan.sqlite) so later runs need not
 // re-read unchanged files. The store is only an accelerator: any store error (lock, corruption, full disk) degrades to memory-only with a warning and

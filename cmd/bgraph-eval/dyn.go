@@ -12,7 +12,7 @@ import (
 	"github.com/qxbao/bgraph/internal/evalkit"
 )
 
-// Phase 6 evaluation commands (docs/dynamic.md §7):
+// Phase 6 evaluation commands (docs/dynamic-layer.md §7):
 //
 //	bgraph-eval t2dyn     [--set DIR=MANIFEST ...] [--repos a,b] [--modes default,trust] [--prepare] [--rerecord] [--jobs 8] [--out DIR]
 //	bgraph-eval replaydyn --dir DIR --manifest M [--repos a,b] [--commits 150] [--sample 8] [--modes default,trust] [--out DIR]

@@ -17,7 +17,7 @@ import (
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
-// jvmEnv computes the JVM environment fingerprint for tree t (docs/dynamic.md §9.3). env overrides the process environment
+// jvmEnv computes the JVM environment fingerprint for tree t (docs/dynamic-layer.md §9.3). env overrides the process environment
 // (JAVA_HOME, MAVEN_HOME, GRADLE_HOME).
 func (ix *Index) jvmEnv(rf *rules.File, t tree.Tree, env []string) (fp, collector, javaHome string, err error) {
 	_, _, trust := ix.dynamicConfig(rf)
@@ -29,7 +29,7 @@ func (ix *Index) jvmEnv(rf *rules.File, t tree.Tree, env []string) (fp, collecto
 	return jvmdyn.Fingerprint(collector, home, env, t), collector, home, nil
 }
 
-// applyJVMClasses runs the JVM class layer (docs/dynamic.md §9) on a selection: selected Maven modules / Gradle projects run
+// applyJVMClasses runs the JVM class layer (docs/dynamic-layer.md §9) on a selection: selected Maven modules / Gradle projects run
 // only the test classes whose records reach a changed file. Anything that prevents it leaves the selection unchanged with a
 // dynamic_skipped warning.
 func (ix *Index) applyJVMClasses(ctx context.Context, in selector.Input, res selector.Result, sel Selection) Selection {
@@ -71,7 +71,7 @@ func (ix *Index) applyJVMClasses(ctx context.Context, in selector.Input, res sel
 		UnitEco: res.UnitEco})
 }
 
-// recordJVM records the JVM units (docs/dynamic.md §9.4): one build invocation per Maven reactor / Gradle build, every test
+// recordJVM records the JVM units (docs/dynamic-layer.md §9.4): one build invocation per Maven reactor / Gradle build, every test
 // class in a fresh JVM with the collector agent.
 func (ix *Index) recordJVM(ctx context.Context, opt RecordOptions, rf *rules.File, an *analyzed, wt tree.Tree, head string,
 	now time.Time, keep func(string) bool, sum *RecordSummary) ([]dynamic.Record, []string, error) {
