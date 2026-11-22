@@ -54,7 +54,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-1"
+const AnalyzerVersion = "go-2"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -185,6 +185,9 @@ type builder struct {
 	pkgs map[string]*pkg
 	// orphans: module dir → module-level files.
 	orphans map[string][]string
+	// hidden: directory holding .go files that the go command does not match with ./... (under testdata/, _x/, .x/) → the node
+	// that owns them. Such a directory can still be imported by an explicit path.
+	hidden map[string]string
 }
 
 func (b *builder) edge(from, to string, kind model.EdgeKind, spec string, line int) {
@@ -285,6 +288,7 @@ func (b *builder) assign() {
 		return p
 	}
 	b.orphans = map[string][]string{}
+	b.hidden = map[string]string{}
 	for _, f := range files {
 		if underNodeModules(f) {
 			continue
@@ -299,6 +303,13 @@ func (b *builder) assign() {
 		}
 		if b.excluded(f, m) {
 			continue
+		}
+		if strings.HasSuffix(f, ".go") && b.hidden[d] == "" {
+			if p := owner(d, m); p != nil {
+				b.hidden[d] = LibNode(p.dir)
+			} else {
+				b.hidden[d] = ModNode(m.dir)
+			}
 		}
 		if p := owner(d, m); p != nil {
 			if d == p.dir && skipDoc(f) {
@@ -437,6 +448,16 @@ func (b *builder) resolveImport(p *pkg, f, from string, im model.ImportRef) {
 		found = true
 		if c != p.dir || from != LibNode(p.dir) { // an external test package importing its own package: unit → library
 			b.edge(from, LibNode(c), model.EdgeImport, spec, im.Line)
+		}
+	}
+	for _, c := range cands {
+		// A directory the go command skips in patterns but that an explicit import path can name (a package under testdata/):
+		// its files belong to its owner, which is the dependency.
+		if n := b.hidden[c]; n != "" && b.pkgs[c] == nil {
+			found = true
+			if n != from {
+				b.edge(from, n, model.EdgeImport, spec, im.Line)
+			}
 		}
 	}
 	for _, vd := range b.ms.vendorDirs(p.mod) {
