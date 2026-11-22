@@ -110,12 +110,12 @@ union of every configuration.
 |---|---|
 | `go.mod`: only comments (including `// indirect` markers), layout, line order or `retract` | `none` |
 | `go.mod`: `module` directive | `module`, `manifest_changed`, scoped to the repo root: every Go unit |
-| `go.mod`: any other directive (`go`, `toolchain`, `require`, `replace`, `exclude`, `godebug`, `tool`...) | `module`, `manifest_changed`, scoped to the module and to every module that builds with it (modules that `replace` a path with it, transitively, and the other modules of every `go.work` that uses it) |
-| `go.mod` added or deleted | `module`, `manifest_changed`: the module, the enclosing module (packages move between them), and the modules that build with either |
-| `go.mod` unparseable on one side | `module`, `manifest_changed` (L0): the module and the modules that build with it |
+| `go.mod`: any other directive (`go`, `toolchain`, `require`, `replace`, `exclude`, `godebug`, `tool`...) | `module`, `manifest_changed`: the units of the module and of every module that builds with it (modules that `replace` a path with it, transitively, and the other modules of every `go.work` that uses it); not the units of other modules nested in its directory (see [nested modules](#nested-modules)) |
+| `go.mod` added or deleted | `module`, `manifest_changed`: the module, the enclosing module (packages move between them), and the modules that build with either, each with every module nested inside it |
+| `go.mod` unparseable on one side | `module`, `manifest_changed` (L0): the module and the modules that build with it, each with every module nested inside it |
 | `go.mod` that does not parse (either tree) | additionally, any change in the module selects every package of the module and its dependents (`unknown_import`) |
-| `go.sum` of a module | `module`, `lock_changed`, scoped to that module (L0) |
-| a file under `vendor/` of a module or `go.work` directory | `module`, `lock_changed`, scoped to that directory; importers of the vendored package are also selected through the graph |
+| `go.sum` of a module | `module`, `lock_changed` (L0): the units of that module and of the other modules of every `go.work` that uses it |
+| a file under `vendor/` of a module or `go.work` directory | `module`, `lock_changed`: the units of that module, or of the workspace's modules; importers of the vendored package are also selected through the graph |
 | `go.work`, `go.work.sum` (any depth) | `full`, `global_input` (global widening table) |
 | `.golangci.yml`, `.golangci.yaml`, `.golangci.toml`, `.golangci.json` | `none` |
 | `.go` file under no `go.mod` while the repository has a `go.mod` | `full`, `unknown_file` |
@@ -125,6 +125,25 @@ union of every configuration.
   their owning package.
 - Every `module` widening carries the ecosystem `go`: it selects Go units only, never another ecosystem's tests under the module
   directory, even for a root `go.mod`.
+
+### Nested modules
+
+A module nested in another module's directory is a separate build: `go test` in it reads its own `go.mod`, `go.sum` and
+`vendor/`, not the parent's. A `go.mod` (other than a `module` change), `go.sum` or `vendor/` change of the parent therefore does
+not select the nested module's units, unless the nested module builds with the parent:
+
+- it `replace`s a path with the parent's directory (`replace example.com/m => ../`), directly or through other local replaces;
+- it is a module of a `go.work` that also uses the parent (any directive change, `go` and `toolchain` included, widens every module
+  of the workspace).
+
+A nested module that imports the parent's packages without either builds them from its own requirements; a change to those
+packages' files still selects it through the import. Fail-closed cases:
+
+- a nested module whose `go.mod` cannot be read (either tree) is included, with the modules that build with it: whether it
+  replaces the parent is unknown;
+- when a `go.work` in the module's directory or above cannot be read, workspace membership is unknown: the widening covers every
+  module nested inside the directory;
+- a `go.work` or `go.work.sum` change is `full` (global table).
 
 ## Unresolved and uncertain imports
 
@@ -137,8 +156,8 @@ union of every configuration.
 | `//go:embed` directive that does not parse | no widening | the package depends on its whole directory tree |
 
 A `.go` file under `testdata/` that does not parse is test data, not an uncertain file: it selects its owner when it changes. A
-change outside the module directories named in the table never fires these (a module nested inside one of them does, see
-[Known gaps](#known-gaps-and-over-selection)). See [architecture](../architecture.md) for how unresolved imports fire.
+change outside the module directories named in the table never fires these (a change in a module nested inside one of them does,
+see [Known gaps](#known-gaps-and-over-selection)). See [architecture](../architecture.md) for how unresolved imports fire.
 
 ## Running the selection
 
@@ -162,19 +181,27 @@ See [cli](../cli.md) for the command's options and JSON output.
 
 ## Addressing units in bgraph.toml
 
-In a `[[rule]]`, an `affects` entry that is a directory selects every Go unit whose **module directory** is that directory or lies
-below it. Go units are addressed by module directory (or `"."` / `"all"`), not by package directory:
+In a `[[rule]]`, an `affects` entry that is a directory selects every Go unit whose **module directory** or **package directory**
+is that directory or lies below it. A unit ID selects exactly that package:
 
 ```toml
 [[rule]]
 paths   = ["proto/**"]
 affects = ["services/api"]   # the directory of services/api/go.mod: every package of that module
 reason  = "generated code is rebuilt from the .proto files"
+
+[[rule]]
+paths   = ["schemas/**"]
+affects = ["services/api/internal/store", "go:services/api/internal/codec"]
+reason  = "store (and the packages below it) and codec load the schemas at run time"
 ```
 
-- A package directory inside a module (for example `services/api/internal/store`) selects nothing.
+- A package directory (`services/api/internal/store`) selects that package and every package below it; the unit ID
+  `go:services/api/internal/store` selects that package only.
 - `"."` selects every unit of every ecosystem; `affects = "all"` widens to `full`.
 - Globs written for test files (for example `**/*_test.go`) do not match Go units: units are packages, not files.
+- A target that matches no unit (a mistyped directory, a package without tests, a glob over `.go` files) is a configuration error:
+  the selection is `full` (`user_rule`).
 
 Go has no `[[dynamic]]` or `[[config]]` declarations. See [configuration](../configuration.md).
 
@@ -185,9 +212,12 @@ Go has no `[[dynamic]]` or `[[config]]` declarations. See [configuration](../con
   the current platform are still units and can be selected.
 - **Ambiguous import paths**: a path claimed by several modules or `replace` targets depends on all of them.
 - **cgo**: a cgo package depends on every C/C++/header/assembly file of the repository.
-- **Nested modules**: a module-level widening (`go.mod`, `go.sum`, `vendor/`) and an unresolved import that fires on any change in a
-  module are scoped to the module directory, and a scope cannot exclude sub-directories: modules nested inside it are selected (or
-  fire) too. A root `go.mod` change therefore selects every Go unit.
+- **Nested modules and unresolved imports**: an unresolved import that fires on any change in a module (unreadable `go.mod`,
+  uncertain scan, missing in-repo package) also fires on a change in a module nested inside it. A `go.mod` added, deleted or
+  unparseable on one side, and a `module` directive change, still widen every module nested inside the scope.
+- **Nested modules that import the parent without a local `replace` or a shared `go.work`**: a parent `go.mod` change does not
+  select them (they build the parent from their own requirements). A `go.work` that is not committed (created locally or in CI)
+  is not seen.
 - **`go.sum` is L0**: any change widens its module; checksums are not compared.
 - **`go.work` and `go.work.sum` are `full`** through the global table, unless a `bgraph.toml` rule says otherwise.
 - **Generated packages**: an import of an in-repo package missing from the tree selects the importer on any change in the module.

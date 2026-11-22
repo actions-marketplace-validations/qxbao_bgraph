@@ -1,0 +1,66 @@
+A nested module whose go.mod does not parse may replace the parent with a local path: a require change of the parent selects it (fail-closed), but not a readable independent nested module.
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/broken/go.mod --
+module example.com/m/broken
+
+go 1.22
+
+require (
+	example.com/m v0.0.0
+-- base/broken/b/b.go --
+package b
+
+func B() {}
+-- base/broken/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/other/go.mod --
+module example.com/m/other
+
+go 1.22
+-- base/other/o/o.go --
+package o
+
+func O() {}
+-- base/other/o/o_test.go --
+package o
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- want --
+select go:a
+select go:broken/b
+noselect go:other/o
+widen manifest_changed
+notfull

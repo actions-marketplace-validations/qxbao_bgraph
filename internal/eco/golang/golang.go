@@ -44,8 +44,10 @@
 //
 // # Known over-selection
 //
-// A module-level widening (go.mod, go.sum, vendor/ change) and an unresolved import that fires on any change in a module are scoped
-// to the module directory, and a scope cannot exclude sub-directories: modules nested inside it are selected (or fire) too.
+// A module-level widening (go.mod, go.sum, vendor/ change) is exact (model.Widening.Exact): it covers the units of the module and of
+// the modules that build with it, not those of a module nested in its directory that does not (ClassifyChange). An unresolved import
+// that fires on any change in a module is scoped to the module directory, and a trigger scope cannot exclude sub-directories: a
+// change in a module nested inside it fires it too.
 package golang
 
 import (
@@ -70,7 +72,7 @@ const Name = "go"
 const Runner = "go"
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "go-7"
+const AnalyzerVersion = "go-8"
 
 // Eco is the Go ecosystem.
 type Eco struct {
@@ -444,7 +446,7 @@ func (b *builder) analyzePackages(ctx context.Context) error {
 func (b *builder) analyzePackage(p *pkg) {
 	lib, unit := LibNode(p.dir), Node(p.dir)
 	if p.tests && !p.vendor {
-		b.a.Tests = append(b.a.Tests, model.TestUnit{Eco: Name, ID: UnitID(p.dir), Project: p.mod.dir, Files: []string{unit},
+		b.a.Tests = append(b.a.Tests, model.TestUnit{Eco: Name, ID: UnitID(p.dir), Project: p.mod.dir, Files: []string{unit}, Dir: p.dir,
 			Runner: Runner, Package: p.mod.importPath(p.dir)})
 	}
 	b.edge(unit, lib, model.EdgeImplicit, "go test compiles the package", 0)

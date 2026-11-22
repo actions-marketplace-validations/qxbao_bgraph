@@ -31,9 +31,10 @@
 #               "none"         -> the change affects no test                            (NARROWING)
 #                                 Only accepted for files nothing imports: if a file in `paths` is part of the
 #                                 import graph, the rule is ignored and reported as rule_rejected.
-#             Go units are addressed by their module: a directory target selects the Go packages of every module whose
-#             directory (the one holding go.mod) lies under it, so name a module directory, "." or "all". A package
-#             directory inside a module (e.g. "internal/api") or a glob over .go files selects no Go unit.
+#             A target may also be a unit ID as bgraph prints it (e.g. "go:internal/api"): exactly that unit.
+#             Go: a module directory selects every package of the module; a package directory (e.g. "internal/api")
+#             selects that package and the packages below it; a glob over .go files selects no Go unit.
+#             A target that matches no test unit is a configuration error: the selection becomes full (user_rule).
 #   reason  : free text, shown in explanations. Strongly recommended; nothing checks it.
 # ---------------------------------------------------------------------------------------------------------------------
 

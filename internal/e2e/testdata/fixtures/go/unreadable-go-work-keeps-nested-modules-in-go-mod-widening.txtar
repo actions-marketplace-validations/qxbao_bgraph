@@ -1,0 +1,51 @@
+A go.work that does not parse hides which modules build together: a root go.mod change widens the whole sub-tree, nested modules included (fail-closed).
+-- base/go.work --
+go 1.22
+
+use (
+	.
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+-- base/tools/gen/gen.go --
+package gen
+
+func G() {}
+-- base/tools/gen/gen_test.go --
+package gen
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- want --
+select go:a
+select go:tools/gen
+widen manifest_changed
+notfull

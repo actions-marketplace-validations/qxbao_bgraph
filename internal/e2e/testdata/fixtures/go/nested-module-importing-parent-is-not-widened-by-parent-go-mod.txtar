@@ -1,0 +1,52 @@
+A nested module that imports the parent module's packages without a local replace or a shared go.work builds them from its own requirements, not from the parent's go.mod: a require change of the parent does not select it. A change to the imported package itself still selects it through the import (see nested-module-importing-parent-is-selected-through-the-import).
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+
+require example.com/m v1.0.0
+-- base/tools/gen/gen.go --
+package gen
+
+import (
+	"example.com/m/a"
+)
+
+func G() { a.A() }
+-- base/tools/gen/gen_test.go --
+package gen
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- want --
+select go:a
+noselect go:tools/gen
+widen manifest_changed
+notfull

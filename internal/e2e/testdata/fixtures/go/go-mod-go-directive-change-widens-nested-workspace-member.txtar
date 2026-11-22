@@ -1,0 +1,66 @@
+A go directive change of the root module widens the nested modules that share its go.work (the workspace builds them together), but not a nested module outside the workspace.
+-- base/go.work --
+go 1.22
+
+use (
+	.
+	./tools
+)
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+-- base/tools/gen/gen.go --
+package gen
+
+func G() {}
+-- base/tools/gen/gen_test.go --
+package gen
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/extra/go.mod --
+module example.com/m/extra
+
+go 1.22
+-- base/extra/x/x.go --
+package x
+
+func X() {}
+-- base/extra/x/x_test.go --
+package x
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.mod --
+module example.com/m
+
+go 1.23
+-- want --
+select go:a
+select go:tools/gen
+noselect go:extra/x
+widen manifest_changed
+notfull

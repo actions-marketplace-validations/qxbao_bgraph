@@ -1,0 +1,56 @@
+A [[rule]] target that is a Go package directory inside a module selects that package and the packages below it, not the rest of the module.
+-- base/bgraph.toml --
+[[rule]]
+paths = ["proto/*.proto"]
+affects = ["svc/internal/foo"]
+reason = "foo is generated from the protos"
+-- base/proto/a.proto --
+syntax = "proto3";
+-- base/svc/go.mod --
+module example.com/svc
+
+go 1.22
+-- base/svc/internal/foo/foo.go --
+package foo
+
+func F() {}
+-- base/svc/internal/foo/foo_test.go --
+package foo
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/svc/internal/foo/sub/sub.go --
+package sub
+
+func S() {}
+-- base/svc/internal/foo/sub/sub_test.go --
+package sub
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/svc/internal/bar/bar.go --
+package bar
+
+func B() {}
+-- base/svc/internal/bar/bar_test.go --
+package bar
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/proto/a.proto --
+syntax = "proto3"; // v2
+-- want --
+precise go:svc/internal/foo
+precise go:svc/internal/foo/sub
+noselect go:svc/internal/bar
+nowiden unknown_file
+notfull

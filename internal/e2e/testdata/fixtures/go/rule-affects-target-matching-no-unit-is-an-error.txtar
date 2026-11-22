@@ -1,0 +1,29 @@
+A [[rule]] target that matches no test unit (a directory that does not exist, or a package without tests) is a configuration error: the selection is full (user_rule), never a silent empty selection.
+-- base/bgraph.toml --
+[[rule]]
+paths = ["proto/*.proto"]
+affects = ["svc/internal/fooo"]
+reason = "typo in the target"
+-- base/proto/a.proto --
+syntax = "proto3";
+-- base/svc/go.mod --
+module example.com/svc
+
+go 1.22
+-- base/svc/internal/foo/foo.go --
+package foo
+
+func F() {}
+-- base/svc/internal/foo/foo_test.go --
+package foo
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/proto/a.proto --
+syntax = "proto3"; // v2
+-- want --
+full
+widen user_rule

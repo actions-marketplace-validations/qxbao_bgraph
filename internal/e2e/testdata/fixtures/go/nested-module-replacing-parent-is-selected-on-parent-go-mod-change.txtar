@@ -1,0 +1,67 @@
+A nested module that replaces the parent module with a local path builds with the parent's go.mod: a require change of the parent selects it. A nested module that does not is a separate build and is not selected.
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+
+require example.com/m v0.0.0
+
+replace example.com/m => ../
+-- base/tools/gen/gen.go --
+package gen
+
+func G() {}
+-- base/tools/gen/gen_test.go --
+package gen
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/other/go.mod --
+module example.com/m/other
+
+go 1.22
+-- base/other/o/o.go --
+package o
+
+func O() {}
+-- base/other/o/o_test.go --
+package o
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- want --
+select go:a
+select go:tools/gen
+noselect go:other/o
+widen manifest_changed
+notfull

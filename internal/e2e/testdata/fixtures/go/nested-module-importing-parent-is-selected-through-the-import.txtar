@@ -1,0 +1,81 @@
+The parent's go.mod and one of its packages change together: the nested module importing that package is selected through the import (precisely), even though the go.mod widening does not cover it; a package of the nested module that does not import it is not selected.
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.3.0
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/b/b.go --
+package b
+
+func B() {}
+-- base/b/b_test.go --
+package b
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+
+require example.com/m v1.0.0
+-- base/tools/gen/gen.go --
+package gen
+
+import (
+	"example.com/m/a"
+)
+
+func G() { a.A() }
+-- base/tools/gen/gen_test.go --
+package gen
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/other/other.go --
+package other
+
+func O() {}
+-- base/tools/other/other_test.go --
+package other
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.mod --
+module example.com/m
+
+go 1.22
+
+require golang.org/x/text v0.4.0
+-- head/a/a.go --
+package a
+
+func A() { _ = 1 }
+-- want --
+select go:a
+select go:b
+precise go:tools/gen
+noselect go:tools/other
+notfull

@@ -1,0 +1,47 @@
+go.work.sum is a global input like go.work: full, whatever modules are nested.
+-- base/go.work --
+go 1.22
+
+use (
+	.
+	./tools
+)
+-- base/go.work.sum --
+golang.org/x/text v0.3.0 h1:aaaa=
+-- base/go.mod --
+module example.com/m
+
+go 1.22
+-- base/a/a.go --
+package a
+
+func A() {}
+-- base/a/a_test.go --
+package a
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- base/tools/go.mod --
+module example.com/m/tools
+
+go 1.22
+-- base/tools/gen/gen.go --
+package gen
+
+func G() {}
+-- base/tools/gen/gen_test.go --
+package gen
+
+import (
+	"testing"
+)
+
+func TestX(t *testing.T) {}
+-- head/go.work.sum --
+golang.org/x/text v0.4.0 h1:bbbb=
+-- want --
+full
+widen global_input

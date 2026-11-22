@@ -1,4 +1,4 @@
-A require change widens the module with Eco go. A module nested in its directory is selected too: a widening scope cannot exclude a sub-directory (over-selection, sound).
+A require change widens the module with Eco go. A module nested in its directory that does not build with it (no local replace, no shared go.work) is a separate build and is not selected.
 -- base/a/a.go --
 package a
 
@@ -86,7 +86,7 @@ require golang.org/x/text v0.4.0
 -- want --
 select go:a
 select go:c
-select go:tools/t
+noselect go:tools/t
 widen manifest_changed
 scope module
 notfull

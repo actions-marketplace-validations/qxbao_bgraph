@@ -114,6 +114,7 @@ A widening:
 | `detail` | human-readable detail |
 | `suggest` | a `bgraph.toml` snippet that could narrow it |
 | `eco` | restricts a module/package widening to one ecosystem's units |
+| `exact` | the widening covers the units of the `scope` project itself, not those of projects nested below it (a Go module inside another module's directory) |
 
 ## `command`
 

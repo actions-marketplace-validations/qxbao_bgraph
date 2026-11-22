@@ -417,30 +417,25 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 			if w.Eco != "" && u.Eco != w.Eco {
 				continue
 			}
-			if unitWithin(u, w.Scope) {
+			if (w.Exact && u.Project == w.Scope) || (!w.Exact && unitWithin(u, w.Scope)) {
 				choose(u, fmt.Sprintf("widen %s (%s) due to %s", scopeName(w.Scope), w.Reason, w.Path), false)
 			}
 		}
 	}
-	// User rules with targets.
+	// User rules with targets. A target that names no unit of the current tree is a configuration error (a stale or mistyped
+	// directory, a glob over files no unit has): the rule cannot say what the change affects, so the selection is full.
 	for _, rt := range ruleTargets {
-		var pat *glob.Pattern
-		if strings.ContainsAny(rt.target, "*?[{") {
-			pat, _ = glob.Compile(rt.target)
-		}
+		matched := false
 		for _, u := range units {
-			if pat == nil && unitWithin(u, path.Clean(rt.target)) {
+			if ruleTargetMatches(u, rt.target) {
+				matched = true
 				choose(u, rt.reason, true)
-				continue
 			}
-			if pat != nil {
-				for _, f := range u.Files {
-					if pat.Match(f) {
-						choose(u, rt.reason, true)
-						break
-					}
-				}
-			}
+		}
+		if !matched {
+			s.widen(model.Widening{Tier: model.TierFull, Reason: model.ReasonUserRule, Path: rules.FileName,
+				Detail: fmt.Sprintf("%s: affects target %q matches no test unit", rt.reason, rt.target)})
+			return s.finishFull()
 		}
 	}
 	// "Whole project" unit (test file set unknown): any meaningful change may touch an unknown test of the project.
@@ -542,6 +537,23 @@ func unitWithin(u model.TestUnit, dir string) bool {
 		}
 	}
 	return false
+}
+
+// ruleTargetMatches: unit u is selected by the [[rule]] affects target t: its unit ID, a directory holding the unit's project,
+// one of its files or its directory (TestUnit.Dir), or a glob matching one of its files.
+func ruleTargetMatches(u model.TestUnit, t string) bool {
+	if t == u.ID {
+		return true
+	}
+	if strings.ContainsAny(t, "*?[{") {
+		pat, err := glob.Compile(t)
+		if err != nil {
+			return false
+		}
+		return slices.ContainsFunc(u.Files, pat.Match)
+	}
+	d := path.Clean(t)
+	return unitWithin(u, d) || (u.Dir != "" && eco.Within(u.Dir, d))
 }
 
 func ruleDetail(r rules.Rule) string {

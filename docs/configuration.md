@@ -50,7 +50,7 @@ rule can also override them (see [Architecture](architecture.md#rules-come-first
 | Key | Required | Value |
 |---|---|---|
 | `paths` | yes | non-empty list of globs: the files the rule is about |
-| `affects` | yes | `"all"`, `"none"`, or a non-empty list of directories or globs |
+| `affects` | yes | `"all"`, `"none"`, or a non-empty list of directories, unit IDs or globs |
 | `reason` | no (recommended) | free text, shown in explanations |
 
 `affects`:
@@ -58,15 +58,21 @@ rule can also override them (see [Architecture](architecture.md#rules-come-first
 | Value | Effect | Kind |
 |---|---|---|
 | `"all"` | run the full suite (`user_rule`) | widening |
-| `["dir", "glob"]` | also select every test unit under these directories, or with a file matching these globs | widening |
+| `["dir", "glob"]` | also select every test unit under these directories, named by these unit IDs, or with a file matching these globs | widening |
 | `"none"` | the change affects no test | narrowing |
 
 `"none"` is accepted only for files that are not part of the import graph. If a matching file is a graph node, the rule
 is ignored for it and reported as `rule_rejected`.
 
-Directory targets select units whose project or files lie under the directory. Go units are addressed by **module**: a
-directory target selects the Go packages of every module whose directory lies under it, so name a module directory or
-`.` (or use `affects = "all"`); a package directory inside a module, or a glob over `.go` files, selects no Go unit.
+Directory targets select units whose project or files lie under the directory; for Go, a unit's package directory counts
+too, so a module directory selects every package of the module and a package directory selects that package and the
+packages below it. A target may also be a unit ID as bgraph prints it (`go:internal/store`), which selects exactly that
+unit. Globs match the units' files; a glob over `.go` files selects no Go unit (Go units are packages, see
+[Go](ecosystems/go.md#addressing-units-in-bgraphtoml)).
+
+A target that matches no test unit of the current tree (a mistyped or stale directory, a package without tests, a glob
+that matches no unit's file) is a configuration error: when the rule matches a changed file, the selection is `full`
+(`user_rule`) and the detail names the target.
 
 ```toml
 [[rule]]

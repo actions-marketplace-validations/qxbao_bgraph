@@ -219,7 +219,7 @@ An unresolved import with scope `none` is report-only: the ecosystem already enc
 |---|---|
 | `"all"` | `full` (`user_rule`). |
 | `"none"` | The file is ignored, **unless** it is a graph node; then the rule is rejected with a `rule_rejected` warning and the file is classified normally. |
-| a list of directories or globs | Every unit under the directories, or with a file matching the globs, is selected (precise). No further widening applies to the file; if it is a graph node the walk still starts from it. |
+| a list of directories, unit IDs or globs | Every unit under the directories, named by the unit IDs, or with a file matching the globs, is selected (precise). A target that matches no unit makes the selection `full` (`user_rule`). No further widening applies to the file; if it is a graph node the walk still starts from it. |
 
 ## Global inputs and harmless files
 

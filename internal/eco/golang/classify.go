@@ -26,8 +26,9 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 	case b == "go.mod" && isMod(dir):
 		return classifyGoMod(p, base, head, bm, hm), true
 	case b == "go.sum" && isMod(dir):
-		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonLockChanged, Path: p, Scope: dir, Eco: Name,
-			Detail: "go.sum at level L0 (checksums not compared)"}}, true
+		// A go.sum is read by its own module's build and, in workspace mode, by every module of the workspace.
+		dirs, exact := moduleScope(dir, coMembers, bm, hm)
+		return scoped(model.ReasonLockChanged, p, dir, "go.sum at level L0 (checksums not compared)", dirs, exact), true
 	case (b == "go.work" || b == "go.work.sum") && moduleDirOK(dir):
 		// Normally a global input (full) before ecosystems are asked; kept for callers that rule it otherwise.
 		var out []model.Widening
@@ -40,8 +41,9 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 		return nil, true
 	}
 	if m := vendorOwner(p, bm, hm); m != "" {
-		return []model.Widening{{Tier: model.TierModule, Reason: model.ReasonLockChanged, Path: p, Scope: m, Eco: Name,
-			Detail: "vendored dependency changed"}}, true
+		// A module's vendor/ directory is read by that module's build only; a workspace's by every module of the workspace.
+		dirs, exact := moduleScope(m, workspaceMembers, bm, hm)
+		return scoped(model.ReasonLockChanged, p, m, "vendored dependency changed", dirs, exact), true
 	}
 	// A .go file under no go.mod in a repository with Go modules: a GOPATH-layout package beside them, not analyzed → full. In a
 	// repository without any go.mod there are no Go units to affect: the file is left to the general rules (an unowned file).
@@ -68,18 +70,77 @@ func vendorOwner(p string, ms ...*modules) string {
 	return ""
 }
 
+// scoped returns one module widening per directory of dirs (dir is the module of the changed file p). exact: each covers the units
+// of that module only (Widening.Exact), not those of modules nested below it.
+func scoped(reason, p, dir, detail string, dirs []string, exact bool) []model.Widening {
+	var out []model.Widening
+	for _, d := range dedupDirs(dirs) {
+		w := model.Widening{Tier: model.TierModule, Reason: reason, Path: p, Scope: d, Eco: Name, Detail: detail, Exact: exact}
+		if d != dir {
+			w.Detail += " (module " + d + " builds with it)"
+		}
+		out = append(out, w)
+	}
+	return out
+}
+
+// moduleScope returns the modules whose build reads a changed input of module (or workspace) directory dir: dir itself and the
+// modules related returns for it, each widened exactly (exact=true): a module nested below dir is a separate build and is not
+// selected unless it is related. Fail-closed exceptions:
+//
+//   - a module nested below dir whose go.mod cannot be read on one side is included, with its own related modules (whether it
+//     builds with dir, through a local replace for example, is unknown);
+//   - when a go.work in dir or one of its ancestors cannot be read, workspace membership is unknown: the scope is dir's whole
+//     sub-tree (exact=false), nested modules included.
+func moduleScope(dir string, related func(string, ...*modules) []string, bm, hm *modules) (dirs []string, exact bool) {
+	dirs = append([]string{dir}, related(dir, bm, hm)...)
+	exact = true
+	for _, ms := range []*modules{bm, hm} {
+		for _, w := range ms.works {
+			if w.mf == nil && eco.Within(dir, w.dir) {
+				exact = false
+			}
+		}
+		for _, m := range ms.list {
+			if m.mf == nil && m.dir != dir && eco.Within(m.dir, dir) {
+				dirs = append(dirs, m.dir)
+				dirs = append(dirs, related(m.dir, bm, hm)...)
+			}
+		}
+	}
+	return dedupDirs(dirs), exact
+}
+
+// coMembers returns the other modules of every go.work that uses module dir (workspace mode reads every module's go.sum).
+func coMembers(dir string, mss ...*modules) []string {
+	var out []string
+	for _, ms := range mss {
+		for _, w := range ms.works {
+			if slices.Contains(w.uses, dir) {
+				out = append(out, w.uses...)
+			}
+		}
+	}
+	return out
+}
+
+// workspaceMembers returns the modules of the go.work files in directory dir (a workspace's vendor/ directory applies to them).
+func workspaceMembers(dir string, mss ...*modules) []string {
+	var out []string
+	for _, ms := range mss {
+		for _, w := range ms.works {
+			if w.dir == dir {
+				out = append(out, w.uses...)
+			}
+		}
+	}
+	return out
+}
+
 func classifyGoMod(p string, base, head tree.Tree, bm, hm *modules) []model.Widening {
 	dir := path.Dir(p)
 	widen := func(detail string, dirs ...string) []model.Widening {
-		var out []model.Widening
-		for _, d := range dedupDirs(dirs) {
-			w := model.Widening{Tier: model.TierModule, Reason: model.ReasonManifestChanged, Path: p, Scope: d, Eco: Name, Detail: detail}
-			if d != dir {
-				w.Detail += " (module " + d + " builds with it)"
-			}
-			out = append(out, w)
-		}
-		return out
+		return scoped(model.ReasonManifestChanged, p, dir, detail, dirs, false)
 	}
 	reach := reachers(dir, bm, hm)
 	om, nm := bm.byDir[dir], hm.byDir[dir]
@@ -111,7 +172,12 @@ func classifyGoMod(p string, base, head tree.Tree, bm, hm *modules) []model.Wide
 		// Import paths of the whole repository may resolve differently.
 		return widen(detail, ".")
 	}
-	return widen(detail, append([]string{dir}, reach...)...)
+	// The module's own build and the builds of the modules that build with it (reachers: local replaces, transitively, and every
+	// go.work using it, which also covers a go or toolchain change seen by the workspace). A nested module that only imports this
+	// module's packages builds them from its own requirements, not from this go.mod; a change to those packages' files still
+	// reaches it through the import edges.
+	dirs, exact := moduleScope(dir, reachers, bm, hm)
+	return scoped(model.ReasonManifestChanged, p, dir, detail, dirs, exact)
 }
 
 // reachers returns the module directories that build with module dir's go.mod: modules that replace a path with it (transitively)

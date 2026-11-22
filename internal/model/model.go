@@ -80,6 +80,9 @@ type Widening struct {
 	// Eco restricts a module/package widening to the test units of one ecosystem (empty: every ecosystem). Used by ecosystems whose
 	// scope directory may also hold other ecosystems' projects (a Cargo.lock at the repo root must not select Node tests).
 	Eco string `json:"eco,omitempty"`
+	// Exact restricts a module/package widening to the test units whose Project is Scope itself: units of projects nested below
+	// Scope (a Go module with its own go.mod inside the widened module) are not covered.
+	Exact bool `json:"exact,omitempty"`
 	// Seeds are graph nodes the selector walks backwards from, besides the changed files (lockfile levels L1/L2: the files of
 	// a project whose dependency closure changed, or the virtual node of a changed package).
 	Seeds []string `json:"-"`
@@ -276,6 +279,9 @@ type TestUnit struct {
 	// Config is a runner-specific launch file: the pytest config file (repo-relative; empty when pytest has none), or for the Python
 	// "django" runner the driver script (tests/runtests.py or manage.py).
 	Config string `json:"config,omitempty"`
+	// Dir is the directory the unit's tests live in, set when Files holds only a virtual node and the unit may be narrower than its
+	// project (a Go package inside a module): a [[rule]] directory target matches it like a file of the unit.
+	Dir string `json:"dir,omitempty"`
 }
 
 // SelectedTest is a selected test unit together with its reason chain.
