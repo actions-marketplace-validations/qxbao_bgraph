@@ -137,6 +137,9 @@ func ParsePnpm(dir string, data []byte) (*Graph, error) {
 		} else {
 			n.Package, n.Version = name, pk
 		}
+		if v, ok := meta["version"].(string); ok && v != "" {
+			n.Version = v // a tarball, git or directory package records its manifest version (the key holds the URL)
+		}
 		idm := map[string]any{}
 		for k, v := range meta {
 			if !pnpmIdentSkip[k] {

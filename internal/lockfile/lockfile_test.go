@@ -146,6 +146,19 @@ func TestPnpmEnvDocument(t *testing.T) {
 	}
 }
 
+// A tarball dependency is keyed by its URL; its version is the recorded manifest version.
+func TestPnpmTarballVersion(t *testing.T) {
+	const url = "https://codeload.github.com/u/r/tar.gz/abc"
+	data := strings.Replace(pnpm9, "        version: 4.17.21", "        version: "+url, 1)
+	data = strings.Replace(data, "  lodash@4.17.21:\n    resolution: {integrity: sha512-lodash}", "  lodash@"+url+":\n    resolution: {tarball: "+url+"}\n    version: 4.17.21", 1)
+	data = strings.Replace(data, "  lodash@4.17.21: {}", "  lodash@"+url+": {}", 1)
+	g := mustParse(t, "pnpm-lock.yaml", ".", data)
+	n := g.Nodes["pnpm:lodash@"+url]
+	if n == nil || n.Package != "lodash" || n.Version != "4.17.21" || !n.Local {
+		t.Fatalf("node = %+v", n)
+	}
+}
+
 // A catalog bump is visible in the importers that use it: it is not a settings change.
 func TestPnpmCatalogsNotExtra(t *testing.T) {
 	cat := func(v string) string {
