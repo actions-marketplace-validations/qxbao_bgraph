@@ -1,0 +1,64 @@
+A plugin path that starts with a property no POM defines (set at build time or by -D) may point into any directory: the rest of the path is matched anywhere in the repository ("${x}/checkstyle.xml" as **/checkstyle.xml, "${x}-suppressions.xml" glued as **/*-suppressions.xml). External properties (${user.home}) are ignored.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>build-tools</module><module>app</module><module>svc</module><module>other</module></modules>
+</project>
+-- base/build-tools/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>build-tools</artifactId>
+</project>
+-- base/build-tools/src/main/resources/config/checkstyle.xml --
+<module name="Checker"/>
+-- base/build-tools/src/main/resources/config/app-suppressions.xml --
+<suppressions/>
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-checkstyle-plugin</artifactId>
+<configuration><configLocation>${checkstyle.dir}/checkstyle.xml</configLocation></configuration>
+</plugin></plugins></build>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/svc/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>svc</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-checkstyle-plugin</artifactId>
+<configuration><suppressionsLocation>${config.prefix}-suppressions.xml</suppressionsLocation></configuration>
+</plugin></plugins></build>
+</project>
+-- base/svc/src/test/java/SvcTest.java --
+class SvcTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-checkstyle-plugin</artifactId>
+<configuration><configLocation>${user.home}/checkstyle.xml</configLocation><headerLocation>${license.header}</headerLocation></configuration>
+</plugin></plugins></build>
+</project>
+-- head/build-tools/src/main/resources/config/checkstyle.xml --
+<module name="Checker"><module name="TreeWalker"/></module>
+-- head/build-tools/src/main/resources/config/app-suppressions.xml --
+<suppressions><suppress checks="x"/></suppressions>
+-- want --
+notfull
+select maven:build-tools
+select maven:app
+select maven:svc
+noselect maven:other

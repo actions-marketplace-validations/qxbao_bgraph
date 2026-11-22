@@ -331,3 +331,27 @@ func TestParseXMLToleratesBOMAndLegacyBytes(t *testing.T) {
 		}
 	}
 }
+
+func TestAnywhereGlob(t *testing.T) {
+	cases := []struct {
+		v, dir, want string
+		ok           bool
+	}{
+		{"${x}/checkstyle.xml", "app", "**/checkstyle.xml", true},
+		{"${x}-suppressions.xml", "app", "**/*-suppressions.xml", true},
+		{"../${x}/rules.xml", "app", "**/rules.xml", true},
+		{"conf/${x}.xml", "app", "app/conf/**/*.xml", true},
+		{"conf/a-${x}.xml", "app", "app/conf/a-*.xml", true},
+		{"${x}", "app", "", false},
+		{"${x}/", "app", "", false},
+		{"${user.home}/a.xml", "app", "", false},
+		{"${settings.localRepository}/a.jar", "app", "", false},
+		{"../../${x}/a.xml", "app", "", false},
+	}
+	for _, c := range cases {
+		got, ok := anywhereGlob(c.v, c.dir)
+		if ok != c.ok || got != c.want {
+			t.Errorf("anywhereGlob(%q, %q) = %q, %v; want %q, %v", c.v, c.dir, got, ok, c.want, c.ok)
+		}
+	}
+}

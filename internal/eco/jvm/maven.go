@@ -368,6 +368,10 @@ func (m *mvnModel) lookup(pi *pomInfo, name string) (string, bool) {
 			return v, true
 		}
 	}
+	if name == "main.basedir" {
+		// Set by directory-maven-plugin (highest-basedir / directory-of the root project): the reactor root.
+		return relDir(pi.dir, m.reactorRoot(pi).dir), true
+	}
 	return "", false
 }
 
@@ -620,6 +624,11 @@ func (pi *pomInfo) pathTexts() []pathText {
 		}
 		if strings.ContainsAny(x.text, "/\\") {
 			out = append(out, pathText{raw: x.text})
+		} else if strings.HasPrefix(x.text, "${") && !strings.ContainsAny(x.text, " \t") {
+			// "${dir}-suppressions.xml": a property glued to a file name.
+			if j := strings.IndexByte(x.text, '}'); j > 0 && strings.Contains(x.text[j+1:], ".") {
+				out = append(out, pathText{raw: x.text})
+			}
 		}
 	})
 	return out
@@ -794,8 +803,17 @@ func (m *mvnModel) externalEdges(b *builder, pi *pomInfo, u *unit) {
 			raw := pt.raw
 			v := m.interp(pi, raw)
 			if strings.Contains(v, "${") {
-				if !pt.srcDir || strings.HasPrefix(v, "${project.build.") || strings.HasPrefix(v, "${project.reporting.") {
-					continue // under target/, or a parameter that need not be a path
+				if !pt.srcDir {
+					// A property defined in no POM of the chain (set by a plugin at build time, -D, maven.config): it may be any
+					// directory of the repository, so the rest of the path is matched anywhere.
+					if g, ok := anywhereGlob(strings.ReplaceAll(v, "\\", "/"), pi.dir); ok {
+						b.edge(u.node, g, model.EdgePattern, "path with an undefined property "+raw)
+						b.edge(u.node, g+"/**", model.EdgePattern, "path with an undefined property "+raw)
+					}
+					continue
+				}
+				if strings.HasPrefix(v, "${project.build.") || strings.HasPrefix(v, "${project.reporting.") {
+					continue // under target/
 				}
 				b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: pi.path, Spec: raw, Class: model.UnresolvedUnknown,
 					ScopeTier: model.TierModule, ScopeDir: m.compRoot[m.comp[pi.path]],
@@ -831,6 +849,74 @@ func (m *mvnModel) externalEdges(b *builder, pi *pomInfo, u *unit) {
 			}
 		}
 	}
+}
+
+// externalPropPrefixes name properties whose value lies outside the repository (local repository, home, JDK, environment) or
+// under build output (target/).
+var externalPropPrefixes = []string{"settings.", "env.", "user.", "java.", "os.", "maven.", "project.build.", "project.reporting.",
+	"session.", "sun.", "file.", "line.", "path."}
+
+func externalProp(name string) bool {
+	switch name {
+	case "localRepository", "basedir", "project.basedir":
+		return true
+	}
+	for _, p := range externalPropPrefixes {
+		if strings.HasPrefix(name, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// anywhereGlob turns path v, relative to directory dir and holding properties that no POM defines, into a repository glob: a
+// property that starts a segment is any directories ("**", or "**/*" when glued to the following name), one inside a segment is
+// "*". ok=false when a property is external (externalProp) or nothing literal is left to match (the whole value is a property:
+// a known gap, it may be any path).
+func anywhereGlob(v, dir string) (string, bool) {
+	var sb strings.Builder
+	for {
+		i := strings.Index(v, "${")
+		if i < 0 {
+			sb.WriteString(escapeGlob(v))
+			break
+		}
+		j := strings.IndexByte(v[i:], '}')
+		if j < 0 {
+			return "", false
+		}
+		if externalProp(v[i+2 : i+j]) {
+			return "", false
+		}
+		lit, rest := v[:i], v[i+j+1:]
+		sb.WriteString(escapeGlob(lit))
+		atSeg := (sb.Len() == 0 || strings.HasSuffix(sb.String(), "/")) && (lit == "" || strings.HasSuffix(lit, "/"))
+		glued := rest != "" && rest[0] != '/'
+		switch {
+		case atSeg && glued:
+			sb.WriteString("**/*")
+		case atSeg:
+			sb.WriteString("**")
+		default:
+			sb.WriteString("*")
+		}
+		v = rest
+	}
+	g := sb.String()
+	if strings.HasPrefix(g, "/") || len(g) > 1 && g[1] == ':' {
+		return "", false
+	}
+	if !strings.HasPrefix(g, "**") {
+		g = path.Join(dir, g)
+		if g == ".." || strings.HasPrefix(g, "../") {
+			return "", false
+		}
+	}
+	g = strings.TrimSuffix(g, "/")
+	if strings.Trim(g, "*?/.") == "" {
+		return "", false
+	}
+	return g, true
 }
 
 // relDir returns the path of directory to relative to directory from (both repo-relative, "." for the root).

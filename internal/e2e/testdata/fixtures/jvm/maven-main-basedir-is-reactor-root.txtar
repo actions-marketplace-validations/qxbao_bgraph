@@ -1,0 +1,45 @@
+${main.basedir} (directory-maven-plugin highest-basedir) is the reactor root: a plugin path through it into another module's directory is a dependency of the configuring module.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>tools</module><module>app</module><module>other</module></modules>
+</project>
+-- base/tools/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>tools</artifactId>
+</project>
+-- base/tools/src/main/resources/rules.xml --
+<rules/>
+-- base/tools/src/main/resources/other-rules.xml --
+<rules/>
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-enforcer-plugin</artifactId>
+<configuration><rulesFile>${main.basedir}/tools/src/main/resources/rules.xml</rulesFile></configuration>
+</plugin></plugins></build>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/tools/src/main/resources/rules.xml --
+<rules><rule/></rules>
+-- want --
+notfull
+select maven:tools
+select maven:app
+noselect maven:other
