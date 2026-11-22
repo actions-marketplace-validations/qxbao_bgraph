@@ -89,3 +89,46 @@ func TestChangeExclude(t *testing.T) {
 		t.Error("invalid pattern accepted")
 	}
 }
+
+// Data files inside a Go module are owned by the module (role data); Exclude still drops them when nothing references them.
+func TestChangeExcludeGoModule(t *testing.T) {
+	root := testRepo(t, map[string]string{
+		"go.mod":         "module example.com/m\n\ngo 1.22\n",
+		"a/a.go":         "package a\n\nconst A = 1\n",
+		"a/a_test.go":    "package a\n\nimport \"testing\"\n\nfunc TestA(t *testing.T) {}\n",
+		"b/b.go":         "package b\n\nimport \"example.com/m/a\"\n\nconst B = a.A\n",
+		"b/b_test.go":    "package b\n\nimport \"testing\"\n\nfunc TestB(t *testing.T) {}\n",
+		"c/c.go":         "package c\n",
+		"c/goal_test.go": "package c\n\nimport \"testing\"\n\nfunc TestC(t *testing.T) {}\n",
+	})
+	ctx := context.Background()
+	ix, err := Open(ctx, root, Options{MemoryOnly: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ix.Close()
+	p := filepath.Join(root, ".tool", "tasks", "01X", "state.json")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte(`{"n":1}`), 0o644)
+	if s, err := ix.Select(ctx, Change{Base: "HEAD", Worktree: true}); err != nil || s.Scope == TierNone {
+		t.Fatalf("without Exclude a state file must widen: %+v %v", s, err)
+	}
+	s, err := ix.Select(ctx, Change{Base: "HEAD", Worktree: true, Exclude: []string{".tool/tasks/**"}})
+	if err != nil || s.Scope != TierNone || len(s.Changed) != 0 || len(s.Tests) != 0 || len(s.Warnings) != 0 {
+		t.Fatalf("excluded state file in a Go module: %+v %v", s, err)
+	}
+
+	// A test file and a Go source are never dropped; selected Go units carry their package directory.
+	os.WriteFile(filepath.Join(root, "a", "a.go"), []byte("package a\n\nconst A = 2\n"), 0o644)
+	s, err = ix.Select(ctx, Change{Base: "HEAD", Worktree: true, Exclude: []string{".tool/tasks/**", "a/**"}})
+	if err != nil || !slices.Equal(s.Changed, []string{"a/a.go"}) {
+		t.Fatalf("source excluded: %+v %v", s, err)
+	}
+	dirs := map[string]string{}
+	for _, u := range s.Tests {
+		dirs[u.Unit] = u.Dir
+	}
+	if dirs["go:a"] != "a" || dirs["go:b"] != "b" || len(dirs) != 2 {
+		t.Errorf("units/dirs: %v", dirs)
+	}
+}

@@ -98,6 +98,7 @@ A selected test:
 | `files` | the unit's files (a virtual node for build-level units) |
 | `reasons` | reason chains, each step joined by ` ; `, e.g. `src/a.test.ts --import-> src/util.ts ; src/util.ts (changed)` |
 | `whole` | run the project's whole test suite (the test file set is unknown) |
+| `dir` | the directory the unit's tests live in, when the unit is narrower than its project (Go: the package directory) |
 | `package`, `config` | ecosystem-specific runner addressing details (for example the Cargo package for `-p`, the Go import path, the pytest config file or Django driver; see the ecosystem pages) |
 | `widened` | selected only because of a widening; only such units can be removed by the dynamic layer |
 | `dynamic` | why the dynamic layer kept the unit |

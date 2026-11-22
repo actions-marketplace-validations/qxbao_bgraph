@@ -294,6 +294,7 @@ type SelectedTest struct {
 	Whole   bool     `json:"whole,omitempty"`   // run the project's whole test suite (see TestUnit.Whole)
 	Package string   `json:"package,omitempty"` // see TestUnit.Package
 	Config  string   `json:"config,omitempty"`  // see TestUnit.Config
+	Dir     string   `json:"dir,omitempty"`     // see TestUnit.Dir (Go: the package directory)
 	// Widened: the unit is selected only because of a widening (unresolved import seed, module/package scope widening, "whole
 	// project" unit), not by the backward walk from the changed files, a [[rule]] target, previously_failed or as a new test
 	// (docs/dynamic-layer.md §1). Only widened units can be removed by the dynamic layer.

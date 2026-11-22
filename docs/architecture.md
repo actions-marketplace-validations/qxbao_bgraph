@@ -314,8 +314,10 @@ widening reasons (`ReasonNoBase`, `ReasonLockChanged`, …) are exported as cons
 - `Change.Exclude` takes glob patterns (bgraph.toml syntax, relative to the repository root) of changed files that are
   inputs of no test, for example a tool's own state files in the working tree. Matching changed files are dropped
   before selection: they are not in `Selection.Changed`, cause no widening and seed nothing. The trees and the graph
-  are unchanged, and a file the graph knows (one with a role in an ecosystem, or with dependents), a symbolic link or a
-  submodule is never dropped: it stays, with a `rule_rejected` warning.
+  are unchanged. A plain data file is dropped even inside a project or package (the caller vouches for it), but a file
+  is kept, with a `rule_rejected` warning, when something references it (an import, embed, include or path literal),
+  when it is code, a test, a manifest, a config, a lockfile or generated output, or when a symbolic link or a submodule
+  is involved. Keep patterns narrow: `**/*.json` would also drop test fixtures nothing references by a literal path.
 - Several processes may open the same `StateDir` and call `Select` concurrently: the scan cache is SQLite in WAL mode
   (one writer at a time, waiting up to 5 s for the lock; a cache that cannot be written degrades to memory with a
   warning, never a wrong result), and dynamic-layer records are replaced atomically. An `Index` is safe for concurrent

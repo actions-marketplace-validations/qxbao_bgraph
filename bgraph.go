@@ -113,8 +113,10 @@ type Change struct {
 	// Exclude: glob patterns (bgraph.toml syntax, forward slashes, relative to the repository root, e.g. ".tool/state/**") of
 	// changed files that are inputs of no test, such as an embedding program's own state files in the working tree. Matching
 	// changed files are dropped from the change set before selection (not in Selection.Changed, no widening, no seed); the
-	// trees and the graph are unchanged. A file the graph knows (one with a role in an ecosystem or with dependents), a
-	// symbolic link or a submodule is kept, with a rule_rejected warning. An invalid pattern makes Select return an error.
+	// trees and the graph are unchanged. A plain data file is dropped even inside a project or package; a file is kept, with a
+	// rule_rejected warning, when something references it (import, embed, include, a path literal in a test...), when it is
+	// code, a test, a manifest, a config, a lockfile or generated output, or when a symbolic link or a submodule is involved.
+	// An invalid pattern makes Select return an error.
 	Exclude []string
 }
 

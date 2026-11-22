@@ -167,6 +167,26 @@ func (g *Graph) hasDependents(p string, seen map[string]bool) bool {
 	return found
 }
 
+// Referenced: something refers to p by more than ownership. Every incoming edge counts (an import, embed, include, path literal,
+// glob...) except an implicit edge from a virtual node (a Go module or package, a Cargo package, a Maven module, an MSBuild
+// project owning the files under its directory).
+func (g *Graph) Referenced(p string) bool {
+	for _, e := range g.rev[p] {
+		if e.Kind != model.EdgeImplicit || !strings.HasPrefix(e.From, "<") {
+			return true
+		}
+	}
+	found := false
+	g.candidates(p, func(pe patternEdge) bool {
+		if pe.edge.From != p && pe.pat.Match(p) {
+			found = true
+			return false
+		}
+		return true
+	})
+	return found
+}
+
 // Aliases returns the paths that read p through a symbolic link (the sources of the symlink edges to p), sorted.
 func (g *Graph) Aliases(p string) []string {
 	var out []string

@@ -44,8 +44,8 @@ type Input struct {
 	MaxChanged       int // 0 → Rules.Options.MaxChanged or DefaultMaxChanged
 	// Exclude: changed files the caller declares are inputs of no test (an embedding program's own state files in the working
 	// tree). A changed file matching one is dropped from the change set (Selection.Changed included) before classification,
-	// unless the graph knows it (a file with a role in some ecosystem, or with dependents) or a symbolic link is involved:
-	// then it stays and a rule_rejected warning says why.
+	// unless something references it or it is more than data (see keepExcluded): then it stays and a rule_rejected warning
+	// says why.
 	Exclude []*glob.Pattern
 }
 
@@ -158,7 +158,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	// A file read through symbolic links changes every path that reads it (its aliases): they are classified as changed files
 	// too (a manifest seen through a directory link, a glob over the link directory, a scoped unresolved import...).
 	if len(in.Exclude) > 0 {
-		changed = s.exclude(changed, g, links)
+		changed = s.exclude(changed, g, links, all)
 		if len(changed) == 0 {
 			return s.sel
 		}
@@ -388,7 +388,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	choose := func(u model.TestUnit, reason string, exact bool) {
 		st, ok := chosen[u.ID]
 		if !ok {
-			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package, Config: u.Config}
+			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package, Config: u.Config, Dir: u.Dir}
 			chosen[u.ID] = st
 			res.UnitEco[u.ID] = u.Eco
 		}
@@ -673,9 +673,9 @@ func withAliases(changed []Changed, g *graph.Graph, base, head tree.Tree) ([]Cha
 	return work, aliasOf
 }
 
-// exclude drops the changed files matching in.Exclude that the graph does not know (see Input.Exclude) from changed and from
+// exclude drops the changed files matching in.Exclude that keepExcluded lets go from changed and from
 // the selection's Changed list.
-func (s *state) exclude(changed []Changed, g *graph.Graph, links linkMap) []Changed {
+func (s *state) exclude(changed []Changed, g *graph.Graph, links linkMap, all []*eco.Analysis) []Changed {
 	dropped := map[string]bool{}
 	var kept []Changed
 	for _, c := range changed {
@@ -690,10 +690,9 @@ func (s *state) exclude(changed []Changed, g *graph.Graph, links linkMap) []Chan
 			kept = append(kept, c)
 			continue
 		}
-		_, isLink := links[c.Path]
-		if isLink || g.IsNode(c.Path) || len(g.Aliases(c.Path)) > 0 || c.OldMode == "160000" || c.NewMode == "160000" {
+		if why := keepExcluded(c, g, links, all); why != "" {
 			s.sel.Warnings = append(s.sel.Warnings, model.Widening{Tier: model.TierNone, Reason: model.ReasonRuleRejected, Path: c.Path,
-				Detail: fmt.Sprintf("excluded by the caller (%s) but kept: the file is a graph node, a symbolic link or a submodule", pat)})
+				Detail: fmt.Sprintf("excluded by the caller (%s) but kept: %s", pat, why)})
 			kept = append(kept, c)
 			continue
 		}
@@ -703,4 +702,29 @@ func (s *state) exclude(changed []Changed, g *graph.Graph, links linkMap) []Chan
 		s.sel.Changed = slices.DeleteFunc(s.sel.Changed, func(p string) bool { return dropped[p] })
 	}
 	return kept
+}
+
+// keepExcluded says why a changed file matching Input.Exclude must stay in the change set ("" when it may be dropped): something
+// references it (an incoming edge: import, embed, include, a path literal...), it is code, a test, a manifest, a config, a
+// lockfile or generated output in some ecosystem, or a symbolic link or submodule is involved. A plain data file is dropped even
+// when a project, module or package owns it (an implicit edge from a virtual node, see Graph.Referenced): the caller declared it
+// an input of no test.
+func keepExcluded(c Changed, g *graph.Graph, links linkMap, all []*eco.Analysis) string {
+	if _, isLink := links[c.Path]; isLink || len(g.Aliases(c.Path)) > 0 {
+		return "a symbolic link is involved"
+	}
+	if c.OldMode == "160000" || c.NewMode == "160000" {
+		return "a submodule"
+	}
+	if g.Referenced(c.Path) {
+		return "other files reference it"
+	}
+	for _, a := range all {
+		switch r := a.Roles[c.Path]; r {
+		case "", model.RoleData, model.RoleUnknown:
+		default:
+			return fmt.Sprintf("its role is %s", r)
+		}
+	}
+	return ""
 }
