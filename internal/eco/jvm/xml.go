@@ -40,6 +40,10 @@ func parseXML(b []byte) (*xnode, error) {
 		switch t := tok.(type) {
 		case xml.StartElement:
 			n := &xnode{name: t.Name.Local}
+			for _, at := range t.Attr {
+				// Attribute values are kept as "@name" children: plugin configurations (antrun, assembly) name files in them.
+				n.kids = append(n.kids, &xnode{name: "@" + at.Name.Local, text: strings.TrimSpace(at.Value)})
+			}
 			if len(stack) > 0 {
 				p := stack[len(stack)-1]
 				p.kids = append(p.kids, n)
@@ -101,6 +105,16 @@ func (n *xnode) children(name string) []*xnode {
 		}
 	}
 	return out
+}
+
+// leaf: n has no child elements (attributes aside).
+func (n *xnode) leaf() bool {
+	for _, k := range n.kids {
+		if !strings.HasPrefix(k.name, "@") {
+			return false
+		}
+	}
+	return true
 }
 
 // walk calls fn for every descendant (not n itself) with the chain of its ancestors, outermost first, ending with its parent.

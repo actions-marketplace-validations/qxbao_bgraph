@@ -1,0 +1,48 @@
+A local parent POM that is not named pom.xml (relativePath to another .xml file): the <dependencies> it declares still reach the children.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>support</module><module>app</module><module>other</module></modules>
+</project>
+-- base/parents/java-parent.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>java-parent</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>support</artifactId><version>1.0</version><scope>test</scope></dependency></dependencies>
+</project>
+-- base/support/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>support</artifactId>
+</project>
+-- base/support/src/main/java/S.java --
+class S {}
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>java-parent</artifactId><version>1.0</version><relativePath>../parents/java-parent.xml</relativePath></parent>
+<artifactId>app</artifactId>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/support/src/main/java/S.java --
+class S { int x; }
+-- want --
+notfull
+select maven:support
+select maven:app
+noselect maven:other

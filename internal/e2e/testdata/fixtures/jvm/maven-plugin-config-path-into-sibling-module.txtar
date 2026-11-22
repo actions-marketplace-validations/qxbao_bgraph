@@ -1,0 +1,43 @@
+A plugin configuration path (surefire suiteXmlFile) that reaches into another module's directory through ../: a change to that file selects the configuring module.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>suites</module><module>app</module><module>other</module></modules>
+</project>
+-- base/suites/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>suites</artifactId>
+</project>
+-- base/suites/src/test/resources/testng.xml --
+<suite/>
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-surefire-plugin</artifactId>
+<configuration><suiteXmlFiles><suiteXmlFile>${project.basedir}/../suites/src/test/resources/testng.xml</suiteXmlFile></suiteXmlFiles></configuration>
+</plugin></plugins></build>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/suites/src/test/resources/testng.xml --
+<suite name="x"/>
+-- want --
+notfull
+select maven:suites
+select maven:app
+noselect maven:other

@@ -38,11 +38,14 @@ type pomInfo struct {
 
 // mvnModel is the Maven part of one tree.
 type mvnModel struct {
-	t     tree.Tree
-	poms  map[string]*pomInfo // by POM path
-	byDir map[string]*pomInfo
-	order []*pomInfo // sorted by path
-	ga    map[string][]*pomInfo
+	t    tree.Tree
+	poms map[string]*pomInfo // by POM path
+	// parentOnly are local parent POMs that are not modules (a relativePath to a file not named pom.xml): they take part in
+	// inheritance but are no unit.
+	parentOnly map[string]*pomInfo
+	byDir      map[string]*pomInfo
+	order      []*pomInfo // sorted by path
+	ga         map[string][]*pomInfo
 	// conflicts: directories that hold two distinct module POMs.
 	conflicts []string
 	// children[pom path] = module POMs whose local parent is that POM.
@@ -114,6 +117,23 @@ func loadMaven(t tree.Tree) *mvnModel {
 		queue = queue[1:]
 		add(p)
 	}
+	// Parent POMs reached through an explicit relativePath that names a file other than pom.xml.
+	m.parentOnly = map[string]*pomInfo{}
+	pending := make([]*pomInfo, 0, len(m.poms))
+	for _, pi := range m.poms {
+		pending = append(pending, pi)
+	}
+	for len(pending) > 0 {
+		pi := pending[0]
+		pending = pending[1:]
+		cand := parentCandidate(pi)
+		if cand == "" || m.poms[cand] != nil || m.parentOnly[cand] != nil || !t.Has(cand) || skipFile(cand) {
+			continue
+		}
+		pp := parsePom(t, cand)
+		m.parentOnly[cand] = pp
+		pending = append(pending, pp)
+	}
 	for _, pi := range m.poms {
 		m.order = append(m.order, pi)
 	}
@@ -132,6 +152,9 @@ func loadMaven(t tree.Tree) *mvnModel {
 		if pi.localParent != "" {
 			m.children[pi.localParent] = append(m.children[pi.localParent], pi)
 		}
+	}
+	for _, pi := range m.parentOnly {
+		pi.localParent = m.findParent(pi)
 	}
 	for _, pi := range m.order {
 		g := m.effGroup(pi)
@@ -188,6 +211,9 @@ func parsePom(t tree.Tree, p string) *pomInfo {
 	}
 	if props := root.child("properties"); props != nil {
 		for _, k := range props.kids {
+			if strings.HasPrefix(k.name, "@") {
+				continue
+			}
 			pi.props[k.name] = k.text
 		}
 	}
@@ -217,19 +243,12 @@ const errNotPom = constErr("root element is not <project>")
 // findParent resolves the local parent POM path of pi ("" when the parent is remote or absent).
 func (m *mvnModel) findParent(pi *pomInfo) string {
 	pr := pi.parent
-	if pr == nil || pr.relEmpty {
+	cand := parentCandidate(pi)
+	if cand == "" {
 		return ""
 	}
-	cand := path.Join(pi.dir, "../pom.xml")
-	if !pr.relDefault {
-		rp := strings.ReplaceAll(pr.relPath, "\\", "/")
-		cand = path.Join(pi.dir, rp)
-		if !strings.HasSuffix(cand, ".xml") {
-			cand = path.Join(cand, "pom.xml")
-		}
-	}
-	c, ok := m.poms[cand]
-	if !ok || c == pi || c.err != nil {
+	c := m.pom(cand)
+	if c == nil || c == pi || c.err != nil {
 		return ""
 	}
 	// Maven accepts the file only when its coordinates match the declared parent.
@@ -242,6 +261,30 @@ func (m *mvnModel) findParent(pi *pomInfo) string {
 	return cand
 }
 
+// parentCandidate is the path of the file the <parent> of pi points to ("" when it is looked up in repositories only).
+func parentCandidate(pi *pomInfo) string {
+	pr := pi.parent
+	if pr == nil || pr.relEmpty {
+		return ""
+	}
+	if pr.relDefault {
+		return path.Join(pi.dir, "../pom.xml")
+	}
+	cand := path.Join(pi.dir, strings.ReplaceAll(pr.relPath, "\\", "/"))
+	if !strings.HasSuffix(cand, ".xml") {
+		cand = path.Join(cand, "pom.xml")
+	}
+	return cand
+}
+
+// pom returns the module POM or parent-only POM at path p (nil when none).
+func (m *mvnModel) pom(p string) *pomInfo {
+	if pi, ok := m.poms[p]; ok {
+		return pi
+	}
+	return m.parentOnly[p]
+}
+
 // chain returns pi followed by its local ancestors.
 func (m *mvnModel) chain(pi *pomInfo) []*pomInfo {
 	var out []*pomInfo
@@ -252,7 +295,7 @@ func (m *mvnModel) chain(pi *pomInfo) []*pomInfo {
 		if cur.localParent == "" {
 			break
 		}
-		cur = m.poms[cur.localParent]
+		cur = m.pom(cur.localParent)
 	}
 	return out
 }
@@ -301,7 +344,7 @@ func (m *mvnModel) lookup(pi *pomInfo, name string) (string, bool) {
 		}
 	case "project.basedir", "basedir", "pom.basedir":
 		return ".", true // paths are interpreted relative to the module directory
-	case "maven.multiModuleProjectDirectory":
+	case "maven.multiModuleProjectDirectory", "session.executionRootDirectory", "project.rootDirectory", "session.rootDirectory":
 		return relDir(pi.dir, m.reactorRoot(pi).dir), true
 	case "project.parent.basedir", "parent.basedir":
 		if pi.localParent != "" {
@@ -427,7 +470,26 @@ func (m *mvnModel) isShared(pi *pomInfo) bool {
 // ref is a coordinate a POM refers to.
 type mref struct {
 	g, a string
-	what string // "dependency", "plugin", "extension", "BOM import"
+	what string // "dependency", "plugin", "extension", "BOM import", "<element> coordinate", "coordinate string"
+	// loose: read from a "groupId:artifactId[:...]" text that may be anything else; it only makes an edge when it names a module.
+	loose bool
+}
+
+// coordContainers are elements whose groupId/artifactId children are not a reference to an artifact the module consumes.
+var coordContainers = map[string]bool{"project": true, "parent": true, "exclusion": true, "dependency": true, "plugin": true,
+	"extension": true}
+
+// coordString reads a "groupId:artifactId[:...]" text (a plugin parameter naming an artifact: resourceBundle,
+// dependenciesToScan, additionalClasspathDependencies, ...).
+func coordString(s string) (g, a string, ok bool) {
+	if strings.ContainsAny(s, " \t\n/\\=,;") || strings.Count(s, ":") < 1 || strings.Count(s, ":") > 4 {
+		return "", "", false
+	}
+	parts := strings.Split(s, ":")
+	if parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	return parts[0], parts[1], true
 }
 
 const defaultPluginGroup = "org.apache.maven.plugins"
@@ -445,6 +507,17 @@ func (pi *pomInfo) refs(inherited bool) []mref {
 			return
 		}
 		par := anc[len(anc)-1]
+		if !coordContainers[x.name] && x.child("artifactId") != nil && x.child("groupId") != nil {
+			// Any other element naming an artifact by coordinates: annotationProcessorPaths/path, dependency-plugin artifactItem,
+			// surefire additionalClasspathDependency, ... A reactor module named there is an input of the module.
+			out = append(out, mref{g: x.childText("groupId"), a: x.childText("artifactId"), what: "<" + x.name + "> coordinate"})
+			return
+		}
+		if x.leaf() && x.name != "module" && x.name != "subproject" {
+			if g, a, ok := coordString(x.text); ok {
+				out = append(out, mref{g: g, a: a, what: "coordinate string", loose: true})
+			}
+		}
 		switch x.name {
 		case "dependency":
 			if par.name != "dependencies" {
@@ -482,35 +555,75 @@ func (pi *pomInfo) refs(inherited bool) []mref {
 	return out
 }
 
-// externalPaths lists the values of source/resource directory elements of pi (raw).
-func (pi *pomInfo) externalPaths() []string {
-	var out []string
+// pathText is a text of a POM that may name a file or directory.
+type pathText struct {
+	raw string
+	// srcDir: a declared source/resource directory; it is a dependency even when absent, and an unresolvable property in it widens.
+	// Other texts (plugin parameters, antrun attributes) are paths only when they name something that exists.
+	srcDir bool
+}
+
+// nonPathElements hold texts that are never file paths of the build.
+var nonPathElements = map[string]bool{"module": true, "subproject": true, "relativePath": true, "groupId": true, "artifactId": true,
+	"version": true, "url": true, "connection": true, "developerConnection": true, "name": true, "description": true,
+	"packaging": true, "scope": true, "type": true, "classifier": true, "goal": true, "phase": true, "id": true}
+
+// pathTexts lists the texts of pi (element texts and attribute values) that may be paths: declared source/resource
+// directories and every other value that looks like a relative path (plugin configuration: suiteXmlFile, configLocation,
+// antrun filesets, assembly descriptors, ...).
+func (pi *pomInfo) pathTexts() []pathText {
+	var out []pathText
 	if pi.root == nil {
 		return nil
 	}
 	pi.root.walk(func(x *xnode, anc []*xnode) {
+		if x.text == "" || !x.leaf() {
+			return
+		}
+		par := ""
+		if len(anc) > 0 {
+			par = anc[len(anc)-1].name
+		}
 		switch x.name {
-		case "sourceDirectory", "testSourceDirectory", "scriptSourceDirectory", "directory", "source":
-			if x.text == "" || len(x.kids) > 0 {
+		case "sourceDirectory", "testSourceDirectory", "scriptSourceDirectory":
+			out = append(out, pathText{raw: x.text, srcDir: true})
+			return
+		case "directory":
+			// <resource><directory> / <testResource><directory>; <build><directory> is the output directory (target).
+			if par == "resource" || par == "testResource" {
+				out = append(out, pathText{raw: x.text, srcDir: true})
 				return
 			}
-			if x.name == "directory" {
-				// <resource><directory> / <testResource><directory>; <build><directory> is the output directory (target).
-				if len(anc) == 0 {
-					return
-				}
-				par := anc[len(anc)-1].name
-				if par != "resource" && par != "testResource" {
-					return
-				}
-			}
-			if x.name == "source" && !(len(anc) > 0 && anc[len(anc)-1].name == "sources") {
+			if par == "build" {
 				return
 			}
-			out = append(out, x.text)
+		case "source":
+			if par == "sources" {
+				out = append(out, pathText{raw: x.text, srcDir: true})
+				return
+			}
+		}
+		if nonPathElements[x.name] || par == "parent" || strings.Contains(x.text, "://") || strings.ContainsAny(x.text, "\n<>|") {
+			return
+		}
+		if strings.ContainsAny(x.text, "/\\") {
+			out = append(out, pathText{raw: x.text})
 		}
 	})
 	return out
+}
+
+// ownerDir returns the directory of the module that owns file or directory p (the nearest module directory at or above it, ""
+// when none).
+func (m *mvnModel) ownerDir(p string) string {
+	for d := p; ; d = path.Dir(d) {
+		if _, ok := m.byDir[d]; ok {
+			return d
+		}
+		if d == "." || d == "/" || d == "" {
+			return ""
+		}
+	}
 }
 
 // analyze adds the Maven part of the graph to b and returns the units.
@@ -532,6 +645,14 @@ func (m *mvnModel) analyze(b *builder) []*unit {
 		byPath[pi.path] = u
 		b.a.Roles[pi.path] = model.RoleManifest
 	}
+	// wild: modules whose own groupId/artifactId keep a property no POM defines (-D, .mvn/maven.config): any reference to
+	// coordinates that match no module may name them.
+	var wild []*pomInfo
+	for _, pi := range m.order {
+		if pi.err == nil && (strings.Contains(m.effGroup(pi), "${") || strings.Contains(m.interp(pi, pi.a), "${")) {
+			wild = append(wild, pi)
+		}
+	}
 	for _, pi := range m.order {
 		u := byPath[pi.path]
 		if pi.err != nil {
@@ -545,6 +666,12 @@ func (m *mvnModel) analyze(b *builder) []*unit {
 		}
 		for _, anc := range m.chain(pi)[1:] {
 			b.edge(u.node, anc.path, model.EdgeImplicit, "parent POM")
+		}
+		if cand := parentCandidate(pi); cand != "" && pi.localParent == "" && m.t.Has(cand) {
+			if c := m.pom(cand); c == nil || c.err != nil {
+				// A file at the parent's relativePath that could not be read as a POM: Maven may still use it.
+				b.edge(u.node, cand, model.EdgeImplicit, "unreadable parent POM candidate")
+			}
 		}
 		// A module inherits the <dependencies>, <build><plugins> and <extensions> of its local parent chain, so the references of
 		// every ancestor POM are its own (interpolated in the child, as in the effective POM).
@@ -560,6 +687,17 @@ func (m *mvnModel) analyze(b *builder) []*unit {
 						b.edge(u.node, byPath[d.path].node, model.EdgeProjectRef, r.what+" "+g+":"+a)
 					}
 				}
+				if len(m.ga[g+":"+a]) == 0 && !r.loose {
+					// No module has these coordinates, but a module whose own coordinates cannot be resolved may.
+					for _, d := range wild {
+						if d != pi && placeholderMatch(m.effGroup(d), g) && placeholderMatch(m.interp(d, d.a), a) {
+							b.edge(u.node, byPath[d.path].node, model.EdgeProjectRef, r.what+" "+g+":"+a+" (module with unresolved coordinates)")
+						}
+					}
+				}
+				continue
+			}
+			if r.loose {
 				continue
 			}
 			// The coordinate cannot be resolved: it may name a module of this repo.
@@ -588,6 +726,41 @@ func (m *mvnModel) analyze(b *builder) []*unit {
 	return units
 }
 
+// placeholderMatch reports whether s can be the value of pattern, where every unresolved ${...} in pattern matches any text.
+func placeholderMatch(pattern, s string) bool {
+	var lits []string
+	for rest := pattern; ; {
+		i := strings.Index(rest, "${")
+		if i < 0 {
+			lits = append(lits, rest)
+			break
+		}
+		j := strings.IndexByte(rest[i:], '}')
+		if j < 0 {
+			lits = append(lits, rest)
+			break
+		}
+		lits = append(lits, rest[:i])
+		rest = rest[i+j+1:]
+	}
+	if len(lits) == 1 {
+		return pattern == s
+	}
+	if !strings.HasPrefix(s, lits[0]) {
+		return false
+	}
+	s = s[len(lits[0]):]
+	last := lits[len(lits)-1]
+	for _, l := range lits[1 : len(lits)-1] {
+		k := strings.Index(s, l)
+		if k < 0 {
+			return false
+		}
+		s = s[k+len(l):]
+	}
+	return strings.HasSuffix(s, last)
+}
+
 func escapeGlob(s string) string {
 	var sb strings.Builder
 	for _, c := range s {
@@ -599,31 +772,50 @@ func escapeGlob(s string) string {
 	return sb.String()
 }
 
-// externalEdges adds the dependencies of u on source/resource directories that lie outside the module directory.
+// externalEdges adds the dependencies of u on files and directories named by paths in its POM and in the POMs of its local parent
+// chain (inherited configuration is resolved against the child's directory, as in the effective POM) that the module does not
+// own: outside its directory, or inside a nested module.
 func (m *mvnModel) externalEdges(b *builder, pi *pomInfo, u *unit) {
-	for _, raw := range pi.externalPaths() {
-		v := m.interp(pi, raw)
-		if strings.Contains(v, "${") {
-			if strings.HasPrefix(v, "${project.build.") || strings.HasPrefix(v, "${project.reporting.") {
-				continue // under target/
+	for _, src := range m.chain(pi) {
+		for _, pt := range src.pathTexts() {
+			raw := pt.raw
+			v := m.interp(pi, raw)
+			if strings.Contains(v, "${") {
+				if !pt.srcDir || strings.HasPrefix(v, "${project.build.") || strings.HasPrefix(v, "${project.reporting.") {
+					continue // under target/, or a parameter that need not be a path
+				}
+				b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: pi.path, Spec: raw, Class: model.UnresolvedUnknown,
+					ScopeTier: model.TierModule, ScopeDir: m.compRoot[m.comp[pi.path]],
+					Detail: "source/resource directory with an unresolvable property"})
+				continue
 			}
-			b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: pi.path, Spec: raw, Class: model.UnresolvedUnknown,
-				ScopeTier: model.TierModule, ScopeDir: m.compRoot[m.comp[pi.path]],
-				Detail: "source/resource directory with an unresolvable property"})
-			continue
-		}
-		v = strings.ReplaceAll(v, "\\", "/")
-		if strings.HasPrefix(v, "/") || (len(v) > 1 && v[1] == ':') {
-			continue
-		}
-		target := path.Join(pi.dir, v)
-		if eco.Within(target, pi.dir) || target == ".." || strings.HasPrefix(target, "../") {
-			continue // owned by the module anyway, or outside the repository
-		}
-		if m.t.Has(target) {
-			b.edge(u.node, target, model.EdgeInclude, "source file "+raw)
-		} else {
-			b.edge(u.node, escapeGlob(target)+"/**", model.EdgePattern, "source directory "+raw)
+			v = strings.ReplaceAll(v, "\\", "/")
+			if i := strings.IndexAny(v, "*?["); i >= 0 {
+				// An include pattern: the directory before the first wildcard.
+				if pt.srcDir {
+					continue
+				}
+				v = path.Dir(v[:i] + "x")
+			}
+			if strings.HasPrefix(v, "/") || (len(v) > 1 && v[1] == ':') {
+				continue
+			}
+			target := path.Join(pi.dir, v)
+			if target == ".." || strings.HasPrefix(target, "../") || m.ownerDir(target) == pi.dir {
+				continue // outside the repository, or owned by the module anyway
+			}
+			if !pt.srcDir && eco.Within(pi.dir, target) {
+				// An ancestor directory (a base directory such as a license-header root or a working directory): a dependency on
+				// every file of the repository below it would select the module for any change. Its files outside every module's
+				// src/ are already shared with the nested modules.
+				continue
+			}
+			switch {
+			case m.t.Has(target):
+				b.edge(u.node, target, model.EdgeInclude, "file "+raw)
+			case pt.srcDir || m.t.IsDir(target):
+				b.edge(u.node, escapeGlob(target)+"/**", model.EdgePattern, "directory "+raw)
+			}
 		}
 	}
 }

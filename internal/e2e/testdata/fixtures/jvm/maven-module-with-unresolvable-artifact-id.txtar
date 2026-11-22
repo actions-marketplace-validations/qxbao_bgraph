@@ -1,0 +1,41 @@
+A module whose own artifactId uses a property defined outside the POMs (-D, .mvn/maven.config) may be the target of any literal reference that matches no module: a change in it selects the modules holding such a reference.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>lib</module><module>app</module><module>other</module></modules>
+</project>
+-- base/lib/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>${lib.name}</artifactId>
+</project>
+-- base/lib/src/main/java/L.java --
+class L {}
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<dependencies><dependency><groupId>org.ex</groupId><artifactId>my-lib</artifactId><version>1.0</version></dependency></dependencies>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+<dependencies><dependency><groupId>org.junit</groupId><artifactId>junit</artifactId><version>4</version></dependency></dependencies>
+</project>
+-- head/lib/src/main/java/L.java --
+class L { int x; }
+-- want --
+notfull
+select maven:lib
+select maven:app
+noselect maven:other

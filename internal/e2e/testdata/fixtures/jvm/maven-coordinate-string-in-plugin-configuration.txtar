@@ -1,0 +1,43 @@
+maven-remote-resources-plugin names a reactor module as a "groupId:artifactId:version" string: a change in that module selects the consuming module.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>res</module><module>app</module><module>other</module></modules>
+</project>
+-- base/res/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>res</artifactId>
+</project>
+-- base/res/src/main/resources/LICENSE.vm --
+a
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-remote-resources-plugin</artifactId>
+<configuration><resourceBundles><resourceBundle>org.ex:res:${project.version}</resourceBundle></resourceBundles></configuration>
+</plugin></plugins></build>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/res/src/main/resources/LICENSE.vm --
+b
+-- want --
+notfull
+select maven:res
+select maven:app
+noselect maven:other

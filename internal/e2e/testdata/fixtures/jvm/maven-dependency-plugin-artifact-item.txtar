@@ -1,0 +1,45 @@
+maven-dependency-plugin unpacks a reactor module through <artifactItem> (not a <dependency>): a change in that module selects the unpacking module.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>schemas</module><module>app</module><module>other</module></modules>
+</project>
+-- base/schemas/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>schemas</artifactId>
+</project>
+-- base/schemas/src/main/resources/a.xsd --
+<a/>
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-dependency-plugin</artifactId>
+<executions><execution><goals><goal>unpack</goal></goals><configuration>
+<artifactItems><artifactItem><groupId>org.ex</groupId><artifactId>schemas</artifactId><version>1.0</version></artifactItem></artifactItems>
+</configuration></execution></executions>
+</plugin></plugins></build>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/schemas/src/main/resources/a.xsd --
+<b/>
+-- want --
+notfull
+select maven:schemas
+select maven:app
+noselect maven:other

@@ -1,0 +1,16 @@
+A file outside every module directory (lombok.config above a reactor rooted in a subdirectory) is not dropped: the module below it is selected.
+-- base/backend/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>app</artifactId>
+<version>1.0</version>
+</project>
+-- base/backend/src/test/java/AppTest.java --
+class AppTest {}
+-- base/lombok.config --
+lombok.addLombokGeneratedAnnotation = true
+-- head/lombok.config --
+lombok.addLombokGeneratedAnnotation = false
+-- want --
+select maven:backend

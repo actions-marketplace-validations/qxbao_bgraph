@@ -1,0 +1,45 @@
+maven-antrun-plugin copies test data from another module's directory through an attribute (<fileset dir="..."/>): a change there selects the copying module.
+-- base/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<groupId>org.ex</groupId>
+<artifactId>root</artifactId>
+<version>1.0</version>
+<packaging>pom</packaging>
+<modules><module>fixtures</module><module>app</module><module>other</module></modules>
+</project>
+-- base/fixtures/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>fixtures</artifactId>
+</project>
+-- base/fixtures/src/test/data/a.csv --
+1
+-- base/app/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>app</artifactId>
+<build><plugins><plugin>
+<artifactId>maven-antrun-plugin</artifactId>
+<executions><execution><phase>generate-test-resources</phase><goals><goal>run</goal></goals><configuration><target>
+<copy todir="${project.build.testOutputDirectory}"><fileset dir="${basedir}/../fixtures/src/test/data" includes="**/*.csv"/></copy>
+</target></configuration></execution></executions>
+</plugin></plugins></build>
+</project>
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/other/pom.xml --
+<project>
+<modelVersion>4.0.0</modelVersion>
+<parent><groupId>org.ex</groupId><artifactId>root</artifactId><version>1.0</version></parent>
+<artifactId>other</artifactId>
+</project>
+-- head/fixtures/src/test/data/a.csv --
+2
+-- want --
+notfull
+select maven:fixtures
+select maven:app
+noselect maven:other
