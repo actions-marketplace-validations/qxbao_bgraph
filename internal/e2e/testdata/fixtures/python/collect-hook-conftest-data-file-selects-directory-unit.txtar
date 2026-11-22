@@ -1,0 +1,27 @@
+A conftest.py implementing pytest_collect_file turns data files into test items (pygments' example files): its directory is a
+unit (pytest <dir>) selected by any change below it.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/lexer.py --
+X = 1
+-- base/tests/__init__.py --
+-- base/tests/examplefiles/conftest.py --
+import pytest
+from pkg import lexer
+
+def pytest_collect_file(parent, file_path):
+    if file_path.suffix == ".txt":
+        return ExampleFile.from_parent(parent, path=file_path)
+-- base/tests/examplefiles/a/sample.txt --
+hello
+-- base/tests/test_api.py --
+import pkg
+-- head/tests/examplefiles/a/sample.txt --
+hello again
+-- want --
+notfull
+select tests/examplefiles
+noselect tests/test_api.py

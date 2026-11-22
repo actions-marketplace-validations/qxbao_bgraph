@@ -73,6 +73,10 @@ func (ix *Index) recordUnits(ctx context.Context) ([]pydyn.Unit, []string, *anal
 			skipped = append(skipped, u.ID+": whole-project unit (test files unknown)")
 			continue
 		}
+		if !an.Tree.Has(u.ID) {
+			skipped = append(skipped, u.ID+": directory unit (pytest collection hook; its items are not files of the record)")
+			continue
+		}
 		out = append(out, pydyn.Unit{ID: u.ID, Project: u.Project, Runner: u.Runner, Config: u.Config, Files: u.Files})
 	}
 	return out, skipped, an, nil

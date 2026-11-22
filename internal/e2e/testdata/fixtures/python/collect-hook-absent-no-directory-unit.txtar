@@ -1,0 +1,22 @@
+A conftest without collection hooks does not create a directory unit.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/a.py --
+X = 1
+-- base/tests/conftest.py --
+import pytest
+
+@pytest.fixture
+def thing():
+    return 1
+-- base/tests/test_a.py --
+from pkg import a
+-- head/pkg/a.py --
+X = 2
+-- want --
+notfull
+select tests/test_a.py
+noselect tests

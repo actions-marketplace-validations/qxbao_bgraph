@@ -92,3 +92,15 @@ func TestDjangoCommands(t *testing.T) {
 		t.Errorf("manage: %v", argvs(p))
 	}
 }
+
+// A directory unit (pytest collection hook) is passed to pytest as the directory: pytest collects every item below it.
+func TestPytestDirectoryUnit(t *testing.T) {
+	p, err := Commands(pysel("pytest", ".", "pyproject.toml", "tests/examplefiles", "tests/test_api.py"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := [][]string{{"python", "-m", "pytest", "--rootdir", ".", "-c", "pyproject.toml", "tests/examplefiles", "tests/test_api.py"}}
+	if got := argvs(p); !reflect.DeepEqual(got, want) {
+		t.Fatalf("%q", got)
+	}
+}

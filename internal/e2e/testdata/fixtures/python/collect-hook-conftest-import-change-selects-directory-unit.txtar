@@ -1,0 +1,23 @@
+The directory unit of a collection-hook conftest depends on what the conftest imports.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/pkg/__init__.py --
+-- base/pkg/lexer.py --
+X = 1
+-- base/tests/snippets/conftest.py --
+from pkg import lexer
+
+def pytest_collect_file(parent, file_path):
+    return None
+-- base/tests/snippets/one.txt --
+x
+-- base/tests/test_other.py --
+import json
+-- head/pkg/lexer.py --
+X = 2
+-- want --
+notfull
+select tests/snippets
+noselect tests/test_other.py

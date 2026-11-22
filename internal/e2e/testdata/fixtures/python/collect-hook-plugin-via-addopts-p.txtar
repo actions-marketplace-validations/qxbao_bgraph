@@ -1,0 +1,19 @@
+A -p plugin of the pytest configuration that is a repo module implementing pytest_collect_file makes the rootdir a directory
+unit: a data file change selects it.
+-- base/pytest.ini --
+[pytest]
+addopts = -p tools.collect
+-- base/tools/__init__.py --
+-- base/tools/collect.py --
+def pytest_collect_file(parent, file_path):
+    return None
+-- base/cases/a.yaml --
+a: 1
+-- base/tests/test_a.py --
+import json
+-- head/cases/a.yaml --
+a: 2
+-- want --
+notfull
+select .
+noselect tests/test_a.py

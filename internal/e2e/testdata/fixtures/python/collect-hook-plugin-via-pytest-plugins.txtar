@@ -1,0 +1,22 @@
+A root conftest loads a repo plugin with pytest_plugins; the plugin implements pytest_collect_directory: the root is a
+directory unit, selected by a change to the plugin or to any file.
+-- base/pyproject.toml --
+[project]
+name = "x"
+version = "1"
+-- base/conftest.py --
+pytest_plugins = ["tools.yamltests"]
+-- base/tools/__init__.py --
+-- base/tools/yamltests.py --
+def pytest_collect_directory(path, parent):
+    return None
+-- base/cases/a.yaml --
+a: 1
+-- base/tests/test_a.py --
+import json
+-- head/tools/yamltests.py --
+def pytest_collect_directory(path, parent):
+    return 1
+-- want --
+notfull
+select .

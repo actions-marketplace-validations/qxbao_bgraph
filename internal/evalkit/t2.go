@@ -737,7 +737,7 @@ func selCovers(sel model.Selection, f string) bool {
 			return true
 		}
 		for _, uf := range u.Files {
-			if uf == f {
+			if uf == f || under(f, uf) || uf == "." { // a directory unit (Python collection hooks) covers its files
 				return true
 			}
 		}

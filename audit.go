@@ -42,7 +42,7 @@ type AuditReport struct {
 // Coverage rule (fail-closed toward reporting). A failing test file F is covered iff:
 //   - the selection scope is full (the runner runs everything; nothing can be missed), or
 //   - runner.Commands turns the selection into a full run (unsupported runner, or a non-empty scope with no tests), or
-//   - F is in Files of some SelectedTest, or
+//   - F is in Files of some SelectedTest or below one of them (a Python directory unit: pytest collection hooks), or
 //   - some SelectedTest has Whole=true and F lies within its Project (eco.Within: "." contains everything).
 //
 // Units removed by the dynamic layer (Selection.Narrowed) are not in Tests: their failures are missed like any other.
@@ -93,7 +93,7 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 
 	covered := func(f string) bool {
 		for _, t := range sel.Tests {
-			if slices.Contains(t.Files, f) || (t.Whole && eco.Within(f, t.Project)) {
+			if slices.ContainsFunc(t.Files, func(tf string) bool { return eco.Within(f, tf) }) || (t.Whole && eco.Within(f, t.Project)) {
 				return true
 			}
 		}

@@ -8,7 +8,10 @@
 // *_test.py), it lies under testpaths (when set), and no directory on its way matches norecursedirs. With --doctest-modules in addopts
 // every module of that scope is a unit too. When python_files/testpaths are computed (tox substitution) the project also gets a
 // "whole project" unit. Projects driven by Django's runner (tests/runtests.py or manage.py, no pytest config) use Runner "django"
-// and the unittest pattern test*.py.
+// and the unittest pattern test*.py. A conftest.py that implements a pytest collection hook (pytest_collect_file,
+// pytest_collect_directory, pytest_pycollect_makemodule, pytest_ignore_collect), itself or through a repo plugin it loads, and
+// a repo -p / pytest11 plugin that does, make their scope directory a "directory unit" (ID and Files = the directory; pytest
+// collects every item below it), because files that are not test_*.py modules may be test items there (see collect.go).
 //
 // # Graph (From depends on To)
 //
@@ -50,7 +53,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "python-3"
+const AnalyzerVersion = "python-4"
 
 // Eco is the Python ecosystem.
 type Eco struct {
@@ -96,6 +99,8 @@ type builder struct {
 
 	dyn     []rules.Dynamic // [[dynamic]] declarations
 	dynUsed []bool
+
+	hookCache map[string]bool // file -> names a pytest collection hook (collect.go)
 }
 
 // moduleTriggers: the files the import system can load. A dynamic import (or a sys.path edit) can only ever load these, so a change to
@@ -121,7 +126,8 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	a := &eco.Analysis{Roles: map[string]model.Role{}}
 	b := &builder{t: t, sc: sc, a: a, fileSet: map[string]bool{}, pyDirs: map[string]bool{}, byLast: map[string][]string{},
 		markers: map[string]bool{}, cfgAt: map[string]*pytestCfg{}, cfgFor: map[string]*pytestCfg{}, rootSeen: map[string]bool{},
-		cache: map[string]resolved{}, seen: map[edgeKey]bool{}, projOf: map[string]string{}, initChain: map[string][]string{}}
+		cache: map[string]resolved{}, seen: map[edgeKey]bool{}, projOf: map[string]string{}, initChain: map[string][]string{},
+		hookCache: map[string]bool{}}
 	if e.rules != nil {
 		b.dyn = e.rules.Dynamics
 		b.dynUsed = make([]bool, len(b.dyn))
@@ -337,6 +343,42 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		for _, f := range epFiles {
 			b.edge(p, f, model.EdgeImport, "pytest11 entry point", 0)
 		}
+	}
+	// Directory units for pytest collection hooks (collect.go).
+	conftests := map[string]model.ScanResult{}
+	rootSet := map[string]bool{}
+	for _, p := range b.pyList {
+		fi := infos[p]
+		if fi.isCnf {
+			conftests[p] = fi.scan
+		}
+		if fi.unit != nil {
+			rd := b.project(path.Dir(p))
+			if fi.unit.cfg != nil {
+				rd = fi.unit.cfg.dir
+			}
+			rootSet[rd] = true
+		}
+	}
+	for _, c := range b.cfgAt {
+		if c == nil {
+			continue
+		}
+		if _, ok := cfgPlugins[c.file]; !ok {
+			var fs []string
+			for _, pl := range c.plugins {
+				fs = append(fs, b.heuristicFiles(pl, nil)...)
+			}
+			cfgPlugins[c.file] = fs
+		}
+	}
+	var rootdirs []string
+	for d := range rootSet {
+		rootdirs = append(rootdirs, d)
+	}
+	sort.Strings(rootdirs)
+	for _, d := range b.collectHookDirs(conftests, epFiles, cfgPlugins, rootdirs) {
+		b.addDirUnit(d, epFiles, cfgPlugins)
 	}
 	// Whole-project units for configs whose collection rules are computed.
 	var cfgDirs []string
