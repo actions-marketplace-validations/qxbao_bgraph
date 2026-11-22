@@ -17,7 +17,7 @@
 | Ecosystem | Granularity | Page |
 |---|---|---|
 | Node (JS/TS) | test file | [ecosystems/node.md](ecosystems/node.md) |
-| Python | test file | [ecosystems/python.md](ecosystems/python.md) |
+| Python | test file (or directory for collection hooks) | [ecosystems/python.md](ecosystems/python.md) |
 | Rust | Cargo target | [ecosystems/rust.md](ecosystems/rust.md) |
 | JVM (Maven, Gradle) | module / project | [ecosystems/jvm.md](ecosystems/jvm.md) |
 | .NET | MSBuild project | [ecosystems/dotnet.md](ecosystems/dotnet.md) |

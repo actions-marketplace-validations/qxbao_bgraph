@@ -43,8 +43,8 @@ Maven and Gradle are never run during analysis.
 - `.git/` and `node_modules/`.
 
 Files an **enclosing** unit keeps outside its `src/` (shared configuration, test data, script plugins in `gradle/`) are also
-dependencies of every nested unit, because a nested module can read them through `../`. Build scripts of the enclosing unit and
-documentation are not shared. For a Maven module with packaging `pom` (it compiles nothing), its non-code files under `src/`
+dependencies of every nested unit, because a nested module can read them through `../`. Build scripts of the enclosing unit,
+documentation and harmless files (`LICENSE`, `.gitignore`, ...) are not shared. For a Maven module with packaging `pom` (it compiles nothing), its non-code files under `src/`
 (checkstyle, license headers, assembly descriptors) are shared too.
 
 ## Test units
@@ -55,9 +55,9 @@ documentation are not shared. For a Maven module with packaging `pom` (it compil
   Gradle project path.
 - IDs: `maven:<dir>` (`.` for the repo root); `gradle:<build dir><path>` where the build dir is empty for a build at the repo
   root. A build directory never contains `:`, so `gradle:backend:core` is unambiguous.
-- Test sources: `src/test*/**`, `src/*Test*/**` (Kotlin Multiplatform `jvmTest`, `commonTest`, Android `androidTest`),
-  `src/it/**`; `.java`, `.kt`, `.kts`, `.groovy`, `.scala`, `.gradle`, `.clj`. Selection does not depend on this: a unit is selected
-  as a whole.
+- Test sources: files under `src/it/` or under a `src/<set>/` whose name contains `test` in any case (`test`, `integrationTest`,
+  Kotlin Multiplatform `jvmTest`, `commonTest`, Android `androidTest`), except `src/testFixtures/`; `.java`, `.kt`, `.kts`,
+  `.groovy`, `.scala`, `.gradle`, `.clj`. Selection does not depend on this: a unit is selected as a whole.
 
 **Per-class narrowing (dynamic layer).** Optional and off by default (`[dynamic_layer] ecosystems = ["jvm"]` in
 [bgraph.toml](../configuration.md), or `--dynamic`). `bgraph record --eco jvm` runs each test class in a fresh JVM with a Java
@@ -128,7 +128,8 @@ repository root it is `full`.
 | Any POM whose profile declares `<modules>` | `manifest_changed`, scoped as above, for any change to it |
 | Remote (non-local) parent coordinates changed, any POM | `manifest_changed`, scoped as above |
 | `pom.xml` under `src/` or `target/` (not a module) | Ordinary file of the owning module |
-| Settings script of a build, or a script it applies | `manifest_changed`, build scope |
+| Settings script of a build, or a script it applies that sits in the settings directory | `manifest_changed`, build scope |
+| Script applied by the settings script from a subdirectory (`gradle/includes.gradle`) | No widening: graph node of the project that owns it (shared with nested projects) |
 | Build script of the root project | `manifest_changed`, build scope |
 | Project build script using `beforeProject`, `afterProject`, `projectsEvaluated`, `projectsLoaded`, or unreadable / not tokenizable | `manifest_changed`, build scope |
 | Any other project build script (including one with `allprojects { }` / `subprojects { }`) | No widening: the project, the projects it configures and their dependents through the graph |

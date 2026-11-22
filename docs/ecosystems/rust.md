@@ -13,15 +13,16 @@ as text.
 | Granularity | Cargo target |
 | Unit ID format | `<pkgdir>::<kind>[:<name>]`, e.g. `crates/core::lib`, `crates/core::test:api`, `.::bin:mytool` |
 | Runners | `cargo test` |
-| Manifests/configs read | `Cargo.toml` (packages, workspaces, target tables, dependencies, `[patch]`, `[replace]`), `.cargo/config(.toml)`, `build.rs` |
+| Manifests/configs read | `Cargo.toml` (packages, workspaces, target tables, dependencies, `[patch]`, `[replace]`), `build.rs`; `.cargo/config(.toml)` is classified on change but not parsed |
 | Lockfiles (and level) | `Cargo.lock` v3/v4, level L1 by default (L2 behaves as L1); see [lockfiles](../lockfiles.md) |
 | Dynamic layer | none |
 
 ## Supported layouts
 
-- **Workspaces**: a `Cargo.toml` with a `[workspace]` table. A package belongs to the nearest ancestor workspace whose `exclude`
-  globs do not match it, or to the one its `package.workspace` key names. `members` is not read: membership is decided by
-  directory nesting and `exclude`.
+- **Workspaces**: a `Cargo.toml` with a `[workspace]` table. A package belongs to the workspace rooted in its own directory, else
+  to the one its `package.workspace` key names, else to the nearest ancestor workspace; when that workspace's `exclude` globs
+  match the package, the package is standalone. `members` is not read: membership is decided by directory nesting and `exclude`.
+  Workspace membership only decides where `{ workspace = true }` dependencies are looked up.
 - **Standalone crates**: a `Cargo.toml` with a `[package]` table and no enclosing workspace, including one at the repo root
   (package directory `.`).
 - **Virtual manifests**: a workspace root without `[package]` is not a package and has no units.
@@ -41,9 +42,10 @@ Every file belongs to its nearest enclosing package. Within the package:
   or `automod::dir!` is **owned** by that target;
 - `build.rs` and the files it reads are **package-level**: every target of the package depends on them;
 - any other file of the package is **package-level**, except unowned `.rs` files under `tests/` (`benches/`, `examples/`), which only
-  the integration tests (benches, examples) depend on. Data files under `tests/` stay package-level because unit tests in `src/` may
-  read them at run time;
-- documentation (`*.md`, `*.markdown`, `*.rst`, `*.adoc`), licence files, `.gitignore`, `clippy.toml`, `.clippy.toml`,
+  the integration tests (benches, examples) depend on when the package has such targets. Data files under `tests/` stay
+  package-level because unit tests in `src/` may read them at run time;
+- documentation (`*.md`, `*.markdown`, `*.rst`, `*.adoc`), licence files at the repo root (`LICENSE*`, `COPYING*`, `NOTICE*`;
+  a licence file inside a package directory is an ordinary package-level file), `.gitignore`, `clippy.toml`, `.clippy.toml`,
   `rustfmt.toml`, `.rustfmt.toml`, `deny.toml` and files under `.cargo/` are never package-level inputs (a README included with
   `#![doc = include_str!("../README.md")]` is owned by the library and does select the doc-tests).
 
@@ -167,7 +169,8 @@ cd crates/server && cargo test -p server --lib --bin server
 - A unit without a package name is addressed with `--manifest-path <pkgdir>/Cargo.toml` instead of `-p`.
 - A unit ID that cannot be parsed runs the whole package: `--all-targets` plus the `--doc` command.
 - Cargo commands are not split into batches.
-- Running a subset with `-p` can unify features differently from a full workspace run; `bgraph command` always prints that note.
+- Running a subset with `-p` can unify features differently from a full workspace run; `bgraph command` prints that note
+  whenever the plan contains Cargo commands.
 
 See [cli](../cli.md) for the command's options and JSON output.
 
@@ -199,7 +202,7 @@ Rust has no `[[dynamic]]` or `[[config]]` declarations. See [configuration](../c
   package, it selects every Rust unit of the repository.
 - **Non-member crates** are indexed and can be selected (extra units).
 - **Paths built at run time**: a test that reads a file through a path computed at run time (not a literal `include*!`) depends on it
-  only when the file is package-level. Documentation files (`*.md`, `*.rst`, `*.adoc`) that no `include*!` or build-script literal
+  only when the file is package-level. Documentation files (`*.md`, `*.markdown`, `*.rst`, `*.adoc`) that no `include*!` or build-script literal
   names are never inputs, so a test reading such a file at run time is not seen.
 - **Build scripts** are scanned for string literals only: a path assembled at run time (`format!`, `Path::join` of variables) is
   not seen, beyond the package-level dependency every target already has on the build script.

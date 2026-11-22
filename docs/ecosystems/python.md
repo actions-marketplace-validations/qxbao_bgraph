@@ -1,6 +1,6 @@
 # Python
 
-bgraph selects affected pytest tests (and tests of projects driven by Django's own runner) one test file at a time. It reads the pytest and packaging configuration as text, scans every `.py` file with its own lexer, and resolves imports against the union of every directory that could be on `sys.path`. Python is never run during selection.
+bgraph selects affected pytest tests (and tests of projects driven by Django's own runner) one test file at a time. It reads the pytest and packaging configuration as text, scans every `.py` file with its own lexer, and resolves imports against the union of every directory that could be on `sys.path`. The static analysis never runs Python; only the opt-in [dynamic layer](../dynamic-layer.md) starts an interpreter (to fingerprint the environment).
 
 ## At a glance
 
@@ -18,7 +18,7 @@ bgraph selects affected pytest tests (and tests of projects driven by Django's o
 - **Projects.** A directory with `pyproject.toml`, `setup.py`, `setup.cfg`, `pytest.ini`, `.pytest.ini`, `pytest.toml` or `.pytest.toml`, or a `tox.ini` with a `[pytest]` section, is a project. When some `.py` file lies outside every such directory, the repository root is a project too. A file belongs to the nearest project.
 - **Nested build configurations are not projects.** A `setup.py`/`setup.cfg`/`pyproject.toml` inside a package (a directory with `__init__.py`) of an enclosing project belongs to that project (numpy.distutils-style per-subpackage `setup.py`), unless the directory holds a pytest configuration.
 - **Layouts.** Flat layout, `src/` layout, namespace packages (PEP 420), several projects in one repository, and mixed repositories (for example a Node project next to a Python one: a change in one project's sources selects no test of the other, and Python configuration widenings select Python units only).
-- **Never repository code:** paths through `node_modules`, `site-packages` or `__pycache__`. Directories holding a `pyvenv.cfg` are not collected.
+- **Never repository code:** paths through `node_modules`, `site-packages` or `__pycache__`. No test is collected below a directory holding a `pyvenv.cfg`.
 
 ## Test units
 
@@ -30,7 +30,7 @@ A file is a pytest test unit when:
 
 `conftest.py` is never a unit.
 
-**Configuration.** The configuration of a file is the nearest ancestor directory that has one, searched in pytest's order: `pytest.toml`, `.pytest.toml`, `pytest.ini`, `.pytest.ini`, `pyproject.toml` (`[tool.pytest.ini_options]` or `[tool.pytest]`), `tox.ini` (`[pytest]`), `setup.cfg` (`[tool:pytest]`, or the old `[pytest]`). The keys read are `python_files`, `testpaths`, `norecursedirs`, `pythonpath` and `addopts`; in `addopts`: `--doctest-modules`, `--doctest-glob`, `-p NAME`, `--ignore`, `--ignore-glob`, and `-o`/`--override-ini` for the keys above.
+**Configuration.** The configuration of a file is the nearest ancestor directory that has one, searched in pytest's order: `pytest.toml`, `.pytest.toml`, `pytest.ini`, `.pytest.ini`, `pyproject.toml` (`[tool.pytest.ini_options]` or `[tool.pytest]`), `tox.ini` (`[pytest]`), `setup.cfg` (`[tool:pytest]`, or the old `[pytest]`). The keys read are `python_files`, `testpaths`, `norecursedirs`, `pythonpath` and `addopts`; in `addopts`: `--doctest-modules`, `--doctest-glob`, `-p NAME`, `--ignore`, `--ignore-glob`, and `-o`/`--override-ini` for `python_files`, `testpaths`, `norecursedirs` and `pythonpath`.
 
 **Other unit kinds:**
 
@@ -38,7 +38,7 @@ A file is a pytest test unit when:
 |---|---|---|
 | Doctest module | `--doctest-modules` in `addopts`: every collectable module (except `setup.py`, `__main__.py`) is a unit | file path |
 | Directory unit | A `conftest.py` that implements `pytest_collect_file`, `pytest_collect_directory`, `pytest_pycollect_makemodule` or `pytest_ignore_collect` (itself or through a repo plugin it loads with `pytest_plugins`), a `-p` plugin or `pytest11` entry point of the repo that does, or `--doctest-glob` in `addopts`: any file below may be a test item | the directory |
-| Whole-project unit | `python_files`, `testpaths`, `norecursedirs`, `pythonpath` or `addopts` is computed (tox `{…}` substitution, `${…}`, a non-string TOML value) or the config file is unreadable | `<py-all-tests:DIR>` |
+| Whole-project unit | `python_files`, `testpaths`, `norecursedirs`, `pythonpath` or `addopts` is computed (a `{…}` substitution in `tox.ini`, `${…}` in a key other than `addopts`, a TOML value that is not a string or a list of strings) or the config file is unreadable or not valid TOML | `<py-all-tests:DIR>` (DIR = the configuration's directory) |
 | Django test module | No pytest configuration applies and the project has `tests/runtests.py`, `runtests.py` or `manage.py`: `test*.py` files below the label root, through a chain of packages (`__init__.py` in every directory) | file path |
 
 A whole-project unit is selected whenever anything is selected or widened, and runs the project's whole suite.
@@ -49,7 +49,7 @@ A whole-project unit is selected whenever anything is selected or widened, and r
 
 - `import a.b.c`, `from a.b import c`, `from . import x`, `from ..a import b`, `from x import *`;
 - `importlib.import_module("m")`, `__import__("m")`, `runpy.run_module("m")`, `pytest.importorskip("m")` with a constant (also `for name in ("a", "b"): import_module(name)` over literal strings);
-- `pytest_plugins = ["a.b"]` (or a plain string) in a `conftest.py`;
+- `pytest_plugins = ["a.b"]` (or a plain string), usually in a `conftest.py` (read in any file);
 - heuristic edges (only added when the target exists): `mock.patch("a.b.c")`, `patch.object`/`multiple`/`dict`, `monkeypatch.setattr("a.b.c", …)`, Django settings `INSTALLED_APPS`/`MIDDLEWARE`/`ROOT_URLCONF`/`AUTHENTICATION_BACKENDS` strings, and `>>> import x` lines in doctests.
 
 **Import roots** (an absolute import is resolved under every root and the matches are united):
@@ -66,7 +66,7 @@ A whole-project unit is selected whenever anything is selected or widened, and r
 - importing `a.b.c` also depends on `a/__init__.py` and `a/b/__init__.py`; every Python file depends on the `__init__.py` of each of its ancestor directories;
 - `importlib.import_module("pkg.plugins." + name)` (a static prefix) depends on everything under `pkg/plugins/`, with no widening;
 - an absolute import no root resolves, but whose path suffix exists somewhere in the repo, is tracked by glob edges (`**/a/b/c.py`, `**/a/b/c/__init__.py`, ancestor `__init__.py`), so a file added later is caught;
-- standard-library modules and distributions declared anywhere in the repo (`[project]` dependencies and optional dependencies, `dependency-groups`, `build-system.requires`, poetry, pdm, uv, hatch environments, `setup.cfg` requires, `setup.py` strings, tox `deps`, `Pipfile`, requirements files) create no edge; common import-name/distribution differences (`yaml`/`pyyaml`, `PIL`/`pillow`…) and namespace distributions are known.
+- standard-library modules and distributions declared anywhere in the repo (`[project]` dependencies and optional dependencies, `dependency-groups`, `build-system.requires`, poetry, pdm, uv, hatch environments, `setup.cfg` requires, `setup.py` strings, tox `deps`, `Pipfile`, requirements files) create no edge when no root resolves them and no module with that path suffix exists in the repo; common import-name/distribution differences (`yaml`/`pyyaml`, `PIL`/`pillow`…) and namespace distributions are known.
 
 **Implicit inputs of a test:**
 
@@ -77,7 +77,7 @@ A whole-project unit is selected whenever anything is selected or widened, and r
 
 ## Changes to manifests, configuration and lockfiles
 
-Widenings below are `module` tier and tagged `python`: they select Python units only.
+Widenings below, except the global `.python-version` row, are `module` tier and tagged `python`: they select Python units only. They apply only when the repository has a Python project.
 
 | Change | Effect |
 |---|---|
@@ -85,13 +85,13 @@ Widenings below are `module` tier and tagged `python`: they select Python units 
 | `pyproject.toml`: only `[project]` `description`, `authors`, `maintainers`, `urls`, `classifiers`, `readme`, `keywords`, `license`, `license-files`, or `[tool.X]` of a linter/formatter/release tool (black, ruff, isort, mypy, coverage, flake8, pylint, pyright, towncrier, bumpversion, sphinx…) | Nothing |
 | `pyproject.toml`: anything else (`version`, dependencies, `build-system`, other tools), or added, deleted, unparsable | `manifest_changed`, scope = its directory |
 | `setup.cfg`: `[tool:pytest]` / `[pytest]` | `test_config_changed`, scope = its directory |
-| `setup.cfg`: only tool sections (`flake8`, `pycodestyle`, `pylint`, `isort`, `mypy*`, `coverage:*`, `bdist_wheel`, `sdist`, `bumpversion*`, `tool:black`, `pydocstyle`, `yapf`) or harmless `[metadata]` keys (`description`, `long_description*`, `author*`, `maintainer*`, `url`, `project_urls`, `classifiers`, `keywords`, `license*`, `platforms`, `download_url`) | Nothing |
+| `setup.cfg`: only tool sections (`flake8`, `pycodestyle`, `pep8`, `pylint`, `pylint.*`, `isort`, `tool:isort`, `mypy`, `mypy-*`, `coverage:*`, `bdist_wheel`, `sdist`, `bumpversion`, `bumpversion:*`, `tool:black`, `pydocstyle`, `yapf`) or harmless `[metadata]` keys (`description`, `long_description*`, `author*`, `maintainer*`, `url`, `project_urls`, `classifiers`, `keywords`, `license*`, `platforms`, `download_url`) | Nothing |
 | `setup.cfg`: other sections or `[metadata]` keys, or added, deleted | `manifest_changed`, scope = its directory |
 | `setup.py` | `manifest_changed`, scope = its directory (code that runs at build time) |
 | `Pipfile` | `manifest_changed`, scope = its directory |
 | `pytest.ini`, `.pytest.ini`, `pytest.toml`, `.pytest.toml` | `test_config_changed`, scope = its directory |
 | `tox.ini`, `noxfile.py` | `test_config_changed`, scope = its directory |
-| `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock*.toml`, `requirements*.txt`, `constraints*.txt`, `*-requirements.txt`, `.txt`/`.in` under `requirements/` | `lock_changed` at L0, scope = the enclosing Python project |
+| `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock.toml`, `pylock.*.toml`; requirements files: a `.txt` or `.in` whose name starts with `requirements`, `constraints` or `requirement-`, or ends with `-requirements`/`_requirements` (case-insensitive), or any `.txt`/`.in` in a directory named `requirements`, `reqs` or `requirement` | `lock_changed` at L0, scope = the deepest enclosing Python project (the repository root when none) |
 | `.flake8`, `.pylintrc`, `.isort.cfg`, `mypy.ini`, `ruff.toml`, `.coveragerc`, `.pre-commit-config.yaml`, `.editorconfig`, `MANIFEST.in`, `codecov.yml`, `.readthedocs.yaml`, `pyrightconfig.json`… and `docs/conf.py` (in `docs/`, `doc/`, `source/`) | Nothing |
 | Native sources (`.pyx`, `.pxd`, `.pxi`, `.c`, `.h`, `.cpp`, `.f90`, `.rs`, `.cu`…, `meson.build`, `CMakeLists.txt`) in a project that builds extensions | `unknown_file`, scope = the project |
 | `.python-version` | `full`, `global_input` (global table, see [architecture](../architecture.md)) |
@@ -104,13 +104,13 @@ When a change fires an unresolved import, the importing file counts as changed a
 
 | Case | Class | Fires on |
 |---|---|---|
-| Undeclared absolute import found nowhere in the repo | report only | tracked by glob edges; a module added later is caught |
-| Relative import of a missing file | report only | exact-path edges to `x.py`, `x.pyi`, `x/__init__.py(i)`; adding the file is caught |
-| Relative import that climbs above the repository root | `unknown` | any change in the project |
-| `import_module(name)`, `__import__(name)`, `pytest_plugins` with a non-constant element, `pkgutil.walk_packages`/`iter_modules`, `importlib.util.spec_from_file_location`, a static prefix that is not a repo package | `dynamic` | a loadable file (`.py`, `.pyi`, `.pyc`, `.so`, `.so.*`, `.pyd`) added, changed or deleted **anywhere in the repository** |
+| Undeclared absolute import found nowhere in the repo | `unknown`, report only | tracked by glob edges; a module added later is caught |
+| Relative import of a missing file | `unknown`, report only | exact-path edges to `x.py`, `x.pyi`, `x/__init__.py(i)`; adding the file is caught |
+| Relative import that climbs above the repository root | `unknown` | any change in the importer's project |
+| `import_module(name)`, `__import__(name)`, `runpy.run_module(name)`, `pytest.importorskip(name)`, `pytest_plugins` with a non-constant element, `pkgutil.walk_packages`/`iter_modules`, `importlib.util.spec_from_file_location`, a static prefix that is not a repo package | `dynamic` | a loadable file (`.py`, `.pyi`, `.pyc`, `.so`, `.so.*`, `.pyd`) added, changed or deleted **anywhere in the repository** |
 | `sys.path` edit bgraph cannot evaluate, or any assignment to `sys.path` | `dynamic` | same as above |
 | File the lexer cannot read with certainty (unterminated string, unbalanced brackets) | `uncertain_scan` | same as above |
-| Computed pytest collection settings | report only | the project gets a whole-project unit |
+| Computed pytest collection settings | `unknown`, report only | the project gets a whole-project unit |
 
 Documentation, data and tool-config changes never fire a dynamic site. Describe a site with `[[dynamic]]` in [`bgraph.toml`](../configuration.md): it then depends only on the declared globs.
 
@@ -122,7 +122,7 @@ loads = ["plugins/**/*.py"] # or: none = true
 reason = "load() only imports the plugins/ modules"
 ```
 
-`sys_path_only = true` covers only the `sys.path` sites of the file. A declaration for a missing file, or whose `lines` match no site, is inert (reported by `bgraph unresolved`), so the widening stays.
+`reason` is required; `loads`, `none = true` or `sys_path_only = true` is required. `sys_path_only = true` covers only the `sys.path` sites of the file and cannot be combined with `lines`. A declaration that matches no dynamic site (wrong `lines`, or a file without such sites) is reported by `bgraph unresolved` as stale and the widening stays; one naming a file that is not a Python file of the repo is reported as inert.
 
 ## Running the selection
 
@@ -130,12 +130,12 @@ reason = "load() only imports the plugins/ modules"
 
 | Runner | Command |
 |---|---|
-| pytest | `python -m pytest --rootdir R -c CFG <files and directories>` (R = the configuration's directory, CFG = the configuration file; `--rootdir .` and no `-c` without a configuration) |
+| pytest | `python -m pytest --rootdir R -c CFG <files and directories>` (R = the configuration's directory, CFG = the configuration file, both relative to the project directory, e.g. `--rootdir .. -c ../pyproject.toml`; `--rootdir .` and no `-c` without a configuration) |
 | pytest, whole-project unit | `python -m pytest --rootdir R -c CFG` (no paths) |
 | Django, `tests/runtests.py` | `python tests/runtests.py <labels>` (labels relative to `tests/`) |
 | Django, `manage.py` | `python manage.py test <labels>` |
 
-- Django labels are dotted module paths (`admin_views.test_forms`); a file outside the label root runs the whole suite.
+- Django labels are dotted module paths (`admin_views.test_forms`), relative to the driver's directory for `runtests.py` and to the project directory for `manage.py`; a file outside the label root runs the whole suite (the driver with no labels).
 - A long pytest list is written to a file when `--list-dir` is given and passed as `@<file>` (needs pytest 8.2 or later); otherwise long lists are split into batches of at most 8000 characters per command line (session fixtures run once per batch; merge the exit codes).
 
 ```console

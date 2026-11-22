@@ -44,7 +44,7 @@ Patterns read from the runner config:
 | `testPathIgnorePatterns` | Jest | Constant elements only; applies only to files matched by a config pattern |
 | `rootDir`, `roots` | Jest | A literal `rootDir` is followed; a computed one makes patterns match at any depth |
 
-**Whole-project unit.** When a test-file pattern is computed by code (a function call, a variable, a negated extglob `!(…)`), the set of tests is unknown. The project then gets the unit `<all-tests:DIR>`, which is selected whenever anything at all is selected or widened, and runs the whole project. A [`[[config]]`](../configuration.md) declaration with `tests = [...]` replacing the key removes it.
+**Whole-project unit.** When a test-file pattern is computed by code (a function call, a variable, a negated extglob `!(…)`) or a `testRegex` is not a valid regular expression for bgraph, the set of tests is unknown. The project then gets the unit `<all-tests:DIR>`, which is selected whenever anything at all is selected or widened, and runs the whole project. A [`[[config]]`](../configuration.md) declaration whose `replaces` names every computed test-pattern key (`include`, `testMatch`, `testRegex`) of that file removes it; its optional `tests = [...]` globs are added to the test patterns.
 
 **Snapshots.** `__snapshots__/a.test.ts.snap` belongs to `a.test.ts` only: changing it selects that test.
 
@@ -64,7 +64,7 @@ A test depends on everything it reaches through the edges below (transitively).
 **Resolution** (union of every plausible target):
 
 - relative and absolute paths with extension probing (`.ts .tsx .d.ts .mts .d.mts .cts .d.cts .js .jsx .mjs .cjs .json .node .vue .svelte`), directory `index.*`, a directory's `package.json` (`main`, `module`, `types`, `typings`, `browser`, `source`, `exports["."]`);
-- TypeScript extension substitution: `./util.js` → `util.ts`/`.tsx`/`.d.ts`, `.jsx` → `.tsx`, `.mjs` → `.mts`, `.cjs` → `.cts`;
+- TypeScript extension substitution: `./util.js` → `util.ts`/`.tsx`/`.d.ts`, `.jsx` → `.tsx`, `.mjs` → `.mts`/`.d.mts`, `.cjs` → `.cts`/`.d.cts`;
 - tsconfig/jsconfig `paths` (exact key, then longest `*` prefix; every fallback target) and `baseUrl`, from every config in the importing file's directory and its ancestors, with `extends` followed;
 - `package.json` `exports` (every condition and every array element, subpath patterns `./features/*`, `null` exclusions) and `imports` (`#internal/*`), self-reference by package name, workspace packages by name;
 - build outputs absent from the tree (`dist/`, `build/`, `lib/`, `out/`, format variants such as `dist/cjs`, `dist/types`) are mapped back to sources through tsconfig `outDir`/`rootDir` or a `src/` directory;
@@ -76,7 +76,7 @@ A test depends on everything it reaches through the edges below (transitively).
 
 - the project's runner config files themselves;
 - every constant string in a runner config that names an existing file or directory (`setupFiles`, `globalSetup`, `preset`, `transform`…); a directory means every file under it. Values of `exclude`, `coverage`, `include`, `testMatch`, `testRegex`, `roots`, `collectCoverageFrom`, `testPathIgnorePatterns` and similar keys are not inputs;
-- `importSource`/`jsxImportSource`: the `jsx-runtime` and `jsx-dev-runtime` modules of that path;
+- `importSource`/`jsxImportSource` in a runner config: the `jsx-runtime` and `jsx-dev-runtime` modules of that path (the tsconfig `jsxImportSource` is not read);
 - every file under a `__mocks__/` directory of the project. For Jest projects, `<project or roots>/__mocks__/<name>` also replaces a bare import of `<name>`: the edge goes to the mock.
 
 **Lockfile level L2** (opt-in): an import that resolves to an external package is an edge to a virtual node of that package, so a lockfile change can be narrowed to its importers.
@@ -89,14 +89,14 @@ A test depends on everything it reaches through the edges below (transitively).
 | `package.json`, only `version`, `description`, `keywords`, `author`, `contributors`, `homepage`, `repository`, `bugs`, `license`, `funding`, `maintainers`, `publishConfig` | Nothing |
 | `package.json`, any other top-level key (`dependencies`, `scripts`, `exports`, `main`, `type`, `jest`…), or file added, deleted or unparsable | `module`, `manifest_changed`, scope = directory of the `package.json` |
 | `tsconfig*.json` / `jsconfig*.json` | `module`, `test_config_changed`, scope = its directory and the directory of every tsconfig that `extends` it (transitively, base or head) |
-| `jest`, `vitest`, `vite`, `playwright`, `babel`, `webpack`, `rollup`, `esbuild`, `tsup`, `rspack`, `karma`, `ava`, `cypress`, `next`, `nuxt`, `svelte`, `astro` `.config.*`; `.babelrc*`, `.swcrc`, `.mocharc*`, `vitest.workspace.*`, `.c8rc*`, `.nycrc*`, `jest.preset.js`, `jest-preset.js`, `node.config.json`, `.browserslistrc`, `browserslist` | `module`, `test_config_changed`, scope = nearest Node project |
+| `jest`, `vitest`, `vite`, `playwright`, `babel`, `webpack`, `rollup`, `esbuild`, `tsup`, `rspack`, `karma`, `ava`, `cypress`, `next`, `nuxt`, `svelte`, `astro` `.config.*`; `.babelrc` (and `.json`, `.js`, `.cjs`), `.swcrc`, `.mocharc` (and `.json`, `.yml`, `.yaml`, `.js`, `.cjs`), `vitest.workspace.ts`/`.js`/`.json`, `.c8rc`, `.c8rc.json`, `.nycrc`, `.nycrc.json`, `jest.preset.js`, `jest-preset.js`, `node.config.json`, `.browserslistrc`, `browserslist` | `module`, `test_config_changed`, scope = nearest Node project (the file's directory when outside every project) |
 | Other runner config files (named variants such as `vitest.unit.config.ts`, files listed by `projects`) | No widening; they are inputs of every test of their project, so the graph selects those tests |
 | Lockfile, level **L0** (configured, unsupported format, unreadable side, format change, change outside the package graph) | `module`, `lock_changed`, scope = lockfile directory, Node units only |
 | Lockfile, level **L1** (default) | `module`, `lock_changed` per project whose resolved closure changed; every file of the project counts as changed, so importers in other projects are selected too. A change in the root project's closure (workspace tooling) selects every project under the lockfile. An undeclared import of a changed package widens the importing project |
 | Lockfile, level **L2** (`[lockfile] level = "L2"`) | `graph`, `lock_changed`: only the importers of the changed direct dependencies; falls back to L1 (see below) |
-| `.nvmrc`, `.node-version`, `.npmrc`, `.yarnrc*`, `.yarn/**`, `.pnpmfile.cjs`, `bunfig.toml`, `pnpm-workspace.yaml`, `lerna.json`, `nx.json`, `turbo.json`, `.env*` | `full`, `global_input` (global table, see [architecture](../architecture.md)) |
+| `.nvmrc`, `.node-version`, `.npmrc`, `.yarnrc`, `.yarnrc.yml`, `.yarn/**`, `.pnpmfile.cjs`, `bunfig.toml`, `pnpm-workspace.yaml`, `lerna.json`, `nx.json`, `turbo.json`, `.env`, `.env.*`, `.envrc` | `full`, `global_input` (global table, see [architecture](../architecture.md)) |
 
-L2 falls back to L1 for a project when the change involves a local or workspace dependency, a direct dependency added or removed, a package with install scripts (pnpm 9.0 does not record them, so L2 always falls back there), peer dependencies, an executable of a changed package named in a config or `package.json` script, a runner/toolchain/plugin/preset/`@types` package, a dependency named in a runner config or a non-dependency key of `package.json`, a dependency no file of the project imports, or an undeclared import of a changed package. Details: [lockfiles](../lockfiles.md).
+L2 falls back to L1 for a project when the project is added to or removed from the lockfile, no direct dependency carries the change, the change involves a local or workspace dependency, a direct dependency added or removed, a package with install scripts (pnpm 9.0 does not record them, so L2 always falls back there), peer dependencies, an executable of a changed package named in a config or `package.json` script (pnpm does not record executable names, so a changed package with executables always falls back there), a runner/toolchain/plugin/preset/`@types` package, a dependency named in a runner config or a non-dependency key of `package.json`, a dependency no file of the project imports, or an undeclared import of a changed package. Details: [lockfiles](../lockfiles.md).
 
 A source or data file that nothing in the graph depends on widens its project (`unreferenced_file`); an unknown file type nobody references widens its project (`unknown_file`). See [architecture](../architecture.md).
 
@@ -112,7 +112,7 @@ An unresolved import does not widen a scope of tests directly: when a file chang
 | Import of a package's build output that is not in the tree and cannot be mapped to sources | `unknown` (`generated_output` in the detail) | the producing package |
 | `require(x)` / `import(x)` with no static prefix, a non-relative glob, a prefix that does not resolve | `dynamic` | anywhere in the repository |
 | File the lexer cannot read with certainty (`const r = require; r('x')`, unclosed SFC block, files over 4 MiB) | `uncertain_scan` | anywhere in the repository |
-| Runner config key computed by code (`moduleNameMapper: buildMapper()`, alias from a helper, `modulePaths`, `moduleDirectories`, `resolver`, `haste`, `projects`/`workspace` that are not literal) | `unknown` (`config_is_code` in the detail), reported as `unknown_import` | the project: every test of the project is selected |
+| Runner config key computed by code (`moduleNameMapper: buildMapper()`, alias from a helper, `roots`, `projects`/`workspace` that are not literal), any non-null `modulePaths`, `moduleDirectories`, `resolver` or `haste`, or an unreadable runner config file | `unknown` (`config_is_code` in the detail), reported as `unknown_import` | the project: every test of the project is selected |
 
 Describe these in [`bgraph.toml`](../configuration.md):
 
@@ -168,7 +168,7 @@ See [CLI](../cli.md) for `--json` and `--list-dir`.
 - **Package-level edges at L1**: a lockfile change selects every test of each project whose closure changed; L2 narrows only npm and pnpm 6.x lockfiles.
 - **Not seen by the scanner:** files read through `fs` at run time, scripts run through `child_process`, stylesheet-to-stylesheet `@import` outside SFC files, imports inside HTML or other template formats. Such files usually have no dependents and widen their project (`unreferenced_file`, `unknown_file`) instead of being missed.
 - **Tool configs the ecosystem does not know** (ESLint, Prettier…) widen their project as unreferenced or unknown files; declare them with a `[[rule]]` `affects = "none"`.
-- Module resolution roots that are not modeled (`NODE_PATH`, `moduleDirectories`, Babel module-resolver) are approximated by the suffix globs of undeclared bare imports.
+- Module resolution roots that are not modeled (`NODE_PATH`, Babel module-resolver) are approximated by the suffix globs of undeclared bare imports. (A Jest `moduleDirectories` or `modulePaths` key is `config_is_code`, see above.)
 
 ## See also
 

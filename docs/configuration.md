@@ -15,8 +15,10 @@ widening in `bgraph affected` output may carry a `suggest` snippet.
 - **Read from the head tree.** The file of the tree being tested is used (the working tree by default).
 - **Changing the file** is a change like any other: unless a `[[rule]]` matches it, `bgraph.toml` is an unclaimed file
   and widens to the project at the repository root (`unknown_file`), or to `full` when no project sits at the root.
-- **Paths** are repo-relative with forward slashes; paths that leave the repository are rejected.
-- **Globs**: `*` (one path segment), `**` (any depth), `?`, `[abc]`, `{a,b}`.
+- **Paths** are repo-relative with forward slashes. The single-path keys of `[[config]]` and `[[dynamic]]` (`file`,
+  alias targets, `sources`, `ignore_paths`) must stay inside the repository; a path that leaves it is an error.
+- **Globs**: `*` (within one path segment), `**` (any depth), `?`, `[abc]`, `[!a]`, `{a,b}`; case-sensitive. A pattern
+  without `/` matches only at the repository root (`*.proto` is not `**/*.proto`).
 
 ### Widening versus narrowing entries
 
@@ -25,7 +27,8 @@ widening in `bgraph affected` output may carry a `suggest` snippet.
 | **Widening** (safe) | adds dependencies, so more tests run | only costs CI time |
 | **Narrowing** (trusted) | tells bgraph that something it would widen on is fine | can make bgraph **skip a test the change breaks** |
 
-Narrowing entries require a `reason`. Review them like code, and re-check them when what they describe changes.
+`[[config]]` and `[[dynamic]]` entries require a `reason`; give one to `affects = "none"` rules too (it is optional
+there). Review narrowing entries like code, and re-check them when what they describe changes.
 
 ## Tables at a glance
 
@@ -62,8 +65,8 @@ rule can also override them (see [Architecture](architecture.md#rules-come-first
 is ignored for it and reported as `rule_rejected`.
 
 Directory targets select units whose project or files lie under the directory. Go units are addressed by **module**: a
-directory target selects the Go packages of every module whose directory lies under it, so name a module directory, `.`
-or `all`; a package directory inside a module, or a glob over `.go` files, selects no Go unit.
+directory target selects the Go packages of every module whose directory lies under it, so name a module directory or
+`.` (or use `affects = "all"`); a package directory inside a module, or a glob over `.go` files, selects no Go unit.
 
 ```toml
 [[rule]]
@@ -142,7 +145,7 @@ reason = "scripts/aliases.js maps vue and @vue/<dir> to the package sources"
 
 Describes what the dynamic imports of one Python file can load: `importlib.import_module(name)`, `__import__(name)`,
 `pkgutil.iter_modules(...)`, a `sys.path` edit built at run time. By default such a site is unresolved at repository
-scope: when a loadable module file (`.py`, `.pyi`, `.pyc`, `.so`, `.pyd`) is added, changed or deleted anywhere in the
+scope: when a loadable module file (`.py`, `.pyi`, `.pyc`, `.so`, `.so.*`, `.pyd`) is added, changed or deleted anywhere in the
 repository, the file with the site and everything that depends on it is selected.
 
 An entry replaces that rule, for the sites it names, with glob edges to what you say they can load: a change to a matching

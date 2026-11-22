@@ -46,7 +46,7 @@ head tree ─┘
    | Condition | Reason |
    |---|---|
    | `bgraph.toml` does not parse or fails validation | `user_rule` |
-   | no base (none given, none found, or a shallow clone that lacks it) | `no_base` |
+   | no base (none given, none found, or a base that does not resolve, for example in a shallow clone) | `no_base` |
    | more changed files than `[options] max_changed` (default 5000) | `diff_too_large` |
    | an ecosystem fails to analyze a tree | `internal_error` |
 
@@ -60,7 +60,8 @@ head tree ─┘
       ecosystem's widenings (for example `manifest_changed`, `test_config_changed`, `lock_changed`). Several ecosystems may
       claim the same file; their widenings add up.
    5. A **graph node** (a file some ecosystem gives a role, or that something depends on) becomes a **seed** of the
-      backward walk. If nothing depends on it and it is not a test, config, manifest or lockfile, a test may still use it
+      backward walk. If nothing depends on it, no ecosystem claimed it in step 4, and it is not a test, config, manifest
+      or lockfile, a test may still use it
       outside the graph (read as data, run as a script): it widens to its nearest project (`unreferenced_file`), or to
       `full` when it lies outside every project.
    6. Otherwise, a file claimed by an ecosystem, a harmless file or a documentation file is ignored.
@@ -77,12 +78,13 @@ head tree ─┘
 |---|---|
 | `none` | No test is affected. Nothing needs to run. |
 | `graph` | The selection follows from the dependency graph alone. |
-| `package` | Widened to a directory, package or Cargo target. |
+| `package` | Widened to a directory, package or Cargo target. Defined, but no current ecosystem produces it. |
 | `module` | Widened to a whole project (a `package.json` project, crate, Go module, Maven module, .NET project...). |
 | `full` | Run the whole suite. `tests` is empty. |
 
-A widening caused by an unresolved import does not raise the scope: the importer is treated as changed and the result is
-still computed from the graph. Such widenings are listed for explanation only.
+A widening caused by an unresolved import does not raise the scope (unless its tier is `full`): the importer is treated
+as changed and the result is still computed from the graph. Such widenings are listed for explanation only. Their tier
+field holds the import's scope tier, usually `module`.
 
 A test runner adapter never receives an empty list for a non-`none` scope: if the scope is not `none` and no unit was
 selected, `bgraph command` falls back to the full suite.
@@ -93,11 +95,11 @@ These codes are stable and appear in the `reason` field of `widening` and `warni
 
 | Reason | Typical tier | Meaning |
 |---|---|---|
-| `unknown_import` | graph | An import that resolves to nothing; its importer is treated as changed when a file in its scope changes. |
-| `dynamic_import` | graph | An import whose target is computed at run time (`import(x)`, `importlib.import_module(name)`, a non-literal `sys.path` edit...). |
-| `ambiguous_import` | graph | An import that could resolve to several targets in ways bgraph cannot decide. |
-| `uncertain_scan` | graph | The scanner could not trust its own reading of the file (unsupported syntax, an unclosed block...). |
-| `config_is_code` | module | A runner configuration key (aliases, test patterns, projects) is computed by code; every test of the project is selected. Describe it with [`[[config]]`](configuration.md#config). |
+| `unknown_import` | module (scope stays `graph`) | An import that resolves to nothing; its importer is treated as changed when a file in its scope changes. |
+| `dynamic_import` | module (scope stays `graph`) | An import whose target is computed at run time (`import(x)`, `importlib.import_module(name)`, a non-literal `sys.path` edit...). |
+| `ambiguous_import` | module (scope stays `graph`) | An import that could resolve to several targets in ways bgraph cannot decide. |
+| `uncertain_scan` | module (scope stays `graph`) | The scanner could not trust its own reading of the file (unsupported syntax, an unclosed block...). |
+| `config_is_code` | module | (detail of an `unknown_import` on every test of the project, and the reason of a whole-project unit) a runner configuration key (aliases, test patterns, projects) is computed by code, so any change in the project selects every test of the project. Describe it with [`[[config]]`](configuration.md#config). |
 | `manifest_changed` | module | A manifest (`package.json`, `Cargo.toml`, `pyproject.toml`, `pom.xml`, `go.mod`...) changed in a way that can affect builds or tests. |
 | `test_config_changed` | module | A test runner or compiler configuration changed (`vitest.config.*`, `tsconfig.json`, pytest settings, `.cargo/config.toml`, `*.runsettings`...). |
 | `lock_changed` | module or graph | A lockfile changed. See [Lockfiles](lockfiles.md). |
@@ -134,19 +136,18 @@ a change to `To` can affect `From`.
 
 | Kind | Example |
 |---|---|
-| `import` | `import x from "./a"`, `from pkg import a`, a Go import, a Maven `<dependency>` |
+| `import` | `import x from "./a"`, `from pkg import a`, a Go import |
 | `type_only` | `import type { T } from "./t"` |
 | `reexport` | `export * from "./a"` |
-| `mod` | a Rust `mod name;` declaration |
-| `include` | `include_str!("data.txt")`, `//go:embed`, MSBuild `<Import>` / `<Compile Include>` |
-| `project_ref` | a .NET `ProjectReference`, a Gradle `project(":x")` |
+| `include` | `include_str!("data.txt")`, MSBuild `<Import>` / item includes, a file a Maven or Gradle build names |
+| `project_ref` | a Maven `<dependency>` on another module of the build, a Gradle `project(":x")`, an included build |
 | `conftest` | a pytest `conftest.py` above a test |
-| `implicit` | a dependency the runner adds on its own (setup files, global setup, runner configs) |
-| `fixture_data` | a data file a test names |
-| `pattern` | a glob edge (below) |
-| `generated` | an import of a declared generated output, redirected to its sources |
-| `rule` | an edge added by a `bgraph.toml` declaration |
-| `mock` | `jest.mock("./a")`, `vi.mock(...)` |
+| `implicit` | a dependency the runner or build adds on its own (setup files, runner configs, the module files of a Cargo target, a .NET `ProjectReference`, a parent POM, the files of a Go package) |
+| `fixture_data` | a data file a Go test names in a string literal |
+| `pattern` | a glob edge (below), including `//go:embed` patterns and the edges of `[[generated]]` and `[[dynamic]]` declarations |
+| `mock` | `jest.mock("./a")`, `vi.mock(...)`, Python `mock.patch("a.b")` |
+
+The kinds `mod`, `probe`, `generated` and `rule` are defined but not emitted today.
 
 The walk follows every edge kind with no depth limit, so transitive dependents are always reached.
 
@@ -157,7 +158,7 @@ Some units are not files. Their unit's file list holds a single virtual node, an
 | Node | Used by |
 |---|---|
 | `<rust:ID>` | a Cargo target (and package-level groups) |
-| `<go:dir>`, `<golib:dir>` | a Go package's test unit and its library (what importers compile) |
+| `<go:dir>`, `<golib:dir>`, `<gomod:dir>` | a Go package's test unit, its library (what importers compile), and a module's module-level files |
 | `<jvm:ID>` | a Maven module or Gradle project |
 | `<dotnet:project file>` | an MSBuild project |
 | `<npm:package>` | an external npm package (lockfile level L2 only) |
@@ -194,7 +195,7 @@ Both trees are analyzed and their graphs unioned:
 - **Previously failed tests.** Unit IDs passed with `--failed` (or `previously_failed` over MCP) are always selected if
   they still exist.
 - **Reasons.** Each selected unit carries a reason chain from the unit back to a seed, for example
-  `src/a.test.ts --import-> src/util.ts (changed)`. `bgraph explain` prints it.
+  `src/a.test.ts --import-> src/util.ts ; src/util.ts (changed)`. `bgraph explain` prints it.
 
 ## Unresolved imports
 
@@ -202,7 +203,7 @@ An import bgraph cannot resolve is recorded with a class (`unknown`, `dynamic`, 
 **scope**: a tier and a directory (usually the importer's project, sometimes the repository). When a changed file lies
 inside that scope, the importing file is treated as changed and its dependents are selected. Some unresolved imports can
 only load files of a known kind and carry trigger globs: a Python dynamic import fires only when a loadable module file
-(`.py`, `.pyi`, `.pyc`, `.so`, `.pyd`) changes in scope, never for a data or documentation file.
+(`.py`, `.pyi`, `.pyc`, `.so`, `.so.*`, `.pyd`) changes in scope, never for a data or documentation file.
 
 An unresolved import with scope `none` is report-only: the ecosystem already encoded the dependency as glob edges.
 

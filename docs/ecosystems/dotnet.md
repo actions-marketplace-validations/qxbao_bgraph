@@ -47,9 +47,10 @@ other project files (`.csproj`, `.fsproj`, `.vbproj`, `.vcxproj`), `.sln`/`.slnx
 ## What a unit depends on
 
 - **Its project file and every file it owns** (see above).
-- **Items**: the file named by the `Include` of every item, wherever it lives (`Compile`, `Compile Link`, `None`, `Content`,
-  `EmbeddedResource`, `AdditionalFiles`, `Analyzer`, `Reference`, `Page`, `Resource`, `EditorConfigFiles`, ... and any other item
-  type), plus `HintPath` files. A wildcard is a pattern edge, so a file added later under the glob selects the project. Item types
+- **Items**: the file named by the `Include` of every item, wherever it lives: always for file item types (`Compile`, `Compile Link`,
+  `None`, `Content`, `EmbeddedResource`, `AdditionalFiles`, `Analyzer`, `Reference`, `Page`, `Resource`, `EditorConfigFiles`, ...,
+  even when the file does not exist yet), and for any other item type when the value contains a path separator or a wildcard or
+  names an existing file; plus `HintPath` files. A wildcard is a pattern edge, so a file added later under the glob selects the project. Item types
   whose `Include` is a name (`PackageReference`, `PackageVersion`, `FrameworkReference`, `Using`, `InternalsVisibleTo`,
   `ProjectCapability`, `AssemblyAttribute`, ...) are skipped, and so are `Include`s that reference other items (`@(...)`,
   `%(...)`). An item inside a `<Target>` that cannot be evaluated is computed at build time and ignored.
@@ -67,7 +68,8 @@ other project files (`.csproj`, `.fsproj`, `.vbproj`, `.vcxproj`), `.sln`/`.slnx
   directory or above (they can turn diagnostics into build errors).
 - **Strings read by tasks**: a task can read a file no item declares (`Copy SourceFiles`, `Exec Command`,
   `ReadLinesFromFile File`). Every attribute value, element text and property value of the project and of the files it imports
-  (inside `<Target>` too) is split into words (on `;` and whitespace, quotes and a leading `-Option=` stripped) and evaluated; a word
+  (inside `<Target>` too) is evaluated and split into words (on `;` and whitespace, quotes stripped; for a word with `=` such as
+  `-File=x`, the text after the last `=` is tried too), resolved against the project directory and the defining file's directory; a word
   that names an existing file is a dependency, an existing directory named with a separator becomes `dir/**`, and a wildcard path a
   pattern edge.
 
@@ -78,14 +80,16 @@ closure (every value, since conditions are not evaluated; at most 64 combination
 - `$(SolutionDir)` when a `.sln`/`.slnx` sits in the project directory or an ancestor;
 - property functions `[MSBuild]::GetPathOfFileAbove`, `GetDirectoryNameOfFileAbove`, `NormalizePath`, `NormalizeDirectory`,
   `EnsureTrailingSlash`, `ValueOrDefault`, `GetTargetFramework*`, `[System.IO.Path]::Combine`, `GetFullPath`, `GetDirectoryName`;
-- `$(Configuration)`, `$(Platform)`, `$(TargetFramework)`, `$(RuntimeIdentifier)` and similar become `*` (every value);
-- build-output properties (`$(OutputPath)`, `$(IntermediateOutputPath)`, `$(ArtifactsPath)`, ...) drop the item; toolchain
-  locations (`$(MSBuildExtensionsPath)`, `$(MSBuildSDKsPath)`, `$(VSToolsPath)`, ...) are ignored.
+- when the repository does not define them: `$(Configuration)`, `$(Platform)`, `$(TargetFramework)`, `$(RuntimeIdentifier)` and
+  similar become `*` (every value); build-output properties (`$(OutputPath)`, `$(IntermediateOutputPath)`, `$(ArtifactsPath)`, ...)
+  drop the item; toolchain locations (`$(MSBuildExtensionsPath)`, `$(MSBuildSDKsPath)`, `$(VSToolsPath)`, ...) are ignored. A
+  definition found in the project or its imports is used instead.
 
 **Conditions are never evaluated.** Every conditional `ProjectReference`, `Import` and item counts as present (the union of all
 branches, e.g. `TargetFramework`-specific references). Under a `Condition`, a property defined nowhere in the repository (SDK,
-command line, environment) is lenient: glued to text inside a path segment (`eng/$(ProjectType).targets`) it is `*`; starting a
-segment glued to a name (`$(EngDir)contract.targets`) it is any directories (`**/*`).
+command line, environment) is lenient: preceded by text of its own path segment (`eng/Build.$(Kind).targets`) it is `*`; starting a
+segment and glued to a name after it, it is any directories (`**/*`): `eng/$(ProjectType).targets` matches `eng/**/*.targets`, and
+`$(EngDir)contract.targets` at the start of the path matches `*contract.targets` in any directory.
 
 ## Changes to manifests, configuration and lockfiles
 
@@ -153,8 +157,8 @@ No list file, environment variable or batching is used. Scope `none` emits no co
   environment-derived paths, are not seen.
 - Item `Include`s built from other items (`@(...)`, `%(...)`) are skipped.
 - Conditions are not evaluated: references and imports of every configuration, platform and target framework count (over-selection).
-- A property supplied only on the command line or by the environment and used in a `ProjectReference` or `Import` makes its
-  project (and its dependents) selected on every change; repositories with many such constructs stay broadly selected.
+- A property supplied only on the command line or by the environment and used in a `ProjectReference` or `Import` (outside the
+  lenient `Condition` cases above) makes its project (and its dependents) selected on every change; repositories with many such constructs stay broadly selected.
 - Granularity is the project, and a file belongs to every enclosing project: a change below a nested project also selects the
   outer ones.
 - Every project is a unit, including libraries; `dotnet test` skips those that are not test projects.

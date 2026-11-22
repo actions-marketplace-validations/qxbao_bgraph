@@ -16,7 +16,7 @@ repository; default `.`).
 | [`mcp`](#mcp) | MCP server on stdio |
 | `version`, `help` | print the version or the usage |
 
-`bgraph doctor` is reserved and currently exits with "not implemented".
+`bgraph doctor` is reserved: it prints "not implemented" and exits with code `2`.
 
 ## Exit codes
 
@@ -96,9 +96,9 @@ A selected test:
 | `project` | the directory the runner runs from |
 | `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`... |
 | `files` | the unit's files (a virtual node for build-level units) |
-| `reasons` | reason chains, e.g. `src/a.test.ts --import-> src/util.ts (changed)` |
+| `reasons` | reason chains, each step joined by ` ; `, e.g. `src/a.test.ts --import-> src/util.ts ; src/util.ts (changed)` |
 | `whole` | run the project's whole test suite (the test file set is unknown) |
-| `package`, `config` | runner addressing details (Cargo package name; pytest config file or Django driver) |
+| `package`, `config` | ecosystem-specific runner addressing details (for example the Cargo package for `-p`, the Go import path, the pytest config file or Django driver; see the ecosystem pages) |
 | `widened` | selected only because of a widening; only such units can be removed by the dynamic layer |
 | `dynamic` | why the dynamic layer kept the unit |
 | `class_filter`, `classes` | the JVM class layer narrowed the unit: only these test classes run (the module is still built) |
@@ -135,7 +135,9 @@ JSON plan: `scope`, `commands` (each with `runner`, `project` (working directory
 Rules:
 
 - scope `none`: no command (note "no test is affected: nothing to run");
-- scope `full`, or a non-`none` scope without tests: no selective command (note "run the full suite");
+- scope `full`: no command (note "run the full suite");
+- a non-`none` scope without tests, or a test unit whose runner has no adapter: the plan's scope becomes `full`, with no
+  command and a note saying to run the full suite;
 - a command is never emitted with an empty list; long lists are split into batches (8000 characters per command line);
 - a runner that cannot express a list safely (a file name with glob characters for Mocha, AVA or `node --test`) falls
   back to a whole-project command, with a note.
@@ -145,6 +147,7 @@ The per-runner command shapes are in the [ecosystem pages](README.md#ecosystems)
 ```sh
 $ bgraph command --base origin/main
 # scope: graph
+# vitest: the argument is a substring of the path, so a.test.ts also matches aa.test.ts (over-selection, safe)
 cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
 ```
 
@@ -226,7 +229,7 @@ Runs test units with a dependency collector and stores the records of the [dynam
 | `--json` | off | print the summary as JSON |
 | `--quiet` | off | no per-unit progress |
 
-The summary lists units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
+The summary lists the commit, units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
 toolchain addons accepted (Node) and the incomplete reasons. Exit code `0` even when some units failed or are incomplete.
 
 ## `dynamic`

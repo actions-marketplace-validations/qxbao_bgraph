@@ -22,7 +22,7 @@ ecosystem's tests.
 | `package-lock.json`, `lockfileVersion` 2 and 3 | Node | L2 | the `packages` section is read; version 1 stays at L0 |
 | `Cargo.lock`, version 3 and 4 | Rust | L1 | no L2: units are whole Cargo targets |
 | `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb` | Node | L0 | |
-| `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock*.toml`, `requirements*.txt` / `.in`, `constraints*.txt` | Python | L0 | scope: the file's Python project |
+| `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files (`requirements*.txt` / `.in`, `constraints*.txt` / `.in`, `*-requirements.txt`, `*_requirements.txt`, any `.txt` / `.in` in a `requirements/` or `reqs/` directory) | Python | L0 | scope: the file's Python project |
 | `go.sum` | Go | L0 | scope: the module; `vendor/` changes widen their module too |
 | `packages.lock.json` | .NET | L0 | scope: the lockfile's directory |
 
@@ -71,14 +71,17 @@ The detail of the widening says `lockfile at level L0 (<why>)`.
 
 At L2, a Node import of an external package becomes an edge to a virtual node `<npm:package>`. For a project whose
 closure changed, only the tests that (transitively) import a **direct dependency whose own closure changed** are
-selected; a transitive change under an imported direct dependency narrows to that dependency's importers. Jest root mocks
-keep the edge to the real package (`jest.requireActual`).
+selected; a transitive change under an imported direct dependency narrows to that dependency's importers. Such a
+narrowed `lock_changed` widening has tier `graph`. Jest root mocks keep the edge to the real package
+(`jest.requireActual`).
 
 L2 falls back to L1 for the project when any of these holds:
 
+- the project was added to or removed from the lockfile, or no direct dependency carries the change;
 - a changed direct dependency is a local or workspace package, or a direct dependency was added or removed;
-- a changed package runs install scripts, or the format does not record install scripts (pnpm 9.0);
-- a changed package has peer dependencies;
+- a package that changed anywhere in the project's closure runs install scripts, or the format does not record install
+  scripts (pnpm 9.0);
+- a package that changed anywhere in the project's closure has peer dependencies;
 - a changed package installs executables named in a `package.json` script or a runner config, or whose names the
   lockfile does not record;
 - the dependency is a runner, transpiler, bundler, plugin, preset or type package (`@types/*`, `jest`, `vitest`,

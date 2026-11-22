@@ -41,9 +41,10 @@ command is never run.
   non-package sub-directories: `testdata/`, `fixtures/`, `_tools/`, `.x/`, and `.go` files there (programs a test may build).
 - Files of a module that no package owns (for example `config/` under a module without a root package) are **module-level**: every
   package of the module depends on them.
-- Not inputs: documentation (`*.md`, `*.markdown`, `*.rst`, `*.adoc`) directly in a package directory or outside every package
-  (documentation under `testdata/` or another non-package sub-directory is data), licence files and `.gitignore`,
-  `.golangci.{yml,yaml,toml,json}`, and the module's own `go.mod`, `go.sum`, `go.work`, `go.work.sum`.
+- Not inputs: documentation (`*.md`, `*.markdown`, `*.rst`, `*.adoc`), `.gitignore` and the repo-root licence files
+  (`LICENSE*`, `COPYING*`, `NOTICE*`) when they lie directly in a package directory or outside every package (under `testdata/`
+  or another non-package sub-directory they are data); `.golangci.{yml,yaml,toml,json}` anywhere; and `go.mod`, `go.sum`,
+  `go.work`, `go.work.sum` in a module or `go.work` directory (classified on change, see below).
 - **Other ecosystems' sub-trees**: a directory holding another ecosystem's project manifest (`package.json`, `pyproject.toml`,
   `setup.py`, `setup.cfg`, `Cargo.toml`, `pom.xml`, `build.gradle(.kts)`, `settings.gradle(.kts)`, `*.csproj`/`*.fsproj`/`*.vbproj`)
   and no `.go` file anywhere below it is not owned by Go. A frontend change under a root `go.mod` therefore selects no Go unit.
@@ -64,7 +65,8 @@ and their imports).
 
 The **library** of a package depends on:
 
-- every non-test file directly in its directory, whatever the extension (`.go`, `.s`, `.c`, `.h`, `.syso`, data);
+- every non-test file directly in its directory, whatever the extension (`.go`, `.s`, `.c`, `.h`, `.syso`, data), except the
+  non-inputs listed under [File ownership](#file-ownership);
 - the files of its non-package sub-directories (`testdata/`, `fixtures/`, `_x/`, `.x/`), and the in-repo packages that `.go`
   programs there import;
 - the packages its non-test `.go` files import;
@@ -135,7 +137,8 @@ union of every configuration.
 | `//go:embed` directive that does not parse | no widening | the package depends on its whole directory tree |
 
 A `.go` file under `testdata/` that does not parse is test data, not an uncertain file: it selects its owner when it changes. A
-change in another module never fires these. See [architecture](../architecture.md) for how unresolved imports fire.
+change outside the module directories named in the table never fires these (a module nested inside one of them does, see
+[Known gaps](#known-gaps-and-over-selection)). See [architecture](../architecture.md) for how unresolved imports fire.
 
 ## Running the selection
 
@@ -151,7 +154,8 @@ cd tools && go test .
 ```
 
 - `.` is the module's root package; other packages are `./<rel>`.
-- `go test` has no argument file: a list longer than about 8000 characters is split into batches, each its own command.
+- `go test` has no argument file: a command line longer than 8000 characters is split into batches, each its own command
+  (with a note that exit codes must be merged).
 - A unit whose ID cannot be parsed or lies outside its module directory runs the whole module: `go test ./...`.
 
 See [cli](../cli.md) for the command's options and JSON output.
