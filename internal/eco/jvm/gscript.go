@@ -104,8 +104,12 @@ func headScope(head []token) (sc scopeInfo, cross string, ok bool) {
 				return scopeInfo{kind: scopeBuild}, "", true
 			}
 			return scopeInfo{kind: scopeSub}, "", true
-		case "beforeProject", "afterProject", "projectsEvaluated":
+		case "beforeProject", "afterProject", "projectsEvaluated", "projectsLoaded":
 			return scopeInfo{kind: scopeBuild}, t.text, true
+		case "rootProject":
+			if i+1 == len(head) {
+				return scopeInfo{kind: scopeProject, arg: ":"}, "", true // rootProject { } / gradle.rootProject { }
+			}
 		case "configure":
 			if i+1 < len(head) && isPunct(head[i+1], "(") {
 				sawConfigure = true

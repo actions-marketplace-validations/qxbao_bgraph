@@ -426,7 +426,14 @@ func (m *gradleModel) analyze(b *builder) []*unit {
 		}
 		for _, pr := range gb.order {
 			if pr.script != "" {
-				m.scriptEdges(b, gb, pr, pr.script, byProj, 0)
+				m.scriptEdges(b, gb, pr, pr.script, byProj, 0, false)
+			}
+		}
+		// Settings scripts can configure projects too (gradle.allprojects { }, gradle.beforeProject { }, gradle.rootProject { }):
+		// the references inside those blocks are dependencies of the configured projects.
+		if root := gb.projects[":"]; root != nil {
+			for _, s := range gb.scripts {
+				m.scriptEdges(b, gb, root, s, byProj, 0, true)
 			}
 		}
 		m.pluginEdges(b, gb, byProj)
@@ -551,8 +558,10 @@ func (m *gradleModel) ownDirs() map[string]bool {
 	return dirs
 }
 
-// scriptEdges adds the dependency edges declared by script (of project pr) and, recursively, by the scripts it applies.
-func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script string, byProj map[*gproj]*unit, depth int) {
+// scriptEdges adds the dependency edges declared by script (of project pr) and, recursively, by the scripts it applies. settings:
+// script is a settings script, whose top-level references are project descriptors (include, projectDir), not dependencies: only
+// the references inside blocks that configure projects count.
+func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script string, byProj map[*gproj]*unit, depth int, settings bool) {
 	sr := m.scriptRefs(script)
 	targets := func(sc scopeInfo) []*gproj {
 		switch sc.kind {
@@ -583,8 +592,11 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 			}
 		}
 	}
-	// Projects configured by this script depend on it (it is a file of the project that owns it).
+	// Projects configured by this script depend on it (it is a file of the project that owns it; a settings script widens).
 	for _, sc := range sr.configures {
+		if settings {
+			break
+		}
 		for _, q := range targets(sc) {
 			if qu := byProj[q]; qu != nil && q != pr {
 				b.edge(qu.node, script, model.EdgeInclude, "configured by "+script)
@@ -592,6 +604,9 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 		}
 	}
 	for _, r := range sr.refs {
+		if settings && (r.sc.kind == scopeSelf || r.kind == refApply) {
+			continue
+		}
 		switch r.kind {
 		case refPath:
 			ts := gb.lookup(r.val, pr)
@@ -658,7 +673,7 @@ func (m *gradleModel) scriptEdges(b *builder, gb *gbuild, pr *gproj, script stri
 				b.edge(pu.node, full, model.EdgeInclude, "apply from "+r.val)
 			}
 			if depth < 3 {
-				m.scriptEdges(b, gb, pr, full, byProj, depth+1)
+				m.scriptEdges(b, gb, pr, full, byProj, depth+1, false)
 			}
 		}
 	}

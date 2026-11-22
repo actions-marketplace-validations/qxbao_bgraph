@@ -1,0 +1,22 @@
+A settings script that adds a project dependency to every project (gradle.allprojects { }): a change in that project selects the others.
+-- base/settings.gradle.kts --
+include(":testutil", ":app")
+gradle.allprojects {
+    pluginManager.withPlugin("java") {
+        dependencies { "testImplementation"(project(":testutil")) }
+    }
+}
+-- base/app/build.gradle.kts --
+plugins { java }
+-- base/app/src/test/java/AppTest.java --
+class AppTest {}
+-- base/testutil/build.gradle.kts --
+plugins { java }
+-- base/testutil/src/main/java/T.java --
+class T {}
+-- head/testutil/src/main/java/T.java --
+class T { int a; }
+-- want --
+notfull
+select gradle::testutil
+select gradle::app
