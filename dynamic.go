@@ -93,9 +93,13 @@ func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input,
 		changes := make([]dynamic.Change, 0, len(res.Changes))
 		for _, c := range res.Changes {
 			roles := c.Roles[eco]
+			other := false
+			for _, r := range c.Roles {
+				other = other || r[0] != "" || r[1] != ""
+			}
 			changes = append(changes, dynamic.Change{Path: c.Path, Status: c.Status, OldMode: c.OldMode, NewMode: c.NewMode,
 				BaseRole: roles[0], HeadRole: roles[1], Global: c.Global, Claimed: len(c.Claimed) > 0,
-				Declared: dynamic.Declared(in.Rules, c.Path)})
+				Declared: dynamic.Declared(in.Rules, c.Path), Rule: c.Rule, Referenced: c.Dependents, OtherRole: other})
 		}
 		if why := dynamic.Guard(sel, changes, eco); why != "" {
 			sel = dynamic.Skip(sel, eco, why)

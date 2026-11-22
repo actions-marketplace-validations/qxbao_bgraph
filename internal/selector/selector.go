@@ -68,6 +68,8 @@ type ChangeInfo struct {
 	Claimed []string
 	// Rule: a bgraph.toml [[rule]] matched the file.
 	Rule bool
+	// Dependents: some file of the graph depends on it (a direct or glob edge points to it).
+	Dependents bool
 }
 
 // Result is Select's output together with the details the dynamic layer needs.
@@ -146,7 +148,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	g := graph.Build(all...)
 	info := make(map[string]*ChangeInfo, len(changed))
 	for _, c := range changed {
-		ci := &ChangeInfo{Changed: c, Roles: map[string][2]model.Role{}}
+		ci := &ChangeInfo{Changed: c, Roles: map[string][2]model.Role{}, Dependents: g.HasDependents(c.Path)}
 		for i, e := range in.Ecos {
 			ci.Roles[e.Name()] = [2]model.Role{all[2*i].Roles[c.Path], all[2*i+1].Roles[c.Path]}
 		}

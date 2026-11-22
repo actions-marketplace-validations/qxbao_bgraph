@@ -443,3 +443,56 @@ func TestFingerprint(t *testing.T) {
 		}
 	}
 }
+
+func docChange(p string) Change {
+	return Change{Path: p, Status: 'M', OldMode: "100644", NewMode: "100644"}
+}
+
+// docs/dynamic.md §2: a modified, unreferenced documentation file next to a modified .py file allows narrowing, and still counts
+// as a changed file for the per-unit check.
+func TestGuardDocFile(t *testing.T) {
+	sel, ch := fixture(mod("pkg/a.py"), docChange("CHANGES.rst"), docChange("docs/usage.md"))
+	out := Narrow(sel, ch, params(goodRecords()...))
+	if got := narrowed(out); !slices.Equal(got, []string{"tests/test_b.py"}) {
+		t.Fatalf("narrowed %v, warnings %+v", got, out.Warnings)
+	}
+	// A unit whose record lists the doc file is kept.
+	recs := goodRecords()
+	recs[1].Deps["CHANGES.rst"] = "ocl"
+	base["CHANGES.rst"] = "ocl"
+	defer delete(base, "CHANGES.rst")
+	out = Narrow(sel, ch, params(recs...))
+	if len(out.Narrowed) != 0 {
+		t.Fatalf("doc dependency ignored: narrowed %v", narrowed(out))
+	}
+	for _, tt := range out.Tests {
+		if tt.Unit == "tests/test_b.py" && !strings.Contains(tt.Dynamic, "CHANGES.rst") {
+			t.Errorf("note %q", tt.Dynamic)
+		}
+	}
+	// Doc files that are referenced, named by bgraph.toml, claimed, given a role, global or not modified still block.
+	for name, f := range map[string]func(c *Change){
+		"referenced":   func(c *Change) { c.Referenced = true },
+		"rule":         func(c *Change) { c.Rule = true },
+		"declared":     func(c *Change) { c.Declared = true },
+		"claimed":      func(c *Change) { c.Claimed = true },
+		"other role":   func(c *Change) { c.OtherRole = true },
+		"eco role":     func(c *Change) { c.BaseRole, c.HeadRole = model.RoleData, model.RoleData },
+		"global":       func(c *Change) { c.Global = true },
+		"added":        func(c *Change) { c.Status, c.OldMode = 'A', "" },
+		"deleted":      func(c *Change) { c.Status, c.NewMode = 'D', "" },
+		"mode changed": func(c *Change) { c.NewMode = "100755" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := docChange("README.md")
+			f(&d)
+			sel, ch := fixture(mod("pkg/a.py"), d)
+			assertSkipped(t, Narrow(sel, ch, params(goodRecords()...)))
+		})
+	}
+	// Not documentation: a JSON data file or a YAML config is still refused.
+	for _, p := range []string{"tests/data/x.json", ".pre-commit-config.yaml", "uv.lock"} {
+		sel, ch := fixture(mod("pkg/a.py"), docChange(p))
+		assertSkipped(t, Narrow(sel, ch, params(goodRecords()...)))
+	}
+}

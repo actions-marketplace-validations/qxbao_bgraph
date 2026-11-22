@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/qxbao/bgraph/internal/classify"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
 )
@@ -19,6 +20,9 @@ type Change struct {
 	Global             bool // matched the built-in global widening table
 	Claimed            bool // some ecosystem's ClassifyChange claimed it (manifest, config, lockfile, native source...)
 	Declared           bool // named by a bgraph.toml [[config]] or [[dynamic]] declaration (see Declared)
+	Rule               bool // a bgraph.toml [[rule]] matches it
+	Referenced         bool // a graph edge (direct or glob) points to it
+	OtherRole          bool // some ecosystem (any) gives it a role in the base or head analysis
 }
 
 // Params is everything Narrow needs besides the selection and the changes.
@@ -86,7 +90,9 @@ func Guard(sel model.Selection, changes []Change, eco string) string {
 		case c.NewMode != "100644" && c.NewMode != "100755":
 			why = "mode " + c.NewMode + " is not a regular file"
 		case !isSource(c.Path):
-			why = "not a " + eco + " source file the collector observes"
+			if !docFile(c) {
+				why = "not a " + eco + " source file the collector observes, nor an unreferenced documentation file"
+			}
 		case !isSourceRole(c.BaseRole) || !isSourceRole(c.HeadRole):
 			why = fmt.Sprintf("role %s/%s at base/head is not source or test", roleName(c.BaseRole), roleName(c.HeadRole))
 		case c.Global:
@@ -101,6 +107,14 @@ func Guard(sel model.Selection, changes []Change, eco string) string {
 		}
 	}
 	return ""
+}
+
+// docFile: a modified documentation or harmless file (classify.Doc / classify.Harmless) that nothing in the graph references, that
+// no ecosystem gives a role, and that no bgraph.toml entry names (docs/dynamic.md §2). Tests can only see it by reading it, which
+// the collector observes: like a source file, it stays a changed file for the per-unit check.
+func docFile(c Change) bool {
+	return (classify.Doc(c.Path) || classify.Harmless(c.Path)) && !c.Referenced && !c.OtherRole && !c.Rule && !c.Declared &&
+		!c.Global && !c.Claimed && c.BaseRole == "" && c.HeadRole == ""
 }
 
 func isSourceRole(r model.Role) bool { return r == model.RoleSource || r == model.RoleTest }

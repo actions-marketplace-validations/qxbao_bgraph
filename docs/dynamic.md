@@ -47,6 +47,16 @@ Narrowing is skipped for the whole selection (with a `dynamic_skipped` note givi
 
 and no widening of the selection has a reason from the global table (`classify` global categories) or tier full.
 
+Decision (2026-11-22, Phase 6 evaluation): a changed file may also be a **documentation or harmless file** (`classify.Doc` /
+`classify.Harmless`: `*.md`, `*.rst`, `*.adoc`, CHANGES/LICENSE-style files, `docs/...`) when it is status M with an unchanged
+regular-file mode, no graph edge (direct or glob) points to it, no ecosystem gives it a role in either tree, no ecosystem claims
+it, it is not in the global table, and no `[[config]]`, `[[dynamic]]` or `[[rule]]` names it. It stays a changed file for the
+per-unit check: a unit whose record lists it as a dependency is kept. In the replay, 70–85 % of the widened commits were refused
+because a changelog or doc file changed next to the `.py` files. Residual risk, the same as for `.py` files and accepted with
+it: a test that sees the file only through native code (an extension module or ctypes under `trust_native_env`), a subprocess
+(already incomplete) or `os.stat` alone (size/mtime, not audited) is not observed. Doc files that are themselves test items
+(`--doctest-glob`) are covered by the static layer's directory unit, which is precise and never removed.
+
 Rationale (plan §4.5): the collector only observes reads of files that exist; additions can shadow modules (negative dependencies), deletions
 and config changes alter loading itself.
 

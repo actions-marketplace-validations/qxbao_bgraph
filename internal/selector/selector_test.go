@@ -62,7 +62,7 @@ func TestWidenedTag(t *testing.T) {
 		t.Fatalf("changes: %+v", res.Changes)
 	}
 	c := res.Changes[0]
-	if c.Path != "pkg/a.py" || c.Roles[python.Name] != [2]model.Role{model.RoleSource, model.RoleSource} || c.Global || c.Rule || len(c.Claimed) > 0 {
+	if c.Path != "pkg/a.py" || c.Roles[python.Name] != [2]model.Role{model.RoleSource, model.RoleSource} || c.Global || c.Rule || len(c.Claimed) > 0 || !c.Dependents {
 		t.Errorf("change info: %+v", c)
 	}
 }

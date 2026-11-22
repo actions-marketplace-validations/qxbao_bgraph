@@ -172,6 +172,19 @@ func TestDynamicWiring(t *testing.T) {
 		t.Fatalf("stale record used: %+v", s.Tests)
 	}
 
+	// An unreferenced documentation file changed with the source does not prevent narrowing (docs/dynamic.md §2).
+	write("CHANGES.md", "# changes\n")
+	git("add", "CHANGES.md")
+	git("commit", "-q", "-m", "changes")
+	write("pkg/b.py", "Y = 1\n")
+	git("add", "pkg/b.py")
+	git("commit", "-q", "-m", "b back")
+	write("CHANGES.md", "# changes\n- a\n")
+	if s := sel(DynamicOn); len(s.Narrowed) != 2 {
+		t.Fatalf("doc file blocked narrowing: %+v", s.Warnings)
+	}
+	git("checkout", "-q", "--", "CHANGES.md")
+
 	// Guard: an added Python file forbids narrowing for the whole selection.
 	write("pkg/new.py", "")
 	if s := sel(DynamicOn); len(s.Narrowed) != 0 || !hasSkip(s, "pkg/new.py") {
