@@ -463,3 +463,200 @@ Protocol (as §7; one repo at a time, `--jobs` bounded, free memory checked betw
 | stat callers | hono: vite (package.json, `.env*` lookups), vitest (project dirs); dayjs: jest-haste-map, jest-resolve, jest-runtime, @babel/core, browserslist; express: locate-path (`.mocharc*`), mocha — no repository-code stat |
 | real repos | hono `src/hono.test.ts`: 37 source files, no unobserved spawn but `net use`; dayjs `test/locale/keys.test.js` lists `src/locale` and loads all 143 locales (a repository listing), `display.test.js` loads only its locales; express `test/acceptance/route-map.js`: `examples/route-map/index.js` + 6 `lib/` files; immutable-js `flatten.ts`: the preprocessor's `make-synchronous` child runs rollup + TypeScript over every `src/` and `__tests__/` file |
 | overhead | median of 5, collector vs none: hono one file 1.80 s → 2.09 s; dayjs `display.test.js` (`--no-cache`) 5.1 s → 7.2 s (noisy) |
+
+## 9. JVM and .NET: per-test-class narrowing (design draft, Phase 7)
+
+Status: design and feasibility only (2026-11-23); nothing implemented. Prototype outside the repository
+(`D:\bench\dynclass-proto`); measurements in `research/phase-7-20261122/dyn-class.md`. Sections 3 and 6 apply with the
+changes below; this section replaces §1, §2, §4 and §5 for the JVM and .NET.
+
+### 9.1 What is narrowed
+
+The static JVM/.NET unit is the Maven module / Gradle project / MSBuild project (plan §6.4, §6.5); a change to a module's own
+sources reaches it through **precise** edges. Unlike §1, the class layer therefore narrows *precise* units, inside the unit:
+a selected unit U may run only the test classes K(U) instead of all of them. The "widened" set is U's test classes beyond
+what static analysis can attribute, i.e. all of them.
+
+```text
+K(U) = { C ∈ Classes(U) : no usable record(C)  OR  Dep(C) ∩ Changed ≠ ∅ }  ∪  Declared(Changed ∩ TestRoots(U))
+```
+
+- Sub-unit ID `<unit ID>#<class>`: JVM binary name of a top-level class (`maven:gson#com.google.gson.GsonTest`), .NET
+  reflection full name (`dotnet:test/X/X.csproj#Ns.Class`, nested `Ns.Outer+Inner`). Nested JVM classes run with their outer
+  class.
+- `Classes(U)` comes from a **class-list record** of U (the classes the runner reported in the recording session) whose `Deps`
+  are every file under U's test source roots with its blob OID. It is usable only if all of them are unchanged at the base;
+  otherwise U is not narrowed (a class added since the recording would never run).
+- `Declared`: a changed test-root file may declare a new class (a second top-level type, a new nested class). Its top-level
+  types at head are extracted lexically and always kept; extraction failure → U is not narrowed.
+- **Compilation is never narrowed**: every unit the static layer selected is still built, even when K(U) is empty. Compile-only
+  effects (signature changes, `InternalsVisibleTo`) are then caught by the build.
+- Units without class-level support (Groovy/Scala sources, F#/VB, Microsoft.Testing.Platform projects in v1, whole-project
+  units) stay whole.
+
+### 9.2 Guards
+
+Per selection, as §2: every changed file has status M and an unchanged regular mode; global or full widenings refuse. Then each
+changed file must be one of:
+
+1. **A code file in a compiled source root** of a unit at base and head. JVM: `.java`/`.kt` under the default or literal
+   declared main/test roots (`src/{main,test}/{java,kotlin}`, Kotlin MPP `src/*{Main,Test}/kotlin`, POM
+   `<sourceDirectory>`/`<testSourceDirectory>`). Not: templates (`src/main/java-templates`, filtered), `module-info.java`,
+   generated-source directories, build scripts (`*.gradle.kts`), `buildSrc/`/`build-logic/`/included-build sources.
+   .NET: `.cs` compiled into a project (SDK glob minus `bin/`/`obj/`, literal `Compile` items). Not `.razor`, `.xaml`, `.resx`,
+   `.tt`, F#/VB.
+2. **A documentation file** under §2's rule — **JVM only** (the JVM collector observes reads; the .NET one cannot, §9.5).
+
+Anything else — resources, test data, `.proto`, `META-INF/services`, build files, props/targets, configurations — **refuses class
+narrowing for the whole selection** (plan §6.4 "a changed non-code file → whole module", widened to the selection because a
+resource of module A reaches the tests of every downstream module through the classpath, as a jar read the collector cannot
+attribute to an entry). Modules using Lombok (on the compile or processor path, or with a `lombok.config`) are never narrowed:
+Lombok rewrites declarations (it can create constants) where the lexical guard below cannot see them.
+
+**Declaration guard.** Compile-time inlining copies information into other class files without a run-time reference: a test
+using `A.CONST` never loads A (reproduced on gson and Polly, §9.7). Per changed code file:
+
+- **Java, constant guard**: the multiset of *constant-capable* member declarations is unchanged between base and head:
+  non-private fields that are `final` (or any field of an interface/annotation type) with an initializer and a primitive or
+  `String` type (JLS §4.12.4). Private constants are inlined only into classes of the same file, which map to the same source.
+  Method bodies, signatures, imports, annotations and enum constants (Java enums are objects; switch maps load the enum) are
+  free: whatever uses them loads the declaring class.
+- **Kotlin**: `const val` declarations under the same rule. `inline` function/property bodies are covered by the collector
+  (SMAP, §9.5); fallback if that coverage fails verification: refuse when a changed line is inside an `inline` declaration.
+- **C#, body-only guard**: the file's skeleton (tokens without comments, with every method/constructor/accessor/operator body
+  and expression body elided) is unchanged. Stricter than Java because the .NET collector records executed methods, not loaded
+  types (§9.5): a skeleton change (field, attribute, `const`, enum member, default parameter value, signature, `using`) could
+  matter to a test that never runs a method of the file. A file that declares no type (assembly attributes, `global using`)
+  always fails.
+
+Rejected alternative for Java: adding every `CONSTANT_Class` entry of every loaded class to the record. javac ≥ 9 leaves the
+owner class of each inlined constant in the constant pool (also for static imports, case labels, annotation values), so it is
+sound for javac, but it costs selectivity on every narrowing (gson: mean share of classes per changed main file 0.51 → 0.65)
+while the constant guard costs 4 of 143 code-only commits. Restricting it to "dangling" Class entries is not sound (the owner
+may also be named by an unexecuted Fieldref). Possible later refinement: on a constant change, keep the classes whose loaded
+classes' constant pools name a class of the changed file, instead of refusing.
+
+### 9.3 Records and fingerprint
+
+`Record` per sub-unit as §3 (`Deps` = tracked file → blob OID, `Complete`, `Pass`, `Env`; collector IDs `jvm-agent-1`,
+`dotnet-eventpipe-1`), plus the class-list record of §9.1. A class's record is the union over every runner execution that ran
+it (gson's second surefire execution runs `JavaTimeTest` again with another `argLine`). `Pass` = every test of the class passed
+in the isolated run; classes that fail alone (gson `ReflectionAccessTest` passes in the shared JVM and fails in a fresh one: an
+order dependency) are never narrowed. A record that loaded a class compiled from a generated source (`target/generated-sources`,
+`build/generated`, `obj/`) is kept on every change; a loaded repository class that maps to no tracked source makes the record
+incomplete.
+
+Fingerprint (§5 counterpart, computed at selection time without running the build): the JDK of the build (its `release` file)
+or the .NET SDK and the runtime selected for the TFM (roll-forward included); the build-tool version (Maven wrapper or `mvn -v`,
+Gradle wrapper properties); a digest of every build-definition file (POMs, `.mvn/**`, Gradle scripts/settings/properties/
+catalogs, buildSrc/build-logic, `*.csproj`/props/targets/`Directory.Packages.props`/`global.json`/`nuget.config`,
+`*.runsettings`, `xunit.runner.json`); for .NET also the restored state (`obj/project.assets.json` of each test project, the
+analogue of Node's installed tree). SNAPSHOT or version-range external dependencies can change without a file change; v1
+refuses builds whose POM/Gradle text shows them.
+
+### 9.4 Isolation and recording commands
+
+One fresh JVM / testhost per test class; the record is everything that process loaded:
+
+| build | recording command | notes |
+|---|---|---|
+| Maven | `mvn test -DforkCount=N -DreuseForks=false` (whole reactor, the lifecycle phase as CI runs it), agent through `JAVA_TOOL_OPTIONS=-javaagent:...` | `-DargLine` cannot inject the agent: a plugin `<argLine>` wins (gson sets one). POM-level `<forkCount>`/`<reuseForks>` also win over `-D`; detected by the per-fork check below |
+| Gradle | `gradlew test -I bgraph-record.gradle`; the init script sets `forkEvery = 1`, `maxParallelForks = N` and `jvmArgs("-javaagent:...")` on every `Test` task | no environment variable, the daemon is not instrumented |
+| dotnet (VSTest) | `dotnet test <proj> --no-build --filter "FullyQualifiedName~Ns.Class." -- xUnit.PreEnumerateTheories=false` per class, parallel jobs, `VSTEST_TESTHOST_SHUTDOWN_TIMEOUT=20000` | `~Ns.Class.` also matches `Other.Ns.Class.` (superset, sound); without the timeout the testhost is killed and its trace truncated; with theory pre-enumeration xUnit discovery runs the data methods of every theory of the assembly |
+
+Fork attribution (JVM): the test class of a fork is the first class defined from a test output directory (`target/test-classes`,
+`build/classes/*/test`); the runner loads it by name before anything else of the test tree. Cross-check per module: every class
+the runner reported has exactly one fork per execution and every fork exactly one class, else the module's records are
+incomplete. The check caught a real loss in the prototype: Windows reused a PID among 121 short-lived forks and a `<pid>.log` was
+overwritten (log names need a nonce).
+
+### 9.5 Collectors
+
+**JVM agent** (Java, embedded jar; one log per JVM; the build tool's own JVMs skipped by main class):
+
+- *Class loading*: a `ClassFileTransformer` that never transforms sees every class defined from bytes with its code source;
+  `SourceFile` and the SMAP `*F` section (Kotlin inlining: file name + class) are read from those bytes. At exit,
+  `Instrumentation.getAllLoadedClasses()` cross-checks: a non-hidden application class the hook never saw → incomplete.
+  Reflection, `Class.forName`, `ServiceLoader` and enum switch maps all end in class loading.
+- *Class → source*: (package of the class, `SourceFile`) looked up in an index of tracked `.java`/`.kt` files keyed by their
+  `package` declaration (Kotlin files need not sit in their package directory) and file name. This covers nested, anonymous and
+  lambda-host classes, Kotlin file facades (`FooKt` → `Foo.kt`, `-Foo.kt` → `_FooKt`) and several top-level classes per file.
+  Several candidates → all of them. SMAP entries map the same way (inline bodies from files whose classes were never loaded);
+  classes from reactor jars (`target/*.jar`, local-repository artifacts of reactor modules) too.
+- *Files*: JFR `jdk.FileRead`/`jdk.FileWrite` with threshold 0 and stack traces, started in `premain`, dumped by JFR's own exit
+  hook. Observed: `FileInputStream`, `RandomAccessFile`, `Files.readAllBytes/lines/newInputStream/newBufferedReader`,
+  `transferTo`, empty-file reads, class files read from directories. **Not observed**: `FileChannel.map` (mmap: content read
+  without any event), an open without a read, `Files.size/exists`, listings. Listings and metadata are the accepted §2/§8
+  residuals; mmap is not: the agent must instrument `sun.nio.ch.FileChannelImpl.map` (shaded ASM), otherwise the design is not
+  sound. Reads whose frames are all JDK/runner class-loader frames are class loading (already mapped); `.class` reads by
+  application frames map through `SourceFile`; a reactor jar read by application frames depends on every source of that module.
+- *Incomplete*: `jdk.ProcessStart` (a child JVM inherits the agent through `JAVA_TOOL_OPTIONS` and could be merged later, as in
+  §8.3), a native library (`jdk.NativeLibrary`, emitted at the end of the recording) outside the JDK and OS directories unless
+  `trust_native_env`, unmapped repository classes, missing logs, fork attribution failures, timeouts.
+
+**.NET collector**: EventPipe through environment variables only (`DOTNET_EnableEventPipe=1`,
+`DOTNET_EventPipeOutputPath=<dir>/trace_{pid}.nettrace`, `DOTNET_EventPipeConfig=Microsoft-Windows-DotNETRuntime:0x8000001018:5`:
+Loader, JIT, JIT tracing for inlinees, type diagnostics; plus `0x2000000000` for ReadyToRun entry points). Every .NET process of
+the run writes a trace; the testhost is the one that loaded the test assembly (restricting the variables to the testhost through
+runsettings `EnvironmentVariables` is the obvious cost saving).
+
+- *Dependencies*: methods JIT-compiled (`MethodLoadVerbose`) and inlined (`MethodJitInliningSucceeded`) in repository
+  assemblies, mapped to documents through the portable PDB (`MethodDebugInformation` and sequence points: partial classes,
+  async/iterator state machines and lambdas map to the file that holds the body; deterministic `/_/` paths resolved through the
+  source root). A method of a repository assembly without PDB information → incomplete; a document outside the repository
+  (`obj/`, source generators) → the generated rule of §9.3.
+- *Why not type loads*: `TypeLoad` is type-level complete, but xUnit discovery loads every test class and the types of their
+  members: in Polly every record contained all 124 test classes and 809–1141 Polly types, so every test-file change would keep
+  every class. Separating discovery from execution needs stack attribution (TraceLog symbol resolution), a possible v2 that
+  would allow the Java-style constant guard. Hence v1 = executed methods + the body-only guard: a body change matters only if
+  the method runs, and a running method of a repository assembly is JIT-compiled (not ReadyToRun; tier 0 does not inline;
+  inlinees are recorded anyway).
+- *Rejected*: coverlet (rewrites the binaries, same information as JIT events, slower); a CLR profiler (native code per
+  platform); `AssemblyLoad` (assembly = project, no narrowing).
+- *Infeasible*: **file reads**. EventPipe has no file I/O events (FileIO is a kernel ETW provider: administrator-only on
+  Windows, absent elsewhere) and a startup hook cannot intercept `FileStream` without a profiler or detours. Consequences: no
+  documentation-file exception for .NET; tests that read sources or assemblies as data (Roslyn analyzer/generator tests,
+  `PublicApiGenerator`/Mono.Cecil approval tests) are detected by loaded assemblies (`Microsoft.CodeAnalysis*`, `Mono.Cecil`,
+  `PublicApiGenerator`, `ICSharpCode.Decompiler`, `Verify*`) and made incomplete. `System.Reflection.Metadata` and
+  `System.Diagnostics.Process` cannot serve as signals (the testhost itself loads them). Child processes: the ReadyToRun
+  entry-point event of `System.Diagnostics.Process.Start` → incomplete. This residual is larger than the JVM's; .NET needs its
+  own §10.3 gate before it is enabled.
+
+### 9.6 Running a narrowed selection
+
+| build | argv | length limits |
+|---|---|---|
+| Maven | `mvn -pl S [-am] test -Dtest=<FQN,...> -Dsurefire.failIfNoSpecifiedTests=false`; units kept whole need a separate invocation (`-Dtest` applies to every module and overrides `includes`/`excludes`) | `mvn.cmd` runs through `cmd.exe` (8,191 chars): pass the list in `MAVEN_ARGS` (Maven ≥ 3.9; verified with 3.9.9) or `MAVEN_OPTS` (system property), both in the environment (32,767) |
+| Gradle | init script adding `filter.includeTestsMatching` per selected project, with `failOnNoMatchingTests = false` | no command-line growth |
+| dotnet | `dotnet test <proj> --filter "FullyQualifiedName~A.\|FullyQualifiedName~B."` | `dotnet.exe` is native (32,767): batch, or a runsettings `TestCaseFilter` |
+
+FQNs with dots work for surefire `-Dtest` (verified). Executions whose POM configuration fixes `<test>` (gson's `java-time-test`)
+ignore `-Dtest` and still run (a harmless superset). A narrowed run changes the set and order of classes in the shared JVM, so
+order-dependent classes may fail spuriously (false alarms, not misses); classes that fail in isolation are never narrowed.
+
+### 9.7 Prototype evidence (Windows 11, JDK 17/21, .NET SDK 10 running net8.0)
+
+| claim | observation |
+|---|---|
+| constant inlining, Java | an added `ConstProbeTest` asserting `JsonReader.DEFAULT_NESTING_LIMIT == 255` loads no `JsonReader`; changing the constant to 256 fails it; the constant guard refuses. Natural case: `GsonBuildConfigTest` uses `GsonBuildConfig.VERSION` from a filtered template in `src/main/java-templates` (refused as a non-code root) |
+| constant inlining, C# | `ChaosStrategyConstantsTests` records only its own file; `ChaosStrategyConstants` (const-only: no method, no PDB document) is never loaded; changing `DefaultInjectionRate` fails the test; both guards refuse |
+| javac constant-pool owners | javac 17 adds a `CONSTANT_Class` for the owner of every inlined constant (qualified name, static import, case label, annotation value, string concatenation) |
+| gson mapping | 120 classes, 120 forks, 0 unmapped classes; nested/anonymous classes map to their file; median 59 files per class |
+| moshi mapping (Gradle, Kotlin) | 25 classes, 0 unmapped; SMAP added a file not otherwise loaded 21 times (`-MoshiKotlinTypesExtensions.kt` inline functions in `KotlinExtensionsTest`) |
+| guard cost (500 first-parent commits) | gson: 143 code-only commits; constant guard passes 139, body-only 42. Polly: 37 code-only; constant guard 37, body-only 14 |
+| selectivity (mean share of a module's classes kept per changed file; static: 1.0) | gson main file 0.51 (median 0.68), gson test file 0.01; Polly.Core src file 0.09 (median 0.03), test file 0.01 |
+| recording cost | gson 15 s (suite) → 37 s (fresh fork per class, 4 forks) → 74 s with the agent; moshi 5 s → 18 s with the agent (4 forks); Polly.Core 8.5 s → 51 s isolated (124 `dotnet test`, 4 jobs) → 361 s traced and parsed; RestSharp 41 s → 45 s isolated → 51 s traced |
+
+### 9.8 Evaluation plan (gate, as §7)
+
+- **T2 hybrid** on the existing JVM/.NET T2 sets (gson, moshi, Polly, RestSharp): records at R; the oracle is the whole suite per
+  class, read from surefire/Gradle XML and trx reports (class verdicts, never the collector). Violations = red classes not in
+  K(U) (must be 0); report selected classes / classes, static vs hybrid, and mutants refused per guard. Add constant mutants
+  (flip a constant literal): the Phase 5 operator mutants never touch declarations.
+- **Replay**: 150 first-parent commits per repo with records fresh at each P (Phase 6 showed records made once at R0 go stale);
+  verification by running the removed classes at C.
+- **Fault injection**: one fixture per guard (resource, build file, template root, constant change, Kotlin `const val`, C#
+  skeleton change, Lombok module, a test class added inside a modified file), per incomplete reason (child process, native
+  library, unmapped class, mmap, missing fork log, attribution mismatch, truncated trace, assembly-reading libraries) and per
+  stale case (class-list drift, environment mismatch).
+- **Cost**: record time per repo and the CI recipe (record on main with N forks).
