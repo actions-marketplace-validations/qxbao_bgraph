@@ -35,8 +35,8 @@ type LockdiffOpts struct {
 	// PnpmConvert: a pnpm 9 command that rewrites a 6.x lockfile as 9.0 (install --lockfile-only --frozen-lockfile)
 	// before Pnpm lists it: pnpm list --lockfile-only exists only in pnpm 10, which cannot read 6.x.
 	PnpmConvert []string
-	Env     []string // extra environment for the tool
-	Log     func(string, ...any)
+	Env         []string // extra environment for the tool
+	Log         func(string, ...any)
 }
 
 // LockdiffMismatch: packages the tool reports for a project that our closure lacks.
