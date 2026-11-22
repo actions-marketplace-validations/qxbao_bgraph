@@ -201,7 +201,12 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # config, manifest or lockfile). It is not proven safe by research: enable it per
 # ecosystem after evaluating it on your repository. `bgraph affected --dynamic` enables it for one run.
 #
-#   ecosystems       : ecosystems to narrow: "python", "node".
+#   ecosystems       : ecosystems to narrow: "python", "node", "jvm". "jvm" is different (docs/dynamic.md §9): it narrows
+#                      the selected Maven modules / Gradle projects to the test classes whose recorded run (one fresh
+#                      test JVM per class with a java agent, `bgraph record --eco jvm`) reaches a changed file; the
+#                      modules are still built. Only when every changed file is a modified .java/.kt file of a compiled
+#                      source root (or a documentation file) and no constant, annotation default or Kotlin const val
+#                      changed; never with Lombok. JDK: JAVA_HOME, else java on PATH.
 #   python           : interpreter for `bgraph record` and the environment fingerprint ("python" on PATH by default;
 #                      a path with a separator is relative to the repo root, e.g. ".venv/Scripts/python.exe").
 #   node             : node executable for `bgraph record` and the Node fingerprint ("node" on PATH by default).

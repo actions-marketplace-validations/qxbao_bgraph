@@ -464,11 +464,13 @@ Protocol (as §7; one repo at a time, `--jobs` bounded, free memory checked betw
 | real repos | hono `src/hono.test.ts`: 37 source files, no unobserved spawn but `net use`; dayjs `test/locale/keys.test.js` lists `src/locale` and loads all 143 locales (a repository listing), `display.test.js` loads only its locales; express `test/acceptance/route-map.js`: `examples/route-map/index.js` + 6 `lib/` files; immutable-js `flatten.ts`: the preprocessor's `make-synchronous` child runs rollup + TypeScript over every `src/` and `__tests__/` file |
 | overhead | median of 5, collector vs none: hono one file 1.80 s → 2.09 s; dayjs `display.test.js` (`--no-cache`) 5.1 s → 7.2 s (noisy) |
 
-## 9. JVM and .NET: per-test-class narrowing (design draft, Phase 7)
+## 9. JVM and .NET: per-test-class narrowing (Phase 7)
 
-Status: design and feasibility only (2026-11-23); nothing implemented. Prototype outside the repository
-(`D:\bench\dynclass-proto`); measurements in `research/phase-7-20261122/dyn-class.md`. Sections 3 and 6 apply with the
-changes below; this section replaces §1, §2, §4 and §5 for the JVM and .NET.
+Status: **JVM implemented** (2026-11-23, `internal/dynamic/jvmdyn`, eco `jvm`, default off); **.NET not implemented** (§9.9).
+Sections 9.1–9.8 are the design as drafted; §9.9 records the lead decisions and the implementation where it differs or adds
+detail, and §9.10 the evaluation. Prototype outside the repository (`D:\bench\dynclass-proto`); feasibility measurements in
+`research/phase-7-20261122/dyn-class.md`, evaluation in `research/phase-7-20261122/dyn-jvm.md`. Sections 3 and 6 apply with
+the changes below; this section replaces §1, §2, §4 and §5 for the JVM.
 
 ### 9.1 What is narrowed
 
@@ -660,3 +662,109 @@ order-dependent classes may fail spuriously (false alarms, not misses); classes 
   library, unmapped class, mmap, missing fork log, attribution mismatch, truncated trace, assembly-reading libraries) and per
   stale case (class-list drift, environment mismatch).
 - **Cost**: record time per repo and the CI recipe (record on main with N forks).
+
+### 9.9 Decisions and implementation (2026-11-23)
+
+Lead decisions on the open points of the draft:
+
+1. **JVM only in v1. .NET is not implemented** (future work): EventPipe has no file-read events, so a .NET record cannot see
+   tests that read sources, assemblies or data files (no documentation-file exception, a residual larger than any accepted so
+   far), and xUnit discovery pollutes type loads, which forces the body-only guard: it passes only 38 % of Polly's and 29 % of
+   gson's code-only commits (constant guard: 100 % / 97 %). Re-open with stack-attributed type loads (TraceLog) or a
+   file-read source (a profiler, admin ETW).
+2. **Constant guard, lexical and fail-closed** (`ConstantGuard`, `guard.go`): a line diff (Myers) splits the change into hunks;
+   narrowing is refused when a hunk's base lines touch a guarded declaration of the base parse or its head lines one of the
+   head parse. Guarded (any visibility, private constants included: allowing them would need every class of the file to be
+   recorded consistently): Java `final` fields (static or instance) with an initializer whose type is primitive, boxed,
+   `String` or cannot be extracted (multi-declarator fields count as unknown); every field of an interface; every member of
+   an annotation type (element defaults); Kotlin `const val` (span extended to the next declaration line, over-approximated)
+   and `annotation class` headers and bodies. Kotlin `inline` functions are free: the collector maps the SMAP of the classes
+   they were inlined into (§9.5). Unicode escapes are translated first; a file that does not lex or place (unbalanced
+   brackets, unterminated literal or comment, an escape producing a line break, unexpected structure) refuses. Whitespace
+   inside a guarded span counts as a change.
+3. **Any changed non-code file refuses class narrowing for the whole selection**, except documentation files (JVM variant of
+   §2's rule: `classify.Doc`/`Harmless`, status M, no other ecosystem's role, JVM role data or none, not global, claimed,
+   declared or named by a `[[rule]]`; graph edges to it (every module depends on its files) do not matter because the
+   collector observes reads).
+4. **Lombok**: no narrowing when any build-definition file of the base or head tree mentions `lombok` or a `lombok.config`
+   exists (repository-wide: a Lombok module's changed file reaches the tests of every downstream module).
+5. **Collector**: as §9.5, with the mmap hook required (below); a JNI library outside the JDK (`java.home` of the fork) and the
+   OS directories (`%SystemRoot%`; `/lib`, `/usr/lib`...) makes the record incomplete, a repository one always; any child
+   process makes it incomplete; log names are `<pid>-<nanotime>-<random>`; a class needs exactly one log (several executions
+   or forks of one class: incomplete; gson's `JavaTimeTest`, run again by a second surefire execution, is never narrowed); a
+   class that fails in its isolated run is recorded with `Pass=false` (never narrowed).
+6. The class list is trusted only while the module's test roots are unchanged at the base (§9.1).
+7. Runner: Maven `-Dtest` through `MAVEN_ARGS`, Gradle filter init script (§9.6, below).
+
+Implementation (`internal/dynamic/jvmdyn`):
+
+- **Agent** (`agent/bgraph/agent/*.java`, embedded; compiled at record time with the build's JDK, `javac --release 11` +
+  `jar`, cached in the state directory per source hash and JDK release). Build-tool JVMs (Maven's classworlds launcher,
+  Gradle daemon/wrapper/launcher, Kotlin daemon) write nothing. Log lines: `start`, `jfr ok|fail`, `hook ok|fail`, `class`
+  (internal name, code source, SourceFile, SMAP `*F` entries; also classes without a code source), `unseen` (shutdown
+  cross-check), `mmap` (path, caller), `end`. JFR (`jdk.FileRead`/`FileWrite` threshold 0 with stacks, `jdk.ProcessStart`,
+  `jdk.NativeLibrary`) is dumped on exit to `<stem>.jfr` and read afterwards by the agent's `Dump` main (one JVM per batch of
+  files), which also reads the SourceFile/SMAP of every `.class` file a fork read.
+- **mmap hook**: `sun.nio.ch.FileChannelImpl.map` is retransformed by a minimal class-file rewriter (no ASM): an 8-byte
+  prologue (`aload_0; getfield path; invokestatic Hook.map; nop`, switch alignment preserved) with the exception table,
+  line/local tables and the first StackMapTable frame shifted; the agent jar is appended to the boot class path and
+  `java.base` made to read the hook's module. JFR is started first (its own instrumentation redefines `FileChannelImpl`),
+  then the hook is installed, self-tested by mapping 16 bytes of the agent jar, and re-inserted on any later redefinition.
+  Any failure: `hook fail`, every record of that JVM is incomplete. (Side effect: the JVM prints a CDS warning because the
+  boot class path was appended.) Observed on moshi: the KSP compile-testing test maps a module jar (the Kotlin compiler
+  reads jars through mmap) and is incomplete.
+- **Recording** (`bgraph record --eco jvm [--units GLOB] [--jobs N] [--build-args ARGS] [--keep-logs]`): one invocation per
+  build. Maven: `mvn -B -ntp -DforkCount=N -DreuseForks=false -Dmaven.test.failure.ignore=true -DfailIfNoTests=false
+  -Dsurefire.failIfNoSpecifiedTests=false [-pl <units> -am] test` with the agent in `JAVA_TOOL_OPTIONS` (paths must not
+  contain spaces). Gradle: `gradlew --console=plain --continue -I <init> test` (every project with a test task; explicit
+  `:p:test` when `--units` selects a subset); the init script sets `forkEvery = 1`, `maxParallelForks = N`, the agent in
+  `jvmArgs`, `ignoreFailures = true`, `outputs.upToDateWhen { false }` and `outputs.cacheIf { false }`. Default N =
+  min(4, CPUs/2). `--timeout` applies per build. Class verdicts come from the JUnit XML reports written during the run
+  (`target/surefire-reports`, `build/test-results`); the class is the **suite name** (testcase class names may name other
+  classes: guava-testlib testers in gson), cut at `$`.
+- **Mapping a fork**: the fork's test class is the first class defined from a test output directory
+  (`<m>/target/test-classes`, `<m>/build/classes/<lang>/<set with "test">`), which also gives the module. Every loaded class,
+  whatever its code source, is looked up by (package, SourceFile) in an index of tracked `.java`/`.kt` files keyed by their
+  `package` declaration (`PackageName`, lexical); SMAP entries by (package of the owning class, file name). A class with a
+  repository code source that maps to no file makes the record incomplete (generated sources: protobuf in gson's `proto`,
+  KSP adapters in moshi's codegen tests, proguard-renamed classes), except Kotlin's regenerated inline classes
+  (`Host$f$$inlined$g$1`, whose SourceFile is the library's), which map to the file of their host class. Reads: a tracked
+  file is a dependency; a `.class` maps through its SourceFile; a byte-identical copy of a tracked resource in a build output
+  (`target/classes`, `target/test-classes`, `build/resources/<set>`) maps to that resource; an archive built by a module
+  (`<m>/build/libs/*.jar`, `<m>/target/*.jar`; Gradle puts project dependencies on the test runtime class path as jars)
+  depends on every tracked file of that module's non-test source sets; any other archive, other build output or untracked
+  file makes the record incomplete; reads outside the repository are the environment.
+- **Records**: `<unit>#<class>` per top-level class (§9.1) and the class-list record `<unit>` (`Record.Classes`, `Deps` = every
+  file of the module's test roots). The class list is incomplete when the build failed (non-zero exit, timeout), when a fork
+  ran a class the runner did not report, or when the module has test sources but no reported class (tests skipped, reports
+  elsewhere): such a module is never narrowed.
+- **Fingerprint** (`jvm-agent-1`, `+trust-native` with `trust_native_env`): OS, arch, a digest of the JDK's `release` file
+  (`JAVA_HOME`, else `java` on PATH), the installed Maven/Gradle (core jar names under `MAVEN_HOME`/`GRADLE_HOME` or the
+  executable on PATH) when the repository has no wrapper, and the content of every build-definition file (POMs, `.mvn/**`,
+  Gradle scripts, settings, `gradle.properties`, version catalogs, wrapper properties, `buildSrc/**`, `build-logic/**`). Not
+  implemented: the refusal of builds with SNAPSHOT or version-range external dependencies (an external SNAPSHOT that changes
+  without a file change is a residual) and the local repository's content (`~/.m2`).
+- **Selection** (`Guard`, `Narrow`; wired in `applyDynamic` for eco `jvm`): the guards of §9.2 as decided above, plus: any
+  widening with eco `jvm` (build-definition changes) refuses. A selected unit gets `SelectedTest.ClassFilter` and `Classes`
+  (the kept classes, possibly none) and a `Dynamic` note; removed classes are `Narrowed` entries `<unit>#<class>`;
+  `IndexStats["narrowed_classes"]`. The scope never becomes `none` (the modules are still built).
+- **Runner** (`bgraph command`): Maven narrowed modules run in their own step-2 invocation `mvn -pl <mods>
+  -Dsurefire.failIfNoSpecifiedTests=false verify` with `MAVEN_ARGS=-Dtest=<C>,<C>$*,...` in `Command.Env` (printed as an
+  environment prefix); modules with no kept class are only built by step 1 (`install -DskipTests` compiles their tests).
+  Gradle: an init script in `--list-dir` adds `filter.includeTestsMatching` for each kept class and its nested classes with
+  `failOnNoMatchingTests = false`; modules with no kept class run `:p:testClasses`; without `--list-dir` the narrowed
+  projects run whole (noted).
+
+### 9.10 Evaluation (2026-11-23)
+
+Details in `research/phase-7-20261122/dyn-jvm.md`.
+
+- T2 hybrid on the Phase 5 JVM oracle (gson, moshi; 40 killed mutants): **0 violations** (339 red classes read from the class
+  oracle of the 29 mutants that narrowed a red unit, all kept); 33 mutants narrowed, 4 refused by the constant guard
+  (annotation defaults, Kotlin annotation classes); hybrid classes / module classes median 0.70 (gson) and 0.80 (moshi),
+  static 1.0.
+- Records (4 forks): gson 130 classes in 149 s (122 complete and passed), moshi 39 classes in 105 s (32), against a suite of
+  104–194 s.
+- Constant guard over 500 first-parent commits: gson 137 of 146 code-only commits pass, moshi 53 of 59.
+- Replay (gson, 10 code-only commits, fresh records at each parent): 9 narrowed, 1 refused by the constant guard, 0 misses
+  (383 removed classes run at their commit, all green); median classes run / module classes 0.70.
