@@ -110,3 +110,13 @@ func TestCLIUsage(t *testing.T) {
 		t.Fatal("wrong exit code")
 	}
 }
+
+func TestCLIDynamicUsage(t *testing.T) {
+	for _, args := range [][]string{{"dynamic"}, {"dynamic", "bogus"}, {"dynamic", "import"}, {"dynamic", "status", "x"},
+		{"affected", "--dynamic=maybe"}, {"record", "extra"}} {
+		var out, errb bytes.Buffer
+		if code := run(args, &out, &errb); code != 2 {
+			t.Errorf("%v: exit %d, want 2 (%s)", args, code, errb.String())
+		}
+	}
+}

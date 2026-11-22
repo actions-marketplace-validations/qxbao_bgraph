@@ -96,7 +96,7 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 // runDynamic implements `bgraph dynamic import FILE` and `bgraph dynamic status`.
 func runDynamic(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--python EXE] [--json]")
+		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--python EXE] [--trust-native-env] [--json]")
 		return 2
 	}
 	sub, rest := args[0], args[1:]
