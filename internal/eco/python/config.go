@@ -217,6 +217,7 @@ type pytestCfg struct {
 	pythonpath  []string
 	addopts     []string
 	doctest     bool
+	doctestGlob bool     // --doctest-glob in addopts: files matching the glob (README.rst...) are test items
 	plugins     []string // -p name from addopts
 	ignore      []string // --ignore paths, relative to dir
 	ignoreGlob  []string
@@ -402,6 +403,8 @@ func (c *pytestCfg) applyAddopts() {
 		switch {
 		case a == "--doctest-modules":
 			c.doctest = true
+		case a == "--doctest-glob" || strings.HasPrefix(a, "--doctest-glob="):
+			c.doctestGlob = true
 		case a == "-p" && i+1 < len(o):
 			i++
 			c.addPlugin(o[i])

@@ -1,0 +1,17 @@
+--doctest-glob in addopts makes matching files (README.rst) test items: the rootdir is a directory unit and a change to the
+README selects it.
+-- base/pytest.ini --
+[pytest]
+addopts = --doctest-glob="*.rst"
+-- base/pkg/__init__.py --
+-- base/README.rst --
+>>> 1 + 1
+2
+-- base/tests/test_a.py --
+import pkg
+-- head/README.rst --
+>>> 1 + 1
+3
+-- want --
+notfull
+select .

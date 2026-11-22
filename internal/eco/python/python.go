@@ -10,7 +10,7 @@
 // "whole project" unit. Projects driven by Django's runner (tests/runtests.py or manage.py, no pytest config) use Runner "django"
 // and the unittest pattern test*.py. A conftest.py that implements a pytest collection hook (pytest_collect_file,
 // pytest_collect_directory, pytest_pycollect_makemodule, pytest_ignore_collect), itself or through a repo plugin it loads, and
-// a repo -p / pytest11 plugin that does, make their scope directory a "directory unit" (ID and Files = the directory; pytest
+// a repo -p / pytest11 plugin that does, and --doctest-glob in addopts, make their scope directory a "directory unit" (ID and Files = the directory; pytest
 // collects every item below it), because files that are not test_*.py modules may be test items there (see collect.go).
 //
 // # Graph (From depends on To)
@@ -377,7 +377,14 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		rootdirs = append(rootdirs, d)
 	}
 	sort.Strings(rootdirs)
-	for _, d := range b.collectHookDirs(conftests, epFiles, cfgPlugins, rootdirs) {
+	hookDirs := b.collectHookDirs(conftests, epFiles, cfgPlugins, rootdirs)
+	for _, c := range b.cfgAt {
+		if c != nil && c.doctestGlob {
+			hookDirs = append(hookDirs, c.dir) // --doctest-glob: non-Python files are test items
+		}
+	}
+	sort.Strings(hookDirs)
+	for _, d := range slices.Compact(hookDirs) {
 		b.addDirUnit(d, epFiles, cfgPlugins)
 	}
 	// Whole-project units for configs whose collection rules are computed.
