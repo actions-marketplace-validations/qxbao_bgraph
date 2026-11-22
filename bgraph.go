@@ -19,6 +19,7 @@ import (
 	"github.com/qxbao/bgraph/internal/eco/python"
 	"github.com/qxbao/bgraph/internal/eco/rust"
 	"github.com/qxbao/bgraph/internal/gitx"
+	"github.com/qxbao/bgraph/internal/glob"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
 	"github.com/qxbao/bgraph/internal/scancache"
@@ -109,11 +110,24 @@ type Change struct {
 	// Dynamic: whether the dynamic layer (docs/dynamic-layer.md) narrows widened units. DynamicDefault follows bgraph.toml
 	// [dynamic_layer] ecosystems.
 	Dynamic DynamicMode
+	// Exclude: glob patterns (bgraph.toml syntax, forward slashes, relative to the repository root, e.g. ".tool/state/**") of
+	// changed files that are inputs of no test, such as an embedding program's own state files in the working tree. Matching
+	// changed files are dropped from the change set before selection (not in Selection.Changed, no widening, no seed); the
+	// trees and the graph are unchanged. A file the graph knows (one with a role in an ecosystem or with dependents), a
+	// symbolic link or a submodule is kept, with a rule_rejected warning. An invalid pattern makes Select return an error.
+	Exclude []string
 }
 
 // Select computes the selection. Infrastructure errors (git cannot run) return an error; everything else uncertain becomes a widening in the Selection.
 func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 	in := selector.Input{Head: ch.Head, PreviouslyFailed: ch.PreviouslyFailed, Scanner: ix.cache}
+	for _, e := range ch.Exclude {
+		p, err := glob.Compile(e)
+		if err != nil {
+			return Selection{}, fmt.Errorf("exclude: %w", err)
+		}
+		in.Exclude = append(in.Exclude, p)
+	}
 	if ch.Base == "" {
 		return noBase(in, "no base"), nil
 	}

@@ -42,6 +42,11 @@ type Input struct {
 	// PreviouslyFailed: ids of test units that failed on the previous run (supplied by the caller); always re-run if they still exist.
 	PreviouslyFailed []string
 	MaxChanged       int // 0 → Rules.Options.MaxChanged or DefaultMaxChanged
+	// Exclude: changed files the caller declares are inputs of no test (an embedding program's own state files in the working
+	// tree). A changed file matching one is dropped from the change set (Selection.Changed included) before classification,
+	// unless the graph knows it (a file with a role in some ecosystem, or with dependents) or a symbolic link is involved:
+	// then it stays and a rule_rejected warning says why.
+	Exclude []*glob.Pattern
 }
 
 type state struct {
@@ -152,6 +157,12 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	links := linkSides(in.BaseTree, in.HeadTree)
 	// A file read through symbolic links changes every path that reads it (its aliases): they are classified as changed files
 	// too (a manifest seen through a directory link, a glob over the link directory, a scoped unresolved import...).
+	if len(in.Exclude) > 0 {
+		changed = s.exclude(changed, g, links)
+		if len(changed) == 0 {
+			return s.sel
+		}
+	}
 	work, aliasOf := withAliases(changed, g, in.BaseTree, in.HeadTree)
 	info := make(map[string]*ChangeInfo, len(work))
 	for _, c := range work {
@@ -648,4 +659,36 @@ func withAliases(changed []Changed, g *graph.Graph, base, head tree.Tree) ([]Cha
 		}
 	}
 	return work, aliasOf
+}
+
+// exclude drops the changed files matching in.Exclude that the graph does not know (see Input.Exclude) from changed and from
+// the selection's Changed list.
+func (s *state) exclude(changed []Changed, g *graph.Graph, links linkMap) []Changed {
+	dropped := map[string]bool{}
+	var kept []Changed
+	for _, c := range changed {
+		var pat *glob.Pattern
+		for _, p := range s.in.Exclude {
+			if p.Match(c.Path) {
+				pat = p
+				break
+			}
+		}
+		if pat == nil {
+			kept = append(kept, c)
+			continue
+		}
+		_, isLink := links[c.Path]
+		if isLink || g.IsNode(c.Path) || len(g.Aliases(c.Path)) > 0 || c.OldMode == "160000" || c.NewMode == "160000" {
+			s.sel.Warnings = append(s.sel.Warnings, model.Widening{Tier: model.TierNone, Reason: model.ReasonRuleRejected, Path: c.Path,
+				Detail: fmt.Sprintf("excluded by the caller (%s) but kept: the file is a graph node, a symbolic link or a submodule", pat)})
+			kept = append(kept, c)
+			continue
+		}
+		dropped[c.Path] = true
+	}
+	if len(dropped) > 0 {
+		s.sel.Changed = slices.DeleteFunc(s.sel.Changed, func(p string) bool { return dropped[p] })
+	}
+	return kept
 }
