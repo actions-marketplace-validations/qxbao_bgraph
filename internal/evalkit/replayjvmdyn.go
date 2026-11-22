@@ -63,7 +63,7 @@ func RunJVMDynReplay(ctx context.Context, cfg JVMReplayConfig) ([]JVMReplayCommi
 		ok := true
 		for _, l := range strings.Split(strings.TrimSpace(raw), "\n") {
 			meta, p, found := strings.Cut(l, "\t")
-			fs := strings.Fields(meta)
+			fs := strings.Fields(strings.TrimPrefix(meta, ":"))
 			if !found || len(fs) < 5 || fs[4] != "M" || fs[0] != fs[1] || !jvm.DynamicSource(p) {
 				ok = false
 				break

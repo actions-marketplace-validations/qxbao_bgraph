@@ -158,6 +158,7 @@ func (c JVMDynConfig) runClasses(ctx context.Context, units []jvmdyn.Unit, class
 	var out, tl string
 	var to bool
 	var err error
+	var env []string
 	if c.Repo.Runner == "maven" {
 		var pl []string
 		for _, u := range units {
@@ -170,10 +171,11 @@ func (c JVMDynConfig) runClasses(ctx context.Context, units []jvmdyn.Unit, class
 			for _, cl := range classes {
 				pats = append(pats, cl, cl+"$*")
 			}
-			args = append(args, "-Dtest="+strings.Join(pats, ","))
+			// In the environment: mvn.cmd runs through cmd.exe (8,191 characters); Maven >= 3.9 reads MAVEN_ARGS.
+			env = []string{"MAVEN_ARGS=-Dtest=" + strings.Join(pats, ",")}
 		}
 		args = append(args, "-pl", strings.Join(pl, ","), "-am", "test")
-		out, tl, to, err = runProc(ctx, c.Clone, nil, timeout, filepath.Join(jvmT2Tools.Maven, "bin", "mvn.cmd"), args...)
+		out, tl, to, err = runProc(ctx, c.Clone, env, timeout, filepath.Join(jvmT2Tools.Maven, "bin", "mvn.cmd"), args...)
 	} else {
 		args := []string{"--console=plain", "--continue", "-q"}
 		args = append(args, c.BuildArgs...)
