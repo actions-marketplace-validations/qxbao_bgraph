@@ -513,8 +513,8 @@ func lockdiffJS(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath 
 		var projs []pnpmProject
 		if jerr := json.Unmarshal(out, &projs); jerr != nil {
 			msg := strings.Join(strings.Fields(string(out)+" "+string(errb)), " ")
-			if strings.Contains(msg, "Invalid string length") {
-				// The JSON tree exceeds Node's string limit: list each project's deduplicated package paths instead.
+			if strings.Contains(msg, "Invalid string length") || strings.Contains(msg, "heap out of memory") || strings.Contains(msg, "allocation failure") {
+				// The JSON tree exceeds Node's string or heap limit: list each project's deduplicated package paths instead.
 				return pnpmParseable(ctx, o, dst, lockDir, projects)
 			}
 			msg = firstLine(msg)
