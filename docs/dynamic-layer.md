@@ -1046,15 +1046,15 @@ whose changed files are all `.rb`:
 | | rack | dry-types | rake | rubocop | jekyll | asciidoctor |
 |---|---|---|---|---|---|---|
 | `.rb`-only commits | 190 | 98 | 137 | 15 | 33 | 142 |
-| Accepted (of which changing library code) | 102 (73) | 32 (14) | 81 (51) | 11 (7) | 24 (17) | 91 (34) |
-| Share accepted | 0.54 | 0.33 | 0.59 | 0.73 | 0.73 | 0.64 |
+| Accepted (of which changing library code) | 102 (73) | 32 (14) | 81 (51) | 11 (7) | 24 (17) | 123 (66) |
+| Share accepted | 0.54 | 0.33 | 0.59 | 0.73 | 0.73 | 0.87 |
 
 Almost every refusal is class- or module-level code (constants, DSL calls, `attr_*`, signatures): 82 of 88 on rack, 64
 of 66 on dry-types, 54 of 56 on rake. The others: additions and deletions, mode changes, magic comments, and two rack
-heads whose parse-time warnings differ from the base. On asciidoctor the lexical structure is the limit: 13 refusals
-because a setter defined without parentheses (`def title= title`) is not followed ("end without a block") and 22 by the
-compile check, where the guard's method lines differ from Ruby's (in `parser.rb`, every line after the character literal
-`?\t` is counted one too far); both are refusals, never a wrong body.
+heads whose parse-time warnings differ from the base; on asciidoctor, 18 of 19 are class-level code and 1 a removal
+outside method bodies. A first run refused 35 more asciidoctor commits on constructs the guard did not yet follow (a
+setter defined without parentheses, `def title= title`, and a lexer line-count error after the character literal `?\t`,
+which the compile check caught): both were refusals, never a wrong body, and both are fixed.
 
 **Replay** (rack and dry-types, the 20 most recent guard-accepted commits before R; fresh records at each parent, the
 selection parent→commit, and every removed test file run alone at the commit with the runner adapter's command; a bundle

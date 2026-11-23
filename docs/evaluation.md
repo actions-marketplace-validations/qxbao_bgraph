@@ -185,9 +185,8 @@ Findings:
 - On Windows, `trust_native_env = true` is needed for Python: pytest's terminal setup loads a system library through
   ctypes, so with the strict default no record is complete.
 - The JVM constant guard passes 94 % (gson) and 90 % (moshi) of code-only commits.
-- The Ruby body guard (with the compile check) accepts 33–73 % of the commits that change only `.rb` files over 500
-  first-parent commits of six repositories; nearly every refusal is class- or module-level code, except on asciidoctor,
-  where constructs the lexical guard does not follow (setters defined without parentheses) refuse 35 commits. Ruby narrows precise
+- The Ruby body guard (with the compile check) accepts 33–87 % of the commits that change only `.rb` files over 500
+  first-parent commits of six repositories; nearly every refusal is class- or module-level code. Ruby narrows precise
   units: on rack, dry-types and rake every test file reaches every library file statically, and with the method records
   a median of 0.12–0.19 of the test files remains on the mutants.
 
