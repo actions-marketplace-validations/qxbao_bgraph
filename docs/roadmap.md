@@ -30,7 +30,7 @@ commit as the feature:
 | .NET (VSTest, Microsoft.Testing.Platform) | MSBuild project | – | test classes | [dotnet](ecosystems/dotnet.md) |
 | Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
 | PHP | Composer project | – | – | [php](ecosystems/php.md) |
-| Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | – | [ruby](ecosystems/ruby.md) |
+| Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | test files, per changed method | [ruby](ecosystems/ruby.md) |
 
 ## New ecosystems
 
