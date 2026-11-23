@@ -14,7 +14,7 @@ own lexer; it never runs Ruby or Bundler.
 | Runners | RSpec (`rspec`), Rails (`bin/rails test`), Minitest / Test::Unit (a `ruby -I…` loader, like `Rake::TestTask`'s) |
 | Manifests/configs read | `Gemfile`, `gems.rb`, `*.gemspec`, `Rakefile` and `*.rake` (`Rake::TestTask`, `RSpec::Core::RakeTask`), `.rspec`, `.rspec-local`, `.rspec-parallel`, `spec/spec.opts` |
 | Lockfiles (and level) | `Gemfile.lock`, `gems.locked`: **L0**. See [lockfiles](../lockfiles.md) |
-| Dynamic layer | none |
+| Dynamic layer | per-method narrowing of selected test files: [dynamic layer, section 10](../dynamic-layer.md#10-ruby-per-method-narrowing) (off by default) |
 
 ## Supported layouts
 
@@ -192,7 +192,9 @@ configuration error: the selection is `full` (`user_rule`).
 ## Known gaps and over-selection
 
 - **Library loaders dominate.** Most gems' test helpers load the whole library (`require "mygem"`, which requires every file),
-  so a change to any library file selects every test that loads the helper. Test-file changes stay precise.
+  so a change to any library file selects every test that loads the helper. Test-file changes stay precise. The
+  [dynamic layer](../dynamic-layer.md#10-ruby-per-method-narrowing) narrows changes inside method bodies to the test
+  files that ran the changed methods.
 - **Computed requires.** Plugin loaders, `require name` helpers and command-line `--require` handling are common in
   frameworks; each one reached by the test helper makes almost any Ruby change select every test. Describe them with
   `[[dynamic]]`.

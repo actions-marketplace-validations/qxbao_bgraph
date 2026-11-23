@@ -118,8 +118,7 @@ func parseRuby(src []byte) (*rbFile, string) {
 	return f, ""
 }
 
-func isOp(t rbscan.Token, s string) bool    { return t.Kind == rbscan.TokOp && t.Text == s }
-func isIdent(t rbscan.Token, s string) bool { return t.Kind == rbscan.TokIdent && t.Text == s }
+func isOp(t rbscan.Token, s string) bool { return t.Kind == rbscan.TokOp && t.Text == s }
 
 // keywordAt reports whether toks[i] is a keyword use of an identifier: not a method name after `.`, `&.` or `::`, not a label
 // (`if:`).

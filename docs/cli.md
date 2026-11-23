@@ -49,6 +49,7 @@ An uncertain selection is not an error: it is reported as a widening and the exi
 | `--dynamic=false` | disable it even if `bgraph.toml` enables it |
 | `--python EXE` | interpreter (overrides `[dynamic_layer] python`) |
 | `--node EXE` | node executable (overrides `[dynamic_layer] node`) |
+| `--ruby EXE` | Ruby executable (overrides `[dynamic_layer] ruby`) |
 | `--trust-native-env` | as `[dynamic_layer] trust_native_env = true` |
 
 Without `--dynamic`, `bgraph.toml` decides.
@@ -230,8 +231,8 @@ default branch, see [`ci/record-github-actions.yml`](ci/record-github-actions.ym
 ## `record`
 
 ```text
-bgraph record [--root DIR] [--eco python|node|jvm|dotnet] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
-              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--trust-native-env]
+bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
+              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
               [--json] [--quiet]
 ```
 
@@ -241,7 +242,7 @@ Runs test units with a dependency collector and stores the records of the [dynam
 |---|---|---|
 | `--eco` | `[dynamic_layer] ecosystems`, else every ecosystem with test units | record one ecosystem |
 | `--units GLOB` | all | only units matching the glob |
-| `--jobs N` | Python: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
+| `--jobs N` | Python and Ruby: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
 | `--timeout D` | `10m` | per unit (per build for JVM, per test host for .NET); a unit that times out gets an incomplete record |
 | `--allow-dirty` | off | record a working tree that differs from `HEAD` |
 | `--out FILE` | the state directory | write the records to a JSONL file instead (import elsewhere with `bgraph dynamic import`) |
@@ -249,6 +250,10 @@ Runs test units with a dependency collector and stores the records of the [dynam
 | `--keep-logs` | off | JVM: keep the collector logs |
 | `--json` | off | print the summary as JSON |
 | `--quiet` | off | no per-unit progress |
+
+Ruby (`--eco ruby`) runs each test file as the runner adapter does, with the collector preloaded through `RUBYOPT` and the
+`--ruby` executable's directory first on `PATH`; the environment variables of the shell (`BUNDLE_GEMFILE`, `BUNDLE_PATH`,
+`BUNDLE_WITHOUT`...) apply, see [dynamic layer §10.4](dynamic-layer.md#104-collector).
 
 The summary lists the commit, units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
 toolchain addons accepted (Node) and the incomplete reasons. Exit code `0` even when some units failed or are incomplete.
@@ -262,13 +267,13 @@ cache, restore the newest records on pull requests.
 
 ```text
 bgraph dynamic import [--root DIR] FILE
-bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet] [--python EXE] [--node EXE] [--trust-native-env] [--json]
+bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env] [--json]
 ```
 
 - `import` merges a records file (from `record --out`) into the store, for example records made by CI on the main branch.
 - `status` reports, per ecosystem, the store, the number of records and recorded units, records of the current
   environment, records usable at `HEAD` (and why the others are not) and the incomplete reasons. Without `--eco` it
-  reports Python and Node when they have records or test units; with `--json`, an object for `--eco`, else an array.
+  reports Python, Node and Ruby when they have records or test units; with `--json`, an object for `--eco`, else an array.
 
 ## `mcp`
 

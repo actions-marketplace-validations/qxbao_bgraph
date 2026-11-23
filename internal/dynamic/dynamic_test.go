@@ -528,3 +528,33 @@ func TestGuardNodeSources(t *testing.T) {
 		}
 	}
 }
+
+// TestRecordFormatCompat: store lines written before the Ruby fields existed still decode, and the Ruby fields round-trip.
+func TestRecordFormatCompat(t *testing.T) {
+	old := `{"eco":"python","unit":"tests/test_a.py","collector":"python-audit-1","deps":{"tests/test_a.py":"abc"},"env":"e","complete":true,"pass":true,"recorded":"2026-11-01T00:00:00Z"}` + "\n"
+	recs, warn := Parse("old", []byte(old))
+	if len(warn) > 0 || len(recs) != 1 || recs[0].Methods != nil || recs[0].Reads != nil || recs[0].Deps["tests/test_a.py"] != "abc" {
+		t.Fatalf("old line: %+v %v", recs, warn)
+	}
+	r := Record{Eco: "ruby", Unit: "spec/a_spec.rb", Collector: "ruby-cov-1", Env: "e", Complete: true, Pass: true, Recorded: t0,
+		Deps:    map[string]string{"spec/a_spec.rb": "1", "lib/a.rb": "2", "data/x.yml": "3"},
+		Methods: map[string]string{"lib/a.rb": "2-4:1,6-8:0", "spec/a_spec.rb": ""}, Reads: []string{"data/x.yml"}}
+	b, err := Encode([]Record{r})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(old, "methods") || !strings.Contains(string(b), `"methods"`) {
+		t.Fatalf("encoding: %s", b)
+	}
+	back, warn := Parse("new", b)
+	if len(warn) > 0 || len(back) != 1 || back[0].Methods["lib/a.rb"] != "2-4:1,6-8:0" || !slices.Equal(back[0].Reads, r.Reads) {
+		t.Fatalf("round trip: %+v %v", back, warn)
+	}
+	if _, ok := back[0].Methods["spec/a_spec.rb"]; !ok {
+		t.Fatal("an empty method table was dropped")
+	}
+	bad := strings.Replace(string(b), `"data/x.yml"]`, `"../x"]`, 1)
+	if recs, warn := Parse("bad", []byte(bad)); len(recs) != 0 || len(warn) == 0 {
+		t.Fatalf("unclean read path accepted: %v", recs)
+	}
+}

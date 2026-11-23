@@ -80,5 +80,5 @@ commit as the feature:
 | .NET: map generated sources to their partial type instead of the whole project | planned | 2 | Repositories with their own source generator narrow little today | [dynamic layer §9.11](dynamic-layer.md#911-net) |
 | .NET: build-time IL diff to relax the body guard (constants, signatures, added members) | planned | 3 | The body guard passes 17–45 % of code-only commits on the evaluated repositories | [dynamic layer §9.11](dynamic-layer.md#911-net) |
 | Go | planned | 3 | Package granularity is already fine; a test-function layer would need coverage per test | |
-| Ruby (test files, from `Coverage` per test file) | planned | 1 | Static selection is about 1.0 on the evaluated repositories (test helpers load the whole library); Ruby's built-in `Coverage` module could record per-test-file dependencies like the Python collector | [dynamic layer](dynamic-layer.md) |
+| Ruby (test files, per changed method, from `Coverage` per test file) | done (unreleased) | 1 | Static selection is about 1.0 on the evaluated repositories (test helpers load the whole library); the method layer removes test files that ran none of the changed methods. Off by default | [dynamic layer §10](dynamic-layer.md#10-ruby-per-method-narrowing) |
 | Rust | planned | 3 | Same question at the Cargo-target level | |

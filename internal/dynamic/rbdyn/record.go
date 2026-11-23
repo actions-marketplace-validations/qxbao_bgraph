@@ -200,7 +200,9 @@ func RecordOf(o Outcome, u Unit, t tree.Tree, root, env, commit string, now time
 			// The same file under two spellings: keep both tables (a count > 0 in either keeps a unit).
 			cms, _ := ParseMethods(cur)
 			ms = append(cms, ms...)
-			sort.Slice(ms, func(i, j int) bool { return ms[i].Start < ms[j].Start || ms[i].Start == ms[j].Start && ms[i].End < ms[j].End })
+			sort.Slice(ms, func(i, j int) bool {
+				return ms[i].Start < ms[j].Start || ms[i].Start == ms[j].Start && ms[i].End < ms[j].End
+			})
 		}
 		r.Methods[p] = FormatMethods(ms)
 	}
@@ -242,7 +244,7 @@ func RecordOf(o Outcome, u Unit, t tree.Tree, root, env, commit string, now time
 	if p, ok := m.tracked(u.ID); ok {
 		add(p)
 		if !loaded[p] {
-			why = append(why, "the unit's own file was not loaded (canary)")
+			why = append(why, "canary: the unit's own file was not loaded")
 		}
 	} else {
 		why = append(why, "the unit's own file "+u.ID+" is not in the tree")

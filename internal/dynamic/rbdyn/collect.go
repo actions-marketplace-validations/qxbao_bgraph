@@ -402,6 +402,7 @@ func merge(o *Outcome, outDir string, mainPid int) {
 			dirs[d] = true
 		}
 		for _, c := range p.Children {
+			c.Cmd = strings.ReplaceAll(c.Cmd, ";", ",") // reasons are joined with "; "
 			switch {
 			case !c.Ruby:
 				o.Incomplete = append(o.Incomplete, "starts a non-Ruby process: "+c.Cmd)

@@ -77,6 +77,19 @@ func (ix *Index) applyRubyMethods(ctx context.Context, in selector.Input, res se
 	if err != nil {
 		return dynamic.Skip(sel, rbdyn.Eco, "environment fingerprint: "+err.Error())
 	}
+	// A head that does not compile, or that Ruby warns about differently, fails or differs when the file is loaded.
+	files, why := rbdyn.ParseFiles(changed, in.BaseTree, in.HeadTree)
+	if why == "" {
+		exe, err := ix.rubyExe(in.Rules)
+		if err != nil {
+			why = "ruby: " + err.Error()
+		} else {
+			why = rbdyn.ParseCheck(ctx, exe, files)
+		}
+	}
+	if why != "" {
+		return dynamic.Skip(sel, rbdyn.Eco, why)
+	}
 	return rbdyn.Narrow(sel, rbdyn.Params{Env: env, Records: recs, Base: in.BaseTree, UnitEco: res.UnitEco, Changed: changed})
 }
 

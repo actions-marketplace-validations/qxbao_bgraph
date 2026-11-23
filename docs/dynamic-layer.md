@@ -11,6 +11,7 @@ what it may remove, when it refuses, what a record is, and what each collector o
 | Node | widened test files | `--require` preload in every process and thread of the runner, one runner invocation per test file | implemented |
 | JVM | test classes inside a selected Maven module / Gradle project | Java agent, one fresh test JVM per class | implemented |
 | .NET | test classes inside a selected test project (VSTest or Microsoft.Testing.Platform) | code coverage (Microsoft.CodeCoverage), one fresh test host per class | implemented ([9.11](#911-net)) |
+| Ruby | selected test files (precise ones too), per changed method | Ruby's `Coverage` in methods mode, preloaded through `RUBYOPT` in every Ruby process of one test file | implemented ([10](#10-ruby-per-method-narrowing)) |
 
 Section numbers are stable: code comments refer to them.
 
@@ -27,6 +28,7 @@ Section numbers are stable: code comments refer to them.
 - [8. Node](#8-node)
 - [9. JVM and .NET: per-test-class narrowing](#9-jvm-and-net-per-test-class-narrowing)
   - [9.11 .NET](#911-net)
+- [10. Ruby: per-method narrowing](#10-ruby-per-method-narrowing)
 
 ## Goal and non-goal
 
@@ -37,18 +39,19 @@ net: a unit the static graph reaches through ordinary edges is never removed.
 Selected = S_precise ∪ { t ∈ S_widened \ S_precise : not (record(t) usable AND Dep(t) ∩ Changed = ∅) }
 ```
 
-(The JVM class layer is the exception: it narrows inside precise units, see [9.1](#91-what-is-narrowed).)
+(The JVM and .NET class layers and the Ruby method layer are the exceptions: they narrow precise units, see
+[9.1](#91-what-is-narrowed) and [10.1](#101-what-is-narrowed).)
 
 Enabling it:
 
 ```toml
 [dynamic_layer]
-ecosystems = ["python"]          # "python", "node", "jvm"
+ecosystems = ["python"]          # "python", "node", "jvm", "dotnet", "ruby"
 ```
 
 `--dynamic` turns the layer on for every supported ecosystem for one run; `--dynamic=false` turns it off even when
 `bgraph.toml` enables it. Library callers use `Change.Dynamic` (`DynamicOn` / `DynamicOff` / default) and
-`Options.Python`, `Options.Node`, `Options.TrustNativeEnv`. See [Configuration](configuration.md#dynamic_layer).
+`Options.Python`, `Options.Node`, `Options.Ruby`, `Options.TrustNativeEnv`. See [Configuration](configuration.md#dynamic_layer).
 
 The layer has passed mutation and replay checks (see [7](#7-evaluation) and [Evaluation](evaluation.md#dynamic-layer))
 but not a release gate: enable it per ecosystem after evaluating it on your repository, for example with
@@ -858,3 +861,167 @@ The guard refused the `const` mutant of Polly, the compile-time inlining case. R
 repository has its own source generator: generated code maps to every file of the generator's consumer project, so every
 class depends on about 105 files. Recording one project on one framework (Polly.Core.Tests, 124 classes) took 1.8× its
 isolated per-class run without coverage.
+
+## 10. Ruby: per-method narrowing
+
+The Ruby layer (`ecosystems = ["ruby"]`, off by default) narrows **precise** units, like the class layers of
+[9](#9-jvm-and-net-per-test-class-narrowing), but at the granularity of methods. File-level records would be useless for
+Ruby: a `spec_helper` usually requires the library's entry file, which requires every other file, so every test file
+loads every library file at boot and the static graph already reaches every test precisely. What differs between test
+files is which **methods** they run. Sections [3](#3-records) and [6](#6-output-and-tooling) apply with the changes
+below; this section replaces [1](#1-which-units-can-be-narrowed), [2](#2-when-narrowing-is-allowed),
+[4](#4-python-collector) and [5](#5-environment-fingerprint) for Ruby. The implementation is `internal/dynamic/rbdyn`.
+
+### 10.1 What is narrowed
+
+The unit is the test file ([Ruby](ecosystems/ruby.md)). A selected Ruby unit `t` (precise or widened) is removed if and
+only if:
+
+- `t` is not a whole-project unit (`<rb-all-tests:…>`), not itself a changed file, and not in `always_run`
+  (previously failed or new);
+- `t` has a **usable** record ([3](#3-records): complete, passed, current environment and collector, every dependency's
+  blob unchanged at the base);
+- `t` ran none of the changed methods (call count 0 in its record), read none of the changed files as data, and loaded
+  or read none of the changed test files, refused test-support files and documentation files (below).
+
+Everything else is kept, with a `dynamic` note saying why (`executed the changed method Shop::Cart#total
+(lib/shop/cart.rb:8)`, `loaded the changed file …`, `record not usable: …`). Removed units are listed in `narrowed`. A
+`full` selection is never narrowed.
+
+### 10.2 Guards
+
+Per selection; any refusal keeps the static selection with a `dynamic_skipped` warning naming the file and the reason.
+
+1. The selection is not `full`, and no widening is global or `full`.
+2. Every changed file has status `M` with an unchanged regular-file mode, is not a symbolic link nor read through one, is
+   not in the global table, not claimed by an ecosystem (Gemfile, gemspec, lockfiles, `.rspec`, Rakefiles, `*.rake`
+   task files, native extension sources), and not named by a `[[config]]`, `[[dynamic]]` or `[[rule]]` of `bgraph.toml`
+   (a rule's targets are never narrowed, so a ruled file refuses the selection).
+3. Each changed file is then one of:
+   - **library code**: a `.rb` file whose Ruby role is source at base and head, outside every `spec`, `test` and
+     `tests` directory, passing the **body guard** (below); otherwise the selection is refused;
+   - **a test file** (role test at base and head): no body guard; the unit itself is kept (it changed), and so is every
+     unit whose record loaded or read it;
+   - **test support**: a `.rb` source below a test directory (`spec_helper.rb`, `support/`, shared examples): passing the
+     body guard, it is treated as library code; otherwise as a test file (every unit that loaded it is kept);
+   - **documentation**: an unreferenced documentation file with no role, as in [2](#2-when-narrowing-is-allowed); a unit
+     whose record read it is kept.
+
+   Anything else refuses: YAML, ERB and other data or templates, `.rake`, `.ru`, extensionless executables, native code,
+   additions, deletions and renames.
+4. **Body guard** (lexical, fail-closed; internal/scan/ruby's lexer at base and head; a file the lexer marks uncertain
+   refuses). Every line is keyed by its tokens (kind, text and whether white space precedes it; comments and layout are
+   dropped; a multi-line literal and a heredoc with its body belong to their first line). The guard follows the block
+   structure (`class`, `module`, `class << x`, `def`, `do`, braces and keyword blocks, modifier `if`/`unless`/`while`/
+   `until` told apart from statements by the preceding token, labels such as `if:` and method calls such as `x.class`
+   excluded), and a structure it cannot follow refuses. The **skeleton** of a file is every keyed line that is not
+   strictly inside the body of a `def … end`, i.e. after the last line of its signature (multi-line parameter lists and
+   default values included) and before the line of its `end`. The skeleton must be identical at base and head; the
+   outermost methods are then paired in order, and each pair whose body differs is a changed **member**, identified by its
+   base `def` line and `end` line (how `Coverage` names it). Consequently:
+   - accepted: changes inside the body of an instance method, `def self.x` / `def obj.x`, a method inside
+     `class << self`, a method defined in a block (`Class.new do … end`), its `rescue` / `else` / `ensure` clauses,
+     heredocs and `eval` strings inside the body; changes to comments and blank lines anywhere (free);
+   - refused: any change to class- or module-level code (constants, `attr_*`, `include`, `private`, `alias`,
+     `alias_method`, `define_method` and other DSL blocks, `require`), to a signature, a default value, a `def` or `end`
+     line, a one-line method (`def x; 1; end`), an endless method (`def x = …`), `BEGIN` / `END` blocks, a heredoc whose
+     opening line is outside a method body, the `__END__` data, a magic comment (`frozen_string_literal`, `encoding`,
+     `warn_indent`, `shareable_constant_value`…) or the shebang; and a changed method that contains a `def` (the inner
+     method is defined when the outer one runs).
+5. **Parse check**: every file the body guard accepted is compiled at base and head by the configured Ruby
+   (`RubyVM::InstructionSequence.compile`, warnings on). A head that does not compile (`unless … elsif` is lexically a
+   body change but a syntax error), or whose parse-time warnings differ from the base's (a test suite may turn warnings
+   into failures at load time), refuses. A Ruby that cannot run refuses too.
+6. **Instrumented check**, per unit: `Coverage` lists every method defined by `def` in each file a recorded process loaded
+   while it was running, with its call count (0 included). When a unit's record loaded a changed file but has no method
+   table for it (the file was loaded before the collector started, for example by `bundler/setup` evaluating a gemspec),
+   or the table has no entry for a changed member's `def` and `end` lines (a method defined by `eval`, a coverage gap),
+   the change cannot be judged and the unit is kept.
+
+### 10.3 Records
+
+Collector ID `ruby-cov-1`; unit = the test file path. `Deps` are every repository file a process of the unit loaded
+(coverage and `$LOADED_FEATURES`) or read, with blob OIDs of the working tree at `HEAD` (as [4](#4-python-collector)), so
+line numbers in the method tables are exact for the recorded content. Two optional fields extend the record (older store
+lines decode unchanged; other ecosystems never set them):
+
+- `methods`: per loaded file with a method table, `"<def line>-<end line>:<calls>"` entries joined by commas (an empty
+  string for a file without methods); a loaded file without an entry has no table;
+- `reads`: the dependencies read as data (or found by listing a directory) rather than loaded as code; any change to one
+  keeps the unit.
+
+Store, import, export and `bgraph dynamic status` are as for the other layers (`<state dir>/dynamic/ruby.jsonl`).
+
+### 10.4 Collector
+
+`bgraph record --eco ruby [--units GLOB] [--jobs N] [--timeout D] [--ruby EXE]` runs each test file in a process tree of
+its own, from the unit's project directory, exactly as the [runner adapter](ecosystems/ruby.md#running-the-selection)
+runs it: `bundle exec rspec FILE`, `bundle exec ruby -I<dirs> -e 'ARGV.each { |f| require File.expand_path(f) }' FILE`, or
+`bin/rails test FILE` (without `bundle exec` when the project has no Gemfile). The process is Ruby itself
+(`ruby <bindir>/bundle exec …`, else `ruby -S bundle exec …`), the configured Ruby's directory is first on `PATH`, and the
+collector (embedded in the binary, written to a temporary directory put first on `RUBYLIB`) is required first through
+`RUBYOPT=-rbgraph_rb_collect` (prepended to the user's `RUBYOPT`), so it loads in every Ruby process of the tree, child
+processes included. A unit that times out has its whole process tree killed. `--jobs` defaults to half the CPUs.
+
+In each process the collector:
+
+- calls `Coverage.setup(methods: true, lines: true)` and `Coverage.resume` before anything else loads (`eval: true` is not
+  used: evaluated code would replace the coverage entry of the file it names); at exit (its `at_exit` handler is
+  registered first, so it runs after the test framework's) it writes the method tables of the repository files
+  (`Coverage.peek_result`), the repository entries of `$LOADED_FEATURES`, and everything below to
+  `$BGRAPH_RB_OUT/<pid>-….json`. Counts survive a file being loaded again (Ruby keeps called method entries alive).
+- observes **file reads**: `IO.read`, `IO.binread`, `IO.readlines`, `IO.foreach`, `IO.copy_stream` (and therefore the
+  `File`, `Pathname`, `YAML.load_file` and `JSON.load_file` forms that call them), and every `File.new` / `File.open` /
+  `Kernel#open` of a path in a reading mode (`File#initialize`). Paths under the repository root are data dependencies.
+- observes **directory listings**: `Dir.glob`, `Dir[]` (the directory before the first wildcard), `Dir.children`,
+  `Dir.entries`, `Dir.each_child`, `Dir.foreach`, `Dir.new` / `Dir.open`. A listing adds every tracked file under the
+  listed directory, recursively, as data dependencies, unless the caller (looking through the standard library's own
+  frames) is the loading machinery or a test framework: RubyGems, Bundler, Zeitwerk, rspec-core, Minitest, test-unit,
+  Rake, Bootsnap, or a gemspec. Those listings only decide which files exist, which only additions, deletions and renames
+  change, and those are refused.
+- observes **processes**: `Kernel#system`, `` ` ``, `spawn`, `exec`, `Kernel#open("|…")`, `IO.popen` (and `Open3`,
+  which calls `spawn`), `Process.spawn`, `Process.exec`, and forks (`Process._fork`, Ruby 3.1+). A child whose program
+  is Ruby (`RbConfig.ruby`, `ruby`, `bundle`, `rake`, `rspec`, `gem`… or a script with a Ruby shebang) loads the collector
+  through the inherited `RUBYOPT`; bgraph then checks that a process with the child's pid, or whose parent is the child
+  (a Windows `.bat` wrapper), wrote an output, otherwise the record is incomplete. `exec` writes the process's output
+  first. Any other program, or a shell command line, makes the record incomplete (`starts a non-Ruby process`). Processes
+  started by the loading machinery or a gemspec (`git ls-files`) are exempt.
+- marks the record **incomplete** when: `Coverage` was already running or the tests called `Coverage.setup`, `start`,
+  `resume`, `suspend` or `result` (SimpleCov, for example); the collector raised; a process wrote no output (`exit!`, a
+  crash); a Ruby child wrote none; a compiled extension under the repository root was loaded; an untracked repository
+  file was loaded or read (lockfiles and `.bundle`, `vendor/bundle`, `.git`, `node_modules` excepted); the unit timed out;
+  the unit's own file is not among the loaded files (canary); the runner's output has no summary line (`N examples`,
+  `N runs`, `N tests`) or it reports zero tests.
+- **Pass** = exit code 0 and at least one test ran.
+
+### 10.5 Environment fingerprint
+
+`sha256` of: the collector ID; OS and architecture; `RUBY_DESCRIPTION` of the configured Ruby (`[dynamic_layer] ruby`,
+`--ruby`, `Options.Ruby`, default `ruby` on PATH; probed once from an empty directory without `RUBYOPT`, cached by
+executable path and modification time); the variables `RUBYOPT`, `RUBYLIB`, `BUNDLE_GEMFILE` (relative when inside the
+repository), `BUNDLE_WITHOUT`, `BUNDLE_WITH`, `BUNDLE_ONLY`, `BUNDLE_FROZEN`, `BUNDLE_DEPLOYMENT`; and, for every
+directory of the tree with a `Gemfile` or `gems.rb` outside test data, the digest of its `Gemfile.lock` / `gems.locked`
+**on disk** (gems often do not commit it: the tests ran with the one on disk), of `.ruby-version` and of
+`.bundle/config` when present, plus the lockfile of `BUNDLE_GEMFILE`. A project without a lockfile on disk, or a
+repository without a Gemfile, has no fingerprint (the gem set is not pinned): nothing is narrowed and the warning says
+why. A lockfile change in the diff is refused by [10.2](#102-guards) anyway.
+
+### 10.6 Residual risks (accepted)
+
+- Line numbers shift below an edited method: behaviour that depends on `__LINE__`, `caller` / backtrace line numbers or
+  `Method#source_location` of library code is not modeled; neither is reading a method's source through
+  `RubyVM::AbstractSyntaxTree` without a hooked file read.
+- Global state shared by test files that run in the same process (as for the static layer).
+- Code reached through `TracePoint`, `ObjectSpace`, `method_missing` or `send` is covered as long as it runs a method
+  defined by `def` (`Coverage` counts it); methods defined by `define_method` or `class_eval` strings are refused by the
+  guard (class-level code) or kept by the instrumented check.
+- A file loaded with `load` and later `require`d again (or the reverse) is compiled twice; counts of methods called
+  before survive, but a method entry that was never called may disappear, which only keeps units.
+- Native code, `PTY.spawn` and other process starts the hooks do not see; reads made by native extensions; file
+  existence checks (`File.exist?`), which only additions and deletions change.
+- Finalizers that run after the collector's `at_exit` handler.
+
+### 10.7 Evaluation
+
+See [Evaluation](evaluation.md#dynamic-layer) (hybrid mutation on rack, dry-types and rake, body-guard acceptance over
+first-parent commits, replay).
