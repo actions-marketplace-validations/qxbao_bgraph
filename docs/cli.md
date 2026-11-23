@@ -230,7 +230,7 @@ default branch, see [`ci/record-github-actions.yml`](ci/record-github-actions.ym
 ## `record`
 
 ```text
-bgraph record [--root DIR] [--eco python|node|jvm] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
+bgraph record [--root DIR] [--eco python|node|jvm|dotnet] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
               [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--trust-native-env]
               [--json] [--quiet]
 ```
@@ -241,11 +241,11 @@ Runs test units with a dependency collector and stores the records of the [dynam
 |---|---|---|
 | `--eco` | `[dynamic_layer] ecosystems`, else every ecosystem with test units | record one ecosystem |
 | `--units GLOB` | all | only units matching the glob |
-| `--jobs N` | Python: half the CPUs; Node: a quarter; JVM: min(4, CPUs/2) parallel test JVMs | parallelism |
-| `--timeout D` | `10m` | per unit (per build for JVM); a unit that times out gets an incomplete record |
+| `--jobs N` | Python: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
+| `--timeout D` | `10m` | per unit (per build for JVM, per test host for .NET); a unit that times out gets an incomplete record |
 | `--allow-dirty` | off | record a working tree that differs from `HEAD` |
 | `--out FILE` | the state directory | write the records to a JSONL file instead (import elsewhere with `bgraph dynamic import`) |
-| `--build-args ARGS` | – | JVM: extra Maven/Gradle arguments, space-separated |
+| `--build-args ARGS` | – | JVM: extra Maven/Gradle arguments; .NET: extra `dotnet restore/build/test` arguments (e.g. `-c Release`); space-separated |
 | `--keep-logs` | off | JVM: keep the collector logs |
 | `--json` | off | print the summary as JSON |
 | `--quiet` | off | no per-unit progress |
@@ -262,7 +262,7 @@ cache, restore the newest records on pull requests.
 
 ```text
 bgraph dynamic import [--root DIR] FILE
-bgraph dynamic status [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--json]
+bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet] [--python EXE] [--node EXE] [--trust-native-env] [--json]
 ```
 
 - `import` merges a records file (from `record --out`) into the store, for example records made by CI on the main branch.

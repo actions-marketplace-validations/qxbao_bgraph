@@ -1,7 +1,9 @@
 package runner
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/qxbao/bgraph/internal/model"
 )
@@ -12,7 +14,11 @@ const dotnetNote = "dotnet: units are MSBuild projects, one `dotnet test` per pr
 // dotnetCommands turns selected .NET project units into one `dotnet test` command each. `dotnet test` takes one project (or solution)
 // argument, so projects cannot share a command. A unit whose Config names a global.json that selects the Microsoft.Testing.Platform
 // runner uses `--project` (the positional form is VSTest-only in that mode, and MTP accepts one --project per invocation).
-func dotnetCommands(tests []model.SelectedTest) ([]Command, []string) {
+//
+// A unit narrowed by the class layer (ClassFilter, docs/dynamic-layer.md §9) runs `dotnet test --filter` with one
+// FullyQualifiedName~<class> clause per kept class (a contains match: it may also run classes whose names extend a kept one,
+// never fewer); with no kept class the project is only built.
+func dotnetCommands(tests []model.SelectedTest, opt Options) ([]Command, []string) {
 	sorted := append([]model.SelectedTest(nil), tests...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Unit < sorted[j].Unit })
 	var cmds []Command
@@ -30,6 +36,19 @@ func dotnetCommands(tests []model.SelectedTest) ([]Command, []string) {
 			continue
 		}
 		seen[proj] = true
+		if t.ClassFilter && t.Config == "" {
+			if len(t.Classes) == 0 {
+				cmds = append(cmds, Command{Runner: "dotnet", Project: ".", Argv: []string{"dotnet", "build", proj},
+					Note: "class layer: no test class of this project is affected; it is only built"})
+				continue
+			}
+			if f := dotnetClassFilter(t.Classes); len(f) <= opt.MaxArgChars {
+				cmds = append(cmds, Command{Runner: "dotnet", Project: ".", Argv: []string{"dotnet", "test", proj, "--filter", f},
+					Note: fmt.Sprintf("class layer: %d test classes", len(t.Classes))})
+				continue
+			}
+			notes = append(notes, fmt.Sprintf("dotnet: the class filter of %s is longer than %d characters: the whole project runs", proj, opt.MaxArgChars))
+		}
 		argv := []string{"dotnet", "test"}
 		if t.Config != "" {
 			argv = append(argv, "--project", proj)
@@ -44,4 +63,20 @@ func dotnetCommands(tests []model.SelectedTest) ([]Command, []string) {
 		notes = append(notes, "dotnet: global.json selects Microsoft.Testing.Platform (.NET 10 SDK), which takes `--project <file>` once per invocation")
 	}
 	return cmds, notes
+}
+
+// dotnetClassFilter is the VSTest filter running the given top-level classes (and their nested classes).
+func dotnetClassFilter(classes []string) string {
+	parts := make([]string, 0, len(classes))
+	for _, c := range classes {
+		var b strings.Builder
+		for _, r := range c {
+			if strings.ContainsRune(`\()|&=!~`, r) {
+				b.WriteByte('\\')
+			}
+			b.WriteRune(r)
+		}
+		parts = append(parts, "FullyQualifiedName~"+b.String())
+	}
+	return strings.Join(parts, "|")
 }

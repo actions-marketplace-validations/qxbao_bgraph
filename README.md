@@ -147,7 +147,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 | 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
 | ▶️ **Ready-to-run commands** | `bgraph command` prints `vitest run ...`, `pytest ...`, `cargo test -p ...`, `mvn -pl ...`, `dotnet test ...`, `go test ...`, batched for long lists. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
-| ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python, Node and JVM test classes. [Dynamic layer](docs/dynamic-layer.md) |
+| ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files and for JVM and .NET test classes. [Dynamic layer](docs/dynamic-layer.md) |
 | 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |
 | 🤖 **MCP server** | `bgraph mcp` gives coding agents `affected_tests`, `dependents_of` and `explain_selection`. [MCP](docs/cli.md#mcp) |
 | 🧩 **Go library** | Embed the selector in your own tooling with `bgraph.Open` and `Index.Select`. |

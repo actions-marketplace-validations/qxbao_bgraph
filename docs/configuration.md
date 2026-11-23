@@ -38,7 +38,7 @@ there). Review narrowing entries like code, and re-check them when what they des
 | [`[[generated]]`](#generated) | narrowing | Node | git-ignored build outputs that code imports |
 | [`[[config]]`](#config) | narrowing | Node | runner-config keys computed in code |
 | [`[[dynamic]]`](#dynamic) | narrowing | Python | what dynamic imports of a file can load |
-| [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM | enable the record-based dynamic layer |
+| [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET | enable the record-based dynamic layer |
 | [`[lockfile]`](#lockfile) | narrowing at `L2` | Node, Rust, Python | lockfile comparison level |
 | [`[options]`](#options) | – | selector | thresholds |
 
@@ -188,7 +188,7 @@ is a table of its own (not `[dynamic]`) because `[[dynamic]]` is the array of dy
 
 | Key | Default | Value |
 |---|---|---|
-| `ecosystems` | `[]` (off) | ecosystems to narrow: `"python"`, `"node"`, `"jvm"` |
+| `ecosystems` | `[]` (off) | ecosystems to narrow: `"python"`, `"node"`, `"jvm"`, `"dotnet"` |
 | `python` | `"python"` on PATH | interpreter for `bgraph record` and the Python environment fingerprint; a path with a separator is relative to the repository root |
 | `node` | `"node"` on PATH | node executable for `bgraph record` and the Node fingerprint (same rules) |
 | `trust_native_env` | `false` | native extension modules of the environment do not make a record incomplete; their versions are in the fingerprint. Records made under the other setting are not used. |

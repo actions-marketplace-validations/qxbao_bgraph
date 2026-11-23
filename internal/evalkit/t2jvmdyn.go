@@ -87,9 +87,14 @@ func loadOracle(file string) ([]T2Record, error) {
 	return out, sc.Err()
 }
 
-// classLists returns the class list of every recorded unit (class-list records of the store).
+// classLists returns the class list of every recorded JVM unit (class-list records of the store).
 func classLists(stateDir string) (map[string][]string, map[string]int) {
-	recs, _ := dynamic.Load(dynamic.StorePath(stateDir, jvmdyn.Eco))
+	return ecoClassLists(stateDir, jvmdyn.Eco)
+}
+
+// ecoClassLists returns the class list of every recorded unit of a per-test-class ecosystem (class-list records of the store).
+func ecoClassLists(stateDir, eco string) (map[string][]string, map[string]int) {
+	recs, _ := dynamic.Load(dynamic.StorePath(stateDir, eco))
 	lists := map[string][]string{}
 	stat := map[string]int{}
 	for _, r := range recs {
@@ -125,10 +130,12 @@ func classCounts(sel model.Selection, lists map[string][]string) (module, run in
 	return module, run
 }
 
-func skipReason(sel model.Selection) string {
+func skipReason(sel model.Selection) string { return ecoSkipReason(sel, jvmdyn.Eco) }
+
+func ecoSkipReason(sel model.Selection, eco string) string {
 	for _, w := range sel.Warnings {
-		if w.Reason == model.ReasonDynamicSkipped && strings.HasPrefix(w.Detail, jvmdyn.Eco+": ") {
-			return strings.TrimPrefix(w.Detail, jvmdyn.Eco+": ")
+		if w.Reason == model.ReasonDynamicSkipped && strings.HasPrefix(w.Detail, eco+": ") {
+			return strings.TrimPrefix(w.Detail, eco+": ")
 		}
 	}
 	return ""

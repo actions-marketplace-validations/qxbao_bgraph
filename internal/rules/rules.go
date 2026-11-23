@@ -96,7 +96,7 @@ type Options struct {
 }
 
 // DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic-layer.md).
-var DynamicEcosystems = []string{"python", "node", "jvm"}
+var DynamicEcosystems = []string{"python", "node", "jvm", "dotnet"}
 
 // DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic-layer.md), off by default. It is a table of its own,
 // not [dynamic], because [[dynamic]] is already the array of dynamic-import declarations and TOML cannot hold both.

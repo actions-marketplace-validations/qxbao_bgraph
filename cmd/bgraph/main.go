@@ -52,9 +52,9 @@ Usage:
   bgraph mcp       [--root DIR]        (MCP server on stdio)
   bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json|go-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE] [--node EXE] [--trust-native-env]
   bgraph audit     --summary --log FILE [--json]
-  bgraph record    [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
+  bgraph record    [--root DIR] [--eco python|node|jvm|dotnet] [--python EXE] [--node EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
   bgraph dynamic import [--root DIR] FILE
-  bgraph dynamic status [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--json]
+  bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet] [--python EXE] [--node EXE] [--trust-native-env] [--json]
   bgraph doctor                (not implemented)
   bgraph version | --version | help
 `

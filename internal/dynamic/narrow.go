@@ -2,6 +2,7 @@ package dynamic
 
 import (
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 
@@ -49,6 +50,8 @@ var sourceFile = map[string]func(p string) bool{
 	// jvm: the per-test-class layer (docs/dynamic-layer.md §9) has its own guards and narrowing (package jvmdyn); this entry only
 	// makes the ecosystem known to the record store, import and status.
 	"jvm": jvm.DynamicSource,
+	// dotnet: the per-test-class layer (docs/dynamic-layer.md §9, package dotnetdyn), like jvm.
+	"dotnet": func(p string) bool { return strings.EqualFold(path.Ext(p), ".cs") },
 }
 
 // Supported reports whether eco has a dynamic layer.

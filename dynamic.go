@@ -6,6 +6,7 @@ import (
 	"slices"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
+	"github.com/qxbao/bgraph/internal/dynamic/dotnetdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/jvmdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
@@ -68,6 +69,9 @@ func (ix *Index) ecoEnv(ctx context.Context, eco string, rf *rules.File, t tree.
 	case jvmdyn.Eco:
 		env, collector, _, err = ix.jvmEnv(rf, t, nil)
 		return env, collector, err
+	case dotnetdyn.Eco:
+		env, err = ix.dotnetEnv(ctx, t, nil, nil)
+		return env, dotnetdyn.CollectorID, err
 	}
 	return "", "", errors.New("no dynamic layer for ecosystem " + eco)
 }
@@ -121,6 +125,10 @@ func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input,
 	for _, eco := range dynamicEcos(ch.Dynamic, in.Rules) {
 		if eco == jvmdyn.Eco {
 			sel = ix.applyJVMClasses(ctx, in, res, sel) // per-test-class layer: narrows precise units (docs/dynamic-layer.md §9)
+			continue
+		}
+		if eco == dotnetdyn.Eco {
+			sel = ix.applyDotnetClasses(ctx, in, res, sel) // per-test-class layer of .NET test projects
 			continue
 		}
 		candidate := false

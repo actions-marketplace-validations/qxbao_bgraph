@@ -44,6 +44,10 @@ type Record struct {
 	// Artifacts: JVM class records list the external archives their test JVM loaded classes from or read (absolute path →
 	// "size:sha1"); a missing or changed archive makes the record unusable (docs/dynamic-layer.md §9.9).
 	Artifacts map[string]string `json:"artifacts,omitempty"`
+	// Lines: the .NET class-list record lists, per tracked source file the coverage reports named, "<blob OID>|<line ranges>"
+	// of the instrumented lines (docs/dynamic-layer.md §9.9): a changed member none of whose lines is instrumented is invisible to
+	// the records, and the guard refuses narrowing.
+	Lines map[string]string `json:"lines,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.

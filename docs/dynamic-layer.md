@@ -10,7 +10,7 @@ what it may remove, when it refuses, what a record is, and what each collector o
 | Python | widened test files | audit hook in a pytest plugin, one process per test file | implemented |
 | Node | widened test files | `--require` preload in every process and thread of the runner, one runner invocation per test file | implemented |
 | JVM | test classes inside a selected Maven module / Gradle project | Java agent, one fresh test JVM per class | implemented |
-| .NET | – | – | not implemented (see [9.9](#99-decisions-and-implementation)) |
+| .NET | test classes inside a selected test project (VSTest) | code coverage (Microsoft.CodeCoverage), one fresh test host per class | implemented ([9.11](#911-net)) |
 
 Section numbers are stable: code comments refer to them.
 
@@ -26,6 +26,7 @@ Section numbers are stable: code comments refer to them.
 - [7. Evaluation](#7-evaluation)
 - [8. Node](#8-node)
 - [9. JVM and .NET: per-test-class narrowing](#9-jvm-and-net-per-test-class-narrowing)
+  - [9.11 .NET](#911-net)
 
 ## Goal and non-goal
 
@@ -475,9 +476,10 @@ Node 22.17, Windows 11.
 
 ## 9. JVM and .NET: per-test-class narrowing
 
-The JVM class layer is implemented (`ecosystems = ["jvm"]`, off by default). The .NET counterpart was designed but is
-not implemented ([9.9](#99-decisions-and-implementation)). Sections 9.1–9.8 are the design; 9.9 records the decisions
-and the implementation where it differs or adds detail; 9.10 the evaluation. Sections [3](#3-records) and
+The JVM class layer is implemented (`ecosystems = ["jvm"]`, off by default). Sections 9.1–9.8 are the design; 9.9
+records the decisions and the implementation where it differs or adds detail; 9.10 the evaluation. The .NET class layer
+(`ecosystems = ["dotnet"]`, off by default) follows the same model with another collector and stricter guards:
+[9.11](#911-net). Sections [3](#3-records) and
 [6](#6-output-and-tooling) apply with the changes below; this section replaces [1](#1-which-units-can-be-narrowed),
 [2](#2-when-narrowing-is-allowed), [4](#4-python-collector) and [5](#5-environment-fingerprint) for the JVM.
 
@@ -579,11 +581,8 @@ among short-lived forks and a log was overwritten; log names now carry a nonce.)
   `trust_native_env`; a repository library always), unmapped repository classes, missing logs, fork attribution
   failures, timeouts.
 
-**.NET (designed, not implemented)**: EventPipe through environment variables (loader, JIT and inlining events),
-dependencies = methods JIT-compiled or inlined in repository assemblies, mapped to documents through portable PDBs. Type
-loads cannot be used (xUnit discovery loads every test class and the types of their members), and EventPipe has **no
-file-read events**, so tests that read sources, assemblies or data files cannot be observed. Both facts force a stricter
-guard (only method-body changes) and leave a larger residual than any accepted elsewhere.
+**.NET**: code coverage instead of runtime events; see [9.11](#911-net) (the EventPipe design first drafted here was
+replaced).
 
 ### 9.6 Running a narrowed selection
 
@@ -629,10 +628,7 @@ Windows 11, JDK 17/21, .NET SDK 10 running net8.0; repositories gson (Maven), mo
 
 Decisions:
 
-1. **JVM only. .NET is not implemented**: EventPipe has no file-read events, so a .NET record cannot see tests that read
-   sources, assemblies or data files, and xUnit discovery pollutes type loads, which forces a body-only guard that passes
-   only 38 % of Polly's and 29 % of gson's code-only commits (constant guard: 100 % / 97 %). It may be reopened with
-   stack-attributed type loads or a file-read source.
+1. **JVM first.** .NET was implemented later with another collector and stricter guards ([9.11](#911-net)).
 2. **Constant guard, lexical and fail-closed**: a line diff splits the change into hunks; narrowing is refused when a
    hunk's base lines touch a guarded declaration of the base parse or its head lines one of the head parse. Guarded (any
    visibility, private constants included): Java `final` fields (static or instance) with an initializer whose type is
@@ -722,3 +718,123 @@ Implementation:
 - Constant guard over 500 first-parent commits: gson 137 of 146 code-only commits pass, moshi 53 of 59.
 - Replay (gson, 10 code-only commits, fresh records at each parent): 9 narrowed, 1 refused by the constant guard,
   0 misses (383 removed classes run at their commit, all green); median classes run / module classes 0.70.
+
+### 9.11 .NET
+
+The .NET class layer (`ecosystems = ["dotnet"]`, off by default) narrows a selected **test project** to the test classes
+whose records reach a changed file, as [9.1](#91-what-is-narrowed) does for JVM modules. Sub-unit ID:
+`dotnet:<project file>#<class>`, the namespace-qualified name of a top-level test class (nested classes run with their
+outer class). The project is always built; only VSTest projects are handled (a project whose `global.json` selects
+Microsoft.Testing.Platform runs whole).
+
+**Collector: code coverage, not runtime events.** A record is the set of tracked source files with at least one executed
+line in the Cobertura report of [Microsoft.CodeCoverage](https://github.com/microsoft/codecoverage) (shipped with
+`Microsoft.NET.Test.Sdk`, so test projects need no extra package) for one fresh test host running one class. Lines, not
+methods: coverage probes are inserted in IL before the JIT, so inlining cannot hide a callee, and a partial type's files
+are only dependencies when one of their lines ran. An EventPipe design (JIT and type-load events mapped through PDBs) was
+prototyped and dropped: type loads are polluted by test discovery (every class of the assembly), method events need
+inlining and ReadyToRun disabled, and recording one project took 361 s against 81 s with coverage, at the same selectivity.
+
+**Recording** (`bgraph record --eco dotnet [--units GLOB] [--jobs N] [--build-args ARGS]`), per project whose
+`IsTestProject` is true: `dotnet restore`, evaluation of `TargetFrameworks` (`dotnet msbuild -getProperty`), one
+`dotnet build`, then per target framework the whole suite once with a TRX logger (the class list, union over the
+frameworks), then every class on every framework in its own `dotnet test --no-build -f <tfm> --filter
+"FullyQualifiedName~<C>.|FullyQualifiedName~<C>+" --collect "Code Coverage"` with bgraph's run settings (Cobertura, test
+assembly included, auto-properties kept, default exclusion lists not merged, dynamic instrumentation only: static
+instrumentation rewrites assemblies on disk that parallel hosts share; xUnit theories not pre-enumerated, since discovery
+would otherwise run the member data of every class in each host), N at a time (default min(4, CPUs/2)).
+`-p:CollectCoverage=false` is passed to every test run (coverlet.msbuild rewrites assemblies on disk, which would race
+between parallel hosts and stack a second instrumentation). `--build-args` go to restore, evaluation, build and test; they
+are part of the fingerprint, and selection only uses records made without them (the narrowed commands run without them).
+A project that sets `RunSettingsFilePath` is not recorded (the recording's `--settings` would replace its run settings).
+On Windows, a failed `Debug.Assert` in a .NET Framework test host of an interactive session opens a dialog that blocks
+the host until the per-host timeout: record in a non-interactive session (CI); a host that
+times out makes its record incomplete (or, for a whole-suite run, the project's class list).
+
+**Mapping.** Report file names are absolute paths, or `/_/...` under deterministic builds. A `/_/` name is a repository file
+only when the tree has it or it lies under `bin/` or `obj/` of a directory with a project file: NuGet packages built
+deterministically elsewhere use the same path map. A tracked file is a dependency; a generated source (under a `bin/` or `obj/` directory) makes the record depend on
+every tracked file of the project that owns it (the directory before `bin/`/`obj/` when it has a project file, or the
+project named by the next segment in the artifacts layout, `artifacts/obj/<project>/...`; the generator's inputs are among
+them), and one of no known project makes the record incomplete; an untracked repository file makes the record incomplete; files outside the repository belong to the environment. Dependencies are the union over the
+target frameworks on which the class exists (a class under `#if` may exist on some of them only: its full-suite runs say
+where).
+
+**Incomplete or failed records** (never used): no complete TRX report for a run (a crashed or aborted host still writes one:
+its result summary, counters and run messages are checked), no or more than one Cobertura report, the class missing from
+its own run, no executed line of the class itself in a tracked repository file (the canary that coverage worked and that its
+file names map to the repository), a framework of the
+project that could not run (the class list may miss a class that exists only there: the whole project stays whole), a
+test project referencing `Microsoft.CodeAnalysis*`, `Mono.Cecil`, `System.Reflection.MetadataLoadContext` or
+`ICSharpCode.Decompiler` (they read sources or assemblies as data), or Microsoft Fakes, JustMock or Typemock (they need
+the CLR profiler slot the coverage uses). A class that fails alone is recorded with `Pass=false`.
+
+**Class list and line maps.** The class-list record `dotnet:<project file>` lists the classes and depends on every file
+under the project directory (a file added or removed there since the recording makes it unusable). It also carries
+`lines`: for every tracked source file the reports named, `<blob OID>|<line ranges>` of the instrumented lines.
+
+**Guards** (per selection; any refusal keeps every project whole):
+
+1. The selection is not `full`, no widening is global, full or a .NET build-definition change, and no build file of the
+   base or head declares a floating or ranged NuGet version (`*`, `[...]`, `(...)`), which can change packages without a
+   file change.
+2. Every changed file is one of:
+   - a modified `.cs` file whose role is source or test at base and head, in no project that runs at build time (a project
+     with `IsRoslynComponent`, a reference to `Microsoft.CodeAnalysis*` or an MSBuild task package, or one referenced with
+     `OutputItemType="Analyzer"`: what a generator or analyzer produces in other projects is not attributed to its files),
+     passing the **body guard**;
+   - a `PublicAPI.Shipped.txt` / `PublicAPI.Unshipped.txt` baseline (read by an analyzer at build time only);
+   - a documentation file outside every project directory, with no role, no graph edge, not named by `bgraph.toml`, and
+     whose file name no C# file of the head mentions (tests that read a file usually name it).
+
+   Anything else refuses: **file reads are not observed** (no event source exists without administrator rights or a
+   native profiler), so data files, resources, project files and additions, deletions and renames of C# files are
+   refused, not narrowed.
+3. **Body guard** (lexical, fail-closed): each changed hunk must lie inside code that only runs when a test executes it:
+   a method, constructor, finalizer, operator, accessor or local-function body, an expression body, or the initializer of
+   a non-`const` field or property. Comment and whitespace changes are free. Everything the compiler copies into other
+   files or exposes as metadata refuses: signatures and default parameter values, `const` fields, enum members,
+   attributes, member and type declarations, `partial`, and every `using` directive (an import or alias decides which type
+   a name in a signature, constant or attribute binds to). A hunk
+   inside an `#if` region refuses (another configuration or framework may compile code no record saw); a file the lexer
+   cannot place refuses.
+4. **Instrumented**, per narrowed project: every member a hunk touches must have at least one instrumented line in that
+   project's own line maps, for the file's base content; otherwise the project runs whole. Code that coverage does not see
+   (`[ExcludeFromCodeCoverage]`, which Microsoft.CodeCoverage drops even when its default exclusions are not merged,
+   `[DebuggerHidden]`, assemblies without symbols, a file compiled into another, uninstrumented assembly of that project's
+   hosts) cannot be judged by its records.
+
+**Narrowing** as [9.1](#91-what-is-narrowed): K(U) = classes without a usable record, classes whose record contains a
+changed file, and the top-level types declared by changed C# files of the project (in the class list or not). A project runs
+whole when one of its classes has no record or its own recording run did not report it: nothing proves that the class
+filter selects its tests. **Runner**: `dotnet test <project>
+--filter "FullyQualifiedName~<C1>|FullyQualifiedName~<C2>|..."` (a contains match, so it can only run more); a project
+with no kept class is only built (`dotnet build`); a filter longer than the argument limit runs the whole project.
+
+**Fingerprint** (`dotnet-cov-1`): OS, architecture, `dotnet --version` and `dotnet --list-runtimes` (run in the repository
+root, so `global.json` applies), and the content of every build-definition file (project, props and targets files,
+`global.json`, `nuget.config`, lock files, `.runsettings`, `.rsp`, `dotnet-tools.json`).
+
+**Accepted residuals**: reads of files are not observed (refused as above, except documentation files no C# file names);
+a non-.NET child process is not observed (its inputs are files, refused as above; .NET child processes are collected);
+classes that share static state with others in the shared narrowed run (false alarms, as for the JVM); the closed-source
+Microsoft.CodeCoverage collector.
+
+**Evaluation** (Windows, .NET SDK 10; Polly and RestSharp at the commits of the .NET mutation set):
+
+| | Polly | RestSharp |
+|---|---|---|
+| Recording (all test projects, every framework, 4 hosts) | 230 classes, 229 complete, 18 min (5 projects × 3 frameworks) | 56 classes, 55 complete, 15 min (5 projects × up to 4 frameworks) |
+| Killed mutants / narrowed / refused by a guard | 20 / 17 / 3 (`#if`, constructor declaration, `const`) | 20 / 18 / 1 (constructor declaration) |
+| Failing classes (class verdicts from TRX) / **violations** | 71 / **0** | 52 / **0** |
+| Median classes run / project classes (static: 1.0) | 0.127 | 0.875 |
+| Body guard over 500 first-parent commits (commits changing only `.cs` files) | 17 of 38 | 32 of 95 (`src/`, `test/`) |
+
+Replay on Polly (fresh records at the parent, every removed class run at the commit): a commit changing 57 source files
+inside method bodies narrowed 4 projects and removed 113 classes, all green at the commit (0 misses); another kept its
+project whole because a whole-suite run timed out at the parent (see the assertion dialog above).
+
+The guard refused the `const` mutant of Polly, the compile-time inlining case. RestSharp narrows little because the
+repository has its own source generator: generated code maps to every file of the generator's consumer project, so every
+class depends on about 105 files. Recording one project on one framework (Polly.Core.Tests, 124 classes) took 1.8× its
+isolated per-class run without coverage.

@@ -180,7 +180,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		plan.Notes = append(plan.Notes, notes...)
 	}
 	if len(dotnetTests) > 0 {
-		cmds, notes := dotnetCommands(dotnetTests)
+		cmds, notes := dotnetCommands(dotnetTests, opt)
 		plan.Commands = append(plan.Commands, cmds...)
 		plan.Notes = append(plan.Notes, notes...)
 	}

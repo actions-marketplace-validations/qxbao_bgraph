@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
+	"github.com/qxbao/bgraph/internal/dynamic/dotnetdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/eco"
@@ -30,7 +31,7 @@ type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
 type RecordOptions struct {
-	// Eco: the ecosystem to record ("python", "node" or "jvm"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
+	// Eco: the ecosystem to record ("python", "node", "jvm" or "dotnet"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
 	// set, otherwise every ecosystem with a dynamic layer that has test units.
 	Eco        string
 	Units      string        // glob on unit IDs (test files); empty: every unit
@@ -42,7 +43,8 @@ type RecordOptions struct {
 	// Env: extra environment variables for the test processes (e.g. PYTHONPATH=<checkout>/src so that a worktree's sources
 	// shadow an editable install of another checkout). They are not part of the environment fingerprint.
 	Env []string
-	// BuildArgs: extra Maven/Gradle arguments of the JVM recording build (e.g. -Dmaven.repo.local=...).
+	// BuildArgs: extra Maven/Gradle arguments of the JVM recording build (e.g. -Dmaven.repo.local=...), or extra arguments of
+	// `dotnet build` / `dotnet test` of the .NET recording (e.g. -c Release).
 	BuildArgs []string
 	// KeepLogs keeps the JVM collector logs (for debugging; they are removed by default).
 	KeepLogs bool
@@ -236,6 +238,8 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 			recs, skipped, err = ix.recordNode(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		case jvm.Name:
 			recs, skipped, err = ix.recordJVM(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		case dotnetdyn.Eco:
+			recs, skipped, err = ix.recordDotnet(ctx, opt, an, wt, head, now, keep, &sum)
 		}
 		sum.Skipped = append(sum.Skipped, skipped...)
 		if err != nil {
@@ -506,7 +510,7 @@ func (ix *Index) DynamicStatusOf(ctx context.Context, eco string) (DynamicStatus
 		}
 		st.CurrentEnv++
 		files := []string{r.Unit}
-		if eco == jvm.Name {
+		if eco == jvm.Name || eco == dotnetdyn.Eco {
 			files = nil // class and class-list records: the class's file is among its dependencies, not named by the unit
 		}
 		why := dynamic.Usable(r, files, p)

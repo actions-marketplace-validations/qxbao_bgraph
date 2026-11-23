@@ -46,3 +46,33 @@ func TestDotnetCommandsMTP(t *testing.T) {
 		t.Errorf("got %+v, want %v", p.Commands, want)
 	}
 }
+
+// TestDotnetClassFilter: units narrowed by the class layer (docs/dynamic-layer.md §9.11).
+func TestDotnetClassFilter(t *testing.T) {
+	a := dotnetUnit("tests/a/x.csproj", "")
+	a.ClassFilter, a.Classes = true, []string{"A.FooTests", "A.Bar(Tests)"}
+	b := dotnetUnit("tests/b/x.csproj", "")
+	b.ClassFilter = true
+	c := dotnetUnit("tests/c/x.csproj", "")
+	c.ClassFilter, c.Classes = true, []string{"C.LongNameTests"}
+	p, err := Commands(model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{a, b, c}}, Options{MaxArgChars: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got [][]string
+	for _, c := range p.Commands {
+		got = append(got, c.Argv)
+	}
+	want := [][]string{
+		{"dotnet", "test", "tests/a/x.csproj"}, // the filter is longer than MaxArgChars: the whole project runs
+		{"dotnet", "build", "tests/b/x.csproj"},
+		{"dotnet", "test", "tests/c/x.csproj", "--filter", "FullyQualifiedName~C.LongNameTests"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v\nwant %v", got, want)
+	}
+	p, _ = Commands(model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{a}}, Options{})
+	if f := p.Commands[0].Argv; len(f) != 5 || f[4] != `FullyQualifiedName~A.FooTests|FullyQualifiedName~A.Bar\(Tests\)` {
+		t.Errorf("filter %v", f)
+	}
+}

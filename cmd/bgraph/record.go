@@ -20,12 +20,12 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 	root := fs.String("root", ".", "directory inside the repo")
 	python := fs.String("python", "", "interpreter (overrides bgraph.toml [dynamic_layer] python; default python on PATH)")
 	nodeExe := fs.String("node", "", "node executable (overrides bgraph.toml [dynamic_layer] node; default node on PATH)")
-	ecoName := fs.String("eco", "", "record only this ecosystem: python, node or jvm (default: [dynamic_layer] ecosystems, else every one with test units)")
-	buildArgs := fs.String("build-args", "", "jvm: extra Maven/Gradle arguments of the recording build, space-separated (e.g. -Dmaven.repo.local=DIR)")
+	ecoName := fs.String("eco", "", "record only this ecosystem: python, node, jvm or dotnet (default: [dynamic_layer] ecosystems, else every one with test units)")
+	buildArgs := fs.String("build-args", "", "jvm: extra Maven/Gradle arguments of the recording build; dotnet: extra dotnet build/test arguments (e.g. -c Release); space-separated")
 	keepLogs := fs.Bool("keep-logs", false, "jvm: keep the collector logs (debugging)")
 	trust := fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	units := fs.String("units", "", "only the test units (files) matching this glob")
-	jobs := fs.Int("jobs", 0, "units run in parallel (default: half the CPUs for Python, a quarter for Node; jvm: parallel test JVMs, default min(4, CPUs/2))")
+	jobs := fs.Int("jobs", 0, "units run in parallel (default: half the CPUs for Python, a quarter for Node; jvm and dotnet: parallel test JVMs or test hosts, default min(4, CPUs/2))")
 	timeout := fs.Duration("timeout", 10*time.Minute, "per-unit timeout (a unit that times out gets an incomplete record)")
 	allowDirty := fs.Bool("allow-dirty", false, "record a working tree that differs from HEAD")
 	out := fs.String("out", "", "write the records to this JSONL file instead of the state directory (import elsewhere with `bgraph dynamic import`)")
@@ -107,7 +107,7 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 // runDynamic implements `bgraph dynamic import FILE` and `bgraph dynamic status`.
 func runDynamic(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--eco python|node|jvm] [--python EXE] [--node EXE] [--trust-native-env] [--json]")
+		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet] [--python EXE] [--node EXE] [--trust-native-env] [--json]")
 		return 2
 	}
 	sub, rest := args[0], args[1:]
@@ -121,7 +121,7 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 	case "status":
 		python = fs.String("python", "", "interpreter (overrides bgraph.toml [dynamic_layer] python)")
 		nodeExe = fs.String("node", "", "node executable (overrides bgraph.toml [dynamic_layer] node)")
-		ecoName = fs.String("eco", "", "only this ecosystem (python, node or jvm); default: every one with records or test units; JSON: an object with --eco, else an array")
+		ecoName = fs.String("eco", "", "only this ecosystem (python, node, jvm or dotnet); default: every one with records or test units; JSON: an object with --eco, else an array")
 		trust = fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 		asJSON = fs.Bool("json", false, "in JSON")
 	default:
