@@ -9,6 +9,7 @@
 //	bgraph-eval jvm-locate|dotnet-locate --tasks tasks-jvm.jsonl --work DIR [--out locate.json] [--examples 3]   (locate JVM / .NET FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-gib|jvm-provider --tasks tasks-jvm.jsonl --work DIR --out DIR   (JVM: superset check against gitflow-incremental-builder; Maven reactor and Gradle projects against bgraph units)
 //	bgraph-eval dotnet-affected|dotnet-provider --tasks tasks-dotnet.jsonl --work DIR --out DIR   (.NET: superset check against dotnet-affected; ProjectReference edges against msbuild)
+//	bgraph-eval rb-locate --tasks tasks-ruby.jsonl --work DIR [--out rb-locate.json] [--examples 3]   (locate Ruby FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
 //	bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry|yarn|bun --repos a__b[:lockfile],... [--commits 25] [--out DIR] [--jobs 1] [--pnpm CMD]   (lockfile closures vs the package manager; gate L1)
@@ -103,6 +104,8 @@ func main() {
 		err = cmdGoProvider(ctx, os.Args[2:])
 	case "go-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "go")
+	case "rb-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "ruby")
 	case "lockdiff":
 		err = cmdLockdiff(ctx, os.Args[2:])
 	case "manifest":
@@ -355,7 +358,7 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | ruby")
 	fs.Parse(args)
 	tasks, err := evalkit.LoadTasks(*tasksPath)
 	if err != nil {
@@ -404,6 +407,8 @@ func cmdManifest(args []string) error {
 	var man evalkit.Manifest
 	if *eco == "jvm" || *eco == "dotnet" || *eco == "go" {
 		man = evalkit.BuildJVMDotnetManifest(*eco, t1, *metaPath, *maxPer)
+	} else if *eco == "ruby" {
+		man = evalkit.BuildRubyManifest(t1, *metaPath, *maxPer)
 	} else if *eco == "python" {
 		ds = []evalkit.DatasetInfo{{Name: "princeton-nlp/SWE-bench_Verified", URL: "https://huggingface.co/datasets/princeton-nlp/SWE-bench_Verified", Notes: "test split (500 tasks); all repos are libraries/frameworks"}}
 		if rev := metaString(*metaPath, "python_datasets", ds[0].Name); rev != "" {

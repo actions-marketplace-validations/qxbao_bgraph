@@ -28,6 +28,11 @@ type locName struct {
 	Units      []string `json:"units,omitempty"`
 	PatchUnits []string `json:"patch_units,omitempty"`
 	PkgHit     bool     `json:"pkg_hit,omitempty"`
+	// Ruby only: how the candidates were found, helper files (shared examples) replaced by their includers, and names located
+	// outside a Ruby test unit (Cucumber scenarios; counted as notfound).
+	Via     string   `json:"via,omitempty"`
+	Helpers []string `json:"helpers,omitempty"`
+	NotUnit bool     `json:"not_unit,omitempty"`
 }
 
 type locRow struct {
@@ -59,6 +64,21 @@ func goLocName(l evalkit.GoTestLoc) locName {
 	n := locName{Name: l.Name, Form: l.Form, Class: l.Func, Files: l.Files, InPatch: l.InPatch, Units: l.Units, PatchUnits: l.PatchUnits, PkgHit: l.PkgHit}
 	switch {
 	case l.NotFound:
+		n.Cat = "notfound"
+	case l.Ambiguous:
+		n.Cat = "ambiguous"
+	default:
+		n.Cat = "unique"
+	}
+	return n
+}
+
+// rbLocName: Ruby units are test files, so Units = Files (unit ID = repo-relative path).
+func rbLocName(l evalkit.RbTestLoc) locName {
+	n := locName{Name: l.Name, Form: l.Form, Class: l.Class, Files: l.Files, InPatch: l.InPatch, Units: l.Files, PatchUnits: l.PatchFiles,
+		Via: l.Via, Helpers: l.Helpers, NotUnit: l.NotUnit}
+	switch {
+	case l.NotFound || l.NotUnit:
 		n.Cat = "notfound"
 	case l.Ambiguous:
 		n.Cat = "ambiguous"
@@ -124,7 +144,13 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 				os.MkdirAll(filepath.Dir(idx), 0o755)
 				dir := evalkit.RustRepoDir(*work, t.Repo)
 				var r locRow
-				if eco == "go" {
+				if eco == "ruby" {
+					x := evalkit.RbLocateTask(ctx, dir, idx, t)
+					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
+					for _, l := range x.Locs {
+						r.Names = append(r.Names, rbLocName(l))
+					}
+				} else if eco == "go" {
 					x := evalkit.GoLocateTask(ctx, dir, idx, t)
 					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
 					for _, l := range x.Locs {

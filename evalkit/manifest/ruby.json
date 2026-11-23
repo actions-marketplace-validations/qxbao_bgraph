@@ -1,0 +1,93 @@
+{
+ "ecosystem": "ruby",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "SWE-bench/SWE-bench_Multilingual",
+   "url": "https://huggingface.co/datasets/SWE-bench/SWE-bench_Multilingual",
+   "revision": "846e647b9f33c0b51b739d005d13d85493c9af09",
+   "notes": "test split; keeps Ruby repos (instances whose test patch touches a .rb file)"
+  },
+  {
+   "name": "ByteDance-Seed/Multi-SWE-RL",
+   "url": "https://huggingface.co/datasets/ByteDance-Seed/Multi-SWE-RL",
+   "revision": "9777648932daa214ba18c70c81e85821b5836f32",
+   "notes": "ruby/ directories (JSONL: asciidoctor, jekyll); FAIL_TO_PASS = f2p_tests keys, else n2p_tests keys (task field f2p_kind); a training set, not harness-curated like Multilingual"
+  }
+ ],
+ "repos": [
+  {
+   "name": "rubocop/rubocop",
+   "role": "holdout",
+   "t1_tasks": 16,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "jekyll/jekyll",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Multi-SWE-RL",
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "faker-ruby/faker",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "fluent/fluentd",
+   "role": "dev",
+   "t1_tasks": 12,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "fastlane/fastlane",
+   "role": "dev",
+   "t1_tasks": 7,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "jordansissel/fpm",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-bench_Multilingual"
+   ]
+  },
+  {
+   "name": "asciidoctor/asciidoctor",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Multi-SWE-RL"
+   ]
+  }
+ ]
+}
