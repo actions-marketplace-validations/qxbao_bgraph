@@ -50,25 +50,38 @@ func native(p string) bool {
 // mapper turns the absolute paths Ruby reports into repo-relative paths of tree t.
 type mapper struct {
 	root string // forward slashes, no trailing slash
+	real string // the root with symbolic links resolved, when it differs ("" otherwise)
 	t    tree.Tree
 }
 
 func newMapper(root string, t tree.Tree) *mapper {
-	return &mapper{root: strings.TrimSuffix(filepath.ToSlash(root), "/"), t: t}
+	m := &mapper{root: strings.TrimSuffix(filepath.ToSlash(root), "/"), t: t}
+	// The root may be reached through a symbolic link (macOS /var -> /private/var): Ruby reports real paths for some files.
+	if ev, err := filepath.EvalSymlinks(root); err == nil {
+		if r := strings.TrimSuffix(filepath.ToSlash(ev), "/"); r != m.root {
+			m.real = r
+		}
+	}
+	return m
 }
 
 // rel returns abs relative to the repository root ("" when outside).
 func (m *mapper) rel(abs string) string {
 	abs = filepath.ToSlash(abs)
-	r, a := m.root, abs
-	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
-		r, a = strings.ToLower(r), strings.ToLower(a)
-	}
-	switch {
-	case a == r:
-		return "."
-	case strings.HasPrefix(a, r+"/"):
-		return path.Clean(abs[len(r)+1:])
+	for _, r := range []string{m.root, m.real} {
+		if r == "" {
+			continue
+		}
+		a := abs
+		if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+			r, a = strings.ToLower(r), strings.ToLower(a)
+		}
+		switch {
+		case a == r:
+			return "."
+		case strings.HasPrefix(a, r+"/"):
+			return path.Clean(abs[len(r)+1:])
+		}
 	}
 	if ev, err := filepath.EvalSymlinks(filepath.FromSlash(abs)); err == nil && filepath.ToSlash(ev) != abs {
 		return m.rel(filepath.ToSlash(ev))

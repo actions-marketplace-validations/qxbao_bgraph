@@ -28,7 +28,7 @@ const Eco = "ruby"
 
 // CollectorID identifies the collector and its record format (docs/dynamic-layer.md §10.3): bump it whenever what the collector
 // observes changes (records of other versions are not used).
-const CollectorID = "ruby-cov-1"
+const CollectorID = "ruby-cov-2"
 
 // ResolveRuby turns the configured Ruby into an executable path: a name without separator is looked up on PATH, anything else
 // is relative to the repo root. Empty: "ruby".

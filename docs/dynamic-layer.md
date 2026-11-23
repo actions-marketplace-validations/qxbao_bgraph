@@ -943,7 +943,7 @@ Per selection; any refusal keeps the static selection with a `dynamic_skipped` w
 
 ### 10.3 Records
 
-Collector ID `ruby-cov-1`; unit = the test file path. `Deps` are every repository file a process of the unit loaded
+Collector ID `ruby-cov-2`; unit = the test file path. `Deps` are every repository file a process of the unit loaded
 (coverage and `$LOADED_FEATURES`) or read, with blob OIDs of the working tree at `HEAD` (as [4](#4-python-collector)), so
 line numbers in the method tables are exact for the recorded content. Two optional fields extend the record (older store
 lines decode unchanged; other ecosystems never set them):

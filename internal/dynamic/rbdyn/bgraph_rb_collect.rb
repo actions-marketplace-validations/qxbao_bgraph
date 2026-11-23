@@ -10,11 +10,13 @@ if ENV["BGRAPH_RB_OUT"] && !ENV["BGRAPH_RB_OUT"].empty? && !defined?(::BgraphRbC
   require "rbconfig"
 
   module BgraphRbCollect
-    ID = "ruby-cov-1"
+    ID = "ruby-cov-2"
     OUT = ENV["BGRAPH_RB_OUT"]
     WIN = (RUBY_PLATFORM =~ /mswin|mingw|cygwin/) ? true : false
     ROOT = ENV["BGRAPH_RB_ROOT"].to_s.tr("\\", "/").chomp("/")
     ROOT_KEY = (WIN ? ROOT.downcase : ROOT) + "/"
+    # The root may be reached through a symbolic link (macOS /var -> /private/var): loaded files can carry either spelling.
+    ROOT_KEYS = [ROOT_KEY, ((File.realpath(ROOT).tr("\\", "/").chomp("/") rescue ROOT)).then { |r| (WIN ? r.downcase : r) + "/" }].uniq.freeze
     SELF = File.expand_path(__FILE__).tr("\\", "/")
     LIBDIR = (defined?(RbConfig) ? RbConfig::CONFIG["rubylibdir"].to_s : "").tr("\\", "/")
     # Frames of these libraries list directories to decide what exists (loading machinery, test frameworks): not a dependency.
@@ -55,7 +57,7 @@ if ENV["BGRAPH_RB_OUT"] && !ENV["BGRAPH_RB_OUT"].empty? && !defined?(::BgraphRbC
         return nil if s.start_with?("|")
         abs = File.expand_path(s, base || Dir.pwd).tr("\\", "/")
         k = WIN ? abs.downcase : abs
-        return nil unless (k + "/") == ROOT_KEY || k.start_with?(ROOT_KEY)
+        return nil unless ROOT_KEYS.any? { |rk| (k + "/") == rk || k.start_with?(rk) }
         abs
       rescue ArgumentError, TypeError, SystemCallError
         nil
@@ -99,7 +101,7 @@ if ENV["BGRAPH_RB_OUT"] && !ENV["BGRAPH_RB_OUT"].empty? && !defined?(::BgraphRbC
           next if p == SELF || p.start_with?("<internal:")
           return true if p.end_with?(".gemspec")
           k = WIN ? p.downcase : p
-          return false if k.start_with?(ROOT_KEY)
+          return false if ROOT_KEYS.any? { |rk| k.start_with?(rk) }
           return true if p =~ EXEMPT_GEMS
           return true if !LIBDIR.empty? && (p.start_with?(LIBDIR + "/rubygems") || p.start_with?(LIBDIR + "/bundler"))
           next if stdlib?(p)
@@ -209,7 +211,7 @@ if ENV["BGRAPH_RB_OUT"] && !ENV["BGRAPH_RB_OUT"].empty? && !defined?(::BgraphRbC
 
       def under_root(p)
         k = (WIN ? p.downcase : p)
-        k.start_with?(ROOT_KEY)
+        ROOT_KEYS.any? { |rk| k.start_with?(rk) }
       end
 
       # dump writes what this process saw. exec: written right before exec replaces the process.

@@ -536,7 +536,7 @@ func TestRecordFormatCompat(t *testing.T) {
 	if len(warn) > 0 || len(recs) != 1 || recs[0].Methods != nil || recs[0].Reads != nil || recs[0].Deps["tests/test_a.py"] != "abc" {
 		t.Fatalf("old line: %+v %v", recs, warn)
 	}
-	r := Record{Eco: "ruby", Unit: "spec/a_spec.rb", Collector: "ruby-cov-1", Env: "e", Complete: true, Pass: true, Recorded: t0,
+	r := Record{Eco: "ruby", Unit: "spec/a_spec.rb", Collector: "ruby-cov-2", Env: "e", Complete: true, Pass: true, Recorded: t0,
 		Deps:    map[string]string{"spec/a_spec.rb": "1", "lib/a.rb": "2", "data/x.yml": "3"},
 		Methods: map[string]string{"lib/a.rb": "2-4:1,6-8:0", "spec/a_spec.rb": ""}, Reads: []string{"data/x.yml"}}
 	b, err := Encode([]Record{r})
