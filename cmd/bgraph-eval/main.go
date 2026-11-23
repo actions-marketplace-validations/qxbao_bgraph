@@ -4,7 +4,7 @@
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
 //	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
-//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
+//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python|ruby] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-locate|dotnet-locate --tasks tasks-jvm.jsonl --work DIR [--out locate.json] [--examples 3]   (locate JVM / .NET FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-gib|jvm-provider --tasks tasks-jvm.jsonl --work DIR --out DIR   (JVM: superset check against gitflow-incremental-builder; Maven reactor and Gradle projects against bgraph units)
@@ -519,10 +519,10 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
 	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go (rust/python/jvm/dotnet/go default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | ruby (rust/python/jvm/dotnet/go/ruby default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
 	budget := fs.Duration("budget", 0, "rust/python: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
-	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" {
+	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "ruby" {
 		dirSet, manSet := false, false
 		fs.Visit(func(f *flag.Flag) {
 			dirSet = dirSet || f.Name == "dir"
@@ -565,6 +565,14 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	}
 	b, _ := os.ReadFile(filepath.Join(*out, "t2.md"))
 	fmt.Println(string(b))
+	if *eco == "ruby" {
+		// provider cross-check: the runner's test files (recorded by the baseline) against bgraph's units at R
+		md, err := evalkit.WriteRubyUnits(*out, evalkit.RubyUnitsCheck(ctx, evalkit.T2Config{Dir: *dir, Manifest: man, Repos: sel}))
+		if err != nil {
+			return 2, err
+		}
+		fmt.Println(md)
+	}
 	if qr.Violations > 0 {
 		return 1, nil
 	}

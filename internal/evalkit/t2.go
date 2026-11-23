@@ -52,7 +52,8 @@ type T2Repo struct {
 	Targets    []string `json:"targets,omitempty"` // dotnet: test project files, relative to the checkout (one `dotnet test` each; the unit is the project)
 	Jdk        string   `json:"jdk,omitempty"`     // jvm: "17" (default) or "21"
 	Venv       string   `json:"venv,omitempty"`    // python: virtual environment directory, relative to the T2 root (holds the repo's dependencies and the editable install)
-	Spec       []string `json:"spec,omitempty"`    // mocha: spec paths of the whole suite (Args hold the other options)
+	Spec       []string `json:"spec,omitempty"`    // mocha: spec paths of the whole suite (Args hold the other options); ruby rspec: paths given to rspec when listing the suite
+	Task       string   `json:"task,omitempty"`    // ruby minitest/test-unit: the Rake::TestTask whose file list and libs define the suite (default "test")
 }
 
 // T2Manifest is the T2 repo manifest.
@@ -602,6 +603,8 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		return r.buildOracleJD(ctx, cfg, store, have)
 	case "go":
 		return r.buildOracleGo(ctx, cfg, store, have)
+	case "ruby":
+		return r.buildOracleRuby(ctx, cfg, store, have)
 	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -816,6 +819,10 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 		ck.Changed = sel.Changed
 		ck.Near = goNear(sel, ck.Missed)
 		return ck
+	case "ruby":
+		ck.Changed = sel.Changed
+		ck.Near = pyNear(sel, ck.Missed)
+		return ck
 	}
 	diagFor := ck.Missed
 	if len(diagFor) == 0 && len(ck.NativeOnly) > 0 {
@@ -942,7 +949,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" {
+	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`
