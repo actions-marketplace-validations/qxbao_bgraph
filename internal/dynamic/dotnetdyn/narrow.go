@@ -268,10 +268,10 @@ type Params struct {
 	Guarded Guarded
 }
 
-// Narrowable reports whether the class layer handles selected unit t (VSTest projects; Microsoft.Testing.Platform is not
-// supported yet).
+// Narrowable reports whether the class layer handles selected unit t (a test project run by `dotnet test`, VSTest or
+// Microsoft.Testing.Platform).
 func Narrowable(t model.SelectedTest, eco string) bool {
-	return eco == Eco && t.Runner == RunnerDotnet && !t.Whole && t.Config == "" && t.Package != ""
+	return eco == Eco && t.Runner == RunnerDotnet && !t.Whole && t.Package != ""
 }
 
 // Narrow applies the class layer to sel (docs/dynamic-layer.md §9.1): every selected .NET test project with a usable class list runs

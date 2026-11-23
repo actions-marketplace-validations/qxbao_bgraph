@@ -83,11 +83,8 @@ func (ix *Index) recordDotnet(ctx context.Context, opt RecordOptions, an *analyz
 			case u.Whole || u.Package == "":
 				skipped = append(skipped, u.ID+": whole-project unit")
 				continue
-			case u.Config != "":
-				skipped = append(skipped, u.ID+": Microsoft.Testing.Platform runner (not supported by the class layer yet)")
-				continue
 			}
-			units = append(units, dotnetdyn.Unit{ID: u.ID, Project: u.Package, Dir: path.Dir(u.Package)})
+			units = append(units, dotnetdyn.Unit{ID: u.ID, Project: u.Package, Dir: path.Dir(u.Package), MTP: u.Config != ""})
 		}
 	}
 	if len(units) == 0 {

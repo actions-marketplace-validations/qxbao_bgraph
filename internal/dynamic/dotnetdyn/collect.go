@@ -25,6 +25,7 @@ type Unit struct {
 	ID      string // unit ID ("dotnet:<project file>")
 	Project string // repo-relative project file
 	Dir     string // repo-relative project directory ("." for the root)
+	MTP     bool   // global.json selects Microsoft.Testing.Platform (the project may also opt in itself; see evaluate)
 }
 
 // RunOptions configures Run.
@@ -157,32 +158,42 @@ var ErrNotTestProject = errors.New("not a test project")
 
 // Frameworks evaluates the target frameworks of a test project (`dotnet msbuild -getProperty`).
 func (o RunOptions) Frameworks(ctx context.Context, project string) ([]string, error) {
-	fws, _, err := o.evaluate(ctx, project)
-	return fws, err
+	ev, err := o.evaluate(ctx, project)
+	return ev.fws, err
 }
 
-// evaluate restores a test project and evaluates its target frameworks and its RunSettingsFilePath.
-func (o RunOptions) evaluate(ctx context.Context, project string) ([]string, string, error) {
+type evaluation struct {
+	fws         []string
+	runSettings string // RunSettingsFilePath
+	mtp         bool   // the project opts in to Microsoft.Testing.Platform (UseMicrosoftTestingPlatformRunner, IsTestingPlatformApplication)
+}
+
+// evaluate restores a test project and evaluates its target frameworks, RunSettingsFilePath and test platform.
+func (o RunOptions) evaluate(ctx context.Context, project string) (evaluation, error) {
 	// IsTestProject comes from Microsoft.NET.Test.Sdk, whose props are only imported once the project is restored.
 	if out, err := o.dotnet(ctx, 10*time.Minute, append([]string{"restore", project}, o.BuildArgs...)...); err != nil {
-		return nil, "", fmt.Errorf("restore %s: %v: %s", project, err, tail(out, 6))
+		return evaluation{}, fmt.Errorf("restore %s: %v: %s", project, err, tail(out, 6))
 	}
 	args := append([]string{"msbuild", project, "-getProperty:TargetFrameworks", "-getProperty:TargetFramework",
-		"-getProperty:IsTestProject", "-getProperty:RunSettingsFilePath"}, o.BuildArgs...)
+		"-getProperty:IsTestProject", "-getProperty:RunSettingsFilePath", "-getProperty:UseMicrosoftTestingPlatformRunner",
+		"-getProperty:IsTestingPlatformApplication"}, o.BuildArgs...)
 	out, err := o.dotnet(ctx, 5*time.Minute, args...)
 	if err != nil {
-		return nil, "", fmt.Errorf("evaluate %s: %v: %s", project, err, tail(out, 6))
+		return evaluation{}, fmt.Errorf("evaluate %s: %v: %s", project, err, tail(out, 6))
 	}
 	var v struct{ Properties map[string]string }
 	i := strings.IndexByte(out, '{')
 	if i < 0 {
-		return nil, "", fmt.Errorf("evaluate %s: no properties in the output: %s", project, tail(out, 4))
+		return evaluation{}, fmt.Errorf("evaluate %s: no properties in the output: %s", project, tail(out, 4))
 	}
 	if err := json.Unmarshal([]byte(out[i:]), &v); err != nil {
-		return nil, "", fmt.Errorf("evaluate %s: %v", project, err)
+		return evaluation{}, fmt.Errorf("evaluate %s: %v", project, err)
 	}
-	if !strings.EqualFold(strings.TrimSpace(v.Properties["IsTestProject"]), "true") {
-		return nil, "", ErrNotTestProject
+	isTrue := func(k string) bool { return strings.EqualFold(strings.TrimSpace(v.Properties[k]), "true") }
+	// Microsoft.Testing.Platform applications without Microsoft.NET.Test.Sdk may leave IsTestProject to the per-framework
+	// evaluations (xUnit v3): IsTestingPlatformApplication says it too.
+	if !isTrue("IsTestProject") && !isTrue("IsTestingPlatformApplication") {
+		return evaluation{}, ErrNotTestProject
 	}
 	var fws []string
 	for _, f := range strings.Split(v.Properties["TargetFrameworks"], ";") {
@@ -196,9 +207,10 @@ func (o RunOptions) evaluate(ctx context.Context, project string) ([]string, str
 		}
 	}
 	if len(fws) == 0 {
-		return nil, "", fmt.Errorf("evaluate %s: no target framework", project)
+		return evaluation{}, fmt.Errorf("evaluate %s: no target framework", project)
 	}
-	return fws, strings.TrimSpace(v.Properties["RunSettingsFilePath"]), nil
+	return evaluation{fws: fws, runSettings: strings.TrimSpace(v.Properties["RunSettingsFilePath"]),
+		mtp: isTrue("UseMicrosoftTestingPlatformRunner") || isTrue("IsTestingPlatformApplication")}, nil
 }
 
 // Run records one test project: evaluate its frameworks, build it once, run the whole suite per framework (the class list), then
@@ -207,7 +219,9 @@ func Run(ctx context.Context, opt RunOptions, u Unit) (Outcome, error) {
 	t0 := time.Now()
 	out := Outcome{Unit: u, Unrecorded: map[string]string{}, Classes: map[string]TestOutcome{}, On: map[string][]string{}}
 	defer func() { out.Elapsed = time.Since(t0) }()
-	fws, settingsFile, err := opt.evaluate(ctx, u.Project)
+	ev, err := opt.evaluate(ctx, u.Project)
+	fws, settingsFile := ev.fws, ev.runSettings
+	mtp := u.MTP || ev.mtp
 	if errors.Is(err, ErrNotTestProject) {
 		return out, err
 	}
@@ -228,19 +242,40 @@ func Run(ctx context.Context, opt RunOptions, u Unit) (Outcome, error) {
 	}
 	defer os.RemoveAll(work)
 	settings := filepath.Join(work, "bgraph.runsettings")
-	if err := os.WriteFile(settings, []byte(runSettings), 0o644); err != nil {
+	content := runSettings
+	if mtp {
+		settings, content = filepath.Join(work, "bgraph.coverage.xml"), coverageSettings
+	}
+	if err := os.WriteFile(settings, []byte(content), 0o644); err != nil {
 		return out, err
 	}
 	if o, err := opt.dotnet(ctx, opt.timeout()*3, append([]string{"build", u.Project, "-nologo"}, opt.BuildArgs...)...); err != nil {
 		out.Why = fmt.Sprintf("build: %v: %s", err, tail(o, 8))
 		return out, nil
 	}
+	var apps map[string]mtpApp
+	var caps mtpCaps
+	if mtp {
+		if apps, err = opt.mtpApps(ctx, u.Project, fws); err == nil {
+			caps, err = opt.probe(ctx, apps[fws[0]])
+		}
+		if err != nil {
+			out.Why = "Microsoft.Testing.Platform: " + err.Error()
+			return out, nil
+		}
+	}
 	for _, fw := range fws {
 		dir := filepath.Join(work, "list-"+safeName(fw))
-		args := append([]string{"test", u.Project, "--no-build", "-p:CollectCoverage=false", "-f", fw, "--logger", "trx;LogFileName=list.trx", "--results-directory", dir},
-			opt.BuildArgs...)
-		o, _ := opt.dotnet(ctx, opt.timeout()*3, args...)
-		res, err := ParseTRXFile(filepath.Join(dir, "list.trx"))
+		var res map[string]TestOutcome
+		var o string
+		if mtp {
+			res, o, err = opt.mtpList(ctx, apps[fw], caps, dir)
+		} else {
+			args := append([]string{"test", u.Project, "--no-build", "-p:CollectCoverage=false", "-f", fw, "--logger", "trx;LogFileName=list.trx", "--results-directory", dir},
+				opt.BuildArgs...)
+			o, _ = opt.dotnet(ctx, opt.timeout()*3, args...)
+			res, err = ParseTRXFile(filepath.Join(dir, "list.trx"))
+		}
 		if err != nil {
 			out.Unrecorded[fw] = "the whole suite produced " + trxProblem(err) + ": " + tail(o, 6)
 			continue
@@ -279,7 +314,12 @@ func Run(ctx context.Context, opt RunOptions, u Unit) (Outcome, error) {
 		go func() {
 			defer wg.Done()
 			for i := range next {
-				runs[i] = opt.runClass(ctx, u, jobs[i].class, jobs[i].fw, settings, filepath.Join(work, fmt.Sprintf("c%05d", i)))
+				dir := filepath.Join(work, fmt.Sprintf("c%05d", i))
+				if mtp {
+					runs[i] = opt.mtpClass(ctx, apps[jobs[i].fw], caps, jobs[i].class, jobs[i].fw, settings, dir)
+				} else {
+					runs[i] = opt.runClass(ctx, u, jobs[i].class, jobs[i].fw, settings, dir)
+				}
 				if opt.Progress != nil {
 					mu.Lock()
 					done++

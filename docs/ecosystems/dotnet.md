@@ -14,7 +14,7 @@ the props/targets that apply to them are read and evaluated as text; MSBuild is 
 | Runners | `dotnet` (`dotnet test`, VSTest or Microsoft.Testing.Platform) |
 | Manifests/configs read | Project files, `Directory.Build.props/targets`, `Directory.Packages.props`, every `<Import>`ed file (shared-project `.projitems` included), `.editorconfig`, `.globalconfig`, `Directory.Build.rsp`, `MSBuild.rsp`, `global.json` (runner and Arcade SDK detection), `.sln`/`.slnx` locations (for `$(SolutionDir)`) |
 | Lockfiles | `packages.lock.json` at level L0 (closure not compared, see [lockfiles](../lockfiles.md)) |
-| Dynamic layer | Per-test-class narrowing of VSTest test projects from code coverage, off by default ([dynamic layer §9.11](../dynamic-layer.md#911-net)) |
+| Dynamic layer | Per-test-class narrowing of test projects (VSTest and Microsoft.Testing.Platform) from code coverage, off by default ([dynamic layer §9.11](../dynamic-layer.md#911-net)) |
 
 ## Supported layouts
 
@@ -166,8 +166,8 @@ No list file, environment variable or batching is used. Scope `none` emits no co
 - A `Directory.Packages.props` change selects every project below it, whichever package version changed.
 - Project types other than `.csproj`/`.fsproj`/`.vbproj` (`.vcxproj`, `.wapproj`, traversal `.proj`) are not units.
 - One `dotnet test` invocation per project: no shared build across projects.
-- Without the dynamic layer (off by default) selected projects run all their tests; with it, only VSTest projects are narrowed
-  to classes, and only for changes inside method bodies of C# files ([§9.11](../dynamic-layer.md#911-net)).
+- Without the dynamic layer (off by default) selected projects run all their tests; with it, test projects are narrowed to
+  classes only for changes inside method bodies of C# files ([§9.11](../dynamic-layer.md#911-net)).
 
 ## See also
 

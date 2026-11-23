@@ -148,3 +148,16 @@ func TestParseTRXAborted(t *testing.T) {
 		t.Errorf("failed run rejected: %v", err)
 	}
 }
+
+func TestSplitArgs(t *testing.T) {
+	got := splitArgs(`exec "C:\a b\x.dll" --flag ""`)
+	want := []string{"exec", `C:\a b\x.dll`, "--flag", ""}
+	if len(got) != len(want) {
+		t.Fatalf("%q", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("%d: %q want %q", i, got[i], want[i])
+		}
+	}
+}

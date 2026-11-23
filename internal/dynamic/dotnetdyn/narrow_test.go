@@ -265,11 +265,16 @@ func TestNarrow(t *testing.T) {
 	if out := Narrow(sel("src/Lib/Foo.cs"), p); out.Tests[0].ClassFilter {
 		t.Errorf("failed record narrowed: %+v", out.Tests[0])
 	}
-	// MTP projects and whole units are not handled.
+	// Microsoft.Testing.Platform projects narrow like VSTest ones; whole units are not handled.
 	s := sel("src/Lib/Foo.cs")
 	s.Tests[0].Config = "global.json"
+	if out := Narrow(s, Params{Env: "env", Records: recordsAt(base, "env"), Base: base, Head: head, UnitEco: p.UnitEco}); !out.Tests[0].ClassFilter {
+		t.Errorf("MTP unit not narrowed: %+v", out.Tests[0])
+	}
+	s = sel("src/Lib/Foo.cs")
+	s.Tests[0].Whole = true
 	if out := Narrow(s, Params{Env: "env", Records: recordsAt(base, "env"), Base: base, Head: head, UnitEco: p.UnitEco}); out.Tests[0].Dynamic != "" {
-		t.Errorf("MTP unit touched: %+v", out.Tests[0])
+		t.Errorf("whole unit touched: %+v", out.Tests[0])
 	}
 }
 

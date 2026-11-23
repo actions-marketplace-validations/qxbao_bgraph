@@ -36,14 +36,19 @@ func dotnetCommands(tests []model.SelectedTest, opt Options) ([]Command, []strin
 			continue
 		}
 		seen[proj] = true
-		if t.ClassFilter && t.Config == "" {
+		if t.ClassFilter {
 			if len(t.Classes) == 0 {
 				cmds = append(cmds, Command{Runner: "dotnet", Project: ".", Argv: []string{"dotnet", "build", proj},
 					Note: "class layer: no test class of this project is affected; it is only built"})
 				continue
 			}
 			if f := dotnetClassFilter(t.Classes); len(f) <= opt.MaxArgChars {
-				cmds = append(cmds, Command{Runner: "dotnet", Project: ".", Argv: []string{"dotnet", "test", proj, "--filter", f},
+				argv := []string{"dotnet", "test", proj, "--filter", f}
+				if t.Config != "" {
+					argv = []string{"dotnet", "test", "--project", proj, "--filter", f}
+					mtp = true
+				}
+				cmds = append(cmds, Command{Runner: "dotnet", Project: ".", Argv: argv,
 					Note: fmt.Sprintf("class layer: %d test classes", len(t.Classes))})
 				continue
 			}

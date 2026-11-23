@@ -76,3 +76,16 @@ func TestDotnetClassFilter(t *testing.T) {
 		t.Errorf("filter %v", f)
 	}
 }
+
+func TestDotnetClassFilterMTP(t *testing.T) {
+	a := dotnetUnit("tests/a/x.csproj", "global.json")
+	a.ClassFilter, a.Classes = true, []string{"A.FooTests"}
+	p, err := Commands(model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{a}}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"dotnet", "test", "--project", "tests/a/x.csproj", "--filter", "FullyQualifiedName~A.FooTests"}
+	if !reflect.DeepEqual(p.Commands[0].Argv, want) {
+		t.Errorf("got %v", p.Commands[0].Argv)
+	}
+}

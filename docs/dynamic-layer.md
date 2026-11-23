@@ -10,7 +10,7 @@ what it may remove, when it refuses, what a record is, and what each collector o
 | Python | widened test files | audit hook in a pytest plugin, one process per test file | implemented |
 | Node | widened test files | `--require` preload in every process and thread of the runner, one runner invocation per test file | implemented |
 | JVM | test classes inside a selected Maven module / Gradle project | Java agent, one fresh test JVM per class | implemented |
-| .NET | test classes inside a selected test project (VSTest) | code coverage (Microsoft.CodeCoverage), one fresh test host per class | implemented ([9.11](#911-net)) |
+| .NET | test classes inside a selected test project (VSTest or Microsoft.Testing.Platform) | code coverage (Microsoft.CodeCoverage), one fresh test host per class | implemented ([9.11](#911-net)) |
 
 Section numbers are stable: code comments refer to them.
 
@@ -724,8 +724,7 @@ Implementation:
 The .NET class layer (`ecosystems = ["dotnet"]`, off by default) narrows a selected **test project** to the test classes
 whose records reach a changed file, as [9.1](#91-what-is-narrowed) does for JVM modules. Sub-unit ID:
 `dotnet:<project file>#<class>`, the namespace-qualified name of a top-level test class (nested classes run with their
-outer class). The project is always built; only VSTest projects are handled (a project whose `global.json` selects
-Microsoft.Testing.Platform runs whole).
+outer class). The project is always built. VSTest and Microsoft.Testing.Platform (MTP) projects are handled.
 
 **Collector: code coverage, not runtime events.** A record is the set of tracked source files with at least one executed
 line in the Cobertura report of [Microsoft.CodeCoverage](https://github.com/microsoft/codecoverage) (shipped with
@@ -743,7 +742,17 @@ frameworks), then every class on every framework in its own `dotnet test --no-bu
 assembly included, auto-properties kept, default exclusion lists not merged, dynamic instrumentation only: static
 instrumentation rewrites assemblies on disk that parallel hosts share; xUnit theories not pre-enumerated, since discovery
 would otherwise run the member data of every class in each host), N at a time (default min(4, CPUs/2)).
-`-p:CollectCoverage=false` is passed to every test run (coverlet.msbuild rewrites assemblies on disk, which would race
+**Microsoft.Testing.Platform projects** (`global.json` selects the platform, or the project sets
+`UseMicrosoftTestingPlatformRunner` / `IsTestingPlatformApplication`): the recording runs the test application of each
+framework directly (its `RunCommand` and `RunArguments`), with the same VSTest-syntax `--filter`, the application's TRX
+report (`--report-xunit-trx` for xUnit v3, else `--report-trx` from Microsoft.Testing.Extensions.TrxReport) and, for xUnit
+v3, `--pre-enumerate-theories off`. Coverage comes from the platform's extension (`--coverage`, from
+Microsoft.Testing.Extensions.CodeCoverage) when the application has it, else from the
+[`dotnet-coverage`](https://learn.microsoft.com/dotnet/core/additional-tools/dotnet-coverage) tool (on `PATH` or in
+`~/.dotnet/tools`) wrapping the application, both with the same Microsoft.CodeCoverage settings. An application without
+`--filter`, without a TRX option, or with no coverage collector available is not recorded (its project runs whole).
+
+`-p:CollectCoverage=false` is passed to every VSTest run (coverlet.msbuild rewrites assemblies on disk, which would race
 between parallel hosts and stack a second instrumentation). `--build-args` go to restore, evaluation, build and test; they
 are part of the fingerprint, and selection only uses records made without them (the narrowed commands run without them).
 A project that sets `RunSettingsFilePath` is not recorded (the recording's `--settings` would replace its run settings).
@@ -807,9 +816,10 @@ under the project directory (a file added or removed there since the recording m
 **Narrowing** as [9.1](#91-what-is-narrowed): K(U) = classes without a usable record, classes whose record contains a
 changed file, and the top-level types declared by changed C# files of the project (in the class list or not). A project runs
 whole when one of its classes has no record or its own recording run did not report it: nothing proves that the class
-filter selects its tests. **Runner**: `dotnet test <project>
---filter "FullyQualifiedName~<C1>|FullyQualifiedName~<C2>|..."` (a contains match, so it can only run more); a project
-with no kept class is only built (`dotnet build`); a filter longer than the argument limit runs the whole project.
+filter selects its tests. **Runner**: `dotnet test <project> --filter "FullyQualifiedName~<C1>|FullyQualifiedName~<C2>|..."`
+(`dotnet test --project <project> --filter ...` when `global.json` selects Microsoft.Testing.Platform; a contains match, so it
+can only run more); a project with no kept class is only built (`dotnet build`); a filter longer than the argument limit
+runs the whole project.
 
 **Fingerprint** (`dotnet-cov-1`): OS, architecture, `dotnet --version` and `dotnet --list-runtimes` (run in the repository
 root, so `global.json` applies), and the content of every build-definition file (project, props and targets files,
@@ -833,6 +843,12 @@ Microsoft.CodeCoverage collector.
 Replay on Polly (fresh records at the parent, every removed class run at the commit): a commit changing 57 source files
 inside method bodies narrowed 4 projects and removed 113 classes, all green at the commit (0 misses); another kept its
 project whole because a whole-suite run timed out at the parent (see the assertion dialog above).
+
+Microsoft.Testing.Platform (TimeZoneConverter, xUnit v3, `dotnet-coverage` without the coverage extension): 3 projects
+on up to 4 frameworks (net48 included) recorded in 2 min 40 s, 15 of 16 class records complete; 8 killed one-token mutants
+of `src/`, 0 violations (every class of the main project reaches the shared time-zone data, so none was narrowed); a
+change inside a test method body narrowed the project to its 1 class of 11, and the generated
+`dotnet test --project ... --filter` command ran it on every framework.
 
 The guard refused the `const` mutant of Polly, the compile-time inlining case. RestSharp narrows little because the
 repository has its own source generator: generated code maps to every file of the generator's consumer project, so every
