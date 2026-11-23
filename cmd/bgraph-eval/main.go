@@ -160,7 +160,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
-	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
+	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | ruby; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
 	rulesDir := fs.String("rules-dir", "", "inject DIR/<owner>__<name>.toml as bgraph.toml into P and C of that repo's tasks (python [[dynamic]] declarations)")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
@@ -177,6 +177,9 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "go" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/go.json"
+	}
+	if *eco == "ruby" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/ruby.json"
 	}
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return fmt.Errorf("--tasks, --work, --out are required")
@@ -232,6 +235,11 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "go" {
 		if werr := evalkit.WriteGoReport(*out, rs); werr != nil {
+			return werr
+		}
+	}
+	if *eco == "ruby" {
+		if werr := evalkit.WriteRubyReport(*out, rs); werr != nil {
 			return werr
 		}
 	}

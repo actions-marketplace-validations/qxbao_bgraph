@@ -62,6 +62,8 @@ type T1Result struct {
 	JVM     *JVMT1Info    `json:"jvm,omitempty"`           // JVM oracle details (ecosystem jvm only)
 	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"`        // .NET oracle details (ecosystem dotnet only)
 	Go      *GoT1Info     `json:"go,omitempty"`            // Go oracle details (ecosystem go only)
+	Rb      *RbT1Info     `json:"ruby,omitempty"`          // Ruby oracle details (ecosystem ruby only)
+	RbW     *RbWide       `json:"ruby_wide,omitempty"`     // why the Ruby selection is as big as it is (ecosystem ruby only)
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
 	Kind    string        `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
@@ -442,6 +444,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("unmapped", errors.New(goInfoDetail(info)))
 		}
+	} else if rr.cfg.Ecosystem == "ruby" {
+		rreq, info, err := rbRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch), t.F2PKind)
+		res.Rb = info
+		if err != nil {
+			return skip("ruby_oracle", err)
+		}
+		req = rreq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("no_oracle", errors.New(rbInfoDetail(info)))
+		}
 	} else if rr.cfg.Ecosystem == "python" {
 		preq, info, err := pyRequired(ctx, dir, res.P, ids, t.Repo)
 		res.Py = info
@@ -511,6 +524,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
 	} else if rr.cfg.Ecosystem == "go" {
 		res.Missing = goMissing(req, su, res.Go, sel.Changed)
+	} else if rr.cfg.Ecosystem == "ruby" {
+		res.Missing = rbMissing(req, su, res.Rb, sel.Changed)
+		res.RbW = rbSelStats(sel)
 	} else if rr.cfg.Ecosystem == "python" {
 		res.Missing = pyMissing(req, su, res.Py, sel.Changed)
 		res.PyW = pySelStats(sel)
@@ -531,6 +547,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			dotnetDiagnose(res.Dotnet)
 		} else if rr.cfg.Ecosystem == "go" {
 			goDiagnose(res.Go)
+		} else if rr.cfg.Ecosystem == "ruby" {
+			rbDiagnose(res.Rb)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
 		} else if rr.cfg.Ecosystem != "rust" {
