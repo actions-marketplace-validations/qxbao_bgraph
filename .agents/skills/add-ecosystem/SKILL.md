@@ -23,9 +23,17 @@ violations on the dev set, trap fixtures green, widening rates reported by reaso
   - **B — evaluation data**: `internal/evalkit`, `cmd/bgraph-eval`, `evalkit/` only. Phase 1 (data, clones, manifest,
     test-name locator) runs in parallel with A; phase 2 (owners → units, T1, provider cross-check) starts after A lands.
   - Then **C — T2 mutation** on 2–3 small repos once T1 is clean.
-- Both agents work in the same checkout: they must stage files **by path** (never `git add -A`, `commit -a`), must not
+- Prefer one git worktree per agent (the Agent tool's worktree isolation): each commits on its own branch, the lead
+  reviews and cherry-picks onto `main`, then re-runs every CI check on the merged result. Agents that share a framework
+  file (`internal/lockfile/lockfile.go`, `cmd/bgraph-eval/main.go`, `internal/evalkit/lockdiff.go`) keep their edits
+  additive (a `case`, a flag) and avoid refactoring shared helpers; two parallel refactors of the same helper are the
+  merge conflicts that need real thought. An agent branched from an older `main` should fast-forward first when it
+  depends on recent framework changes.
+- When agents share one checkout instead, they must stage files **by path** (never `git add -A`, `commit -a`), must not
   run `git stash/reset/checkout --`, and must not push or tag. Expect the other agent's in-progress files to break the
   build of unrelated packages; they test their own packages and say so.
+- Run git on the evaluation clones with `-c gc.auto=0 -c maintenance.auto=false`: an auto-gc on a large clone stalls
+  for minutes and can prune unreachable objects the harness created.
 - Repo conventions: English for code comments, user-facing strings, docs and commit messages; commit messages end with
   the Co-Authored-By trailer the session specifies. Public files never cite private material (`docs/private/` is
   gitignored); cite the public docs instead.
@@ -81,16 +89,39 @@ Decide and fix before any code:
     `web/` frontend under a root `go.mod` must not select every Go package).
   - Tests that build or run the repository's own programs (`go build ./cmd/x`, `exec.Command("../bin/x")`, import paths
     or relative paths in string literals, testscripts) depend on the built program's whole closure, not only its files.
+    A program built before the tests (by a Makefile) and run by a relative path that is not in the tree is matched by
+    the name the build tool gives it (Go: the main package's directory, or the module path's last element); the literal
+    often sits in a non-test helper package the test imports, so the scanner must keep relative-path literals of
+    non-test files too. Do not accept a bare `./name` (a working-directory data path such as caddy's `"./caddy"`
+    selected every package once); check every task whose selection grows.
   - **Bump `AnalyzerVersion` on every logic change** — analysis snapshots are keyed by it and stale snapshots hide fixes
     (this bit us repeatedly; never bump it *down*). A change in a shared layer that alters what an analysis sees (the
     tree's symlink semantics, path rules) needs its own cache-key bump.
   - Symbolic links are resolved by the tree layer for every ecosystem; do not re-implement them per ecosystem.
+  - Ownership edges (a project, module or package virtual node → the files it owns) are `implicit` edges from a virtual
+    node; `Graph.Referenced` tells a real reference (import, embed, literal, glob) from ownership. Use it wherever "does
+    anything use this file?" must not count mere ownership.
+  - A project nested in another project's directory that builds separately (a Go module with its own `go.mod`) is not
+    covered by the parent's module widening: set `Widening.Exact` and add the nested projects that really build with
+    the parent (local replace, shared workspace) explicitly.
 - **ClassifyChange** with a structural diff of manifests: harmless keys (metadata, docs, linters' config) → claim with
   no widening; dependency/feature changes → manifest_changed at the scope where unification happens; target layout →
   package + reverse deps; test-runner config → test_config_changed; lockfiles → lock_changed at L0. A lockfile format
   moves to L1 (closure comparison, `internal/lockfile`) only after the differential check against the package manager
   (`bgraph-eval lockdiff`, see `docs/lockfiles.md`): our per-project closure must be a superset of the tool's on ~10
-  repos × 20–30 lockfile-changing commits.
+  repos × 20–30 lockfile-changing commits, and, per consecutive pair, every project whose tool-side package set changed
+  must be among the projects we mark changed. Lessons from the L1 formats:
+  - Top-level keys go through `Graph.Extra` per key: a key whose effect already shows in the resolved entries
+    (pnpm `overrides`, uv `options`, yarn `resolutions`) is compared through the closures; a key that changes
+    installation in ways the graph does not show stays L0 and the detail names it. Decide each key with the gate.
+  - Patches mark the patched packages changed instead of L0; a selector that cannot be resolved to entries is L0.
+  - Some formats need the tree (yarn v1 and bun read workspace manifests; Berry applies `resolutions`, catalogs,
+    `.yarnrc.yml` `packageExtensions` and yarn's built-in extensions at resolve time). Anything resolving to no entry,
+    or an unknown format version, is L0.
+  - Python: every project of one lockfile shares a virtual environment, so per-member closures are not enough (root
+    dependency groups, pytest plugins loaded by entry point, imports nothing in the closure provides).
+  - `go.sum` has no graph: lines only added change no build; anything else stays L0.
+  - Pin the package-manager versions the reference uses; shared corepack caches drift.
 - **Runner adapter** in `internal/runner` (+ tests), using `SelectedTest.Package`/`Project`/`Whole` as needed.
 - **Registration** in `bgraph.Ecosystems()`; the e2e harness already runs all ecosystems.
 - **Fixtures** (txtar: `base/`, `head/`, `delete/`, `link:base/`, `link:head/` (symbolic links, body = target), `want`
@@ -112,6 +143,8 @@ Decide and fix before any code:
 - Widenings without `Eco` that could select other ecosystems' tests; widenings with a tier that selects nothing
   (a module-tier Unresolved only seeds its own file — a broken manifest needs a real scope).
 - Version bumps present; old cache rows still decode; Node behaviour unchanged (run the Node quick suite).
+- A `[[rule]]` target that matches no unit makes the selection full (configuration error), in every ecosystem: new
+  addressing forms (package directories, unit IDs) must keep that true.
 - General-rule changes made along the way (e.g. "test files named in a config are not implicit deps", gitlink pointer
   comparison, symlink resolution in the tree layer) need the **full** T1 of every existing ecosystem, not just the
   quick suite; compare the per-task status sets with the previous runs, not only the totals.
@@ -163,6 +196,12 @@ anything there on your own; at each phase close ask the user whether to keep or 
 
 Typical findings worth looking for in T1: whole-ecosystem full widenings caused by something generic (Rust: every
 submodule in both trees counted as changed → bat always full; fixed by comparing gitlink OIDs, dev full rate 19% → 4%).
+
+Timing claims need a quiet machine and an A/B in one process: T1 `ms` moves by tens of percent between two runs of the
+same binary when other evaluations run, and a scanner or analyzer bump makes the first run cold. Build both versions
+against a small program that opens a fresh `Index` and calls `Select` N times on a warm state directory, alternate the
+binaries, and count git processes with `GIT_TRACE`: on Windows a spawned git costs tens of milliseconds and is usually
+the real cost (a `git cat-file` per run to read symlink targets was the "20 % slower select" of the symlink change).
 
 ## 4. Closing the phase
 
