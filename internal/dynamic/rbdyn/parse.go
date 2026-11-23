@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -40,7 +41,17 @@ ARGV.each_slice(3) do |name, b, h|
   elsif out[0][0] != out[1][0]
     puts "ERR #{name}: the change alters the warnings Ruby emits when it loads the file (#{(out[1][0] - out[0][0]).first.to_s.strip[0, 120]})"
   else
-    puts "OK #{name}"
+    defs = [b, h].map do |f|
+      found = []
+      walk = lambda do |iseq|
+        a = iseq.to_a
+        found << "#{a[4][:code_location][0]}-#{a[4][:code_location][2]}" if a[9] == :method
+        iseq.each_child { |c| walk.call(c) }
+      end
+      walk.call(RubyVM::InstructionSequence.compile(File.binread(f), name, name))
+      found.join(",")
+    end
+    puts "OK #{name}|#{defs[0]}|#{defs[1]}"
   end
 end
 `
@@ -51,9 +62,63 @@ type ParseFile struct {
 	Base, Head []byte
 }
 
+// sameDefs reports whether the method spans Ruby compiled (rubyDefs: "start-end" joined by commas) are exactly the defs the
+// guard's structure found in src: the guard's method bodies, and therefore its skeleton, are Ruby's own.
+func sameDefs(src []byte, rubyDefs string) bool {
+	f, why := parseRuby(src)
+	if why != "" {
+		return false
+	}
+	left := map[[2]int]int{}
+	if rubyDefs != "" {
+		for _, d := range strings.Split(rubyDefs, ",") {
+			a, b, ok := strings.Cut(d, "-")
+			x, err1 := strconv.Atoi(a)
+			y, err2 := strconv.Atoi(b)
+			if !ok || err1 != nil || err2 != nil {
+				return false
+			}
+			left[[2]int{x, y}]++
+		}
+	}
+	take := func(k [2]int) bool {
+		if left[k] == 0 {
+			return false
+		}
+		left[k]--
+		return true
+	}
+	for _, m := range f.methods {
+		if !m.endless {
+			if !take([2]int{m.start, m.end}) {
+				return false
+			}
+			continue
+		}
+		found := false
+		for k, n := range left {
+			if n > 0 && k[0] == m.start {
+				found = take(k)
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	for _, n := range left {
+		if n != 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // ParseCheck compiles the base and the head of each file with Ruby exe (docs/dynamic-layer.md §10.2): a head that does not
-// compile, or whose parse-time warnings differ from the base's, fails when the file is loaded, whatever method changed. It
-// returns "" when every file passes, otherwise the reason (Ruby that cannot run is a reason too).
+// compile, or whose parse-time warnings differ from the base's, fails when the file is loaded, whatever method changed; and
+// the methods Ruby compiles (def and end lines) must be exactly those the body guard found, at base and head, or the guard's
+// method bodies cannot be trusted. It returns "" when every file passes, otherwise the reason (Ruby that cannot run is a
+// reason too).
 func ParseCheck(ctx context.Context, exe string, files []ParseFile) string {
 	if len(files) == 0 {
 		return ""
@@ -88,6 +153,14 @@ func ParseCheck(ctx context.Context, exe string, files []ParseFile) string {
 		case strings.HasPrefix(l, "ERR "):
 			return strings.TrimPrefix(l, "ERR ")
 		case strings.HasPrefix(l, "OK "):
+			parts := strings.Split(strings.TrimPrefix(l, "OK "), "|")
+			if ok >= len(files) || len(parts) != 3 || parts[0] != files[ok].Path {
+				return "unexpected output of the compile check: " + l
+			}
+			f := files[ok]
+			if !sameDefs(f.Base, parts[1]) || !sameDefs(f.Head, parts[2]) {
+				return f.Path + ": the guard's view of the methods (def and end lines) differs from Ruby's: its block structure cannot be trusted"
+			}
 			ok++
 		}
 	}

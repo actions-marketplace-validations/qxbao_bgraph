@@ -931,7 +931,10 @@ Per selection; any refusal keeps the static selection with a `dynamic_skipped` w
 5. **Parse check**: every file the body guard accepted is compiled at base and head by the configured Ruby
    (`RubyVM::InstructionSequence.compile`, warnings on). A head that does not compile (`unless … elsif` is lexically a
    body change but a syntax error), or whose parse-time warnings differ from the base's (a test suite may turn warnings
-   into failures at load time), refuses. A Ruby that cannot run refuses too.
+   into failures at load time), refuses. The `def` and `end` lines of the methods Ruby compiles (method instruction
+   sequences, at any depth) must also be exactly those the body guard found, at base and head: the guard's lexical block
+   structure is checked against Ruby's own parser, so a misread modifier or keyword cannot widen a method body over
+   class-level code. A Ruby that cannot run refuses too.
 6. **Instrumented check**, per unit: `Coverage` lists every method defined by `def` in each file a recorded process loaded
    while it was running, with its call count (0 included). When a unit's record loaded a changed file but has no method
    table for it (the file was loaded before the collector started, for example by `bundler/setup` evaluating a gemspec),

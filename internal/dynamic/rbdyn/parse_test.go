@@ -38,7 +38,21 @@ func TestParseCheck(t *testing.T) {
 			}
 		})
 	}
+	// The guard's methods of a file with every kind of def match Ruby's (endless, class << self, def self.x, blocks).
+	head := strings.Replace(libBase, "@items = items", "@items = items.dup", 1)
+	if why := ParseCheck(ctx, ruby, []ParseFile{{Path: "lib/shop.rb", Base: []byte(libBase), Head: []byte(head)}}); why != "" {
+		t.Fatalf("libBase: %s", why)
+	}
 	if why := ParseCheck(ctx, ruby+"-missing", []ParseFile{{Path: "lib/x.rb", Base: []byte(base), Head: []byte(base)}}); why == "" {
 		t.Fatal("a Ruby that cannot run passed the check")
+	}
+}
+
+func TestSameDefs(t *testing.T) {
+	src := []byte("class A\n  def x\n    1\n  end\n\n  def y = 2\nend\n")
+	for defs, want := range map[string]bool{"2-4,6-6": true, "6-6,2-4": true, "2-4": false, "2-5,6-6": false, "2-4,6-6,8-9": false, "": false} {
+		if got := sameDefs(src, defs); got != want {
+			t.Errorf("sameDefs(%q) = %v", defs, got)
+		}
 	}
 }
