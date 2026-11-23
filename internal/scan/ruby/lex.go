@@ -682,8 +682,8 @@ func (lx *lexer) charLiteral() bool {
 			i--
 		}
 		lx.pos = min(i+1, lx.end)
-		if lx.at(lx.pos) == '\n' {
-			lx.line++
+		if i < lx.end && lx.src[i] == '\n' {
+			lx.line++ // ?\<newline>: the literal itself is the newline character
 		}
 		return true
 	}

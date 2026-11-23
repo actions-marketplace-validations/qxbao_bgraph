@@ -262,3 +262,18 @@ func TestBodyGuardUnbalancedRefuses(t *testing.T) {
 	base := "class A\n  def x\n    1\n  end\nend\n"
 	mustRefuse(t, base, "class A\n  def x\n    if y\n  end\nend\n", "unbalanced")
 }
+
+func TestBodyGuardBareSetterAndCharLiteral(t *testing.T) {
+	// A setter without parentheses around its parameter.
+	base := "class C\n  def x= v\n    @x = v\n  end\nend\n"
+	s := mustGuard(t, base, strings.Replace(base, "@x = v", "@x = v.to_s", 1))
+	if len(s) != 1 || s[0].From != 2 || s[0].To != 4 {
+		t.Fatalf("bare setter: spans %+v", s)
+	}
+	// An escaped character literal before a method must not shift its lines.
+	base = "TAB = ?\t\ndef x\n  1\nend\n"
+	s = mustGuard(t, base, strings.Replace(base, "  1\n", "  2\n", 1))
+	if len(s) != 1 || s[0].From != 2 || s[0].To != 4 {
+		t.Fatalf("char literal: spans %+v", s)
+	}
+}

@@ -323,8 +323,9 @@ func signature(toks []rbscan.Token, i int) (m *method, next int, why string) {
 	m.id += name.Text
 	m.sigEnd = name.Line
 	k := j + 1
-	// A setter: `def x=(v)` (no space before = or before the parenthesis).
-	if k+1 < len(toks) && isOp(toks[k], "=") && !toks[k].Space && isOp(toks[k+1], "(") && !toks[k+1].Space {
+	// A setter: `def x=(v)` or `def x= v` (no space before the =; `def x = v` with a space is an endless def).
+	if k+1 < len(toks) && isOp(toks[k], "=") && !toks[k].Space &&
+		(isOp(toks[k+1], "(") && !toks[k+1].Space || toks[k+1].Space && toks[k+1].Kind == rbscan.TokIdent) {
 		m.id += "="
 		k++
 	}
