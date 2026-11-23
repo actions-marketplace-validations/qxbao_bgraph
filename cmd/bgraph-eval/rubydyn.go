@@ -178,6 +178,10 @@ func cmdRubyDyn(ctx context.Context, args []string) (int, error) {
 			if err != nil {
 				return 1, err
 			}
+			if err := evalkit.RbDynReplayBundle(*t2, *work, r); err != nil {
+				return 1, err
+			}
+			cfg.Install = true
 			res := evalkit.RunRubyReplay(ctx, cfg, cs)
 			all[r.Name] = res
 			for _, c := range res {

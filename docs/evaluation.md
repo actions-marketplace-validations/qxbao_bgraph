@@ -168,14 +168,14 @@ overall (0.100 on hono), median 239 ms per commit (p95 1.0 s).
 
 ### Dynamic layer
 
-| | Python | Node | JVM (class layer) |
-|---|---|---|---|
-| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi |
-| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) |
-| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) |
-| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) |
-| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** |
-| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – |
+| | Python | Node | JVM (class layer) | Ruby (method layer) |
+|---|---|---|---|---|
+| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) |
+| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository |
+| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) |
+| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 |
+| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** |
+| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – |
 
 Findings:
 
@@ -185,6 +185,11 @@ Findings:
 - On Windows, `trust_native_env = true` is needed for Python: pytest's terminal setup loads a system library through
   ctypes, so with the strict default no record is complete.
 - The JVM constant guard passes 94 % (gson) and 90 % (moshi) of code-only commits.
+- The Ruby body guard (with the compile check) accepts 33–73 % of the commits that change only `.rb` files over 500
+  first-parent commits of six repositories; nearly every refusal is class- or module-level code, except on asciidoctor,
+  where constructs the lexical guard does not follow (setters defined without parentheses) refuse 35 commits. Ruby narrows precise
+  units: on rack, dry-types and rake every test file reaches every library file statically, and with the method records
+  a median of 0.12–0.19 of the test files remains on the mutants.
 
 These checks are not a release gate: the dynamic layer stays off by default.
 

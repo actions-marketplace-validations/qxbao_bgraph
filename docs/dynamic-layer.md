@@ -1026,5 +1026,46 @@ why. A lockfile change in the diff is refused by [10.2](#102-guards) anyway.
 
 ### 10.7 Evaluation
 
-See [Evaluation](evaluation.md#dynamic-layer) (hybrid mutation on rack, dry-types and rake, body-guard acceptance over
-first-parent commits, replay).
+Windows 11, Ruby 3.4 (RubyInstaller UCRT), each repository's own bundle; `bgraph-eval rbdyn t2|guard|replay`.
+
+**Hybrid mutation** on the Ruby mutation set (rack, dry-types, rake at their T2 commits; the oracle ran every test file
+alone on each mutant): records made once at R, then every killed mutant selected statically and with the layer on.
+
+| | rack (Minitest) | dry-types (RSpec, Zeitwerk) | rake (test-unit) |
+|---|---|---|---|
+| Recording (every test file, 6 at a time) | 40 files in 8 s; 33 complete and passed (6 files already fail at R here, 1 runs no test) | 35 files in 13 s; 35 | 46 files in 41–49 s; 44 (2 start a non-Ruby process) |
+| Killed mutants / narrowed / refused by a guard / every unit kept | 70 / 63 / 7 / 0 | 60 / 42 / 9 / 9 | 58 / 47 / 7 / 4 |
+| Refusals | 6 class-level code, 1 head that does not compile (compile check) | 9 class-level code | 7 class-level code |
+| Red test files (summed over the mutants) / **violations** | 268 / **0** | 511 / **0** | 326 / **0** |
+| Median selected / test files, static → hybrid | 0.975 → 0.175 | 1.000 → 0.186 | 1.000 → 0.120 |
+| Mean files removed per narrowed mutant | 29.1 | 28.6 | 40.0 |
+
+**Guards over 500 first-parent commits** (no records: the selection guard, then the compile check), counting the commits
+whose changed files are all `.rb`:
+
+| | rack | dry-types | rake | rubocop | jekyll | asciidoctor |
+|---|---|---|---|---|---|---|
+| `.rb`-only commits | 190 | 98 | 137 | 15 | 33 | 142 |
+| Accepted (of which changing library code) | 102 (73) | 32 (14) | 81 (51) | 11 (7) | 24 (17) | 91 (34) |
+| Share accepted | 0.54 | 0.33 | 0.59 | 0.73 | 0.73 | 0.64 |
+
+Almost every refusal is class- or module-level code (constants, DSL calls, `attr_*`, signatures): 82 of 88 on rack, 64
+of 66 on dry-types, 54 of 56 on rake. The others: additions and deletions, mode changes, magic comments, and two rack
+heads whose parse-time warnings differ from the base. On asciidoctor the lexical structure is the limit: 13 refusals
+because a setter defined without parentheses (`def title= title`) is not followed ("end without a block") and 22 by the
+compile check, where the guard's method lines differ from Ruby's (in `parser.rb`, every line after the character literal
+`?\t` is counted one too far); both are refusals, never a wrong body.
+
+**Replay** (rack and dry-types, the 20 most recent guard-accepted commits before R; fresh records at each parent, the
+selection parent→commit, and every removed test file run alone at the commit with the runner adapter's command; a bundle
+install at each checkout, so older commits get the gems they declare):
+
+| | rack | dry-types |
+|---|---|---|
+| Commits replayed / narrowed | 20 / 9 | 17 / 4 (3 more could not install their bundle) |
+| Removed test files run at their commit / **misses** | 266 / **0** | 129 / **0** |
+| Median selected / test files, static → hybrid | 0.975 → 0.150 | 1.000 → 0.200 |
+
+The commits that were not narrowed changed only test files (the selection is already those files), test support every
+file loads (`test/helper.rb`, `spec/support/*.rb`, `spec_helper.rb`), or a method every file runs; on two dry-types
+commits no record was usable (the suite does not start at those commits in this environment), so nothing was removed.

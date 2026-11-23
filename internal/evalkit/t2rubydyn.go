@@ -39,6 +39,9 @@ type RbDynConfig struct {
 	Work     string // directory of this evaluation's clones and state (t2/ruby-dyn)
 	Jobs     int
 	Rerecord bool
+	// Install: run `bundle install` after every checkout (replay: older commits may need gems the T2 bundle lacks; BUNDLE_PATH
+	// then points at a copy of it, see RbDynReplayBundle).
+	Install bool
 }
 
 func (c RbDynConfig) logf(f string, a ...any) {
@@ -95,7 +98,28 @@ func (c RbDynConfig) rbCheckout(ctx context.Context, rev string) error {
 			return err
 		}
 	}
+	if c.Install {
+		_, tl, to, err := runProc(ctx, c.clone(), nil, 20*time.Minute, rubyExe(), "-S", "bundle", "install", "--quiet")
+		if to || err != nil {
+			return fmt.Errorf("bundle install at %s: timeout=%v %v %s", rev, to, err, tl)
+		}
+	}
 	return nil
+}
+
+// RbDynReplayBundle points BUNDLE_PATH at work/<venv>-replay, a copy of the T2 bundle made once, into which the replay's
+// `bundle install` adds the gems older commits need (the T2 bundle stays untouched).
+func RbDynReplayBundle(t2Dir, work string, r T2Repo) error {
+	if r.Venv == "" {
+		return nil
+	}
+	dst := filepath.Join(work, r.Venv+"-replay")
+	if _, err := os.Stat(dst); err != nil {
+		if err := os.CopyFS(dst, os.DirFS(filepath.Join(t2Dir, r.Venv))); err != nil {
+			return fmt.Errorf("copy the bundle: %w", err)
+		}
+	}
+	return os.Setenv("BUNDLE_PATH", dst)
 }
 
 // RbDynCheckoutR makes (or resets) the evaluation clone of the repo at R.
