@@ -386,12 +386,15 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		fi := b.infos[p]
 		role := model.RoleSource
 		base := path.Base(p)
+		// Manifest and configuration roles are exempt from the unreferenced-file rule: only files that really are a project's
+		// manifest or configuration get them (a Gemfile below spec/fixtures is test data, a plain source).
+		atProject := b.markers[path.Dir(p)] && !underDataDir(p, true)
 		switch {
 		case units[p] != nil:
 			role = model.RoleTest
-		case base == "Gemfile" || base == "gems.rb" || strings.HasSuffix(base, ".gemspec"):
+		case atProject && (base == "Gemfile" || base == "gems.rb" || strings.HasSuffix(base, ".gemspec")):
 			role = model.RoleManifest
-		case base == "Rakefile" || base == "rakefile" || base == "Rakefile.rb" || isTaskFile(p):
+		case atProject && (base == "Rakefile" || base == "rakefile" || base == "Rakefile.rb") || isTaskFile(p) && !underDataDir(p, true):
 			role = model.RoleConfig
 		}
 		a.Roles[p] = role
@@ -405,16 +408,14 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	for _, p := range ids {
 		u := units[p]
 		a.Tests = append(a.Tests, *u)
+		// Every unit of the project, whatever its runner: a file classified as minitest may still run under RSpec (and the
+		// reverse), and an extra dependency only over-selects.
 		c := cfg[u.Project]
-		switch u.Runner {
-		case RunnerRSpec:
-			for _, r := range c.rspecRequires {
-				b.feature(p, r.spec, ".rspec --require", false, model.EdgeImplicit)
-			}
-		default:
-			for _, r := range c.rubyOpts {
-				b.feature(p, r, "Rake::TestTask ruby_opts -r", false, model.EdgeImplicit)
-			}
+		for _, r := range c.rspecRequires {
+			b.feature(p, r.spec, ".rspec --require", false, model.EdgeImplicit)
+		}
+		for _, r := range c.rubyOpts {
+			b.feature(p, r, "Rake::TestTask ruby_opts -r", false, model.EdgeImplicit)
 		}
 	}
 	// Whole-project units for computed test patterns.
@@ -553,13 +554,28 @@ func (b *builder) otherRoles(files []string) {
 			continue
 		}
 		base := path.Base(p)
+		dir := path.Dir(p)
+		atProject := b.markers[dir] && !underDataDir(p, true)
 		switch {
 		case base == "Gemfile.lock" || base == "gems.locked":
-			b.a.Roles[p] = model.RoleLock
-		case base == ".rspec" || base == ".rspec-local" || base == ".rspec-parallel" || base == ".simplecov" ||
-			strings.HasSuffix(p, "spec/spec.opts") && base == "spec.opts":
-			b.a.Roles[p] = model.RoleConfig
-		case dataExt(p) && b.inRuby(p):
+			if atProject {
+				b.a.Roles[p] = model.RoleLock
+			}
+		case base == ".rspec" || base == ".rspec-local" || base == ".rspec-parallel":
+			if atProject {
+				b.a.Roles[p] = model.RoleConfig
+			}
+		case base == "spec.opts" && path.Base(dir) == "spec":
+			if b.markers[path.Dir(dir)] && !underDataDir(dir, true) {
+				b.a.Roles[p] = model.RoleConfig
+			}
+		case base == ".simplecov":
+			if b.markers[b.project(dir)] && !underDataDir(p, true) {
+				b.a.Roles[p] = model.RoleConfig
+			}
+		case (dataExt(p) || testish(p, false)) && b.inRuby(p):
+			// Every file below a spec/test directory is test data (a Jekyll test site's .markdown pages are not
+			// documentation): as a graph node, a change nothing is known to read widens instead of being skipped as a doc.
 			b.a.Roles[p] = model.RoleData
 		}
 	}

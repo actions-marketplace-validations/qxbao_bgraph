@@ -1,0 +1,25 @@
+A Gemfile below spec/fixtures is test data: a change there widens to the enclosing project instead of being a manifest of nothing.
+-- base/app/Gemfile --
+source "https://rubygems.org"
+-- base/app/spec/fixtures/sample/Gemfile --
+gem "x"
+-- base/app/spec/fixtures/sample/Gemfile.lock --
+GEM
+-- base/app/spec/bundle_spec.rb --
+x = 1
+-- base/other/Gemfile --
+source "https://rubygems.org"
+-- base/other/spec/other_spec.rb --
+y = 1
+-- head/app/spec/fixtures/sample/Gemfile --
+gem "y"
+-- head/app/spec/fixtures/sample/Gemfile.lock --
+GEM2
+-- want --
+notfull
+widen unreferenced_file
+widen unknown_file
+nowiden manifest_changed
+nowiden lock_changed
+select app/spec/bundle_spec.rb
+noselect other/spec/other_spec.rb

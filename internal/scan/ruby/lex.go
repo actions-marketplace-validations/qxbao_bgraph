@@ -566,7 +566,9 @@ func (lx *lexer) colon(toks []token, start int, sp bool, line int32, st prevStat
 	case st != pValue && n != 0 && !isSpace(n) && n != '\n' && strings.IndexByte("+-*/%<>=!~[&|^`@$", n) >= 0:
 		lx.pos++
 		switch {
-		case n == '@' || n == '$':
+		case n == '$':
+			lx.gvar() // :$&, :$`, :$', :$LOAD_PATH
+		case n == '@':
 			lx.pos++
 			for lx.pos < lx.end && (isIdentChar(lx.src[lx.pos]) || lx.src[lx.pos] == '@') {
 				lx.pos++
@@ -609,7 +611,7 @@ func (lx *lexer) charLiteral() bool {
 			}
 			i--
 		}
-		lx.pos = i + 1
+		lx.pos = min(i+1, lx.end)
 		if lx.at(lx.pos) == '\n' {
 			lx.line++
 		}
@@ -678,6 +680,7 @@ func (lx *lexer) percentLiteral(heuristic bool) bool {
 	if heuristic && i == lx.pos+1 && closer(d) == 0 && d != '|' && d != '!' {
 		return false // `x %foo` after a method name is too ambiguous to be a literal with an exotic delimiter
 	}
+	typeless := i == lx.pos+1 // %(...) rather than %w(...): more ambiguous after a method name
 	lx.pos = i + 1
 	idx := lx.newStr(kind)
 	interp := kind == sDouble || kind == sIWords || kind == sRegex || kind == sXStr
@@ -686,7 +689,7 @@ func (lx *lexer) percentLiteral(heuristic bool) bool {
 	if kind == sRegex {
 		lx.regexFlags()
 	}
-	if heuristic && lx.line != l0 {
+	if heuristic && typeless && lx.line != l0 {
 		lx.fail("ambiguous % literal spans lines")
 	}
 	return true

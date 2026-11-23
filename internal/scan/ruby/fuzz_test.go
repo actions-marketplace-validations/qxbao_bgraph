@@ -20,7 +20,7 @@ var fuzzSeeds = []string{
 	"\xef\xbb\xbfrequire 'a'\r\nrequire 'b'\r\n",
 	"'unterminated", "\"#{", "\"#{\"#{", "<<~A", "<<A\n", "%w(", "%", "?", ":", "/", "=begin", "\\", "#{}", "}", "{", "((((", "))))",
 	"require", "require(", "require 'a',", "Dir[", "Dir.glob(", "File.join(", "File.expand_path(", "\x00", "\xff\xfe", "é",
-	"x = \"#{\"#{\"#{\"#{a}\"}\"}\"}\"", "foo(<<A, <<B)\na\nA\nb\nB\n", "eval(File.read(x))", "send(:require, 'a')",
+	"def(A=", `?\C-C-C-`, "x = \"#{\"#{\"#{\"#{a}\"}\"}\"}\"", "foo(<<A, <<B)\na\nA\nb\nB\n", "eval(File.read(x))", "send(:require, 'a')",
 }
 
 func FuzzScan(f *testing.F) {

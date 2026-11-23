@@ -6,6 +6,8 @@
 // working directory: resolved by suffix), "rel" (relative to the scanned file's directory) or "root" (relative to the project
 // root, Rails.root). Dynamic=true means only a static prefix (Spec, possibly empty) of the path is known.
 //
+//   - A partly computed path (require "a/#{x}/version") is Dynamic with Spec = the static prefix, followed, when static text
+//     follows the computed part, by "#{}" and that suffix ("a/#{}/version").
 //   - require / require_dependency / autoload (any receiver for the last two; Kernel.require; send(:require, ...)) →
 //     rb_require. require_relative / autoload_relative → rb_require with base "rel". Path expressions are evaluated:
 //     File.expand_path("x", __dir__), File.expand_path("../x", __FILE__), File.join(__dir__, "a"), File.dirname(__FILE__) +
@@ -42,7 +44,8 @@ func Scan(_ string, src []byte) model.ScanResult {
 	if why != "" {
 		return model.ScanResult{Imports: []model.ImportRef{}, Uncertain: true, UncertainReason: why}
 	}
-	s := &scanner{src: src, strs: lx.strs, seen: map[refKey]bool{}, used: map[int32]bool{}}
+	s := &scanner{src: src, strs: lx.strs, seen: map[refKey]bool{}, used: map[int32]bool{}, top: lx.toks, ctx: -1}
+	s.collectVars(lx.toks)
 	s.run(lx.toks)
 	// Interpolations: every code part is scanned too (a require inside "#{...}" is still a require).
 	for i := 0; i < len(s.strs); i++ {
@@ -75,6 +78,13 @@ type scanner struct {
 	handled map[int32]bool
 	rake    string // "rake" / "rspec" once a Rake::TestTask / RSpec::Core::RakeTask is seen
 	loadP   bool
+	top     []token            // the top-level token list
+	vars    map[string]*varDef // single-assignment path variables (vars.go)
+	scopes  []int              // scope of each top-level token (vars.go); nil when unknown
+	// defsLoad: the file defines a method named load; a bare `load(x)` call there is that method, not Kernel#load.
+	defsLoad bool
+	// ctx: while a string's interpolations are evaluated, the index of that string in the top-level list (-1: none).
+	ctx int
 }
 
 func (s *scanner) text(t token) string { return string(s.src[t.start:t.end]) }
@@ -350,7 +360,7 @@ func (s *scanner) ident(ts []token, i int) int {
 		if s.handled[t.start] {
 			return i
 		}
-		if s.isOp(ts, i+1, "=") {
+		if s.isOp(ts, i+1, "=") || name == "load" && !afterDot && s.defsLoad {
 			return i
 		}
 		ranges, end := s.callRanges(ts, i)
@@ -535,7 +545,7 @@ func (s *scanner) requireCall(ts []token, name string, ranges [][2]int, line int
 	relative := name == "require_relative" || name == "autoload_relative"
 	v, ok := s.evalExact(ts, r[0], r[1])
 	s.markUsed(ts, r[0], r[1])
-	if !ok || !v.usable() || v.dyn && v.s == "" && v.b == bStr {
+	if !ok || !v.usable() || v.fullyDynamic() {
 		s.add(kind, "", "", true, line)
 		return
 	}
@@ -547,7 +557,7 @@ func (s *scanner) requireCall(ts []token, name string, ranges [][2]int, line int
 		s.add(kind, "", "", true, line) // a directory is not a file: not understood
 		return
 	}
-	s.add(kind, v.s, baseTag(b), v.dyn, line)
+	s.add(kind, v.spec(), baseTag(b), v.dyn, line)
 }
 
 // kwString returns the literal string of keyword argument `key: "x"` in range r.
@@ -840,6 +850,16 @@ func (s *scanner) dirCall(ts []token, i int) int {
 		for _, k := range s.loopRequires(ts, end, dirList) {
 			reqKinds[k] = true
 		}
+		// `paths = Dir[...]` then `paths.each { |f| require f }`: a single-assignment variable holding the list.
+		if v := s.assignedTo(ts, i); v != "" {
+			for j := end; j < len(ts); j++ {
+				if s.isIdent(ts, j, v) && !s.isOp(ts, j-1, ".") && s.isOp(ts, j+1, ".") && s.sameScope(ts, i, j) {
+					for _, k := range s.loopRequires(ts, j+1, dirList) {
+						reqKinds[k] = true
+					}
+				}
+			}
+		}
 	}
 	if len(reqKinds) > 0 && (unknown || len(globs) == 0) {
 		s.add(model.ImportRbRequire, "", "", true, line) // the files required are not known
@@ -847,13 +867,13 @@ func (s *scanner) dirCall(ts []token, i int) int {
 	}
 	for _, g := range globs {
 		if len(reqKinds) == 0 {
-			s.add(model.ImportRbDataGlob, g.s, baseTag(g.b), g.dyn, line)
+			s.add(model.ImportRbDataGlob, g.spec(), baseTag(g.b), g.dyn, line)
 			continue
 		}
-		s.add(model.ImportRbGlob, g.s, baseTag(g.b), g.dyn, line)
+		s.add(model.ImportRbGlob, g.spec(), baseTag(g.b), g.dyn, line)
 		if reqKinds["require_relative"] && g.b == bStr {
 			// require_relative of a working-directory relative name resolves against the file's directory.
-			s.add(model.ImportRbGlob, g.s, "rel", g.dyn, line)
+			s.add(model.ImportRbGlob, g.spec(), "rel", g.dyn, line)
 		}
 	}
 	return end
@@ -1104,4 +1124,21 @@ func (s *scanner) stringRef(t token) {
 			}
 		}
 	}
+}
+
+// assignedTo returns the name of the single-assignment variable whose right-hand side starts at i (`name = Dir[...]`), or "".
+func (s *scanner) assignedTo(ts []token, i int) string {
+	if i < 2 || !s.isOp(ts, i-1, "=") || ts[i-2].kind != tIdent || !s.stmtStart(ts, i-2) || !s.sameList(ts) {
+		return ""
+	}
+	n := s.text(ts[i-2])
+	if d := s.vars[n]; d == nil || d.bad || d.n != 1 {
+		return ""
+	}
+	return n
+}
+
+// sameScope: tokens i and j of the top-level list are in the same local-variable scope.
+func (s *scanner) sameScope(ts []token, i, j int) bool {
+	return s.sameList(ts) && s.scopes != nil && s.scopes[i] == s.scopes[j]
 }

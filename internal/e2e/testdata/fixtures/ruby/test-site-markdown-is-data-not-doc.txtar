@@ -1,0 +1,24 @@
+A Markdown page below test/ is test data (a Jekyll test site read through computed paths), not documentation: it widens to the project.
+-- base/site/Gemfile --
+source "https://rubygems.org"
+-- base/site/test/helper.rb --
+def source_dir(*parts) = File.join(SITE_ROOT, *parts)
+-- base/site/test/test_site.rb --
+require_relative "helper"
+-- base/site/test/source/_posts/2020-01-01-hello.markdown --
+hello
+-- base/other/Gemfile --
+source "https://rubygems.org"
+-- base/other/test/test_other.rb --
+x = 1
+-- base/docs/guide.md --
+a
+-- head/site/test/source/_posts/2020-01-01-hello.markdown --
+hello world
+-- head/docs/guide.md --
+b
+-- want --
+notfull
+widen unreferenced_file
+select site/test/test_site.rb
+noselect other/test/test_other.rb

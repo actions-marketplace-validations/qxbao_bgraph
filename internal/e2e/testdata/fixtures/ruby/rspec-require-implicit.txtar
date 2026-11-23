@@ -21,7 +21,9 @@ S = 1
 describe "a" do; end
 -- base/spec/b_spec.rb --
 describe "b" do; end
--- base/test/x_test.rb --
+-- base/other/Gemfile --
+source "https://rubygems.org"
+-- base/other/spec/x_spec.rb --
 require "minitest/autorun"
 -- head/lib/foo/setup.rb --
 S = 2
@@ -29,4 +31,4 @@ S = 2
 notfull
 select spec/a_spec.rb
 select spec/b_spec.rb
-noselect test/x_test.rb
+noselect other/spec/x_spec.rb

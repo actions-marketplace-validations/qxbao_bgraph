@@ -22,8 +22,24 @@ const selfMark = "\x00file"
 type pval struct {
 	b   base
 	s   string
-	pn  bool // a Pathname: + and / join
-	dyn bool // only the static prefix s is known (s is then a string prefix, not necessarily a whole segment)
+	pn  bool   // a Pathname: + and / join
+	dyn bool   // only the static prefix s is known (s is then a string prefix, not necessarily a whole segment)
+	suf string // with dyn: the static text known to follow the unknown part ("" when nothing is known)
+}
+
+// fullyDynamic: nothing static is known about the path.
+func (v pval) fullyDynamic() bool { return v.dyn && v.s == "" && v.b == bStr && v.suf == "" }
+
+// holeMark separates the static prefix and suffix of a partly computed path in a reference's Spec.
+const holeMark = "#{}"
+
+// spec renders a value for a reference: the path, or for a partly computed one its prefix, and when a static suffix is known,
+// holeMark and the suffix.
+func (v pval) spec() string {
+	if v.dyn && v.suf != "" {
+		return v.s + holeMark + v.suf
+	}
+	return v.s
 }
 
 func (v pval) usable() bool { return v.b != bEnv && !strings.Contains(v.s, "\x00") }
@@ -83,16 +99,19 @@ func (p *pp) expr() (pval, bool) {
 			p.pos++
 			r, ok := p.term()
 			if !ok {
-				if v.dyn || o == "/" && !v.pn {
+				if o == "/" && !v.pn {
 					p.pos = save
 					return v, true
 				}
 				// x + <unknown>: the static prefix is still known.
 				p.pos = p.skipOperand()
-				v.dyn = true
-				if v.pn {
-					v.s = joinPrefix(v.s)
+				if !v.dyn {
+					v.dyn = true
+					if v.pn {
+						v.s = joinPrefix(v.s)
+					}
 				}
+				v.suf = ""
 				continue
 			}
 			if v, ok = combine(o, v, r); !ok {
@@ -156,7 +175,13 @@ func combine(o string, l, r pval) (pval, bool) {
 		return pval{}, false
 	}
 	if l.dyn {
-		return l, true
+		if r.b != bStr {
+			return pval{}, false
+		}
+		if o == "/" || l.pn {
+			return join(l, r, false)
+		}
+		return concat(l, r), true
 	}
 	if o == "/" || l.pn {
 		if !l.pn || r.b != bStr {
@@ -177,7 +202,16 @@ func combine(o string, l, r pval) (pval, bool) {
 // concat appends a plain string to a value as text.
 func concat(l, r pval) pval {
 	out := l
+	if l.dyn {
+		if r.dyn {
+			out.suf = r.suf
+		} else {
+			out.suf = l.suf + r.s
+		}
+		return out
+	}
 	out.dyn = r.dyn
+	out.suf = r.suf
 	if l.b == bStr {
 		out.s = l.s + r.s
 		return out
@@ -201,7 +235,7 @@ func concat(l, r pval) pval {
 	case l.s == "." || l.s == "":
 		// "<dir>" + "x": a sibling of the directory, not a path inside it.
 		if r.dyn {
-			return pval{b: l.b, s: "../", dyn: true}
+			return pval{b: l.b, s: "../", dyn: true, suf: r.suf}
 		}
 		return pval{b: bStr, s: "\x00"} // unusable
 	default:
@@ -216,7 +250,19 @@ func concat(l, r pval) pval {
 // join is File.join / Pathname#join of one more element.
 func join(l, r pval, fileJoin bool) (pval, bool) {
 	if l.dyn {
-		return l, true
+		if r.b != bStr {
+			return pval{}, false
+		}
+		if strings.HasPrefix(r.s, "/") && !fileJoin {
+			return r, true
+		}
+		out := l
+		if r.dyn {
+			out.suf = r.suf
+		} else {
+			out.suf = strings.TrimSuffix(l.suf, "/") + "/" + strings.TrimLeft(r.s, "/")
+		}
+		return out, true
 	}
 	if r.b != bStr {
 		if l.b == bStr && l.s == "" {
@@ -234,6 +280,7 @@ func join(l, r pval, fileJoin bool) (pval, bool) {
 	out := l
 	if r.dyn {
 		out.dyn = true
+		out.suf = r.suf
 		out.s = joinPrefix(l.s) + s
 		if l.b == bStr && l.s == "" {
 			out.s = s
@@ -436,6 +483,17 @@ func (p *pp) primary() (pval, bool) {
 		}
 		return fileCall(m, args)
 	}
+	// A single-assignment variable or constant holding a path (vars.go).
+	if !p.op(p.pos+1, "(") || p.ts[p.pos+1].sp {
+		at := p.pos
+		if !p.s.sameList(p.ts) {
+			at = p.s.ctx // an interpolation: the position of its string in the top-level list
+		}
+		if v, ok := p.s.varValue(name, at, p.ts); ok {
+			p.pos++
+			return v, true
+		}
+	}
 	return pval{}, false
 }
 
@@ -443,24 +501,18 @@ func fileCall(m string, args []pval) (pval, bool) {
 	switch m {
 	case "join":
 		v := args[0]
-		if v.dyn {
-			return v, v.s != "" || v.b != bStr
-		}
 		for _, a := range args[1:] {
 			var ok bool
 			if v, ok = join(v, a, true); !ok {
 				return pval{}, false
 			}
-			if v.dyn {
-				break
-			}
 		}
 		v.pn = false
-		return v, true
+		return v, !v.fullyDynamic()
 	case "expand_path", "absolute_path":
 		a := args[0]
 		if len(args) == 1 {
-			if a.dyn && a.s == "" && a.b == bStr {
+			if a.fullyDynamic() {
 				return pval{}, false
 			}
 			return a, true
@@ -496,7 +548,7 @@ func fileCall(m string, args []pval) (pval, bool) {
 	case "realpath", "realdirpath":
 		v := args[0]
 		v.pn = false
-		return v, !(v.dyn && v.s == "" && v.b == bStr)
+		return v, !v.fullyDynamic()
 	}
 	return pval{}, false
 }
@@ -510,9 +562,27 @@ func (s *scanner) strValue(t token) (pval, bool) {
 	default:
 		return pval{}, false
 	}
+	save := s.ctx
+	defer func() { s.ctx = save }()
+	if s.sameList(s.top) {
+		s.ctx = s.topIndex(t)
+	}
 	acc := pval{b: bStr}
 	first := true
 	for _, part := range si.parts {
+		if acc.dyn {
+			// After a computed part only the static tail is tracked.
+			if !part.isCode {
+				acc.suf += part.lit
+				continue
+			}
+			if v, ok := s.evalExact(part.code, 0, len(part.code)); ok && !v.dyn && v.b == bStr {
+				acc.suf += v.s
+			} else {
+				acc.suf = ""
+			}
+			continue
+		}
 		if !part.isCode {
 			acc = concat(acc, pval{b: bStr, s: part.lit})
 			if !acc.usable() && !strings.Contains(acc.s, selfMark) {
@@ -524,13 +594,22 @@ func (s *scanner) strValue(t token) (pval, bool) {
 		v, ok := s.evalExact(part.code, 0, len(part.code))
 		if !ok || v.dyn {
 			if ok && first {
-				return v, true
+				acc = v
+				acc.pn = false
+				first = false
+				continue
 			}
-			acc.dyn = true
+			if ok && v.b == bStr {
+				acc = concat(acc, v) // "../#{x}" with x = "<unknown>/spec/helper": the suffix is kept
+				first = false
+				continue
+			}
+			acc.dyn, acc.suf = true, ""
 			if acc.b != bStr {
 				acc.s = strings.TrimSuffix(acc.s, ".")
 			}
-			return acc, true
+			first = false
+			continue
 		}
 		if first || acc.b == bStr && acc.s == "" {
 			acc = v
@@ -538,8 +617,7 @@ func (s *scanner) strValue(t token) (pval, bool) {
 		} else if v.b == bStr {
 			acc = concat(acc, v)
 		} else {
-			acc.dyn = true
-			return acc, true
+			acc.dyn, acc.suf = true, ""
 		}
 		first = false
 	}

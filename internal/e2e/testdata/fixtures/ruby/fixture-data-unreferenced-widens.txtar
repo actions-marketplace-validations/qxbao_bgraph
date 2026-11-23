@@ -24,7 +24,7 @@ y = 1
 {"a": 1}
 -- want --
 notfull
-widen unknown_file
+widen unreferenced_file
 select spec/parser_spec.rb
 select spec/other_spec.rb
 # the general rule widens to the whole project directory, nested projects included

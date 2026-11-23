@@ -157,37 +157,56 @@ func (b *builder) feature(from, spec, what string, load bool, kind model.EdgeKin
 // prefix handles a require/load whose path has a static prefix (im.Spec, possibly empty).
 func (b *builder) prefix(fi *fileInfo, im model.ImportRef, load bool) {
 	p := fi.p
-	ext := "*.rb"
-	if load {
-		ext = "*"
+	spec, suf, _ := strings.Cut(im.Spec, holeMark)
+	// The file loaded is <prefix><anything><suffix>[.rb]: one glob for an unknown part without a slash, one with.
+	var tails []string
+	switch {
+	case suf == "" && load:
+		tails = []string{"*", "*/**"}
+	case suf == "":
+		tails = []string{"*.rb", "*/**/*.rb"}
+	default:
+		e := ""
+		if !load && path.Ext(suf) != ".rb" {
+			if nativeFeature(suf) {
+				return // a compiled extension, not a Ruby file
+			}
+			e = ".rb"
+		}
+		t := escapeGlob(suf) + e
+		tails = []string{"*" + t, "*/**/*" + t}
 	}
-	var pre string
+	var g string
 	switch im.Suffix {
 	case "":
-		pre = stripWD(im.Spec)
-		if pre == "" || strings.Trim(pre, "./") == "" {
+		pre := stripWD(spec)
+		if suf == "" && strings.Trim(pre, "./") == "" {
 			b.unres(p, im.Spec, model.UnresolvedDynamic, im.Line, "the required path is computed")
 			return
 		}
-		g := escapeGlob(pre)
-		b.edge(p, "**/"+g+ext, model.EdgePattern, im.Spec+"…", im.Line)
-		b.edge(p, "**/"+g+"*/**/"+ext, model.EdgePattern, im.Spec+"…", im.Line)
-		return
+		g = "**/" + escapeGlob(pre)
 	default:
-		pre = joinPrefix(baseDir(fi, im.Suffix), im.Spec)
+		pre := joinPrefix(baseDir(fi, im.Suffix), spec)
+		if outside(pre) {
+			b.unres(p, im.Spec, model.UnresolvedDynamic, im.Line, "the required path is computed and leaves the repository")
+			return
+		}
+		g = escapeGlob(pre)
+		if pre == "" && suf == "" {
+			b.edge(p, "**/*.rb", model.EdgePattern, im.Spec, im.Line)
+			if load {
+				b.edge(p, "**", model.EdgePattern, im.Spec, im.Line)
+			}
+			return
+		}
 	}
-	if outside(pre) {
-		b.unres(p, im.Spec, model.UnresolvedDynamic, im.Line, "the required path is computed and leaves the repository")
-		return
+	for _, t := range tails {
+		b.edge(p, g+t, model.EdgePattern, im.Spec, im.Line)
 	}
-	g := escapeGlob(pre)
-	if pre == "" {
-		b.edge(p, "**/"+ext, model.EdgePattern, im.Spec+"…", im.Line)
-		return
-	}
-	b.edge(p, g+ext, model.EdgePattern, im.Spec+"…", im.Line)
-	b.edge(p, g+"*/**/"+ext, model.EdgePattern, im.Spec+"…", im.Line)
 }
+
+// holeMark separates the static prefix and suffix of a partly computed path (internal/scan/ruby).
+const holeMark = "#{}"
 
 // joinPrefix joins a directory and a string prefix relative to it ("" means everything in the directory). The result is a
 // string prefix of repo-relative paths ("" for the whole repository).
@@ -211,8 +230,15 @@ func joinPrefix(dir, pre string) string {
 // globRef adds pattern edges for a Dir glob (forRequire: its files are loaded).
 func (b *builder) globRef(fi *fileInfo, im model.ImportRef, forRequire bool) {
 	if im.Dynamic {
-		pre := globEscapePrefix(im.Spec)
-		b.globAt(fi, im, []string{pre + "*", pre + "*/**"}, forRequire)
+		spec, suf, _ := strings.Cut(im.Spec, holeMark)
+		pre := globEscapePrefix(spec)
+		if suf == "" {
+			b.globAt(fi, im, []string{pre + "*", pre + "*/**"}, forRequire)
+			return
+		}
+		// The suffix is glob text already ("/*.rb"): the unknown part, without or with slashes, sits between.
+		suf = strings.ReplaceAll(suf, "\\", "/")
+		b.globAt(fi, im, []string{pre + "*" + suf, pre + "*/**/*" + suf}, forRequire)
 		return
 	}
 	b.globAt(fi, im, []string{strings.ReplaceAll(im.Spec, "\\", "/")}, forRequire)

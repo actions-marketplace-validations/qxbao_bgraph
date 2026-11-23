@@ -106,7 +106,15 @@ func TestPathExpressions(t *testing.T) {
 func TestDynamicRequires(t *testing.T) {
 	expect(t, `require name`, "rb_require  dyn")
 	expect(t, `require "rubocop/cop/#{name}"`, "rb_require rubocop/cop/ dyn")
-	expect(t, `require "#{x}/y"`, "rb_require  dyn")
+	expect(t, `require "#{x}/y"`, "rb_require #{}/y dyn")
+	expect(t, `require "#{x}"`, "rb_require  dyn")
+	expect(t, `require "rubocop/#{feature}/version"`, "rb_require rubocop/#{}/version dyn")
+	expect(t, `require "a/#{b}/#{c}.rb"`, "rb_require a/#{}.rb dyn")
+	expect(t, `require "a/#{b}/#{"c"}"`, "rb_require a/#{}/c dyn")
+	expect(t, `require "a/" + x + "/b"`, "rb_require a/#{}/b dyn")
+	expect(t, `require "a/" + x + y`, "rb_require a/ dyn")
+	expect(t, `require File.join(__dir__, "cops", name, "x")`, "rb_require cops/#{}/x [rel] dyn")
+	expect(t, `require File.join(x, "a")`, "rb_require #{}/a dyn")
 	expect(t, `require "foo_" + kind`, "rb_require foo_ dyn")
 	expect(t, `require File.join(__dir__, name)`, "rb_require  [rel] dyn")
 	expect(t, `require File.join(__dir__, "plugins", name)`, "rb_require plugins/ [rel] dyn")
@@ -142,6 +150,37 @@ end`, "rb_glob support/**/*.rb [rel]")
 	expect(t, `Dir.each_child(File.join(__dir__, "plugins")) { |f| require File.join(__dir__, "plugins", f) }`,
 		"rb_require plugins/ [rel] dyn", "rb_data_glob plugins/* [rel]")
 	expect(t, `Dir.glob(%w[a/*.rb b/*.rb]).each { |f| load f }`, "rb_glob a/*.rb", "rb_glob b/*.rb")
+	expect(t, `def require_all(path)
+  glob = File.join(__dir__, path, "*.rb")
+  Dir[glob].sort.each do |f|
+    require f
+  end
+end`, "rb_glob #{}/*.rb [rel] dyn")
+}
+
+func TestVariables(t *testing.T) {
+	expect(t, "paths = Dir[File.expand_path(\"**/ui/*.rb\", File.dirname(__FILE__))]\nraise 'x' unless paths.count > 0\npaths.each do |file|\n  require file\nend",
+		"rb_glob **/ui/*.rb [rel]")
+	expect(t, "paths = Dir['a/*.rb']\npaths << 'b.rb'\npaths.each { |f| require f }", "rb_data_glob a/*.rb", "rb_require  dyn")
+	expect(t, "TOOLS.each do |tool|\n  path = File.join(tool.to_s, \"spec\", \"spec_helper.rb\")\n  require_relative \"../#{path}\" if File.exist?(path)\nend",
+		"rb_require ../#{}/spec/spec_helper.rb [rel] dyn")
+	expect(t, "def a\n  path = \"lib/x\"\n  require path\nend", "rb_require lib/x")
+	expect(t, "path = \"x\"\ndef a\n  require path\nend", "rb_require  dyn")
+	expect(t, "def a\n  path = \"x\"\nend\nrequire path", "rb_require  dyn")
+	expect(t, "require path\npath = \"x\"", "rb_require  dyn")
+	expect(t, "x = \"a\"\nx << \"b\"\nrequire x", "rb_require  dyn")
+	expect(t, "x = \"a\"\nx = \"b\"\nrequire x", "rb_require  dyn")
+	expect(t, "def a(x)\n  x = \"a\"\n  require x\nend", "rb_require  dyn")
+	expect(t, "[1].each { |x| x = 'a'; require x }", "rb_require  dyn")
+	expect(t, "a, x = 'a', 'b'\nrequire x", "rb_require  dyn")
+	expect(t, "LIB = File.expand_path('../lib', __dir__)\ndef t\n  require File.join(LIB, 'x')\nend", "rb_require ../lib/x [rel]")
+	expect(t, "LIB = File.expand_path('../lib', __dir__)\nLIB = 'other'\nrequire File.join(LIB, 'x')", "rb_require #{}/x dyn")
+	expect(t, "A = B\nB = A\nrequire A", "rb_require  dyn")
+	expect(t, "def load(p) = Marshal.load(File.binread(p))\nx = load(path)")
+	got := refs(t, "FIX = File.expand_path(\"fixtures\", __dir__)\ndef t = File.read(File.join(FIX, \"a.json\"))", true)
+	if !slices.Contains(got, "rb_string fixtures/a.json [rel]") {
+		t.Fatalf("constant path: %q", got)
+	}
 }
 
 func TestZeitwerkRailsRake(t *testing.T) {
@@ -240,6 +279,8 @@ func TestLexerAmbiguities(t *testing.T) {
 		"if x then y end; puts %(a'b)\nrequire 'r'",
 		"x = `ls '`\nrequire 'r'",
 		"ary.map { |p| p / 2 }\nrequire 'r'",
+		"case x\nwhen :$&, :$MATCH then 1\nwhen :$`, :$' then 2\nend\nrequire 'r'",
+		"assert_includes %w(\n  a'b\n  c\n), x\nrequire 'r'",
 	}
 	for _, c := range cases {
 		got := refs(t, c, false)
