@@ -82,6 +82,13 @@ func main() {
 			stop()
 			os.Exit(code)
 		}
+	case "rbdyn":
+		var code int
+		code, err = cmdRubyDyn(ctx, os.Args[2:])
+		if err == nil && code != 0 {
+			stop()
+			os.Exit(code)
+		}
 	case "cargometa":
 		err = cmdCargoMeta(ctx, os.Args[2:])
 	case "rust-locate":
