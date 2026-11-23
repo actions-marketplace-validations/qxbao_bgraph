@@ -1,0 +1,34 @@
+Composer PSR-4, PSR-0, classmap, and files paths can cross project boundaries.
+-- base/composer.json --
+{"autoload":{"psr-4":{"App\\":"suite/src"},"psr-0":{"Legacy":["suite/legacy"]},"classmap":["suite/map/*"],"files":["suite/bootstrap.php"]}}
+-- base/phpunit.xml.dist --
+<phpunit><testsuites><testsuite name="unit"><directory>tests</directory></testsuite></testsuites></phpunit>
+-- base/tests/AppTest.php --
+<?php
+-- base/src/Service.php --
+<?php function demo() { return 1; }
+-- base/web/package.json --
+{"devDependencies":{"vitest":"1.0.0"}}
+-- base/web/check.test.ts --
+export {}
+-- base/suite/composer.json --
+{"require-dev":{"phpunit/phpunit":"^10"}}
+-- base/suite/tests/NestedTest.php --
+<?php
+-- base/suite/src/External.php --
+<?php
+-- base/suite/legacy/Legacy.php --
+<?php
+-- base/suite/map/Model.php --
+<?php
+-- base/suite/bootstrap.php --
+<?php
+-- head/suite/src/External.php --
+<?php // new
+-- head/suite/bootstrap.php --
+<?php // changed
+-- want --
+select .::php
+select suite::php
+noselect web/check.test.ts
+notfull

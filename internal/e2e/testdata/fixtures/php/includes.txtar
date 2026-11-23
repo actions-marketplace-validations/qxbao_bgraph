@@ -1,0 +1,27 @@
+An explicit __DIR__ include crosses project boundaries and treats brackets literally.
+-- base/composer.json --
+{"name":"demo/app","description":"Original","require-dev":{"phpunit/phpunit":"^10"}}
+-- base/phpunit.xml.dist --
+<phpunit><testsuites><testsuite name="unit"><directory>tests</directory></testsuite></testsuites></phpunit>
+-- base/tests/AppTest.php --
+<?php require __DIR__ . '/../suite/src/[shared].php';
+-- base/src/Service.php --
+<?php function demo() { return 1; }
+-- base/web/package.json --
+{"devDependencies":{"vitest":"1.0.0"}}
+-- base/web/check.test.ts --
+export {}
+-- base/suite/composer.json --
+{"require-dev":{"phpunit/phpunit":"^10"}}
+-- base/suite/tests/NestedTest.php --
+<?php
+-- base/suite/src/[shared].php --
+<?php function x() { return 1; }
+-- head/suite/src/[shared].php --
+<?php function x() { return 2; }
+-- want --
+select .::php
+select suite::php
+noselect web/check.test.ts
+notfull
+nowiden dynamic_import

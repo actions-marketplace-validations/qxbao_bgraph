@@ -11,13 +11,14 @@ import (
 // (GIT_INDEX_FILE): no checkout, working tree untouched. Commit-tree uses the process's hermetic git environment
 // (fixed author/date), so P has the same OID as the old `git commit` approach on a worktree.
 type indexBuilder struct {
-	repo  string // repo directory (object store)
-	idx   string // path of the temporary index file
-	env   []string
-	base  string
-	tree  string // current tree of the index
-	Head  string // current commit (base, then P, then C)
-	ready bool
+	repo               string // repo directory (object store)
+	idx                string // path of the temporary index file
+	env                []string
+	base               string
+	tree               string // current tree of the index
+	Head               string // current commit (base, then P, then C)
+	ready              bool
+	allowPromisedBlobs bool
 }
 
 func newIndexBuilder(repo, idxFile, base string) *indexBuilder {
@@ -61,7 +62,13 @@ func (b *indexBuilder) SetFile(ctx context.Context, path string, content []byte,
 }
 
 func (b *indexBuilder) commit(ctx context.Context, msg string) (string, error) {
-	tree, err := gitIn(ctx, b.repo, b.env, "", "write-tree")
+	args := []string{"write-tree"}
+	if b.allowPromisedBlobs {
+		// Unchanged index entries can refer to promised blobs in a partial clone.
+		// Leave them unfetched until the caller prefetches the paths it needs.
+		args = append(args, "--missing-ok")
+	}
+	tree, err := gitIn(ctx, b.repo, b.env, "", args...)
 	if err != nil {
 		return "", err
 	}

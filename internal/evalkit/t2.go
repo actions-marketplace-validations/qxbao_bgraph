@@ -602,6 +602,8 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		return r.buildOracleJD(ctx, cfg, store, have)
 	case "go":
 		return r.buildOracleGo(ctx, cfg, store, have)
+	case "php":
+		return r.buildOraclePHP(ctx, cfg, store, have)
 	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -815,6 +817,9 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 	case "go":
 		ck.Changed = sel.Changed
 		ck.Near = goNear(sel, ck.Missed)
+		return ck
+	case "php":
+		ck.Changed = sel.Changed
 		return ck
 	}
 	diagFor := ck.Missed

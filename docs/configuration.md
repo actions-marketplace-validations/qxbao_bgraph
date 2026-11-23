@@ -70,6 +70,9 @@ packages below it. A target may also be a unit ID as bgraph prints it (`go:inter
 unit. Globs match the units' files; a glob over `.go` files selects no Go unit (Go units are packages, see
 [Go](ecosystems/go.md#addressing-units-in-bgraphtoml)).
 
+For PHP, use a project directory or an exact ID such as `services/api::php` (`.::php` at the repository root).
+See [PHP](ecosystems/php.md#addressing-units-in-bgraphtoml).
+
 A target that matches no test unit of the current tree (a mistyped or stale directory, a package without tests, a glob
 that matches no unit's file) is a configuration error: when the rule matches a changed file, the selection is `full`
 (`user_rule`) and the detail names the target.

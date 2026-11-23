@@ -1,0 +1,21 @@
+A path dependency installed from a lockfile can be absent from composer.json repositories.
+-- base/app/composer.json --
+{"require":{"demo/library":"1.0.0"},"require-dev":{"phpunit/phpunit":"^11"}}
+-- base/app/composer.lock --
+{"packages":[{"name":"demo/library","version":"1.0.0","dist":{"type":"path","url":"../library"}}],"packages-dev":[]}
+-- base/app/tests/AppTest.php --
+<?php
+-- base/library/composer.json --
+{"name":"demo/library","autoload":{"psr-4":{"Demo\\Library\\":"src"}}}
+-- base/library/src/Thing.php --
+<?php
+-- base/other/composer.json --
+{"require-dev":{"phpunit/phpunit":"^11"}}
+-- base/other/tests/OtherTest.php --
+<?php
+-- head/library/src/Thing.php --
+<?php // changed
+-- want --
+select app::php
+noselect other::php
+notfull

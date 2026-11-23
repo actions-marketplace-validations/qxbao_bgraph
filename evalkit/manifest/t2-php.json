@@ -1,0 +1,46 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "Whole PHPUnit or Pest suite for each listed Composer project. Set up dependencies with Composer before running. PHP token_get_all locates one-line operator changes in the included source paths. Two clean baseline runs are required. Each red project is confirmed once. The oracle records project unit IDs and can be replayed without PHP.",
+ "repos": [
+  {
+   "name": "schmittjoh/php-option",
+   "dir": "php-option",
+   "eco": "php",
+   "remote": "https://github.com/schmittjoh/php-option.git",
+   "r": "638a154f8d4ee6a5cfa96d6a34dfbe0cffa9566d",
+   "runner": "phpunit",
+   "bin": "vendor/bin/phpunit",
+   "include": ["src/**/*.php"],
+   "mutants": 12,
+   "tries": 60,
+   "seed": "t2-php-v1"
+  },
+  {
+   "name": "ramsey/collection",
+   "dir": "collection",
+   "eco": "php",
+   "remote": "https://github.com/ramsey/collection.git",
+   "r": "344572933ad0181accbf4ba763e85a0306a8c5e2",
+   "runner": "phpunit",
+   "bin": "vendor/bin/phpunit",
+   "include": ["src/**/*.php"],
+   "mutants": 12,
+   "tries": 60,
+   "seed": "t2-php-v1"
+  },
+  {
+   "name": "pestphp/pest-plugin-arch",
+   "dir": "pest-plugin-arch",
+   "eco": "php",
+   "remote": "https://github.com/pestphp/pest-plugin-arch.git",
+   "r": "1cc6b4efa92be695848f49a2dca381aca06f6144",
+   "runner": "pest",
+   "bin": "vendor/bin/pest",
+   "include": ["src/**/*.php"],
+   "mutants": 12,
+   "tries": 60,
+   "seed": "t2-php-v1"
+  }
+ ]
+}

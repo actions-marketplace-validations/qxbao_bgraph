@@ -1,0 +1,166 @@
+{
+ "ecosystem": "php",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "EmInReLab/bugsPHP",
+   "url": "https://github.com/EmInReLab/bugsPHP",
+   "revision": "276dc0e52f2da7172985a0cd119620c6ed700d4b",
+   "notes": "BugsPHP metadata and recorded PHPUnit outcomes, with gold and test overlays reconstructed from upstream Git objects"
+  }
+ ],
+ "repos": [
+  {
+   "name": "symfony/symfony",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "PHPOffice/PhpSpreadsheet",
+   "role": "holdout",
+   "t1_tasks": 12,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "doctrine/orm",
+   "role": "holdout",
+   "t1_tasks": 15,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "laravel/framework",
+   "role": "holdout",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "doctrine/dbal",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "cakephp/cakephp",
+   "role": "dev",
+   "t1_tasks": 33,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "PHP-CS-Fixer/PHP-CS-Fixer",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "magento/magento2",
+   "role": "dev",
+   "t1_tasks": 23,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "w7corp/easywechat",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "nikic/PHP-Parser",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "googleapis/google-api-php-client",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "composer/composer",
+   "role": "dev",
+   "t1_tasks": 18,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "briannesbitt/Carbon",
+   "role": "dev",
+   "t1_tasks": 11,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "Seldaek/monolog",
+   "role": "dev",
+   "t1_tasks": 7,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  },
+  {
+   "name": "spatie/laravel-permission",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "BugsPHP"
+   ]
+  }
+ ]
+}
