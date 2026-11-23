@@ -294,6 +294,7 @@ A `full` selection is not an error: the step fails only when bgraph itself fails
 | [Dynamic layer](docs/dynamic-layer.md) | record-based narrowing |
 | [Evaluation](docs/evaluation.md) | how soundness is tested, and the results per ecosystem |
 | [Benchmarks](docs/benchmarks.md) | the comparison with general code-graph tools |
+| [Roadmap](docs/roadmap.md) | ecosystems and integrations that may come next |
 
 ## License
 

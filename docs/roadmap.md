@@ -1,0 +1,76 @@
+# Integration roadmap
+
+What bgraph may support next: new ecosystems, runners and build systems inside existing ones, lockfile levels and the
+dynamic layer. Nothing here is a commitment or a date; items move when someone needs them. An item is only marked done
+when it meets the bar of [Evaluation](evaluation.md) for its kind (trap fixtures, T1/T2 with 0 violations, regression of
+every other ecosystem) and its public page documents it.
+
+**Status**: `planned` (not started), `researching`, `in progress`, `done (vX.Y.Z)`, `dropped` (with the reason).
+**Priority**: 1 = next, 3 = when someone asks.
+
+## How to update this page
+
+Whoever finishes an integration (a person or an agent following the `add-ecosystem` skill) updates this page in the same
+commit as the feature:
+
+1. Set the item's status to `done (vX.Y.Z)` with the first release that contains it (`done (unreleased)` until then),
+   and link its page in the last column.
+2. Move what the work left open into new rows (with `planned` and a priority), not into prose.
+3. Add a row for any integration discovered along the way, and mark items found infeasible `dropped`, with why.
+4. Keep [Supported today](#supported-today) in step with the README and `docs/README.md`.
+
+## Supported today
+
+| Ecosystem | Granularity | Lockfiles at L1 | Dynamic layer | Page |
+|---|---|---|---|---|
+| Node (JS/TS) | test file | npm and pnpm (up to L2), yarn classic and Berry, bun.lock | widened test files | [node](ecosystems/node.md) |
+| Python | test file | uv.lock, poetry.lock | widened test files | [python](ecosystems/python.md) |
+| Rust | Cargo target | Cargo.lock | – | [rust](ecosystems/rust.md) |
+| JVM (Maven, Gradle) | module / project | – | test classes | [jvm](ecosystems/jvm.md) |
+| .NET (VSTest, Microsoft.Testing.Platform) | MSBuild project | – | test classes | [dotnet](ecosystems/dotnet.md) |
+| Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
+
+## New ecosystems
+
+| Item | Status | Priority | Notes | Page |
+|---|---|---|---|---|
+| Ruby (RSpec, Minitest; Bundler, `Gemfile.lock`) | planned | 1 | `require_relative` is static; Rails autoloading (Zeitwerk) maps constants to paths by convention and needs its own rules; dynamic `require` widens | |
+| PHP (PHPUnit, Pest; Composer, `composer.lock`) | planned | 1 | PSR-4 / PSR-0 / classmap autoload from `composer.json` gives class → file; `include` of computed paths widens | |
+| Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
+| Swift (SwiftPM, `swift test`, `Package.resolved`) | planned | 2 | Module granularity like Cargo targets | |
+| Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | planned | 2 | Static imports; package granularity; Flutter golden files are test data | |
+| C / C++ (CMake + CTest, Meson) | planned | 3 | Include paths and macros come from the build system: likely target granularity from the build graph, with heavy widening | |
+
+## Build systems and runners inside existing ecosystems
+
+| Item | Ecosystem | Status | Priority | Notes | Page |
+|---|---|---|---|---|---|
+| Bazel / Buck | any | planned | 3 | Has its own target graph (`rdeps`); integration would map changed files to targets rather than scan sources | |
+| Scala (sbt) | JVM | planned | 2 | Maven/Gradle Scala modules are units today; sbt builds are not read, and the class layer keeps Scala modules whole | |
+| Groovy sources in the class layer | JVM | planned | 3 | Modules with Groovy sources run whole under the class layer | |
+| Android (Gradle Android plugin, build variants, `androidTest`) | JVM | planned | 3 | Variants multiply source sets; instrumented tests need a device | |
+| Bun test runner (`bun test`) | Node | planned | 2 | Projects using Bun as runner, not only as package manager | |
+| Cypress | Node | planned | 3 | Its config is recognized; no runner adapter yet | |
+| More than one runner per project (e.g. Vitest + Playwright) | Node | planned | 2 | Today the first detected runner runs every test file of the project | |
+| pytest-django | Python | planned | 2 | Settings and the app registry are loaded by name at run time | |
+| TUnit (Microsoft.Testing.Platform) | .NET | planned | 3 | Needs `--treenode-filter` in the recorder and the runner; TUnit projects run whole under the class layer today | |
+
+## Lockfiles
+
+| Item | Status | Priority | Notes | Page |
+|---|---|---|---|---|
+| `pdm.lock`, `Pipfile.lock`, `pylock.toml`, requirements files to L1 | planned | 2 | L0 today: any change selects every Python test of the project | [lockfiles](lockfiles.md) |
+| `bun.lockb` (binary) and `npm-shrinkwrap.json` to L1 | planned | 3 | `bun.lock` (text) and `package-lock.json` are read today | [lockfiles](lockfiles.md) |
+| `packages.lock.json` (.NET) to L1 | planned | 2 | L0 today | [lockfiles](lockfiles.md) |
+| Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
+
+## Dynamic layer
+
+| Item | Status | Priority | Notes | Page |
+|---|---|---|---|---|
+| Default-on decision per ecosystem (replay + mutation on public repositories) | planned | 1 | Gate per ecosystem: ≥ 300 replayed pairs, 0 misses, ≥ 70 % complete records, ≥ 15 % fewer tests selected | [dynamic layer](dynamic-layer.md) |
+| .NET class layer on Linux and macOS (recorded runs) | planned | 2 | Implemented and evaluated on Windows; dynamic instrumentation exists on x64 only | [dynamic layer §9.11](dynamic-layer.md#911-net) |
+| .NET: map generated sources to their partial type instead of the whole project | planned | 2 | Repositories with their own source generator narrow little today | [dynamic layer §9.11](dynamic-layer.md#911-net) |
+| .NET: build-time IL diff to relax the body guard (constants, signatures, added members) | planned | 3 | The body guard passes 17–45 % of code-only commits on the evaluated repositories | [dynamic layer §9.11](dynamic-layer.md#911-net) |
+| Go | planned | 3 | Package granularity is already fine; a test-function layer would need coverage per test | |
+| Rust | planned | 3 | Same question at the Cargo-target level | |

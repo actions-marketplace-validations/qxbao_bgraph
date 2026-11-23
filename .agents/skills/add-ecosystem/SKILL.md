@@ -9,7 +9,7 @@ bgraph is a **fail-closed** affected-test selector: for every change the output 
 affected, or it widens (package/module/full) with a machine-readable reason. Every decision below serves that
 invariant first and selectivity second. A silent miss is the only unacceptable outcome.
 
-Read the public docs before designing: `docs/architecture.md` (contract, graph, widening reasons, global table),
+Read the public docs before designing: `docs/roadmap.md` (the item, its priority and notes), `docs/architecture.md` (contract, graph, widening reasons, global table),
 `docs/configuration.md`, `docs/lockfiles.md`, `docs/evaluation.md` (method and the bar each ecosystem met) and the
 existing `docs/ecosystems/*.md` pages as models for the new one. The phase's done-criteria are usually: 0 T1/T2
 violations on the dev set, trap fixtures green, widening rates reported by reason, plus an ecosystem-specific check
@@ -233,4 +233,8 @@ the real cost (a `git cat-file` per run to read symlink targets was the "20 % sl
   `docs/README.md`; the results in `docs/evaluation.md` (every number from the latest run, not an older report);
   `bgraph.toml` additions in `docs/configuration.md` and `docs/bgraph.example.toml` (a test keeps it parseable). Run
   `bgraph command` on a fixture to capture example output instead of writing it by hand.
+- Update `docs/roadmap.md` in the same commit as the feature: set the item's status (`done (unreleased)` until a release
+  contains it, then `done (vX.Y.Z)`), link the new page, add rows for what the phase left open (with status and priority)
+  and for integrations discovered on the way, mark infeasible items `dropped` with the reason, and keep its "Supported
+  today" table in step with the README and `docs/README.md`. Before starting a phase, read it to pick the item and its notes.
 - Ask the user: keep or delete the phase's eval data; proceed to the next phase.
