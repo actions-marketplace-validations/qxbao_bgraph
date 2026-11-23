@@ -1,0 +1,21 @@
+A computed require is assumed not to load a test file nothing references: changing such a spec selects it alone.
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/lib/foo/plugins.rb --
+module Foo
+  def self.load_plugin(name)
+    require name
+  end
+end
+-- base/spec/plugins_spec.rb --
+require "foo/plugins"
+-- base/spec/leaf_spec.rb --
+it_works = true
+-- head/spec/leaf_spec.rb --
+it_works = false
+-- want --
+notfull
+scope graph
+nowiden dynamic_import
+select spec/leaf_spec.rb
+noselect spec/plugins_spec.rb

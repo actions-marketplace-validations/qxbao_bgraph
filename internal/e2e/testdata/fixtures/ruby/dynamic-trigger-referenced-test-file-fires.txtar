@@ -1,0 +1,26 @@
+A test file that another file requires is library code too: a change to it still fires a computed require.
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/lib/foo/plugins.rb --
+module Foo
+  def self.load_plugin(name)
+    require name
+  end
+end
+-- base/spec/plugins_spec.rb --
+require "foo/plugins"
+-- base/spec/shared_test.rb --
+SHARED = 1
+-- base/spec/other_spec.rb --
+require_relative "shared_test"
+-- base/spec/plain_spec.rb --
+x = 1
+-- head/spec/shared_test.rb --
+SHARED = 2
+-- want --
+notfull
+widen dynamic_import
+select spec/shared_test.rb
+select spec/other_spec.rb
+select spec/plugins_spec.rb
+noselect spec/plain_spec.rb

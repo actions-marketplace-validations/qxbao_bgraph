@@ -21,7 +21,7 @@
 // fixture, vendor, tmp, node_modules, .bundle), is not a helper (test_helper.rb, spec_helper.rb, rails_helper.rb, helper.rb:
 // sources, so that a helper nothing is known to load widens) and
 //
-//   - it lies below a directory named spec or test and its name matches *_spec.rb, *_test.rb, test_*.rb or tc_*.rb; or
+//   - it lies below a directory named spec, test or tests and its name matches *_spec.rb, *_test.rb, test_*.rb or tc_*.rb; or
 //   - it matches a literal test pattern of its project: .rspec / .rspec-local / .rspec-parallel / spec/spec.opts --pattern (also
 //     below --default-path, where *_spec.rb files are tests too), Rake::TestTask / RSpec::Core::RakeTask `pattern =` /
 //     `test_files =` (strings, %w[], FileList[...], Dir[...], Dir.glob, FileList.new, ENV["X"] || "literal", ENV.fetch("X",
@@ -93,7 +93,9 @@
 // reliably is uncertain_scan (its references found so far still count). Both are Unresolved at repository scope with
 // TriggerGlobs on the files a require or load can execute (**/*.rb, **/*.rake, **/*.ru, **/*.gemspec, **/bin/*, **/exe/*,
 // **/libexec/*): such a file added, changed or deleted anywhere seeds the file with the dynamic site, and every test reaching
-// it is selected. A bare load(x) in a file that defines its own `load` method is that method, not Kernel#load.
+// it is selected. A changed test file nothing references (other than its ownership) does not fire a dynamic site: computed
+// loads are assumed not to load test files, which the runner loads; an uncertain scan still fires on them. A bare load(x) in a
+// file that defines its own `load` method is that method, not Kernel#load.
 //
 // # Widenings (ClassifyChange, all with Eco "ruby")
 //
@@ -142,7 +144,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "ruby-2"
+const AnalyzerVersion = "ruby-3"
 
 // Eco is the Ruby ecosystem.
 type Eco struct{}
@@ -577,6 +579,9 @@ func (b *builder) unres(from, spec string, class model.UnresolvedClass, line int
 	switch class {
 	case model.UnresolvedDynamic, model.UnresolvedUncertainScan:
 		u.ScopeTier, u.ScopeDir, u.TriggerGlobs = model.TierModule, ".", triggers
+		// A computed require does not load a test file nothing else references (the runner does); an uncertain scan may have
+		// missed a literal reference to it, so it keeps firing on test files.
+		u.SkipTests = class == model.UnresolvedDynamic
 	default:
 		u.ScopeTier = model.TierNone
 	}

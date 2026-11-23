@@ -160,12 +160,15 @@ func testName(base string) bool {
 		strings.HasPrefix(base, "test_") && strings.HasSuffix(base, ".rb") || strings.HasPrefix(base, "tc_") && strings.HasSuffix(base, ".rb")
 }
 
-// nearestTestDir returns "spec" or "test" for the nearest ancestor directory with one of those names ("" for none).
+// nearestTestDir returns "spec" or "test" for the nearest ancestor directory named spec, test or tests ("test"), "" for none.
 func nearestTestDir(p string) string {
 	segs := strings.Split(path.Dir(p), "/")
 	for i := len(segs) - 1; i >= 0; i-- {
-		if segs[i] == "spec" || segs[i] == "test" {
+		switch segs[i] {
+		case "spec", "test":
 			return segs[i]
+		case "tests":
+			return "test"
 		}
 	}
 	return ""

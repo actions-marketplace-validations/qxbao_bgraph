@@ -282,6 +282,10 @@ type Unresolved struct {
 	// also matches one of these globs seeds the importer. It is for imports that can only load files of a known kind (a dynamic
 	// Python import loads modules, never data files). Empty: any changed file within scope triggers.
 	TriggerGlobs []string `json:"trigger_globs,omitempty"`
+	// SkipTests: a changed test file that no real reference (import, glob, literal; ownership does not count) reaches does not
+	// trigger. For computed loads in ecosystems whose test files are only loaded by the runner (a Ruby `require name`): such a
+	// file is run on its own when it changes, and a computed load is assumed not to load it.
+	SkipTests bool `json:"skip_tests,omitempty"`
 }
 
 // TestUnit is a unit a test runner can run on its own (docs/architecture.md).
