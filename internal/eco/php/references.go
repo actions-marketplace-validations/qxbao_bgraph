@@ -7,6 +7,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"unicode"
 
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/model"
@@ -72,7 +73,38 @@ func (b *analysis) literalPaths(p *project, f string, imp model.ImportRef) []str
 	return candidates
 }
 
+// externalRead reports literal read operands that never name a repository
+// file: absolute paths, network URLs and php:// streams other than
+// php://filter, whose resource= target can be a relative file.
+func externalRead(imp model.ImportRef) bool {
+	if imp.Suffix != "" {
+		return false
+	}
+	spec := strings.ReplaceAll(imp.Spec, "\\", "/")
+	if path.IsAbs(spec) || len(spec) >= 3 && spec[1] == ':' && spec[2] == '/' && unicode.IsLetter(rune(spec[0])) {
+		return true
+	}
+	lower := strings.ToLower(spec)
+	if strings.HasPrefix(lower, "data:") {
+		return true
+	}
+	scheme, _, ok := strings.Cut(lower, "://")
+	if !ok {
+		return false
+	}
+	switch scheme {
+	case "http", "https", "ftp", "ftps":
+		return true
+	case "php":
+		return !strings.HasPrefix(lower, "php://filter")
+	}
+	return false
+}
+
 func (b *analysis) literalRead(p *project, f string, imp model.ImportRef) {
+	if externalRead(imp) {
+		return
+	}
 	candidates := b.literalPaths(p, f, imp)
 	if len(candidates) == 0 {
 		b.unresolved(p, f, imp.Spec, "unsupported PHP data path", model.UnresolvedUnknown, imp.Line, nil)

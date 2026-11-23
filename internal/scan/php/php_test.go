@@ -40,6 +40,28 @@ func TestCommentInsertionPreservesImports(t *testing.T) {
 	}
 }
 
+func TestScanSkipsMembersAndDeclarations(t *testing.T) {
+	src := "<?php\n" +
+		"$include = $opts['x'];\n" +
+		"$this->include($tpl);\n" +
+		"$x?->require('a.php');\n" +
+		"$request->file('avatar');\n" +
+		"new File($path);\n" +
+		"self::INCLUDE;\n" +
+		"function file($p) {}\n" +
+		"const REQUIRE = 1;\n" +
+		"\\file_get_contents('global.json');\n" +
+		"include 'real.php';\n"
+	got := Scan([]byte(src))
+	want := []model.ImportRef{
+		{Kind: model.ImportRead, Line: 10, Spec: "global.json"},
+		{Kind: model.ImportRequire, Line: 11, Spec: "real.php"},
+	}
+	if got.Uncertain || !slices.Equal(got.Imports, want) {
+		t.Fatalf("Scan: %+v; want %+v", got, want)
+	}
+}
+
 func FuzzScan(f *testing.F) {
 	for _, seed := range []string{"<?php require __DIR__ . '/a.php';", "<?= include $asset ?>", "<?php <<<END\ntext\nEND;"} {
 		f.Add(seed)

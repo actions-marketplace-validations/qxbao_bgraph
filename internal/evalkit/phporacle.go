@@ -272,7 +272,7 @@ func phpTestOwners(t tree.Tree, files []string) (map[string][]string, error) {
 		dir := path.Dir(f)
 		if seen[dir] ||
 			(path.Base(f) != "phpunit.xml" && t.Has(path.Join(dir, "phpunit.xml"))) ||
-			(path.Base(f) == "phpunit.dist.xml" && t.Has(path.Join(dir, "phpunit.xml.dist"))) {
+			(path.Base(f) == "phpunit.xml.dist" && t.Has(path.Join(dir, "phpunit.dist.xml"))) {
 			continue
 		}
 		seen[dir] = true

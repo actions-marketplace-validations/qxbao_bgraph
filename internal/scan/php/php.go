@@ -38,7 +38,7 @@ func Scan(src []byte) model.ScanResult {
 	out.Uncertain = l.problem != ""
 	out.UncertainReason = l.problem
 	for i, t := range tokens {
-		if t.kind != 'i' {
+		if t.kind != 'i' || member(tokens[:i]) {
 			continue
 		}
 		switch strings.ToLower(t.text) {
@@ -59,6 +59,32 @@ func Scan(src []byte) model.ScanResult {
 		}
 	}
 	return out
+}
+
+// member reports whether the identifier after prev is not a global language
+// construct or function call: a variable ($include), a property or method
+// ($request->file, $x?->file, self::INCLUDE), or a name being declared or
+// instantiated (new File, function file, const INCLUDE).
+func member(prev []token) bool {
+	n := len(prev)
+	if n == 0 {
+		return false
+	}
+	last := prev[n-1]
+	switch last.kind {
+	case '$':
+		return true
+	case '>':
+		return n >= 2 && prev[n-2].kind == '-'
+	case ':':
+		return n >= 2 && prev[n-2].kind == ':'
+	case 'i':
+		switch strings.ToLower(last.text) {
+		case "new", "function", "fn", "const", "class", "interface", "trait", "enum", "instanceof":
+			return true
+		}
+	}
+	return false
 }
 
 func operand(ts []token, line int) model.ImportRef {

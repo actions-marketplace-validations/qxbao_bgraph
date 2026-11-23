@@ -80,7 +80,7 @@ func projectDir(t tree.Tree, file string) string {
 		if t.Has(path.Join(d, "composer.json")) {
 			return d
 		}
-		for _, n := range []string{"phpunit.xml", "phpunit.xml.dist", "phpunit.dist.xml"} {
+		for _, n := range []string{"phpunit.xml", "phpunit.dist.xml", "phpunit.xml.dist"} {
 			if t.Has(path.Join(d, n)) {
 				return d
 			}
