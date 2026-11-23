@@ -32,7 +32,7 @@ func SetupHermeticEnv(emptyCfgDir string) error {
 		"GIT_COMMITTER_NAME":  "bgraph-eval",
 		"GIT_COMMITTER_EMAIL": "eval@example.invalid",
 		"GIT_COMMITTER_DATE":  "2020-01-01T00:00:00Z",
-		"GIT_CONFIG_COUNT":    "4",
+		"GIT_CONFIG_COUNT":    "5",
 		"GIT_CONFIG_KEY_0":    "core.autocrlf",
 		"GIT_CONFIG_VALUE_0":  "false",
 		"GIT_CONFIG_KEY_1":    "core.longpaths",
@@ -42,6 +42,8 @@ func SetupHermeticEnv(emptyCfgDir string) error {
 		// Trees are built with plumbing only (temporary index, never checked out): Windows-invalid names such as "a:0" must not abort read-tree.
 		"GIT_CONFIG_KEY_3":   "core.protectNTFS",
 		"GIT_CONFIG_VALUE_3": "false",
+		"GIT_CONFIG_KEY_4":   "maintenance.auto",
+		"GIT_CONFIG_VALUE_4": "false",
 	}
 	for k, v := range kv {
 		if err := os.Setenv(k, v); err != nil {

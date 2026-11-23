@@ -29,6 +29,7 @@ commit as the feature:
 | JVM (Maven, Gradle) | module / project | – | test classes | [jvm](ecosystems/jvm.md) |
 | .NET (VSTest, Microsoft.Testing.Platform) | MSBuild project | – | test classes | [dotnet](ecosystems/dotnet.md) |
 | Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
+| PHP | Composer project | – | – | [php](ecosystems/php.md) |
 | Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | – | [ruby](ecosystems/ruby.md) |
 
 ## New ecosystems
@@ -38,7 +39,7 @@ commit as the feature:
 | Ruby (RSpec, Minitest; Bundler, `Gemfile.lock`) | done (unreleased) | 1 | Test-file units; `require` by path suffix; Zeitwerk and Rails autoloading depend on whole directories; computed `require` widens (describable with `[[dynamic]]`) | [ruby](ecosystems/ruby.md) |
 | Ruby: constant-level narrowing for Zeitwerk and Rails autoloading | planned | 2 | Today an autoloading application or gem depends on every file it can autoload; mapping referenced constants to files would narrow it, with widening for metaprogramming | [ruby](ecosystems/ruby.md#known-gaps-and-over-selection) |
 | Ruby: Cucumber features | planned | 3 | `.feature` files are not units; a change to one widens its project | |
-| PHP (PHPUnit, Pest; Composer, `composer.lock`) | planned | 1 | PSR-4 / PSR-0 / classmap autoload from `composer.json` gives class → file; `include` of computed paths widens | |
+| PHP (PHPUnit, Pest; Composer, `composer.lock`) | done (unreleased) | 1 | Project ownership, Composer autoload roots, and static and computed includes | [php](ecosystems/php.md) |
 | Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
 | Swift (SwiftPM, `swift test`, `Package.resolved`) | planned | 2 | Module granularity like Cargo targets | |
 | Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | planned | 2 | Static imports; package granularity; Flutter golden files are test data | |
@@ -57,6 +58,7 @@ commit as the feature:
 | More than one runner per project (e.g. Vitest + Playwright) | Node | planned | 2 | Today the first detected runner runs every test file of the project | |
 | pytest-django | Python | planned | 2 | Settings and the app registry are loaded by name at run time | |
 | TUnit (Microsoft.Testing.Platform) | .NET | planned | 3 | Needs `--treenode-filter` in the recorder and the runner; TUnit projects run whole under the class layer today | |
+| Composer scripts and custom PHPUnit/Pest invocations | PHP | planned | 3 | Resolve project-defined launchers, configuration paths and additional suite flags | [php](ecosystems/php.md) |
 
 ## Lockfiles
 
@@ -67,6 +69,7 @@ commit as the feature:
 | `packages.lock.json` (.NET) to L1 | planned | 2 | L0 today | [lockfiles](lockfiles.md) |
 | `Gemfile.lock` / `gems.locked` (Ruby) to L1 | planned | 2 | L0 today; the `GEM` and `PATH` specs give a dependency graph per gem, to be gated by the differential check against Bundler | [lockfiles](lockfiles.md) |
 | Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
+| `composer.lock` to L1 | planned | 3 | L0 today. Compare local and transitive dependency resolution against Composer first. | [lockfiles](lockfiles.md) |
 
 ## Dynamic layer
 

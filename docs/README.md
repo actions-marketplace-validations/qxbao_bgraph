@@ -25,4 +25,5 @@
 | JVM (Maven, Gradle) | module / project | [ecosystems/jvm.md](ecosystems/jvm.md) |
 | .NET | MSBuild project | [ecosystems/dotnet.md](ecosystems/dotnet.md) |
 | Go | package | [ecosystems/go.md](ecosystems/go.md) |
+| PHP | Composer project | [ecosystems/php.md](ecosystems/php.md) |
 | Ruby | test file | [ecosystems/ruby.md](ecosystems/ruby.md) |

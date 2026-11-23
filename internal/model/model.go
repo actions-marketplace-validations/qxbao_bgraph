@@ -120,6 +120,7 @@ const (
 	// and whose Suffix holds the comma-separated names of a `from <Spec> import <names>` statement ("*" for a star import).
 	ImportSysPath ImportKind = "sys_path" // sys.path.insert/append(...): Spec is a path relative to the file's directory, or "cwd:<path>"; Dynamic: not evaluable
 	ImportPlugin  ImportKind = "plugin"   // pytest_plugins = ["a.b"]
+	ImportRead    ImportKind = "read"     // PHP literal file access
 	// Ruby (internal/scan/ruby documents Spec, Suffix and Dynamic for each kind). Suffix holds the base of a path ("" a feature or a
 	// path relative to an unknown directory, "rel" relative to the scanned file's directory, "root" relative to the project root).
 	ImportRbRequire     ImportKind = "rb_require"      // require / require_relative / require_dependency / autoload
@@ -303,6 +304,10 @@ type TestUnit struct {
 	// Config is a runner-specific launch file: the pytest config file (repo-relative; empty when pytest has none), or for the Python
 	// "django" runner the driver script (tests/runtests.py or manage.py).
 	Config string `json:"config,omitempty"`
+	// BinDir and RunnerPaths hold the Composer launcher directory and explicit
+	// test operands for PHP. Their paths are relative to the repository.
+	BinDir      string   `json:"bin_dir,omitempty"`
+	RunnerPaths []string `json:"runner_paths,omitempty"`
 	// Dir is the directory the unit's tests live in, set when Files holds only a virtual node and the unit may be narrower than its
 	// project (a Go package inside a module): a [[rule]] directory target matches it like a file of the unit.
 	Dir string `json:"dir,omitempty"`
@@ -310,15 +315,17 @@ type TestUnit struct {
 
 // SelectedTest is a selected test unit together with its reason chain.
 type SelectedTest struct {
-	Unit    string   `json:"unit"`
-	Project string   `json:"project,omitempty"`
-	Runner  string   `json:"runner,omitempty"`
-	Files   []string `json:"files"`
-	Reasons []string `json:"reasons"`
-	Whole   bool     `json:"whole,omitempty"`   // run the project's whole test suite (see TestUnit.Whole)
-	Package string   `json:"package,omitempty"` // see TestUnit.Package
-	Config  string   `json:"config,omitempty"`  // see TestUnit.Config
-	Dir     string   `json:"dir,omitempty"`     // see TestUnit.Dir (Go: the package directory)
+	Unit        string   `json:"unit"`
+	Project     string   `json:"project,omitempty"`
+	Runner      string   `json:"runner,omitempty"`
+	Files       []string `json:"files"`
+	Reasons     []string `json:"reasons"`
+	Whole       bool     `json:"whole,omitempty"`   // run the project's whole test suite (see TestUnit.Whole)
+	Package     string   `json:"package,omitempty"` // see TestUnit.Package
+	Config      string   `json:"config,omitempty"`  // see TestUnit.Config
+	BinDir      string   `json:"bin_dir,omitempty"`
+	RunnerPaths []string `json:"runner_paths,omitempty"`
+	Dir         string   `json:"dir,omitempty"` // see TestUnit.Dir (Go: the package directory)
 	// Widened: the unit is selected only because of a widening (unresolved import seed, module/package scope widening, "whole
 	// project" unit), not by the backward walk from the changed files, a [[rule]] target, previously_failed or as a new test
 	// (docs/dynamic-layer.md §1). Only widened units can be removed by the dynamic layer.

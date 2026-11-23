@@ -52,7 +52,7 @@ func TestRubyScanRoundTrip(t *testing.T) {
 			t.Fatalf("kind %s has no index", k)
 		}
 	}
-	if kindIdx[model.ImportPlugin] != 11 || kindIdx[model.ImportRbRequire] != 12 {
+	if kindIdx[model.ImportPlugin] != 11 || kindIdx[model.ImportRead] != 12 || kindIdx[model.ImportRbRequire] != 13 {
 		t.Fatal("existing kind indexes must not move")
 	}
 }

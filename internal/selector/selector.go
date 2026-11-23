@@ -295,7 +295,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 				for _, w := range ws {
 					s.widen(w)
 					for _, sd := range w.Seeds {
-						seeds = append(seeds, graph.Seed{Path: sd, Reason: model.ReasonLockChanged + " " + p})
+						seeds = append(seeds, graph.Seed{Path: sd, Reason: w.Reason + " " + p})
 					}
 				}
 			}
@@ -391,7 +391,8 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	choose := func(u model.TestUnit, reason string, exact bool) {
 		st, ok := chosen[u.ID]
 		if !ok {
-			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package, Config: u.Config, Dir: u.Dir}
+			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package,
+				Config: u.Config, Dir: u.Dir, BinDir: u.BinDir, RunnerPaths: u.RunnerPaths}
 			chosen[u.ID] = st
 			res.UnitEco[u.ID] = u.Eco
 		}

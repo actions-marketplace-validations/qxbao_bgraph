@@ -101,7 +101,7 @@ func dotnetLocName(l evalkit.DotnetTestLoc) locName {
 	return n
 }
 
-// cmdJVMLocate runs the JVM (eco "jvm") or .NET (eco "dotnet") test-name locator over every task's P tree and prints unique / ambiguous /
+// cmdJVMLocate runs the selected ecosystem's test-name locator over every task's P tree and prints unique / ambiguous /
 // not-found statistics (overall, per repo, per name form, and for n2p tasks how many names fall into files the test patch touches).
 func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 	fs := flag.NewFlagSet(eco+"-locate", flag.ExitOnError)
@@ -149,6 +149,24 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
 					for _, l := range x.Locs {
 						r.Names = append(r.Names, rbLocName(l))
+					}
+				} else if eco == "php" {
+					names, e := evalkit.PHPLocateTask(ctx, dir, idx, t)
+					ids, _ := evalkit.ParseF2P(t.F2P)
+					r = locRow{ID: t.InstanceID, Repo: t.Repo, Source: t.Source, Kind: t.F2PKind, F2P: len(ids)}
+					if e != nil {
+						r.Err = e.Error()
+					}
+					for _, l := range names {
+						cat := "unique"
+						switch len(l.Files) {
+						case 0:
+							cat = "notfound"
+						case 1:
+						default:
+							cat = "ambiguous"
+						}
+						r.Names = append(r.Names, locName{Name: l.Name, Form: "phpunit", Class: strings.SplitN(l.Name, "::", 2)[0], Files: l.Files, Cat: cat, InPatch: l.InPatch})
 					}
 				} else if eco == "go" {
 					x := evalkit.GoLocateTask(ctx, dir, idx, t)

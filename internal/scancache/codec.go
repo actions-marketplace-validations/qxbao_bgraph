@@ -24,7 +24,7 @@ const codecVersion = 1
 var kinds = []model.ImportKind{
 	model.ImportStatic, model.ImportTypeOnly, model.ImportDynamic, model.ImportRequire, model.ImportResolve,
 	model.ImportMock, model.ImportGlob, model.ImportURL, model.ImportReExport, model.ImportTripleSlash,
-	model.ImportSysPath, model.ImportPlugin,
+	model.ImportSysPath, model.ImportPlugin, model.ImportRead,
 	// Appended (never reorder: stored rows refer to kinds by index).
 	model.ImportRbRequire, model.ImportRbLoad, model.ImportRbGlob, model.ImportRbDataGlob, model.ImportRbString, model.ImportRbZeitwerk,
 	model.ImportRbPushDir, model.ImportRbRails, model.ImportRbTestPattern, model.ImportRbTestTask, model.ImportRbRubyOpt,

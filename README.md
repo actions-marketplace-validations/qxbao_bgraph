@@ -5,7 +5,7 @@
 <h3 align="center">Your agent writes the code in minutes. Don't wait an hour for the tests.</h3>
 
 <p align="center">
-  <b>bgraph</b> runs only the tests a change can affect, across seven language ecosystems,<br>
+  <b>bgraph</b> runs only the tests a change can affect, across eight language ecosystems,<br>
   and never silently skips one.
 </p>
 
@@ -17,7 +17,7 @@
   <a href="https://pkg.go.dev/github.com/qxbao/bgraph"><img src="https://img.shields.io/badge/API%20docs-pkg.go.dev-14B8A6?style=flat&labelColor=0F172A" alt="API docs on pkg.go.dev"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-F59E0B?style=flat&labelColor=0F172A" alt="License: Apache-2.0"></a>
   <br>
-  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go%20%C2%B7%20Ruby-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go, Ruby"></a>
+  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go%20%C2%B7%20Ruby%20%C2%B7%20PHP-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go, Ruby, PHP"></a>
   <a href="#built-for-coding-agents"><img src="https://img.shields.io/badge/MCP-server%20included-white?style=flat&labelColor=0F172A" alt="MCP server included"></a>
   <a href="#github-action"><img src="https://img.shields.io/badge/GitHub%20Action-qxbao%2Fbgraph%40v0-white?style=flat&labelColor=0F172A&logo=githubactions&logoColor=white" alt="GitHub Action: qxbao/bgraph@v0"></a>
   <img src="https://img.shields.io/badge/tested%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-white?style=flat&labelColor=0F172A" alt="Tested on Linux, macOS and Windows">
@@ -44,14 +44,14 @@ is a regression shipped to production. bgraph is built around that constraint:
 
 <table>
   <tr>
-    <td align="center" width="25%"><h3>1,498</h3>real bug-fix tasks replayed<br>across seven ecosystems</td>
-    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 515 mutation kills</td>
+    <td align="center" width="25%"><h3>1,767</h3>real bug-fix tasks replayed<br>across eight ecosystems</td>
+    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 548 mutation kills</td>
     <td align="center" width="25%"><h3>3–13%</h3>of the suite selected on<br>well-structured repositories</td>
     <td align="center" width="25%"><h3>&lt; 1 s</h3>typical selection time,<br>index cached between runs</td>
   </tr>
 </table>
 
-<sub>Numbers from the project's own evaluation: SWE-bench-family FAIL_TO_PASS tasks, mutation testing on 19 open-source
+<sub>Numbers from the project's own evaluation: SWE-bench-family FAIL_TO_PASS tasks, mutation testing on 22 open-source
 repositories, median selection on dayjs, hono and the Go holdout set. Method and every result:
 <a href="docs/evaluation.md">docs/evaluation.md</a>.</sub>
 
@@ -135,6 +135,7 @@ and per-task causes: [docs/benchmarks.md](docs/benchmarks.md).
 | <img src="https://cdn.simpleicons.org/openjdk/ED8B00" width="20" alt=""> | [**JVM** (Java / Kotlin)](docs/ecosystems/jvm.md) | Maven module, Gradle project | Maven, Gradle (wrappers detected) |
 | <img src="https://cdn.simpleicons.org/dotnet" width="20" alt=""> | [**.NET** (C# / F# / VB)](docs/ecosystems/dotnet.md) | MSBuild project | `dotnet test` (VSTest, Microsoft.Testing.Platform) |
 | <img src="https://cdn.simpleicons.org/go" width="20" alt=""> | [**Go**](docs/ecosystems/go.md) | package | `go test`, modules, `go.work`, vendoring |
+| <img src="https://cdn.simpleicons.org/php" width="20" alt=""> | [**PHP**](docs/ecosystems/php.md) | Composer project | PHPUnit, Pest |
 | <img src="https://cdn.simpleicons.org/ruby" width="20" alt=""> | [**Ruby**](docs/ecosystems/ruby.md) | test file | RSpec, Minitest, Test::Unit, Rails test, Bundler |
 
 Polyglot repositories work out of the box: every ecosystem selects independently, and a change in one does not select
@@ -146,7 +147,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 |---|---|
 | 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
 | 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
-| ▶️ **Ready-to-run commands** | `bgraph command` prints `vitest run ...`, `pytest ...`, `cargo test -p ...`, `mvn -pl ...`, `dotnet test ...`, `go test ...`, batched for long lists. [CLI](docs/cli.md#command) |
+| ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest, RSpec, Minitest and more. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
 | ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files and for JVM and .NET test classes. [Dynamic layer](docs/dynamic-layer.md) |
 | 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |

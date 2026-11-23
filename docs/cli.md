@@ -94,7 +94,7 @@ A selected test:
 |---|---|
 | `unit` | unit ID (a test file, `crate::target`, `maven:<dir>`, `go:<dir>`...; see the [ecosystem pages](README.md#ecosystems)) |
 | `project` | the directory the runner runs from |
-| `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`... |
+| `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`, `phpunit`, `pest` |
 | `files` | the unit's files (a virtual node for build-level units) |
 | `reasons` | reason chains, each step joined by ` ; `, e.g. `src/a.test.ts --import-> src/util.ts ; src/util.ts (changed)` |
 | `whole` | run the project's whole test suite (the test file set is unknown) |
