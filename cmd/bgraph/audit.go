@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -36,6 +37,8 @@ type auditLogLine struct {
 	Head     string              `json:"head"`
 	Scope    bgraph.Tier         `json:"scope"`
 	Selected int                 `json:"selected"`
+	Total    int                 `json:"total"`
+	Full     bool                `json:"full"`
 	Failed   int                 `json:"failed"`
 	Missed   []bgraph.FailedTest `json:"missed"`
 	Unmapped []bgraph.FailedTest `json:"unmapped"`
@@ -49,14 +52,15 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
 	var results multiFlag
-	fs.Var(&results, "results", "test results file (repeatable): JUnit XML, Jest/Vitest JSON, Playwright JSON")
-	format := fs.String("format", audit.FormatAuto, "results format: auto|junit|jest-json|playwright-json")
+	fs.Var(&results, "results", "test results file (repeatable): JUnit XML, Jest/Vitest JSON, Playwright JSON, go test -json")
+	format := fs.String("format", audit.FormatAuto, "results format: "+strings.Join(audit.Formats, "|"))
 	base := fs.String("base", "", "base ref (default: merge-base with origin/HEAD, origin/main, main, master)")
 	head := fs.String("head", "", "target commit (default: working tree)")
 	failed := fs.String("failed", "", "ids of test units that failed in the previous run, comma-separated")
 	asJSON := fs.Bool("json", false, "in JSON")
 	logPath := fs.String("log", "", "append one JSON line per run to this file and print the clean-run streak")
 	strict := fs.Bool("strict", false, "also exit 3 when a failure cannot be mapped to a test file")
+	summary := fs.Bool("summary", false, "print aggregates over the --log file instead of auditing (no --results)")
 	var dyn dynamicFlag
 	dyn.register(fs)
 	python := fs.String("python", "", "interpreter of the dynamic layer (overrides bgraph.toml [dynamic_layer] python)")
@@ -72,11 +76,18 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "audit: extra arguments: %v\n", fs.Args())
 		return 2
 	}
+	if *summary {
+		if *logPath == "" || len(results) > 0 {
+			fmt.Fprintln(stderr, "audit --summary: needs --log FILE and no --results")
+			return 2
+		}
+		return runAuditSummary(*logPath, *asJSON, stdout, stderr)
+	}
 	if len(results) == 0 {
 		fmt.Fprintln(stderr, "audit: --results is required")
 		return 2
 	}
-	if !slices.Contains([]string{audit.FormatAuto, audit.FormatJUnit, audit.FormatJestJSON, audit.FormatPlaywright}, *format) {
+	if !slices.Contains(audit.Formats, *format) {
 		fmt.Fprintf(stderr, "invalid --format: %q\n", *format)
 		return 2
 	}
@@ -125,7 +136,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	}
 	if *logPath != "" {
 		n, err := appendAuditLog(*logPath, auditLogLine{Time: time.Now().UTC().Format(time.RFC3339), Base: rep.Base, Head: rep.Head,
-			Scope: rep.Scope, Selected: rep.Selected, Failed: rep.Failed, Missed: rep.Missed, Unmapped: rep.Unmapped, Clean: ok})
+			Scope: rep.Scope, Selected: rep.Selected, Total: rep.Total, Full: rep.Full, Failed: rep.Failed, Missed: rep.Missed, Unmapped: rep.Unmapped, Clean: ok})
 		if err != nil {
 			return fail(err)
 		}
@@ -146,7 +157,14 @@ func printAudit(w io.Writer, rep bgraph.AuditReport, parsed []audit.Result) {
 	if rep.Base != "" {
 		fmt.Fprintf(w, "base: %s\n", rep.Base)
 	}
-	fmt.Fprintf(w, "results files: %d\nselected test units: %d\nfailed test cases: %d\n", len(parsed), rep.Selected, rep.Failed)
+	sel := fmt.Sprint(rep.Selected)
+	if rep.Full {
+		sel = "all"
+	}
+	if rep.Total > 0 {
+		sel += fmt.Sprintf(" of %d", rep.Total)
+	}
+	fmt.Fprintf(w, "results files: %d\nselected test units: %s\nfailed test cases: %d\n", len(parsed), sel, rep.Failed)
 	section := func(title, hint string, list []bgraph.FailedTest) {
 		if len(list) == 0 {
 			return
@@ -158,6 +176,9 @@ func printAudit(w io.Writer, rep bgraph.AuditReport, parsed []audit.Result) {
 				break
 			}
 			name := f.File
+			if name == "" {
+				name = f.Unit
+			}
 			if name == "" {
 				name = "(unknown file)"
 			}
@@ -207,21 +228,39 @@ func appendAuditLog(path string, line auditLogLine) (int, error) {
 	if _, err := f.Seek(0, io.SeekStart); err != nil {
 		return 0, err
 	}
-	streak := 0
-	sc := bufio.NewScanner(f)
+	runs, _, err := readAuditLog(f)
+	return cleanStreak(runs), err
+}
+
+// readAuditLog parses the log; unparsable lines and lines without "clean" are counted in skipped, never an error.
+func readAuditLog(r io.Reader) (runs []auditLogLine, skipped int, err error) {
+	sc := bufio.NewScanner(r)
 	sc.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for sc.Scan() {
-		var l struct {
-			Clean *bool `json:"clean"`
-		}
-		if json.Unmarshal(sc.Bytes(), &l) != nil || l.Clean == nil {
+		if len(bytes.TrimSpace(sc.Bytes())) == 0 {
 			continue
 		}
-		if *l.Clean {
-			streak++
+		var probe struct {
+			Clean *bool `json:"clean"`
+		}
+		var l auditLogLine
+		if json.Unmarshal(sc.Bytes(), &probe) != nil || probe.Clean == nil || json.Unmarshal(sc.Bytes(), &l) != nil {
+			skipped++
+			continue
+		}
+		runs = append(runs, l)
+	}
+	return runs, skipped, sc.Err()
+}
+
+func cleanStreak(runs []auditLogLine) int {
+	n := 0
+	for _, r := range runs {
+		if r.Clean {
+			n++
 		} else {
-			streak = 0
+			n = 0
 		}
 	}
-	return streak, sc.Err()
+	return n
 }

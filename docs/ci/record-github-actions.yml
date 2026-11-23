@@ -1,0 +1,146 @@
+# bgraph dynamic layer in CI: example GitHub Actions workflow that records per-test dependencies on the default branch
+# and audits the dynamic layer in shadow mode on pull requests.
+#
+# The dynamic layer (docs/dynamic-layer.md) narrows widened selections with per-test records of what each test file
+# loaded. Records are made by `bgraph record`, which runs every test unit on its own with a collector, so it is slow:
+# run it on a schedule, not on every PR.
+#
+#   record (nightly, default branch): bgraph record → records file → Actions cache (one entry per run).
+#   shadow (pull requests):           restore the newest records → run the FULL suite as usual → bgraph audit twice,
+#                                     without and with the dynamic layer → upload both shadow logs.
+#
+# Nothing is ever skipped and nothing blocks a merge. A missed failure whose reason says "removed by the dynamic layer"
+# is the case to look at: the records said the test could not be affected, but it failed.
+#
+# Records are only used when the environment matches (docs/dynamic-layer.md, section 5): set up the same toolchain
+# (runner OS, Node/Python/JDK version, installed dependencies) in both jobs. A record whose dependencies changed since it
+# was made is simply not used, so stale records are safe; refresh them often enough to stay useful.
+#
+# Compare the two logs with `bgraph audit --summary --log FILE` (add --json for machine-readable output): runs, clean
+# streak, runs with misses, and the share of the suite each selection would run.
+
+name: bgraph dynamic layer
+
+on:
+  schedule:
+    - cron: "23 3 * * *" # nightly; scheduled runs use the default branch
+  workflow_dispatch: # run it once by hand to seed the cache
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The same toolchain as the shadow job below: the environment fingerprint is part of every record.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Mode record runs `bgraph record --out <records> --json`; args go to bgraph record (e.g. "--eco node",
+      # "--jobs 4", "--timeout 5m"). Without [dynamic_layer] ecosystems in bgraph.toml it records every ecosystem with
+      # a dynamic layer that has test units. Keep the records file outside the workspace: an untracked file in the
+      # working tree is a change to bgraph. The step summary counts complete, incomplete and failed records.
+      - name: Record
+        id: record
+        uses: qxbao/bgraph@v0
+        with:
+          mode: record
+          records: ${{ runner.temp }}/bgraph-records.jsonl
+          args: --eco node
+
+      # One cache entry per run; the shadow job restores the newest through the key prefix. Caches made on the
+      # default branch are readable by every pull request.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/bgraph-records.jsonl
+          key: bgraph-records-${{ runner.os }}-${{ github.run_id }}
+
+  shadow:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # bgraph needs the base commit: a shallow clone makes every run "full" (trivially clean)
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # The newest records (the key never matches exactly; the prefix picks the most recent entry). The same path as
+      # in the record job: the cache version depends on it. No records yet: the audit runs without narrowing.
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/bgraph-records.jsonl
+          key: bgraph-records-${{ runner.os }}-${{ github.run_id }}
+          restore-keys: bgraph-records-${{ runner.os }}-
+
+      # 1. The FULL suite with a machine-readable reporter (see shadow-github-actions.yml for other runners). Keep going
+      #    when tests fail: the failures are the input.
+      - name: Run the full test suite
+        continue-on-error: true
+        run: npx vitest run --reporter=junit --outputFile=test-results/junit.xml
+
+      # 2. Two audits of the same results: the static selection, and the selection narrowed by the records (the action
+      #    imports the records file with `bgraph dynamic import` first; a missing file is a notice). Comparing the two
+      #    logs shows what the dynamic layer saves and whether it ever removed a test that failed.
+      - name: bgraph audit, static (shadow, never blocks)
+        id: static
+        continue-on-error: true
+        uses: qxbao/bgraph@v0
+        with:
+          mode: audit
+          args: --results test-results/junit.xml --dynamic=false --log test-results/bgraph-shadow-static.jsonl
+
+      - name: bgraph audit, dynamic layer (shadow, never blocks)
+        id: dynamic
+        continue-on-error: true
+        uses: qxbao/bgraph@v0
+        with:
+          mode: audit
+          records: ${{ runner.temp }}/bgraph-records.jsonl
+          args: --results test-results/junit.xml --dynamic --log test-results/bgraph-shadow-dynamic.jsonl
+
+      # 3. Keep the logs (one JSON line per run each). Download them from several runs and concatenate them to
+      #    aggregate with `bgraph audit --summary --log FILE`.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bgraph-shadow
+          path: |
+            test-results/bgraph-shadow-static.jsonl
+            test-results/bgraph-shadow-dynamic.jsonl
+            test-results/junit.xml
+          if-no-files-found: ignore
+
+      - name: Report
+        if: always()
+        env:
+          STATIC_OUTCOME: ${{ steps.static.outcome }}
+          STATIC_CLEAN: ${{ steps.static.outputs.clean }}
+          DYNAMIC_OUTCOME: ${{ steps.dynamic.outcome }}
+          DYNAMIC_CLEAN: ${{ steps.dynamic.outputs.clean }}
+          REPORT: ${{ steps.dynamic.outputs.json }}
+        run: |
+          if [ "$STATIC_OUTCOME" = "failure" ] || [ "$DYNAMIC_OUTCOME" = "failure" ]; then
+            echo "::warning title=bgraph shadow::an audit could not run; see the step log"
+          fi
+          if [ "$STATIC_CLEAN" = "false" ]; then
+            echo "::warning title=bgraph shadow::a failed test lies outside the static selection"
+          elif [ "$DYNAMIC_CLEAN" = "false" ]; then
+            echo "::warning title=bgraph shadow::the dynamic layer removed a test that failed; see $REPORT"
+          fi

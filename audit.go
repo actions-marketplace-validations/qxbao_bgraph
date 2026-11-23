@@ -8,6 +8,7 @@ import (
 
 	"github.com/qxbao/bgraph/internal/audit"
 	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/golang"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/runner"
 )
@@ -17,7 +18,8 @@ type AuditResult = audit.Result
 
 // FailedTest is one failed test case together with the test file it was mapped to.
 type FailedTest struct {
-	File   string `json:"file,omitempty"` // repo-relative test file; empty for unmapped failures
+	File   string `json:"file,omitempty"` // repo-relative test file; empty for unmapped failures and Go packages
+	Unit   string `json:"unit,omitempty"` // test unit, for failures mapped by package (Go: go:<dir>)
 	Test   string `json:"test"`
 	Source string `json:"source,omitempty"` // results file it came from
 	Reason string `json:"reason"`           // why it is missed / unmapped
@@ -28,7 +30,9 @@ type AuditReport struct {
 	Scope    Tier         `json:"scope"`
 	Base     string       `json:"base,omitempty"`
 	Head     string       `json:"head,omitempty"`
-	Selected int          `json:"selected"` // number of selected test units
+	Selected int          `json:"selected"` // number of selected test units (0 for scope full)
+	Total    int          `json:"total"`    // test units at head (0 when unknown)
+	Full     bool         `json:"full"`     // the selection runs the whole suite (scope full, or a runner falls back to it)
 	Failed   int          `json:"failed"`   // failed test cases across all results
 	Missed   []FailedTest `json:"missed"`   // failed, but the selection would not have run them
 	Unmapped []FailedTest `json:"unmapped"` // failed, but not attributable to a known test file
@@ -53,6 +57,9 @@ type AuditReport struct {
 //
 // Failures that cannot be attributed to a known test file (describe-name-only JUnit classnames, files unknown to the
 // head tree) are returned in Unmapped and never dropped. When the scope is full nothing is mapped at all.
+//
+// A failure carrying a Go package (go test -json) maps to the Go unit whose import path equals it, not to a file: the
+// package is the unit (one unit per path; several → ambiguous, none → unmapped).
 func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (AuditReport, error) {
 	sel, err := ix.Select(ctx, ch)
 	if err != nil {
@@ -67,24 +74,37 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 	if err != nil {
 		return AuditReport{}, err
 	}
-	if sel.Scope == model.TierFull || plan.Scope == model.TierFull || rep.Failed == 0 {
-		return rep, nil
-	}
-
+	rep.Full = sel.Scope == model.TierFull || plan.Scope == model.TierFull
 	rev := ""
 	if !ch.Worktree && ch.Head != "" {
 		rev = ch.Head
 	}
+	if n, ok := sel.IndexStats["units"]; ok {
+		rep.Total = n
+	} else if an, err := ix.analyzeRev(ctx, rev); err == nil {
+		// A full selection stops before counting units; the count is informational, so a failure only leaves it 0.
+		for _, a := range an.Analyses {
+			rep.Total += len(a.Tests)
+		}
+	}
+	if rep.Full || rep.Failed == 0 {
+		return rep, nil
+	}
+
 	an, err := ix.analyzeRev(ctx, rev)
 	if err != nil {
 		return AuditReport{}, err
 	}
 	var known, projects []string
+	byPkg := map[string][]model.TestUnit{} // Go import path → units
 	for _, a := range an.Analyses {
 		for _, u := range a.Tests {
 			known = append(known, u.Files...)
 			if !slices.Contains(projects, u.Project) {
 				projects = append(projects, u.Project)
+			}
+			if u.Eco == golang.Name && u.Package != "" {
+				byPkg[u.Package] = append(byPkg[u.Package], u)
 			}
 		}
 	}
@@ -114,8 +134,28 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 			}
 		}
 		for _, f := range r.Failures {
+			ft := FailedTest{Test: f.Test, Source: r.Source}
+			if f.Package != "" {
+				units := byPkg[f.Package]
+				switch len(units) {
+				case 1:
+					ft.Unit = units[0].ID
+					if !slices.ContainsFunc(sel.Tests, func(t SelectedTest) bool { return t.Unit == units[0].ID }) &&
+						!slices.ContainsFunc(units[0].Files, covered) {
+						ft.Reason = why
+						rep.Missed = append(rep.Missed, ft)
+					}
+				case 0:
+					ft.Reason = "no Go test package with import path " + f.Package
+					rep.Unmapped = append(rep.Unmapped, ft)
+				default:
+					ft.Reason = "Go import path " + f.Package + " names several test packages"
+					rep.Unmapped = append(rep.Unmapped, ft)
+				}
+				continue
+			}
 			file, out := m.Map(f.Candidates)
-			ft := FailedTest{File: file, Test: f.Test, Source: r.Source}
+			ft.File = file
 			switch out {
 			case audit.Mapped:
 				if covered(file) {

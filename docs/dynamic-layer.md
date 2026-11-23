@@ -119,6 +119,14 @@ per (unit, environment) wins; rewritten atomically; a corrupt store is ignored w
 developers import. Records are content-keyed, so they stay valid across commits until a dependency changes; in practice
 they must be refreshed on the base branch to stay useful.
 
+**Recording in CI.** [`ci/record-github-actions.yml`](ci/record-github-actions.yml) is a ready-to-adapt GitHub Actions
+workflow: a nightly job on the default branch runs the `qxbao/bgraph` action with `mode: record` and saves the records
+file in the Actions cache (one entry per run); the pull-request job restores the newest entry, runs the full suite as
+usual and audits it twice (`--dynamic=false` and `--dynamic`, the action importing the records first), keeping both
+shadow logs. `bgraph audit --summary --log FILE` compares them: misses (a test the records removed that failed) and the
+share of the suite each selection would run. Both jobs must set up the same toolchain, since records are tied to the
+environment fingerprint (section 5); keep the records file outside the working tree, where it would count as a change.
+
 ## 4. Python collector
 
 `bgraph record` runs each Python test unit (test file) **in its own process**. Per-file isolation is what makes

@@ -1,5 +1,5 @@
-// Package audit parses test-result files (JUnit XML, Jest/Vitest JSON, Playwright JSON) into a flat list of failed
-// test cases, and maps each failure to a repo-relative test file (docs/cli.md, audit).
+// Package audit parses test-result files (JUnit XML, Jest/Vitest JSON, Playwright JSON, `go test -json`) into a flat
+// list of failed test cases, and maps each failure to a repo-relative test file (docs/cli.md, audit).
 //
 // It only extracts facts from the results; deciding whether bgraph's selection covers a failure is done by the
 // root package (Index.Audit).
@@ -19,7 +19,11 @@ const (
 	FormatJUnit      = "junit"
 	FormatJestJSON   = "jest-json"
 	FormatPlaywright = "playwright-json"
+	FormatGoJSON     = "go-json"
 )
+
+// Formats lists every format name accepted by Parse, auto first.
+var Formats = []string{FormatAuto, FormatJUnit, FormatJestJSON, FormatPlaywright, FormatGoJSON}
 
 // Failure is one failed (or errored; never skipped) test case.
 type Failure struct {
@@ -28,6 +32,9 @@ type Failure struct {
 	// Candidates are the paths that may identify the test file, best first, exactly as written in the results
 	// (not normalized). The mapper tries them in order.
 	Candidates []string
+	// Package is the Go import path of the failed test's package (go-json only). Go test units are packages, so the
+	// failure maps to the unit by import path instead of by file.
+	Package string
 }
 
 // Result is the parsed content of one results file.
@@ -38,7 +45,7 @@ type Result struct {
 	Failures []Failure
 }
 
-// Parse reads and parses a results file. format is auto|junit|jest-json|playwright-json.
+// Parse reads and parses a results file. format is one of Formats.
 func Parse(path, format string) (Result, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -75,15 +82,17 @@ func ParseBytes(data []byte, format string) (Result, error) {
 		r, err = parseJest(data)
 	case FormatPlaywright:
 		r, err = parsePlaywright(data)
+	case FormatGoJSON:
+		r, err = parseGoJSON(data)
 	default:
-		return Result{}, fmt.Errorf("unknown format %q (want auto|junit|jest-json|playwright-json)", format)
+		return Result{}, fmt.Errorf("unknown format %q (want %s)", format, strings.Join(Formats, "|"))
 	}
 	r.Format = format
 	return r, err
 }
 
-// Detect guesses the format from the content: XML → junit; JSON with testResults → jest-json; JSON with suites and
-// config → playwright-json.
+// Detect guesses the format from the content: XML → junit; JSON lines whose first object has an Action key → go-json;
+// JSON with testResults → jest-json; JSON with suites and config → playwright-json.
 func Detect(data []byte) (string, error) {
 	t := bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	t = bytes.TrimSpace(t)
@@ -94,6 +103,9 @@ func Detect(data []byte) (string, error) {
 	case '<':
 		return FormatJUnit, nil
 	case '{':
+		if isGoJSON(t) {
+			return FormatGoJSON, nil
+		}
 		keys, err := topKeys(t)
 		if err != nil {
 			return "", err

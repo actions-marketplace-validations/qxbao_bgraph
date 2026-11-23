@@ -184,8 +184,9 @@ Analyzes the working tree and prints `files`, `edges`, `test units`, `unresolved
 ## `audit`
 
 ```text
-bgraph audit --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json]
+bgraph audit --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json|go-json]
              [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [dynamic flags]
+bgraph audit --summary --log FILE [--json]
 ```
 
 Shadow mode: CI runs the **full** suite as usual, then `audit` computes the selection for the same change and reports
@@ -194,19 +195,37 @@ on the base; the audit cannot tell which, so it reports and a human judges.
 
 | Flag | Meaning |
 |---|---|
-| `--results FILE` | test results (repeatable): JUnit XML, Jest/Vitest JSON, Playwright JSON |
-| `--format` | `auto` (default) or a fixed format |
-| `--json` | print the report as JSON: `scope`, `base`, `head`, `selected`, `failed`, `missed[]`, `unmapped[]`, `clean` |
-| `--log FILE` | append one JSON line per run and print the number of clean runs in a row |
+| `--results FILE` | test results (repeatable): JUnit XML, Jest/Vitest JSON, Playwright JSON, `go test -json` output |
+| `--format` | `auto` (default) or a fixed format: `junit`, `jest-json`, `playwright-json`, `go-json` |
+| `--json` | print the report as JSON: `scope`, `base`, `head`, `selected`, `total` (test units at head), `full` (the selection runs the whole suite), `failed`, `missed[]`, `unmapped[]`, `clean` |
+| `--log FILE` | append one JSON line per run (the report's fields and `time`) and print the number of clean runs in a row |
 | `--strict` | also exit `3` when a failure cannot be mapped to a test file |
+| `--summary` | with `--log FILE` and no `--results`: aggregate the log instead of auditing (see below) |
+
+A failed test in `missed[]` or `unmapped[]` has `file` (the test file it was mapped to), `test`, `source` (the results
+file) and `reason`; failures mapped by package instead of file have `unit` instead of `file`.
 
 - Failures that cannot be attributed to a known test file (for example JUnit from Mocha with describe names only) are
   listed as `unmapped`, never dropped.
+- `go test -json` (`go-json`, auto-detected when the first line is a test2json event): a failed test maps to the Go
+  unit whose import path is the event's `Package` (the unit is the package, `go:<dir>`). Only leaf failures count (a
+  parent test fails with its subtest); a package that failed with no failed test (build failure, panic in `init` or
+  `TestMain`, timeout) is one failure named `(package failed)`. Lines that are not JSON (build errors when stderr is
+  merged) are skipped; with them in the first line, pass `--format go-json`.
 - A failure in a unit removed by the dynamic layer is a miss like any other.
 - A run whose scope is `full` is trivially clean.
 
+`--summary` reads a log (one line per run, possibly concatenated from several CI artifacts) and prints: runs, clean runs,
+clean runs in a row at the end, the runs with missed failures (time, head and the missed tests), unmapped failures, the
+runs whose selection was the whole suite, and the selected units against the total: mean and median share of the suite
+over the runs that logged a total (a full run counts as 100 %). Lines that are not audit runs are counted and skipped.
+With `--json`: `runs`, `skipped_lines`, `clean_runs`, `clean_streak`, `missed_runs[]` (`time`, `base`, `head`, `missed`,
+`tests[]`), `unmapped`, `unmapped_runs`, `full_runs`, `full_share`, `measured_runs`, `mean_selected`, `mean_total`,
+`mean_share`, `median_share`, `unmeasured_runs` (shares are fractions). Exit code `0`.
+
 Switch selection on after N clean shadow runs in a row. A ready-to-adapt GitHub Actions workflow is in
-[`ci/shadow-github-actions.yml`](ci/shadow-github-actions.yml).
+[`ci/shadow-github-actions.yml`](ci/shadow-github-actions.yml); to audit the dynamic layer with records made on the
+default branch, see [`ci/record-github-actions.yml`](ci/record-github-actions.yml).
 
 ## `record`
 
@@ -233,6 +252,11 @@ Runs test units with a dependency collector and stores the records of the [dynam
 
 The summary lists the commit, units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
 toolchain addons accepted (Node) and the incomplete reasons. Exit code `0` even when some units failed or are incomplete.
+
+In GitHub Actions, the `qxbao/bgraph` action runs it with `mode: record` (the `records` input is the `--out` file; `args`
+go to `bgraph record`), and its other modes import a `records` file before running. See
+[`ci/record-github-actions.yml`](ci/record-github-actions.yml): record nightly on the default branch into the Actions
+cache, restore the newest records on pull requests.
 
 ## `dynamic`
 

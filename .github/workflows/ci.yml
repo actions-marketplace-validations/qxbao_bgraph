@@ -64,7 +64,7 @@ jobs:
         run: go test -timeout 10m ./...
 
   # Exercises the composite action (action.yml) on every OS with a bgraph built from source (the undocumented `binary`
-  # input), until a release exists to download.
+  # input). The release download path is exercised by the dogfood job.
   action:
     name: action (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -181,3 +181,130 @@ jobs:
           case "$SCOPE" in none | graph | package | module | full) ;; *) exit 1 ;; esac
           case "$FULL" in true | false) ;; *) exit 1 ;; esac
           bgraph version | grep -q '0.0.0-ci'
+
+      # Mode record on a Node fixture (node:test needs no package), then mode affected importing the records.
+      - name: Create Node fixture repository
+        id: nodefx
+        run: |
+          dir="$RUNNER_TEMP/nodefx"
+          mkdir -p "$dir/src" "$dir/test"
+          cd "$dir"
+          git init -q
+          git config user.email ci@example.com
+          git config user.name ci
+          printf '{"name":"fx","version":"1.0.0"}\n' > package.json
+          printf 'exports.a = () => 1\n' > src/a.js
+          printf "const test = require('node:test')\nconst { a } = require('../src/a')\ntest('a', () => { if (a() !== 1) throw new Error('a') })\n" > test/a.test.js
+          git add .
+          git commit -qm init
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+
+      - name: Action, mode record (Node fixture)
+        id: rec
+        uses: ./
+        with:
+          binary: ${{ steps.build.outputs.binary }}
+          root: ${{ steps.nodefx.outputs.dir }}
+          mode: record
+          records: ${{ runner.temp }}/records/bgraph-records.jsonl
+          args: --eco node --jobs 1
+
+      - name: Check mode record
+        env:
+          RECORDS: ${{ steps.rec.outputs.records }}
+          JSON: ${{ steps.rec.outputs.json }}
+          SCOPE: ${{ steps.rec.outputs.scope }}
+        run: |
+          set -x
+          [ -z "$SCOPE" ]
+          grep -q '"complete": 1' "$JSON"
+          grep -q 'test/a.test.js' "$RECORDS"
+
+      - name: Action, mode affected importing the records
+        id: imp
+        uses: ./
+        with:
+          binary: ${{ steps.build.outputs.binary }}
+          root: ${{ steps.nodefx.outputs.dir }}
+          base: HEAD
+          mode: affected
+          records: ${{ steps.rec.outputs.records }}
+          args: --dynamic
+
+      - name: Check the import
+        env:
+          SCOPE: ${{ steps.imp.outputs.scope }}
+          ROOT: ${{ steps.nodefx.outputs.dir }}
+        run: |
+          set -x
+          [ "$SCOPE" = "none" ]
+          status=$(bgraph dynamic status --root "$ROOT" --eco node --json)
+          echo "$status" | grep -Eq '"records": *1,'
+          echo "$status" | grep -Eq '"usable": *1,'
+
+  # Dogfood: a static shadow audit of bgraph on itself. The full suite runs (here as go test -json, in parallel with the
+  # check jobs, which stay the source of truth for pass/fail), then the action audits what bgraph would have selected
+  # for this push or PR. A missed failure is a warning annotation, never a failed build; the log is kept as an
+  # artifact (aggregate several with bgraph audit --summary --log FILE).
+  #
+  # The audit uses bgraph built from this checkout (the undocumented `binary` input): it then audits the selection
+  # logic under review and reads go-json results, which older releases cannot. The release download path is checked
+  # by a separate step (version: latest, no binary).
+  dogfood:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Outside the workspace: an untracked file in the working tree is a change to bgraph.
+      - name: Full test suite (go test -json)
+        run: |
+          go test -json -timeout 10m ./... > "$RUNNER_TEMP/go-test.jsonl" ||
+            echo "::notice title=dogfood::some tests failed (the check jobs report them); the audit maps the failures"
+
+      - name: Build bgraph
+        id: build
+        run: |
+          go build -trimpath -ldflags "-X main.version=0.0.0-ci" -o "$RUNNER_TEMP/bgraph-bin/bgraph" ./cmd/bgraph
+          echo "binary=$RUNNER_TEMP/bgraph-bin/bgraph" >> "$GITHUB_OUTPUT"
+
+      - name: bgraph audit (shadow, never blocks)
+        id: audit
+        uses: ./
+        with:
+          binary: ${{ steps.build.outputs.binary }}
+          mode: audit
+          args: --results ${{ runner.temp }}/go-test.jsonl --format go-json --log ${{ runner.temp }}/bgraph-shadow.jsonl
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: bgraph-shadow
+          path: |
+            ${{ runner.temp }}/bgraph-shadow.jsonl
+            ${{ runner.temp }}/go-test.jsonl
+          if-no-files-found: ignore
+
+      # The real install path: the latest release from GitHub, checksum-verified (no `binary`).
+      - name: Action with the latest release
+        id: release
+        uses: ./
+        with:
+          version: latest
+
+      - name: Check the release install
+        env:
+          RELEASE_PATH: ${{ steps.release.outputs.path }}
+          SCOPE: ${{ steps.release.outputs.scope }}
+        run: |
+          set -x
+          "$RELEASE_PATH" version | grep -Eq '^bgraph [0-9]+\.[0-9]+\.[0-9]+'
+          if "$RELEASE_PATH" version | grep -q '0.0.0-ci'; then exit 1; fi
+          case "$SCOPE" in none | graph | package | module | full) ;; *) exit 1 ;; esac

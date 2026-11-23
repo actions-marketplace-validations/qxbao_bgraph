@@ -22,6 +22,7 @@ inputs:
       "command" (default): the selection as runner commands (outputs commands and script).
       "affected": the selection as JSON (bgraph affected --json).
       "audit": shadow mode, bgraph audit --json against HEAD; pass the results with args, e.g. "--results junit.xml".
+      "record": bgraph record --json, writing the dynamic-layer records to the records file (output records).
     required: false
     default: command
   root:
@@ -32,6 +33,13 @@ inputs:
     description: Extra flags for the bgraph command, split on whitespace (e.g. "--list-dir .bgraph-lists" or "--dynamic=false").
     required: false
     default: ""
+  records:
+    description: >-
+      Path of a dynamic-layer records file. Mode record writes it (default: a file in the runner's temporary
+      directory). The other modes import it with bgraph dynamic import first when it exists; a missing file is skipped.
+      Keep it outside the workspace (e.g. under runner.temp): an untracked file in the working tree changes the selection.
+    required: false
+    default: ""
   binary:
     # Undocumented: path to a local bgraph binary instead of a release download (used by this repository's CI).
     description: Internal use.
@@ -40,10 +48,10 @@ inputs:
 
 outputs:
   scope:
-    description: none, graph, package, module or full.
+    description: none, graph, package, module or full (empty in mode record).
     value: ${{ steps.run.outputs.scope }}
   full:
-    description: '"true" when the full suite must run (scope full), else "false".'
+    description: '"true" when the full suite must run (scope full), else "false" (empty in mode record).'
     value: ${{ steps.run.outputs.full }}
   commands:
     description: The runner commands, one shell line each (mode command; empty for scope none and full).
@@ -52,11 +60,14 @@ outputs:
     description: Path to a bash script running the commands with set -e (mode command).
     value: ${{ steps.run.outputs.script }}
   json:
-    description: Path to a file with bgraph's full JSON output (the plan, the selection or the audit report).
+    description: Path to a file with bgraph's full JSON output (the plan, the selection, the audit report or the record summary).
     value: ${{ steps.run.outputs.json }}
   clean:
     description: 'Mode audit: "true" when no failed test lies outside the selection.'
     value: ${{ steps.run.outputs.clean }}
+  records:
+    description: 'Mode record: path to the records file written.'
+    value: ${{ steps.run.outputs.records }}
   path:
     description: Path to the installed bgraph binary (its directory is also added to PATH).
     value: ${{ steps.install.outputs.path }}
@@ -82,6 +93,7 @@ runs:
         BASE: ${{ inputs.base }}
         ROOT: ${{ inputs.root }}
         ARGS: ${{ inputs.args }}
+        RECORDS: ${{ inputs.records }}
         EVENT_NAME: ${{ github.event_name }}
         BASE_REF: ${{ github.base_ref }}
         BEFORE: ${{ github.event.before }}

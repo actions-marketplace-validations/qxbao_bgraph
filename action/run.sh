@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Runs bgraph for the composite action (action.yml) and writes the step outputs.
 #
-# Environment: BGRAPH (binary), MODE (command | affected | audit), BASE (optional), ROOT, ARGS (extra flags, split on
-# whitespace), EVENT_NAME, BASE_REF, BEFORE, MERGE_GROUP_BASE.
+# Environment: BGRAPH (binary), MODE (command | affected | audit | record), BASE (optional), ROOT, ARGS (extra flags,
+# split on whitespace), RECORDS (optional records file: written by mode record, imported before the other modes),
+# EVENT_NAME, BASE_REF, BEFORE, MERGE_GROUP_BASE.
 set -euo pipefail
 
 err() { echo "::error title=bgraph::$*"; exit 1; }
@@ -17,17 +18,19 @@ bin=$(posix "${BGRAPH:-bgraph}")
 mode=${MODE:-command}
 root=${ROOT:-.}
 case "$mode" in
-  command | affected | audit) ;;
-  *) err "invalid mode: '$mode' (want command, affected or audit)" ;;
+  command | affected | audit | record) ;;
+  *) err "invalid mode: '$mode' (want command, affected, audit or record)" ;;
 esac
 
-if [ "$(git -C "$root" rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
+if [ "$mode" != "record" ] && [ "$(git -C "$root" rev-parse --is-shallow-repository 2>/dev/null || echo false)" = "true" ]; then
   echo "::warning title=bgraph::shallow clone: the base commit may be missing and the selection is then 'full'. Check out with actions/checkout and fetch-depth: 0."
 fi
 
 zero=0000000000000000000000000000000000000000
 base=${BASE:-}
-if [ -z "$base" ]; then
+if [ "$mode" = "record" ]; then
+  : # records the checked-out commit: no base
+elif [ -z "$base" ]; then
   case "${EVENT_NAME:-}" in
     pull_request | pull_request_target)
       base="origin/${BASE_REF:-}"
@@ -46,7 +49,7 @@ if [ -z "$base" ]; then
       ;;
   esac
 fi
-echo "bgraph $mode: base $base"
+[ "$mode" = "record" ] || echo "bgraph $mode: base $base"
 
 extra=()
 if [ -n "${ARGS:-}" ]; then
@@ -59,8 +62,24 @@ out=$(mktemp -d "$tmp/bgraph-XXXXXX") # one directory per invocation: several st
 json="$out/bgraph.json"
 script="$out/commands.sh"
 : >"$script"
+scope=""
 commands=""
 clean=""
+records=""
+if [ -n "${RECORDS:-}" ]; then
+  records=$(posix "$RECORDS")
+fi
+
+# Records made elsewhere (mode record on the default branch) feed the dynamic layer of the other modes. They are
+# optional: without them nothing is narrowed, which is always safe, so a missing or unreadable file is not an error.
+if [ "$mode" != "record" ] && [ -n "$records" ]; then
+  if [ -f "$records" ]; then
+    "$bin" dynamic import --root "$root" "$records" ||
+      echo "::warning title=bgraph::cannot import the records in $RECORDS; the dynamic layer will not narrow"
+  else
+    echo "::notice title=bgraph::no records file at $RECORDS (nothing to import)"
+  fi
+fi
 
 code=0
 case "$mode" in
@@ -87,6 +106,14 @@ case "$mode" in
     esac
     cat "$json"
     ;;
+  record)
+    [ -n "$records" ] || records="$out/records.jsonl"
+    mkdir -p "$(dirname "$records")"
+    records="$(cd "$(dirname "$records")" && pwd)/$(basename "$records")"
+    "$bin" record --root "$root" --out "$records" --json ${extra[@]+"${extra[@]}"} >"$json" || code=$?
+    [ "$code" -eq 0 ] || err "bgraph record failed (exit $code)"
+    cat "$json"
+    ;;
 esac
 
 # Top-level fields of the JSON output (jq when available; the output is indented by two spaces otherwise).
@@ -97,13 +124,16 @@ field() {
     sed -n "s/^  \"$1\": \"\{0,1\}\([^\",]*\)\"\{0,1\},\{0,1\}\$/\1/p" "$json" | head -n 1 | tr -d '\r'
   fi
 }
-if [ -z "${scope:-}" ]; then
-  scope=$(field scope)
+full=""
+if [ "$mode" != "record" ]; then
+  if [ -z "${scope:-}" ]; then
+    scope=$(field scope)
+  fi
+  [ -n "$scope" ] || err "no scope in the bgraph output"
+  [ "$mode" = "audit" ] && clean=$(field clean)
+  full=false
+  [ "$scope" = "full" ] && full=true
 fi
-[ -n "$scope" ] || err "no scope in the bgraph output"
-[ "$mode" = "audit" ] && clean=$(field clean)
-full=false
-[ "$scope" = "full" ] && full=true
 
 delim="bgraph_$(date +%s)_$RANDOM$RANDOM"
 {
@@ -112,6 +142,7 @@ delim="bgraph_$(date +%s)_$RANDOM$RANDOM"
   echo "json=$(native "$json")"
   echo "script=$(native "$script")"
   echo "clean=$clean"
+  if [ "$mode" = "record" ]; then echo "records=$(native "$records")"; else echo "records="; fi
   echo "commands<<$delim"
   [ -z "$commands" ] || printf '%s\n' "$commands"
   echo "$delim"
@@ -121,16 +152,20 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
   {
     echo "### bgraph ($mode)"
     echo
-    echo "Scope: \`$scope\` (base \`$base\`)"
-    if [ "$full" = "true" ]; then
-      echo
-      echo "The full test suite must run."
-    elif [ -n "$commands" ]; then
-      echo
-      echo '```sh'
-      printf '%s\n' "$commands"
-      echo '```'
+    if [ "$mode" = "record" ]; then
+      echo "Recorded $(field recorded) of $(field units) units: $(field complete) complete, $(field incomplete) incomplete, $(field failed) failed (records: \`$(native "$records")\`)"
+    else
+      echo "Scope: \`$scope\` (base \`$base\`)"
+      if [ "$full" = "true" ]; then
+        echo
+        echo "The full test suite must run."
+      elif [ -n "$commands" ]; then
+        echo
+        echo '```sh'
+        printf '%s\n' "$commands"
+        echo '```'
+      fi
+      [ -z "$clean" ] || { echo; echo "Audit clean: \`$clean\`"; }
     fi
-    [ -z "$clean" ] || { echo; echo "Audit clean: \`$clean\`"; }
   } >>"$GITHUB_STEP_SUMMARY"
 fi

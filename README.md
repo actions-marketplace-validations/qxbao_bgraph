@@ -260,9 +260,10 @@ steps:
 |---|---|---|
 | `version` | `latest` | release to install, e.g. `v0.1.0` |
 | `base` | see below | base ref or commit |
-| `mode` | `command` | `command` (runner commands), `affected` (selection JSON) or `audit` (shadow mode; pass `--results FILE` in `args`) |
+| `mode` | `command` | `command` (runner commands), `affected` (selection JSON), `audit` (shadow mode; pass `--results FILE` in `args`) or `record` (dynamic-layer records) |
 | `root` | `.` | directory inside the repository |
 | `args` | | extra flags for the bgraph command, split on whitespace |
+| `records` | | records file: mode `record` writes it, the other modes import it first when it exists |
 
 The default base is `origin/<base branch>` on `pull_request`, the merge group's base on `merge_group`, and the commit
 before the push on `push` (`HEAD~1` when that commit is unknown, e.g. for a new branch).
@@ -275,9 +276,11 @@ before the push on `push` (`HEAD~1` when that commit is unknown, e.g. for a new 
 | `script` | path to a bash script that runs them with `set -e` (mode `command`) |
 | `json` | path to bgraph's JSON output (plan, selection or audit report) |
 | `clean` | mode `audit`: `'true'` when no failed test lies outside the selection |
+| `records` | mode `record`: path to the records file written |
 
 A `full` selection is not an error: the step fails only when bgraph itself fails. Complete workflows:
-[selection](docs/ci/select-github-actions.yml) and [shadow mode](docs/ci/shadow-github-actions.yml).
+[selection](docs/ci/select-github-actions.yml), [shadow mode](docs/ci/shadow-github-actions.yml) and
+[dynamic-layer records with a shadow audit](docs/ci/record-github-actions.yml).
 
 ## Documentation
 

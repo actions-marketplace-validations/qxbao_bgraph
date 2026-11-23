@@ -154,3 +154,53 @@ func TestMapper(t *testing.T) {
 		t.Errorf("results-dir relative: got (%q, %v)", got, out)
 	}
 }
+
+// Real `go test -json` output (Go 1.25): a build failure, a failed test, a failed subtest under a failed parent, a
+// passing and a skipped test.
+func TestGoJSON(t *testing.T) {
+	r := parseFile(t, "go-test.jsonl", "auto")
+	if r.Format != FormatGoJSON || r.Total != 7 || len(r.Failures) != 3 {
+		t.Fatalf("got %+v", r)
+	}
+	want := []Failure{
+		{Test: "(package failed)", Package: "example.com/fx/broken"},
+		{Test: "TestFail", Message: "fail_test.go:6: expected 1, got 2", Package: "example.com/fx/fail"},
+		{Test: "TestParent/bad", Message: "fail_test.go:9: sub broke", Package: "example.com/fx/fail"},
+	}
+	for i, w := range want {
+		f := r.Failures[i]
+		if f.Test != w.Test || f.Message != w.Message || f.Package != w.Package || len(f.Candidates) != 0 {
+			t.Errorf("f%d: got %+v, want %+v", i, f, w)
+		}
+	}
+}
+
+func TestGoJSONEdgeCases(t *testing.T) {
+	// Non-JSON lines (stderr merged into stdout) are skipped; a package fail without a failed test is reported once.
+	in := "# example.com/x\nx.go:1: syntax error\n" +
+		`{"Action":"start","Package":"example.com/x"}` + "\n" +
+		`{"Action":"fail","Package":"example.com/x"}` + "\n"
+	r, err := ParseBytes([]byte(in), FormatGoJSON)
+	if err != nil || len(r.Failures) != 1 || r.Failures[0].Package != "example.com/x" {
+		t.Fatalf("got %+v, %v", r, err)
+	}
+	// Auto-detection needs the first line to be an event.
+	if _, err := ParseBytes([]byte(in), "auto"); err == nil {
+		t.Error("auto on leading non-JSON must fail")
+	}
+	if f, err := Detect([]byte(`{"Action":"start","Package":"p"}` + "\n")); err != nil || f != FormatGoJSON {
+		t.Errorf("detect: %q, %v", f, err)
+	}
+	// A single-line Jest report is not go-json.
+	if f, _ := Detect([]byte(`{"testResults":[]}`)); f != FormatJestJSON {
+		t.Errorf("jest detected as %q", f)
+	}
+	if _, err := ParseBytes([]byte("no events\n"), FormatGoJSON); err == nil {
+		t.Error("no event must fail")
+	}
+	// All passing: no failure.
+	r, err = ParseBytes([]byte(`{"Action":"pass","Package":"p","Test":"TestA"}`+"\n"+`{"Action":"pass","Package":"p"}`), FormatGoJSON)
+	if err != nil || r.Total != 1 || len(r.Failures) != 0 {
+		t.Errorf("passing: %+v, %v", r, err)
+	}
+}

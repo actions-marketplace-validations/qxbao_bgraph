@@ -12,6 +12,7 @@
 | [Benchmarks](benchmarks.md) | Comparison with general code-graph tools (codegraph, GitNexus, graphify) |
 | [Shadow-mode workflow](ci/shadow-github-actions.yml) | A GitHub Actions workflow that audits selections against full runs |
 | [Selection workflow](ci/select-github-actions.yml) | A GitHub Actions workflow that runs only the affected tests with the `qxbao/bgraph` action |
+| [Records workflow](ci/record-github-actions.yml) | A GitHub Actions workflow that records dynamic-layer records nightly and audits the dynamic layer on pull requests |
 
 ## Ecosystems
 

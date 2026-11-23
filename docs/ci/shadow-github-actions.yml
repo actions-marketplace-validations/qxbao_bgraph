@@ -9,6 +9,8 @@
 # the audit cannot tell, so a human judges.
 #
 # bgraph audit exit codes: 0 clean, 3 at least one missed failure (--strict: or an unmapped failure), 1 error, 2 usage.
+#
+# To audit the dynamic layer as well (records made nightly on the default branch), see record-github-actions.yml.
 
 name: bgraph shadow
 
@@ -48,6 +50,8 @@ jobs:
       #   JEST_JUNIT_ADD_FILE_ATTRIBUTE=true JEST_JUNIT_OUTPUT_DIR=test-results npx jest --reporters=jest-junit
       # Playwright (JSON):
       #   PLAYWRIGHT_JSON_OUTPUT_NAME=test-results/playwright.json npx playwright test --reporter=json
+      # Go (test2json; failures map to packages):
+      #   go test -json ./... > test-results/go-test.jsonl
       - name: Run the full test suite
         id: tests
         continue-on-error: true
@@ -70,7 +74,8 @@ jobs:
           args: --results test-results/junit.xml --log test-results/bgraph-shadow.jsonl
 
       # 3. Keep the log: it holds one JSON line per run. Persist it across runs (cache, a branch, an object store) to
-      #    make the "clean shadow runs in a row" counter meaningful; an artifact alone only shows this run.
+      #    make the "clean shadow runs in a row" counter meaningful; an artifact alone only shows this run. Aggregate
+      #    logs (concatenated artifacts work too) with `bgraph audit --summary --log FILE`.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
