@@ -52,6 +52,8 @@ var sourceFile = map[string]func(p string) bool{
 	"jvm": jvm.DynamicSource,
 	// dotnet: the per-test-class layer (docs/dynamic-layer.md §9, package dotnetdyn), like jvm.
 	"dotnet": func(p string) bool { return strings.EqualFold(path.Ext(p), ".cs") },
+	// ruby: the per-method layer (docs/dynamic-layer.md §10, package rbdyn) has its own guards and narrowing, like jvm.
+	"ruby": func(p string) bool { return path.Ext(p) == ".rb" },
 }
 
 // Supported reports whether eco has a dynamic layer.

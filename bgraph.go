@@ -11,6 +11,7 @@ import (
 
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
+	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/eco/dotnet"
 	"github.com/qxbao/bgraph/internal/eco/golang"
@@ -52,6 +53,8 @@ type Options struct {
 	TrustNativeEnv bool
 	// Node: node executable of the dynamic layer (docs/dynamic-layer.md §8), overriding bgraph.toml [dynamic_layer] node.
 	Node string
+	// Ruby: Ruby executable of the dynamic layer (docs/dynamic-layer.md §10), overriding bgraph.toml [dynamic_layer] ruby.
+	Ruby string
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
@@ -65,6 +68,8 @@ type Index struct {
 	probes   pydyn.ProbeCache
 	// nodeProbes caches the node executable's description (docs/dynamic-layer.md §8.4).
 	nodeProbes nodedyn.ProbeCache
+	// rubyProbes caches the Ruby executable's description (docs/dynamic-layer.md §10.5).
+	rubyProbes rbdyn.ProbeCache
 }
 
 // Open opens the repo containing root.

@@ -52,6 +52,8 @@ type strPart struct {
 type strInfo struct {
 	kind  strKind
 	parts []strPart
+	// body: a heredoc's body, as byte offsets [body[0], body[1]) of the source (set once the body is read).
+	body [2]int32
 }
 
 // static returns the literal's text when it has no interpolation.
@@ -70,6 +72,8 @@ func (s *strInfo) static() (string, bool) {
 type lexed struct {
 	toks []token
 	strs []strInfo
+	// data: byte offset of the __END__ line (-1 when the file has none); nothing after it is code.
+	data int
 }
 
 type heredoc struct {
@@ -91,6 +95,7 @@ type lexer struct {
 	locals  map[string]bool
 	err     string
 	depth   int
+	data    int // offset of the __END__ line, -1 when none
 	// ambiguous is set when the last regex / percent literal / heredoc decision was a heuristic (an identifier followed by a space).
 	ambiguous bool
 	// localSp: the previous token is the name of a local variable (of some scope of the file) followed by white space.
@@ -99,7 +104,7 @@ type lexer struct {
 
 // lex lexes a Ruby source. A non-empty reason means the token stream cannot be trusted.
 func lex(src []byte) (*lexed, string) {
-	lx := &lexer{src: src, end: len(src), line: 1, locals: map[string]bool{}}
+	lx := &lexer{src: src, end: len(src), line: 1, locals: map[string]bool{}, data: -1}
 	if len(src) >= 3 && src[0] == 0xEF && src[1] == 0xBB && src[2] == 0xBF {
 		lx.pos = 3
 	}
@@ -110,7 +115,7 @@ func lex(src []byte) (*lexed, string) {
 	if lx.err != "" {
 		return nil, lx.err
 	}
-	return &lexed{toks: toks, strs: lx.strs}, ""
+	return &lexed{toks: toks, strs: lx.strs, data: lx.data}, ""
 }
 
 func (lx *lexer) fail(why string) {
@@ -261,6 +266,7 @@ func (lx *lexer) code(stop byte) []token {
 				continue
 			}
 			if c == '_' && lx.lineIs("__END__") && stop == 0 && lx.depth == 1 {
+				lx.data = lx.pos
 				lx.pos = lx.end
 				break
 			}
@@ -960,6 +966,7 @@ func (lx *lexer) heredocBodies() {
 			return
 		}
 		after, afterLine := lx.pos, lx.line
+		lx.strs[h.str].body = [2]int32{int32(bodyStart), int32(bodyEnd)}
 		if !h.interp {
 			lx.strs[h.str].parts = []strPart{{lit: string(lx.src[bodyStart:bodyEnd])}}
 			continue

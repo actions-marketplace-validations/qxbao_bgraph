@@ -10,6 +10,7 @@ import (
 	"github.com/qxbao/bgraph/internal/dynamic/jvmdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
+	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
 	"github.com/qxbao/bgraph/internal/selector"
@@ -72,6 +73,9 @@ func (ix *Index) ecoEnv(ctx context.Context, eco string, rf *rules.File, t tree.
 	case dotnetdyn.Eco:
 		env, err = ix.dotnetEnv(ctx, t, nil, nil)
 		return env, dotnetdyn.CollectorID, err
+	case rbdyn.Eco:
+		env, err = ix.rubyEnv(ctx, rf, t)
+		return env, rbdyn.CollectorID, err
 	}
 	return "", "", errors.New("no dynamic layer for ecosystem " + eco)
 }
@@ -129,6 +133,10 @@ func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input,
 		}
 		if eco == dotnetdyn.Eco {
 			sel = ix.applyDotnetClasses(ctx, in, res, sel) // per-test-class layer of .NET test projects
+			continue
+		}
+		if eco == rbdyn.Eco {
+			sel = ix.applyRubyMethods(ctx, in, res, sel) // per-method layer: narrows precise Ruby test files (docs/dynamic-layer.md §10)
 			continue
 		}
 		candidate := false
