@@ -89,6 +89,7 @@ All numbers come from single runs on Windows 11. Median selection is selected un
 | JVM | 243 (holdout 81) | 0 | 5 % (dev 7 %, holdout 1 %) | 0.94 (holdout 0.82) | holdout 3.7 % |
 | .NET | 248 (holdout 75) | 0 (6 oracle artefacts) | 5 % | 0.89 (holdout 0.80) | holdout 4.0 % |
 | Go | 243 (dev 169, holdout 74) | 0 (26 oracle artefacts, hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
+| Ruby | 117 (dev 61, holdout 56); all 836 fetched tasks: 0 violations | 0 | 2 % (holdout 4 %) | 1.000 | 2.6 % (holdout 5.6 %) |
 
 Notes per ecosystem:
 
@@ -112,6 +113,13 @@ Notes per ecosystem:
   packages have no changed file in their closure (flaky or timing tests). An acceptance test that executes a binary built
   by a Makefile through a relative path (`../../../alertmanager`, from a helper package) was a real gap; it is now covered
   by tying such paths to the main package of that name. Median selection time 46 ms.
+- **Ruby** (SWE-bench Multilingual + Multi-SWE-RL Ruby, 7 repositories; holdout rubocop, jekyll, faker; 2 holdout tasks have
+  no oracle: their FAIL_TO_PASS names lie only in files the test patch does not touch). The only full widenings are CI files
+  (`global_input`). The first run found 390 real misses on asciidoctor, all from two path-evaluation bugs in how its test
+  helper computes the library path (`File.dirname File.dirname(__FILE__)`, `ENV["X"] || (File.join …)`); besides the fixes,
+  every computed require now also depends on the suffix union of its literal tail, so a wrong evaluation can no longer end in
+  a missing target. Selectivity is about 1.0: each test helper loads the whole library, and computed requires (plugin
+  loaders, `require name` helpers) fire in 113 of 117 tasks. Median selection time 0.6 s.
 
 ### T2 mutation summary
 
@@ -123,6 +131,7 @@ Notes per ecosystem:
 | JVM | gson (Maven), moshi (Gradle) | 40 | 0 | 0.875 / 0.708 |
 | .NET | Polly, RestSharp | 40 | 0 | 0.239 / 0.923 |
 | Go | hcl, prometheus/common, connect-go | 60 | 0 | 0.389 / 0.100 / 0.200 |
+| Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -136,6 +145,7 @@ in-repository import paths now depend on that package.
 | JVM | Maven: 20/20 builds read correctly, 1,601 of 1,601 inter-module edges found. Gradle: 8/12 builds identical; the others differ by intermediate projects without files or by settings bgraph cannot evaluate (which fail closed with a full-scope widening). GIB: 34 tasks agree, 1 divergence classified as GIB over-approximation |
 | .NET | `ProjectReference`: 55 repositories / 151 commits, 9,086 edges outside dotnet/runtime, 0 missing; dotnet/runtime: 0 missing (377 edges, 278 of them covered by an unresolved-construct widening). dotnet-affected: 217 tasks without a real violation; 1 divergence by design (it counts a Markdown file under a docs-site project) |
 | Go | 25 repositories, 50 base commits, 656 modules, 7,234 packages with tests: every package with tests is a unit; 87,926 in-repo import edges and 6,602 embedded files covered. 107 extra units (packages excluded by build constraints on the host OS): over-selection only |
+| Ruby | rack, dry-types, rake: the test files the runners collect (`RSpec.configuration.files_to_run`, the `Rake::TestTask` file list) are exactly bgraph's units (121 of 121, none missing, none extra) |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay

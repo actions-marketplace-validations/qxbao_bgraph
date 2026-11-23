@@ -29,12 +29,15 @@ commit as the feature:
 | JVM (Maven, Gradle) | module / project | – | test classes | [jvm](ecosystems/jvm.md) |
 | .NET (VSTest, Microsoft.Testing.Platform) | MSBuild project | – | test classes | [dotnet](ecosystems/dotnet.md) |
 | Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
+| Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | – | [ruby](ecosystems/ruby.md) |
 
 ## New ecosystems
 
 | Item | Status | Priority | Notes | Page |
 |---|---|---|---|---|
-| Ruby (RSpec, Minitest; Bundler, `Gemfile.lock`) | planned | 1 | `require_relative` is static; Rails autoloading (Zeitwerk) maps constants to paths by convention and needs its own rules; dynamic `require` widens | |
+| Ruby (RSpec, Minitest; Bundler, `Gemfile.lock`) | done (unreleased) | 1 | Test-file units; `require` by path suffix; Zeitwerk and Rails autoloading depend on whole directories; computed `require` widens (describable with `[[dynamic]]`) | [ruby](ecosystems/ruby.md) |
+| Ruby: constant-level narrowing for Zeitwerk and Rails autoloading | planned | 2 | Today an autoloading application or gem depends on every file it can autoload; mapping referenced constants to files would narrow it, with widening for metaprogramming | [ruby](ecosystems/ruby.md#known-gaps-and-over-selection) |
+| Ruby: Cucumber features | planned | 3 | `.feature` files are not units; a change to one widens its project | |
 | PHP (PHPUnit, Pest; Composer, `composer.lock`) | planned | 1 | PSR-4 / PSR-0 / classmap autoload from `composer.json` gives class → file; `include` of computed paths widens | |
 | Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
 | Swift (SwiftPM, `swift test`, `Package.resolved`) | planned | 2 | Module granularity like Cargo targets | |
@@ -62,6 +65,7 @@ commit as the feature:
 | `pdm.lock`, `Pipfile.lock`, `pylock.toml`, requirements files to L1 | planned | 2 | L0 today: any change selects every Python test of the project | [lockfiles](lockfiles.md) |
 | `bun.lockb` (binary) and `npm-shrinkwrap.json` to L1 | planned | 3 | `bun.lock` (text) and `package-lock.json` are read today | [lockfiles](lockfiles.md) |
 | `packages.lock.json` (.NET) to L1 | planned | 2 | L0 today | [lockfiles](lockfiles.md) |
+| `Gemfile.lock` / `gems.locked` (Ruby) to L1 | planned | 2 | L0 today; the `GEM` and `PATH` specs give a dependency graph per gem, to be gated by the differential check against Bundler | [lockfiles](lockfiles.md) |
 | Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
 
 ## Dynamic layer
@@ -73,4 +77,5 @@ commit as the feature:
 | .NET: map generated sources to their partial type instead of the whole project | planned | 2 | Repositories with their own source generator narrow little today | [dynamic layer §9.11](dynamic-layer.md#911-net) |
 | .NET: build-time IL diff to relax the body guard (constants, signatures, added members) | planned | 3 | The body guard passes 17–45 % of code-only commits on the evaluated repositories | [dynamic layer §9.11](dynamic-layer.md#911-net) |
 | Go | planned | 3 | Package granularity is already fine; a test-function layer would need coverage per test | |
+| Ruby (test files, from `Coverage` per test file) | planned | 1 | Static selection is about 1.0 on the evaluated repositories (test helpers load the whole library); Ruby's built-in `Coverage` module could record per-test-file dependencies like the Python collector | [dynamic layer](dynamic-layer.md) |
 | Rust | planned | 3 | Same question at the Cargo-target level | |

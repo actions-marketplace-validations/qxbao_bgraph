@@ -22,8 +22,8 @@ does not have (code that computes import paths, build logic it cannot evaluate),
 | Term | Meaning |
 |---|---|
 | **Change** | The files that differ between a *base* commit and a *head* (a commit, or the working tree including staged, unstaged and untracked files). |
-| **Test unit** | The smallest thing a test runner can run on its own: a test file (Node, Python), a Cargo target, a Go package, a Maven module or Gradle project, an MSBuild project. |
-| **Project** | An ecosystem's project directory (`package.json`, Python project, crate, Go module, Maven module, .NET project...). Widenings are scoped to projects. |
+| **Test unit** | The smallest thing a test runner can run on its own: a test file (Node, Python, Ruby), a Cargo target, a Go package, a Maven module or Gradle project, an MSBuild project. |
+| **Project** | An ecosystem's project directory (`package.json`, Python project, Ruby project, crate, Go module, Maven module, .NET project...). Widenings are scoped to projects. |
 | **Ecosystem** | A language integration: it analyzes one tree into roles, edges, unresolved imports and test units, and classifies changes to its own manifests, configs and lockfiles. |
 | **Widening** | A record `{tier, reason, path, scope, detail, suggest}` explaining why the selection is wider than the graph alone. |
 
@@ -143,7 +143,7 @@ a change to `To` can affect `From`.
 | `project_ref` | a Maven `<dependency>` on another module of the build, a Gradle `project(":x")`, an included build |
 | `conftest` | a pytest `conftest.py` above a test |
 | `implicit` | a dependency the runner or build adds on its own (setup files, runner configs, the module files of a Cargo target, a .NET `ProjectReference`, a parent POM, the files of a Go package) |
-| `fixture_data` | a data file a Go test names in a string literal |
+| `fixture_data` | a data file a Go or Ruby test names in a string literal |
 | `pattern` | a glob edge (below), including `//go:embed` patterns and the edges of `[[generated]]` and `[[dynamic]]` declarations |
 | `mock` | `jest.mock("./a")`, `vi.mock(...)`, Python `mock.patch("a.b")` |
 | `symlink` | a path that reads a file through a symbolic link (a file link, or a file under a directory link) depends on the target file |
@@ -160,6 +160,7 @@ Some units are not files. Their unit's file list holds a single virtual node, an
 |---|---|
 | `<rust:ID>` | a Cargo target (and package-level groups) |
 | `<go:dir>`, `<golib:dir>`, `<gomod:dir>` | a Go package's test unit, its library (what importers compile), and a module's module-level files |
+| `<rbreq:feature>`, `<rbload:file>` | a Ruby `require` / `load` target, matched by path suffix anywhere in the repository (tracked through glob edges) |
 | `<jvm:ID>` | a Maven module or Gradle project |
 | `<dotnet:project file>` | an MSBuild project |
 | `<npm:package>` | an external npm package (lockfile level L2 only) |

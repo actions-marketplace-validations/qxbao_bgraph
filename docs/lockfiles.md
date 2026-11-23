@@ -28,6 +28,7 @@ ecosystem's tests.
 | `bun.lock` (text lockfile, bun 1.2 and later; `lockfileVersion` 1) | Node | L1 | other versions stay at L0 |
 | `npm-shrinkwrap.json`, `bun.lockb` (binary) | Node | L0 | |
 | `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files (`requirements*.txt` / `.in`, `constraints*.txt` / `.in`, `*-requirements.txt`, `*_requirements.txt`, any `.txt` / `.in` in a `requirements/` or `reqs/` directory) | Python | L0 | scope: the file's Python project |
+| `Gemfile.lock`, `gems.locked` | Ruby | L0 | scope: the lockfile's directory (every Ruby project below it) |
 | `go.sum` | Go | L1 (lines only added) / L0 | lines only added change no build: nothing widens; a removed or changed line widens the module (and the other members of its `go.work`); `vendor/` changes widen their module too |
 | `packages.lock.json` | .NET | L0 | scope: the lockfile's directory |
 

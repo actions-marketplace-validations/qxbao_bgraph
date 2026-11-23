@@ -37,7 +37,7 @@ there). Review narrowing entries like code, and re-check them when what they des
 | [`[[rule]]`](#rule) | widening (`"none"`: narrowing) | all ecosystems | a dependency no import expresses |
 | [`[[generated]]`](#generated) | narrowing | Node | git-ignored build outputs that code imports |
 | [`[[config]]`](#config) | narrowing | Node | runner-config keys computed in code |
-| [`[[dynamic]]`](#dynamic) | narrowing | Python | what dynamic imports of a file can load |
+| [`[[dynamic]]`](#dynamic) | narrowing | Python, Ruby | what dynamic imports of a file can load |
 | [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET | enable the record-based dynamic layer |
 | [`[lockfile]`](#lockfile) | narrowing at `L2` | Node, Rust, Python | lockfile comparison level |
 | [`[options]`](#options) | – | selector | thresholds |
@@ -149,10 +149,12 @@ reason = "scripts/aliases.js maps vue and @vue/<dir> to the package sources"
 
 ## `[[dynamic]]`
 
-Describes what the dynamic imports of one Python file can load: `importlib.import_module(name)`, `__import__(name)`,
-`pkgutil.iter_modules(...)`, a `sys.path` edit built at run time. By default such a site is unresolved at repository
-scope: when a loadable module file (`.py`, `.pyi`, `.pyc`, `.so`, `.so.*`, `.pyd`) is added, changed or deleted anywhere in the
-repository, the file with the site and everything that depends on it is selected.
+Describes what the dynamic imports of one Python or Ruby file can load: in Python `importlib.import_module(name)`,
+`__import__(name)`, `pkgutil.iter_modules(...)`, a `sys.path` edit built at run time; in Ruby a `require`, `load`,
+`autoload`, `push_dir` or `Dir` loop whose path is computed. By default such a site is unresolved at repository scope: when a
+loadable file (Python: `.py`, `.pyi`, `.pyc`, `.so`, `.so.*`, `.pyd`; Ruby: `.rb`, `.rake`, `.ru`, `.gemspec`, `bin/*`,
+`exe/*`, `libexec/*`) is added, changed or deleted anywhere in the repository, the file with the site and everything that
+depends on it is selected.
 
 An entry replaces that rule, for the sites it names, with glob edges to what you say they can load: a change to a matching
 file (including files added later) reaches the file and its dependents, and nothing else does.
@@ -164,10 +166,11 @@ file (including files added later) reaches the file and its dependents, and noth
 | `lines` | no | only the sites on these lines (1-based); default: every dynamic site of the file |
 | `loads` | one of the three | globs of the files the sites can load |
 | `none` | one of the three | `true`: the sites load nothing from the repository (only installed packages) |
-| `sys_path_only` | one of the three | `true`: describe only the file's `sys.path` edits (bgraph already matches unresolved imports anywhere in the repository); cannot be combined with `lines` |
+| `sys_path_only` | one of the three | Python only: `true` describes only the file's `sys.path` edits (bgraph already matches unresolved imports anywhere in the repository); cannot be combined with `lines`. A Ruby declaration with it is inert (`$LOAD_PATH` edits need no declaration) |
 
-`none = true` and `loads` are mutually exclusive. An entry whose file does not exist, is not Python, or matches no
-dynamic site (a wrong `lines`) is inert; `bgraph unresolved` lists it as a stale declaration.
+`none = true` and `loads` are mutually exclusive. An entry whose file does not exist, is neither Python nor Ruby, or matches
+no dynamic site (a wrong `lines`) is inert; `bgraph unresolved` lists it as a stale declaration. A file the lexer cannot read
+with certainty (`uncertain_scan`) cannot be described away.
 
 ```toml
 [[dynamic]]
@@ -179,6 +182,11 @@ reason = "load_plugins() imports entry points of installed packages only"
 file = "pkg/runtests.py"
 loads = ["pkg/**/tests/test_*.py", "pkg/**/tests/__init__.py"]
 reason = "the runner only imports the test modules it collects"
+
+[[dynamic]]
+file = "lib/mytool/plugin_loader.rb"
+loads = ["lib/mytool/plugins/*.rb"]
+reason = "require \"mytool/plugins/#{name}\" only loads the bundled plugins"
 ```
 
 ## `[dynamic_layer]`
