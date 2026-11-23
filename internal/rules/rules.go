@@ -67,8 +67,8 @@ type Config struct {
 
 // Dynamic is a [[dynamic]]: the user's description of what the dynamic imports (importlib.import_module(name), __import__(name),
 // non-literal sys.path edits...) of one file can load. Without it bgraph cannot know and treats any change in the project as a
-// possible target. Like [[config]] it narrows the selection on the user's word: a reason is required. Only the Python ecosystem
-// consumes it for now.
+// possible target. Like [[config]] it narrows the selection on the user's word: a reason is required. The Python and Ruby
+// ecosystems consume it (Ruby: computed require/load/autoload sites; sys_path_only does not apply).
 type Dynamic struct {
 	Index       int
 	File        string // repo-relative file containing the dynamic sites

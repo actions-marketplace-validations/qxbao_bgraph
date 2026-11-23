@@ -101,6 +101,11 @@
 // loads are assumed not to load test files, which the runner loads; an uncertain scan still fires on them. A bare load(x) in a
 // file that defines its own `load` method is that method, not Kernel#load.
 //
+// A bgraph.toml [[dynamic]] declaration for a Ruby file (optionally limited to lines) replaces the dynamic Unresolved of its
+// computed sites with pattern edges to its `loads` (Provenance rule), or nothing for `none = true`. sys_path_only does not
+// apply ($LOAD_PATH edits need no declaration) and an uncertain scan is never replaceable. A declaration of a Ruby file that
+// matches no computed site is reported (unknown, no widening); declarations of other files are left to their ecosystems.
+//
 // # Widenings (ClassifyChange, all with Eco "ruby")
 //
 // Only marker files at a Ruby project are claimed; the same names below test-data directories are left to the general rules.
@@ -148,13 +153,15 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "ruby-4"
+const AnalyzerVersion = "ruby-5"
 
 // Eco is the Ruby ecosystem.
-type Eco struct{}
+type Eco struct {
+	rules *rules.File // [[dynamic]]; may be nil
+}
 
-// New creates the Ruby ecosystem. [[rule]] entries are applied by the selector.
-func New(_ *rules.File) *Eco { return &Eco{} }
+// New creates the Ruby ecosystem. [[rule]] entries are applied by the selector; [[dynamic]] entries are read here.
+func New(r *rules.File) *Eco { return &Eco{rules: r} }
 
 func (e *Eco) Name() string    { return Name }
 func (e *Eco) Version() string { return AnalyzerVersion }
@@ -205,6 +212,8 @@ type builder struct {
 	seen     map[edgeKey]bool
 	infos    map[string]*fileInfo
 	reqDone  map[string]bool // virtual nodes already linked
+	dyn      []rules.Dynamic // [[dynamic]] declarations
+	dynUsed  []bool
 	rails    map[string]bool // projects that are Rails applications
 }
 
@@ -288,6 +297,10 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		exes: map[string]bool{}, byBase: map[string][]string{}, fixtures: map[string][]string{}, topDirs: map[string]map[string]bool{},
 		gemfiles: map[string]string{}, foreign: map[string]bool{}, rbDirs: map[string]bool{}, seen: map[edgeKey]bool{},
 		infos: map[string]*fileInfo{}, reqDone: map[string]bool{}, rails: map[string]bool{}}
+	if e.rules != nil {
+		b.dyn = e.rules.Dynamics
+		b.dynUsed = make([]bool, len(b.dyn))
+	}
 	var exeCands []string
 	fixtureDirs := map[string]bool{}
 	for _, p := range files {
@@ -480,6 +493,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		a.Unresolved = append(a.Unresolved, model.Unresolved{File: c.computed, Spec: "test pattern", Class: model.UnresolvedUnknown,
 			ScopeTier: model.TierNone, Detail: "the test file pattern is computed: the project's whole suite is one unit"})
 	}
+	b.staleDeclarations()
 	b.otherRoles(files)
 	slices.SortFunc(a.Edges, func(x, y model.Edge) int {
 		if c := strings.Compare(x.From, y.From); c != 0 {
@@ -579,6 +593,9 @@ func (b *builder) edge(from, to string, kind model.EdgeKind, spec string, line i
 }
 
 func (b *builder) unres(from, spec string, class model.UnresolvedClass, line int, detail string) {
+	if class == model.UnresolvedDynamic && b.declared(from, line) {
+		return
+	}
 	u := model.Unresolved{File: from, Spec: spec, Class: class, Line: line, Detail: detail}
 	switch class {
 	case model.UnresolvedDynamic, model.UnresolvedUncertainScan:
@@ -682,4 +699,42 @@ func escapeGlob(s string) string {
 // outside: a cleaned repo-relative path that leaves the repository.
 func outside(p string) bool {
 	return p == ".." || strings.HasPrefix(p, "../") || strings.HasPrefix(p, "/")
+}
+
+// declared: a [[dynamic]] declaration describes the computed require at from:line. Its loads become pattern edges (nothing
+// for none = true) in place of the Unresolved. sys_path_only declarations do not apply: $LOAD_PATH edits need none (suffix
+// union), and an uncertain scan is never replaceable.
+func (b *builder) declared(from string, line int) bool {
+	for i, d := range b.dyn {
+		if d.File != from || d.SysPathOnly || len(d.Lines) > 0 && !slices.Contains(d.Lines, line) {
+			continue
+		}
+		b.dynUsed[i] = true
+		for _, g := range d.RawLoads {
+			k := edgeKey{from, g, model.EdgePattern}
+			if !b.seen[k] {
+				b.seen[k] = true
+				b.a.Edges = append(b.a.Edges, model.Edge{From: from, To: g, Kind: model.EdgePattern, Line: line,
+					Spec: "bgraph.toml [[dynamic]]", Provenance: model.ProvRule})
+			}
+		}
+		return true
+	}
+	return false
+}
+
+// staleDeclarations reports the [[dynamic]] declarations of Ruby files that describe no computed require (other files are
+// left to the ecosystems that own them).
+func (b *builder) staleDeclarations() {
+	for i, d := range b.dyn {
+		if b.dynUsed[i] || !b.isRuby[d.File] {
+			continue
+		}
+		why := "matches no computed require of the file (stale declaration?): the widening stays"
+		if d.SysPathOnly {
+			why = "sys_path_only does not apply to Ruby ($LOAD_PATH edits need no declaration): the declaration is inert"
+		}
+		b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: rules.FileName, Spec: fmt.Sprintf("[[dynamic]] #%d file = %q", i+1, d.File),
+			Class: model.UnresolvedUnknown, ScopeTier: model.TierNone, Detail: "[[dynamic]] " + why})
+	}
 }

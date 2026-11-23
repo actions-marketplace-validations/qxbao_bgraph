@@ -53,7 +53,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "python-5"
+const AnalyzerVersion = "python-6"
 
 // Eco is the Python ecosystem.
 type Eco struct {
@@ -405,6 +405,9 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		if !b.dynUsed[i] {
 			why := "matches no dynamic import site (stale declaration?): the widening stays"
 			if !b.fileSet[d.File] {
+				if rubyFile(t, d.File) {
+					continue // the Ruby ecosystem reports its own declarations
+				}
 				why = "is not a Python file of the repo: the declaration is inert"
 			}
 			a.Unresolved = append(a.Unresolved, model.Unresolved{File: rules.FileName, Spec: fmt.Sprintf("[[dynamic]] #%d file = %q", i+1, d.File),
@@ -906,4 +909,31 @@ func (b *builder) dynSite(from, spec, proj string, line int, sysPath bool, detai
 	_ = proj
 	b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: from, Spec: spec, Class: model.UnresolvedDynamic, Line: line,
 		ScopeTier: model.TierModule, ScopeDir: ".", Detail: detail, TriggerGlobs: moduleTriggers})
+}
+
+// rubyFile: p is a Ruby file (by name, or an extensionless bin/exe/libexec script whose shebang names ruby), whose [[dynamic]]
+// declarations the Ruby ecosystem handles.
+func rubyFile(t tree.Tree, p string) bool {
+	switch path.Ext(p) {
+	case ".rb", ".rake", ".ru", ".gemspec":
+		return true
+	case "":
+	default:
+		return false
+	}
+	switch path.Base(p) {
+	case "Gemfile", "Rakefile", "rakefile":
+		return true
+	}
+	switch path.Base(path.Dir(p)) {
+	case "bin", "exe", "libexec":
+	default:
+		return false
+	}
+	src, err := t.Read(p)
+	if err != nil || !strings.HasPrefix(string(src), "#!") {
+		return false
+	}
+	line, _, _ := strings.Cut(string(src), "\n")
+	return strings.Contains(line, "ruby")
 }
