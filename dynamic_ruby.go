@@ -61,21 +61,21 @@ func (ix *Index) applyRubyMethods(ctx context.Context, in selector.Input, res se
 	}
 	changed, why := rbdyn.Guard(sel, changes, in.BaseTree, in.HeadTree)
 	if why != "" {
-		return dynamic.Skip(sel, rbdyn.Eco, why)
+		return rubySkip(sel, res.UnitEco, why)
 	}
 	if ix.stateDir == "" {
-		return dynamic.Skip(sel, rbdyn.Eco, "no state directory: no records")
+		return rubySkip(sel, res.UnitEco, "no state directory: no records")
 	}
 	recs, warns := dynamic.Load(dynamic.StorePath(ix.stateDir, rbdyn.Eco))
 	for _, w := range warns {
 		sel.Warnings = append(sel.Warnings, model.Widening{Tier: model.TierNone, Reason: model.ReasonDynamicSkipped, Detail: w})
 	}
 	if len(recs) == 0 {
-		return dynamic.Skip(sel, rbdyn.Eco, "no records (run `bgraph record --eco ruby`)")
+		return rubySkip(sel, res.UnitEco, "no records (run `bgraph record --eco ruby`)")
 	}
 	env, err := ix.rubyEnv(ctx, in.Rules, in.BaseTree)
 	if err != nil {
-		return dynamic.Skip(sel, rbdyn.Eco, "environment fingerprint: "+err.Error())
+		return rubySkip(sel, res.UnitEco, "environment fingerprint: "+err.Error())
 	}
 	// A head that does not compile, or that Ruby warns about differently, fails or differs when the file is loaded.
 	files, why := rbdyn.ParseFiles(changed, in.BaseTree, in.HeadTree)
@@ -88,9 +88,22 @@ func (ix *Index) applyRubyMethods(ctx context.Context, in selector.Input, res se
 		}
 	}
 	if why != "" {
-		return dynamic.Skip(sel, rbdyn.Eco, why)
+		return rubySkip(sel, res.UnitEco, why)
 	}
 	return rbdyn.Narrow(sel, rbdyn.Params{Env: env, Records: recs, Base: in.BaseTree, UnitEco: res.UnitEco, Changed: changed})
+}
+
+// rubySkip returns sel with a dynamic_skipped warning for the Ruby layer, and the reason on every Ruby unit it would have
+// considered (bgraph explain shows it: Ruby units are precise, so the warning alone would not be attached to them).
+func rubySkip(sel Selection, unitEco map[string]string, why string) Selection {
+	sel = dynamic.Skip(sel, rbdyn.Eco, why)
+	sel.Tests = slices.Clone(sel.Tests)
+	for i, t := range sel.Tests {
+		if rbdyn.Narrowable(t, unitEco[t.Unit]) && t.Dynamic == "" {
+			sel.Tests[i].Dynamic = "not narrowed by the Ruby method layer: " + why
+		}
+	}
+	return sel
 }
 
 // recordRuby records the Ruby test files (docs/dynamic-layer.md §10.4): each in a process tree of its own, run as the runner

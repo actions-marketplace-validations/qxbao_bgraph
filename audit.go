@@ -164,7 +164,7 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 				ft.Reason = why
 				for _, n := range sel.Narrowed {
 					if n.Unit == file {
-						ft.Reason = "selected by a widening but removed by the dynamic layer: " + n.Reason
+						ft.Reason = "selected but removed by the dynamic layer: " + n.Reason
 					}
 				}
 				rep.Missed = append(rep.Missed, ft)

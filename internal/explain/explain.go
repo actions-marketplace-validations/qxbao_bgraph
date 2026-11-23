@@ -50,7 +50,7 @@ func Lines(sel model.Selection, target string) []string {
 				}
 				line += ")"
 			}
-			out = append(out, fmt.Sprintf("test %s was selected by a widening but removed by the dynamic layer:", n.Unit), line)
+			out = append(out, fmt.Sprintf("test %s was selected but removed by the dynamic layer:", n.Unit), line)
 		}
 	}
 	if found {

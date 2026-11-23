@@ -189,6 +189,15 @@ func TestRecordRubyIntegration(t *testing.T) {
 	if w := s.Warnings; len(w) == 0 || !strings.Contains(w[len(w)-1].Detail, "outside method bodies") {
 		t.Errorf("Cart::LIMIT warnings %+v", w)
 	}
+	if !strings.Contains(s.Tests[0].Dynamic, "not narrowed by the Ruby method layer: lib/shop/cart.rb:2: code outside method bodies") {
+		t.Errorf("Cart::LIMIT note %q", s.Tests[0].Dynamic)
+	}
+	// A body change that does not compile refuses (parse check).
+	write("lib/shop/cart.rb", strings.Replace(rubyCart, "    @items.sum\n", "    @items.sum +\n", 1))
+	s = check("syntax error", all, nil)
+	if !strings.Contains(s.Tests[0].Dynamic, "does not compile at the head") {
+		t.Errorf("syntax error note %q", s.Tests[0].Dynamic)
+	}
 	write("lib/shop/cart.rb", rubyCart)
 	// A method run by price_test.
 	write("lib/shop/price.rb", "module Price\n  def self.format(x)\n    \"$\" + x.to_s\n  end\n\n  def self.tax(x)\n    x * 2\n  end\nend\n")

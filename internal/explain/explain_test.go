@@ -38,7 +38,7 @@ func TestLinesDynamic(t *testing.T) {
 	if got := Lines(sel, "tests/test_l.py"); len(got) != 3 || got[2] != "  "+sel.Tests[0].Dynamic {
 		t.Errorf("kept: %q", got)
 	}
-	if got := Lines(sel, "tests/test_b.py"); len(got) != 2 || got[0] != "test tests/test_b.py was selected by a widening but removed by the dynamic layer:" {
+	if got := Lines(sel, "tests/test_b.py"); len(got) != 2 || got[0] != "test tests/test_b.py was selected but removed by the dynamic layer:" {
 		t.Errorf("narrowed: %q", got)
 	}
 	sel.Warnings = []model.Widening{{Reason: model.ReasonDynamicSkipped, Detail: "python: pkg/n.py: status A"}}
