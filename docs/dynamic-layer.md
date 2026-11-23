@@ -747,7 +747,9 @@ would otherwise run the member data of every class in each host), N at a time (d
 framework directly (its `RunCommand` and `RunArguments`), with the same VSTest-syntax `--filter`, the application's TRX
 report (`--report-xunit-trx` for xUnit v3, else `--report-trx` from Microsoft.Testing.Extensions.TrxReport) and, for xUnit
 v3, `--pre-enumerate-theories off`. Coverage comes from the platform's extension (`--coverage`, from
-Microsoft.Testing.Extensions.CodeCoverage) when the application has it, else from the
+Microsoft.Testing.Extensions.CodeCoverage, which `MSTest.Sdk` includes) when the application has it; it reads
+`IncludeTestAssembly` at the top level of its settings only and otherwise leaves the test application out, which every
+record's canary would reject. Without the extension, coverage comes from the
 [`dotnet-coverage`](https://learn.microsoft.com/dotnet/core/additional-tools/dotnet-coverage) tool (on `PATH` or in
 `~/.dotnet/tools`) wrapping the application, both with the same Microsoft.CodeCoverage settings. An application without
 `--filter`, without a TRX option, or with no coverage collector available is not recorded (its project runs whole).
@@ -848,7 +850,9 @@ Microsoft.Testing.Platform (TimeZoneConverter, xUnit v3, `dotnet-coverage` witho
 on up to 4 frameworks (net48 included) recorded in 2 min 40 s, 15 of 16 class records complete; 8 killed one-token mutants
 of `src/`, 0 violations (every class of the main project reaches the shared time-zone data, so none was narrowed); a
 change inside a test method body narrowed the project to its 1 class of 11, and the generated
-`dotnet test --project ... --filter` command ran it on every framework.
+`dotnet test --project ... --filter` command ran it on every framework. MSTest on the platform with its own coverage extension
+(component-detection, `MSTest.Sdk`, 2 projects): 33 of 34 class records complete in 35 s; 8 killed mutants of
+`Microsoft.ComponentDetection.Common`, 0 violations, each narrowed to 2–3 of 23 classes.
 
 The guard refused the `const` mutant of Polly, the compile-time inlining case. RestSharp narrows little because the
 repository has its own source generator: generated code maps to every file of the generator's consumer project, so every

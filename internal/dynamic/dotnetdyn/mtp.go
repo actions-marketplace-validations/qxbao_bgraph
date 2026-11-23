@@ -18,9 +18,12 @@ import (
 // the platform's extension (Microsoft.Testing.Extensions.CodeCoverage) or, without it, from `dotnet-coverage collect`.
 
 // coverageSettings is the Microsoft.CodeCoverage configuration of runSettings for the platform extension and dotnet-coverage.
+// The extension reads IncludeTestAssembly at the configuration level only (it excludes the test application otherwise: no
+// record would pass the canary); it is repeated inside CodeCoverage for dotnet-coverage.
 const coverageSettings = `<?xml version="1.0" encoding="utf-8"?>
 <Configuration>
   <Format>cobertura</Format>
+  <IncludeTestAssembly>True</IncludeTestAssembly>
   <CodeCoverage>
     <Attributes><Exclude mergeDefaults="False"><Attribute>^Bgraph\.NeverMatches$</Attribute></Exclude></Attributes>
     <Sources><Exclude mergeDefaults="False"><Source>^$</Source></Exclude></Sources>
