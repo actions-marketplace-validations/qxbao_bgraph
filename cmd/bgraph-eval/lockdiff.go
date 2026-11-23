@@ -14,11 +14,11 @@ import (
 	"github.com/qxbao/bgraph/internal/evalkit"
 )
 
-// cmdLockdiff: bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry --work DIR --repos a__b[:path/to/lockfile],... --out DIR
+// cmdLockdiff: bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry|yarn|bun --work DIR --repos a__b[:path/to/lockfile],... --out DIR
 // (lockfile closures vs the package manager's own per-project dependency sets; gate L1).
 func cmdLockdiff(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("lockdiff", flag.ExitOnError)
-	format := fs.String("format", "", "pnpm | npm | cargo | uv | poetry")
+	format := fs.String("format", "", "pnpm | npm | cargo | uv | poetry | yarn | bun")
 	evalDir := evalkit.EvalDir()
 	work := fs.String("work", filepath.Join(evalDir, "work"), "work directory (repos/<owner__name>; default under $BGRAPH_EVAL_DIR)")
 	tmp := fs.String("tmp", filepath.Join(evalDir, "tmp", "lockdiff"), "scratch directory (materialized trees and worktrees, removed after use)")
@@ -30,6 +30,10 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 	jobs := fs.Int("jobs", 1, "repos in parallel")
 	pnpm := fs.String("pnpm", "", "pnpm command (space-separated), e.g. \"node /path/to/pnpm/bin/pnpm.cjs\"")
 	pnpmConvert := fs.String("pnpm-convert", "", "pnpm 9 command that rewrites 6.x lockfiles as 9.0 before listing, e.g. \"node /path/to/pnpm9/node_modules/pnpm/bin/pnpm.cjs\"")
+	yarn1 := fs.String("yarn1", "", "yarn classic command (space-separated; default node <$BGRAPH_EVAL_TOOLS>/yarn1/node_modules/yarn/bin/yarn.js, else yarn)")
+	yarnBerry := fs.String("yarn-berry", "", "yarn 2+ command for commits that pin no yarnPath (default node <$BGRAPH_EVAL_TOOLS>/yarn4/node_modules/@yarnpkg/cli-dist/bin/yarn.js, else yarn)")
+	bun := fs.String("bun", "", "bun command (default bun)")
+	bunLinker := fs.String("bun-linker", "isolated", "bun install --linker: isolated (fast; the same resolution) or hoisted; empty: the project's own")
 	cargoHome := fs.String("cargo-home", evalkit.ToolPath("cargo-home", os.Getenv("CARGO_HOME")), "CARGO_HOME (default $BGRAPH_EVAL_TOOLS/cargo-home, else $CARGO_HOME; empty: inherited)")
 	uv := fs.String("uv", evalkit.ToolPath("uv-bin/uv", "uv"), "uv command (default $BGRAPH_EVAL_TOOLS/uv-bin/uv, else uv on PATH)")
 	poetry := fs.String("poetry", evalkit.ToolPath("uv-bin/poetry", "poetry"), "poetry command with poetry-plugin-export (default $BGRAPH_EVAL_TOOLS/uv-bin/poetry, else poetry on PATH)")
@@ -62,6 +66,36 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 		o.Env = []string{"npm_config_update_notifier=false", "npm_config_audit=false", "npm_config_fund=false"}
 		if evalkit.ToolsDir() != "" {
 			o.Env = append(o.Env, "npm_config_cache="+evalkit.ToolPath("npm-cache", ""))
+		}
+	case "yarn":
+		o.Yarn1 = strings.Fields(*yarn1)
+		o.YarnBerry = strings.Fields(*yarnBerry)
+		if len(o.Yarn1) == 0 {
+			o.Yarn1 = []string{"yarn"}
+			if evalkit.ToolsDir() != "" { // npm install --prefix <tools>/yarn1 yarn@1.22.22
+				o.Yarn1 = []string{"node", evalkit.ToolPath("yarn1/node_modules/yarn/bin/yarn.js", "")}
+			}
+		}
+		if len(o.YarnBerry) == 0 {
+			o.YarnBerry = []string{"yarn"}
+			if evalkit.ToolsDir() != "" { // npm install --prefix <tools>/yarn4 @yarnpkg/cli-dist@4
+				o.YarnBerry = []string{"node", evalkit.ToolPath("yarn4/node_modules/@yarnpkg/cli-dist/bin/yarn.js", "")}
+			}
+		}
+		// Only settings every yarn release knows: yarn 2 and 3 reject unknown ones (enableHardenedMode).
+		o.Env = []string{"YARN_ENABLE_TELEMETRY=0", "COREPACK_ENABLE_STRICT=0"}
+		if evalkit.ToolsDir() != "" {
+			o.Env = append(o.Env, "YARN_CACHE_FOLDER="+evalkit.ToolPath("yarn1-cache", ""), "YARN_GLOBAL_FOLDER="+evalkit.ToolPath("yarn-berry-global", ""))
+		}
+	case "bun":
+		o.Bun = strings.Fields(*bun)
+		o.BunLinker = *bunLinker
+		if len(o.Bun) == 0 {
+			o.Bun = []string{"bun"}
+		}
+		o.Env = []string{"BUN_RUNTIME_TRANSPILER_CACHE_PATH=0", "DO_NOT_TRACK=1"}
+		if evalkit.ToolsDir() != "" {
+			o.Env = append(o.Env, "BUN_INSTALL_CACHE_DIR="+evalkit.ToolPath("bun-cache", ""), "BUN_INSTALL="+evalkit.ToolPath("bun/home", ""))
 		}
 	case "cargo":
 		o.Env = []string{"RUSTUP_TOOLCHAIN=stable", "CARGO_NET_GIT_FETCH_WITH_CLI=true"}

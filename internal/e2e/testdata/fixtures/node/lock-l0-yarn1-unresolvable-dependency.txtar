@@ -1,0 +1,42 @@
+yarn.lock v1 whose head has no entry for a declared range -> level L0: every project under the lockfile's directory.
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"]}
+-- base/packages/a/package.json --
+{"name":"a","version":"1.0.0","dependencies":{"lodash":"^4.0.0"}}
+-- base/packages/a/test/a.test.js --
+require('lodash')
+-- base/packages/c/package.json --
+{"name":"c","version":"1.0.0","dependencies":{"left-pad":"^1.0.0"}}
+-- base/packages/c/test/c.test.js --
+require('left-pad')
+-- base/yarn.lock --
+# yarn lockfile v1
+
+
+left-pad@^1.0.0:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/left-pad/-/left-pad-1.3.0.tgz#aaa"
+  integrity sha512-leftpad
+
+lodash@^4.0.0:
+  version "4.17.21"
+  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz#bbb"
+  integrity sha512-lodash
+-- head/yarn.lock --
+# yarn lockfile v1
+
+
+left-pad@^1.0.0:
+  version "1.3.0"
+  resolved "https://registry.yarnpkg.com/left-pad/-/left-pad-1.3.0.tgz#aaa"
+  integrity sha512-leftpad
+
+lodash@^4.17.0:
+  version "4.17.21"
+  resolved "https://registry.yarnpkg.com/lodash/-/lodash-4.17.21.tgz#bbb"
+  integrity sha512-lodash
+-- want --
+notfull
+widen lock_changed
+select packages/a/test/a.test.js
+select packages/c/test/c.test.js

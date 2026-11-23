@@ -23,7 +23,10 @@ ecosystem's tests.
 | `Cargo.lock`, version 3 and 4 | Rust | L1 | no L2: units are whole Cargo targets |
 | `uv.lock`, version 1 (revisions up to 5) | Python | L1 | no L2 |
 | `poetry.lock`, lock-version 1.0, 1.1, 2.0, 2.1 | Python | L1 | no L2; one project per lockfile |
-| `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb` | Node | L0 | |
+| `yarn.lock`, yarn classic (v1) | Node | L1 | the workspaces and their direct dependencies are read from the `package.json` files |
+| `yarn.lock`, yarn 2 and later (`__metadata` version 4 to 6 and 8 to 10) | Node | L1 | other `__metadata` versions stay at L0 |
+| `bun.lock` (text lockfile, bun 1.2 and later; `lockfileVersion` 1) | Node | L1 | other versions stay at L0 |
+| `npm-shrinkwrap.json`, `bun.lockb` (binary) | Node | L0 | |
 | `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files (`requirements*.txt` / `.in`, `constraints*.txt` / `.in`, `*-requirements.txt`, `*_requirements.txt`, any `.txt` / `.in` in a `requirements/` or `reqs/` directory) | Python | L0 | scope: the file's Python project |
 | `go.sum` | Go | L1 (lines only added) / L0 | lines only added change no build: nothing widens; a removed or changed line widens the module (and the other members of its `go.work`); `vendor/` changes widen their module too |
 | `packages.lock.json` | .NET | L0 | scope: the lockfile's directory |
@@ -73,6 +76,37 @@ Effect of a changed closure:
 
 An unchanged closure selects nothing: a lockfile edit that only touches other projects costs nothing.
 
+### How yarn and bun lockfiles are resolved
+
+Each format records resolution differently; bgraph follows the package manager's own rules and stays at L0 when a
+dependency does not resolve to exactly one entry.
+
+- **yarn classic (v1).** The lockfile maps `name@range` patterns to entries and records no workspace. The projects are
+  the root `package.json` next to the lockfile and the workspaces its `workspaces` globs match; their dependencies
+  (`dependencies`, `devDependencies`, `optionalDependencies`, and `peerDependencies` when they resolve) come from their
+  manifests, so both sides of the comparison read the manifests of their own tree. As yarn does, a dependency whose name
+  is a workspace's and whose range accepts the workspace's version links to that workspace; anything else resolves to the
+  entry whose patterns contain `name@range`.
+- **yarn 2 and later (Berry).** Workspaces are the `name@workspace:path` entries. A dependency resolves through the
+  descriptor index of the lockfile keys, after yarn's own substitutions, which the lockfile does not record: the root
+  manifest's `resolutions`, `catalog:` ranges from `.yarnrc.yml`, the dependencies that `packageExtensions` in
+  `.yarnrc.yml` and yarn's built-in package extensions add to a package, and ranges bound to their parent (`link:`,
+  `portal:`, relative `patch:` paths). A `workspace:` range resolves to the workspace of that name even when it is not
+  a key yet. Peer dependencies are not edges: yarn resolves them from the dependent, which is in the same closure. A
+  `patch:` entry and the entry it patches are in each other's closure, so a patch
+  change (including yarn's built-in compatibility patches for `typescript`, `fsevents` and `resolve`) is a change of
+  the patched package. Plug'n'Play does not change how the lockfile is read.
+- **bun.** `packages` maps an install path to a package: `a`, or `a/b` for the copy of `b` that `a` resolves instead of
+  the hoisted one. A dependency of the package at path `p` resolves to `p/<name>`, then to each shorter parent path, then
+  to `<name>`; a workspace's dependencies start at the workspace's package name and include every name its
+  `package.json` declares (the lockfile drops some, such as a `devDependency` that is also a peer). A peer dependency also reaches every
+  copy of the package whose version the peer range accepts, because bun's isolated linker does not resolve peers
+  through the install path. Overrides and catalogs only steer
+  resolution, so they are compared through the closures; patches (`patchedDependencies`) are compared like pnpm's.
+
+yarn and bun lockfiles do not record which packages run install scripts, so L2 always falls back to L1 for these
+formats.
+
 ### Fallbacks to L0
 
 | Situation | Why |
@@ -83,6 +117,9 @@ An unchanged closure selects nothing: a lockfile edit that only touches other pr
 | a changed pnpm patch whose selector is a version range, or that selects no package of either side | the patched packages cannot be identified |
 | a Cargo package matches several lockfile entries; a uv dependency reference matches several packages | ambiguous |
 | uv `revision` or poetry `lock-version` changed, or is newer than bgraph knows | the format version changed |
+| a yarn or bun dependency resolves to no entry (or, yarn, to several): a stale lockfile, a range or workspace glob bgraph cannot read, a resolution keyed by a parent's range | the closure would be incomplete |
+| yarn Berry `__metadata` (lockfile version or `cacheKey`) changed; bun keys outside `workspaces`, `packages`, `overrides`, catalogs and `patchedDependencies` (`trustedDependencies`, `configVersion`...) | installation may change in ways the graph does not show |
+| `bun.lockb` | binary format, not read |
 | `[lockfile] level = "L0"` | configured |
 
 The detail of the widening says `lockfile at level L0 (<why>)`; for a changed top-level key it names the keys.
@@ -117,7 +154,7 @@ L2 falls back to L1 for the project when any of these holds:
 - the project was added to or removed from the lockfile, or no direct dependency carries the change;
 - a changed direct dependency is a local or workspace package, or a direct dependency was added or removed;
 - a package that changed anywhere in the project's closure runs install scripts, or the format does not record install
-  scripts (pnpm 9.0);
+  scripts (pnpm 9.0, yarn, bun);
 - a package that changed anywhere in the project's closure has peer dependencies;
 - a changed package installs executables named in a `package.json` script or a runner config, or whose names the
   lockfile does not record;

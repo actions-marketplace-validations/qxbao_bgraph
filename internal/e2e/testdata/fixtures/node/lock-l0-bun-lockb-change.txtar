@@ -1,0 +1,22 @@
+The binary bun.lockb is not read: a change is level L0 (every project under the lockfile's directory).
+-- base/package.json --
+{"name":"root","private":true,"workspaces":["packages/*"]}
+-- base/packages/a/package.json --
+{"name":"@x/a","dependencies":{"ms":"^2.0.0"}}
+-- base/packages/a/test/a.test.js --
+require('ms')
+-- base/packages/c/package.json --
+{"name":"@x/c","dependencies":{"left-pad":"^1.0.0"}}
+-- base/packages/c/test/c.test.js --
+require('left-pad')
+-- base/bun.lockb --
+#!/usr/bin/env bun
+bun-lockfile-format-v0 (binary content one)
+-- head/bun.lockb --
+#!/usr/bin/env bun
+bun-lockfile-format-v0 (binary content two)
+-- want --
+notfull
+widen lock_changed
+select packages/a/test/a.test.js
+select packages/c/test/c.test.js

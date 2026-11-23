@@ -2,7 +2,8 @@
 // between two trees (docs/lockfiles.md, levels L1 and L2).
 //
 // Supported formats: pnpm-lock.yaml (lockfile versions 6.x and 9.0), package-lock.json (lockfileVersion 2 and 3, the
-// "packages" section), Cargo.lock (version 3 and 4), uv.lock (version 1) and poetry.lock (lock-version 1.x and 2.x).
+// "packages" section), Cargo.lock (version 3 and 4), uv.lock (version 1), poetry.lock (lock-version 1.x and 2.x),
+// yarn.lock (v1 and Berry; see ParseFiles) and bun.lock (text).
 // Anything else, or a file that does not parse, is an error: the caller stays at level L0.
 //
 // A graph has one node per installed package and one node per project (workspace member). The closure of a project is
@@ -84,6 +85,8 @@ func Parse(name, dir string, data []byte) (*Graph, error) {
 		return ParseUv(dir, data)
 	case "poetry.lock":
 		return ParsePoetry(dir, data)
+	case "yarn.lock", "bun.lock":
+		return ParseFiles(name, dir, data, nil)
 	}
 	return nil, fmt.Errorf("unsupported lockfile %s", name)
 }
@@ -91,7 +94,7 @@ func Parse(name, dir string, data []byte) (*Graph, error) {
 // Supported reports whether Parse handles the lockfile base name.
 func Supported(name string) bool {
 	switch path.Base(name) {
-	case "pnpm-lock.yaml", "package-lock.json", "npm-shrinkwrap.json", "Cargo.lock", "uv.lock", "poetry.lock":
+	case "pnpm-lock.yaml", "package-lock.json", "npm-shrinkwrap.json", "Cargo.lock", "uv.lock", "poetry.lock", "yarn.lock", "bun.lock":
 		return true
 	}
 	return false

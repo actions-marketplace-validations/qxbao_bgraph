@@ -11,7 +11,7 @@
 //	bgraph-eval dotnet-affected|dotnet-provider --tasks tasks-dotnet.jsonl --work DIR --out DIR   (.NET: superset check against dotnet-affected; ProjectReference edges against msbuild)
 //	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
-//	bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry --repos a__b[:lockfile],... [--commits 25] [--out DIR] [--jobs 1] [--pnpm CMD]   (lockfile closures vs the package manager; gate L1)
+//	bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry|yarn|bun --repos a__b[:lockfile],... [--commits 25] [--out DIR] [--jobs 1] [--pnpm CMD]   (lockfile closures vs the package manager; gate L1)
 //	bgraph-eval replay   --repo URL [--repo URL...] --commits 100 --manifest ... --work DIR --out DIR
 package main
 

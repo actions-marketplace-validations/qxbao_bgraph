@@ -16,7 +16,7 @@ import (
 
 // l1Formats are the lockfiles whose closure passed the differential check against the package manager (docs/lockfiles.md);
 // every other lockfile stays at level L0.
-var l1Formats = map[string]bool{"pnpm-lock.yaml": true, "package-lock.json": true}
+var l1Formats = map[string]bool{"pnpm-lock.yaml": true, "package-lock.json": true, "yarn.lock": true, "bun.lock": true}
 
 // pkgNode is the virtual node of an external package, the target of every import that resolves to it (level L2 only).
 func pkgNode(name string) string { return "<npm:" + name + ">" }
@@ -75,7 +75,9 @@ func readLock(t tree.Tree, p string) (*lockfile.Graph, error) {
 	if err != nil {
 		return nil, err
 	}
-	return lockfile.Parse(p, path.Dir(p), b)
+	// yarn v1 reads the workspace manifests, yarn Berry the root manifest's resolutions and .yarnrc.yml catalogs, from
+	// the same tree.
+	return lockfile.ParseFiles(p, path.Dir(p), b, t)
 }
 
 // classifyLock compares the resolved dependency closure of every project of the lockfile p (docs/lockfiles.md).
@@ -99,6 +101,8 @@ func (e *Eco) classifyLock(p string, base, head tree.Tree, a *eco.Analysis) []mo
 	switch {
 	case level == rules.LockL0:
 		return l0("bgraph.toml [lockfile] level")
+	case path.Base(p) == "bun.lockb":
+		return l0("the binary bun.lockb is not read")
 	case !l1Formats[path.Base(p)]:
 		return l0("closure not compared for this format")
 	}

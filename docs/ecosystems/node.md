@@ -10,7 +10,7 @@ bgraph selects affected JavaScript and TypeScript tests (CommonJS and ESM) one t
 | Unit ID format | Repo-relative path of the test file, e.g. `packages/core/src/parse.test.ts`. A project whose test-file pattern cannot be read gets a "whole project" unit `<all-tests:DIR>`, e.g. `<all-tests:packages/core>` |
 | Runners | Vitest, Jest, Playwright, Mocha, AVA, `node --test` (node:test) |
 | Manifests/configs read | `package.json` (every one outside `node_modules`), `tsconfig*.json` / `jsconfig*.json` (with `extends`), runner configs (`jest.config.*`, `vitest.config.*`, `vite.config.*`, `playwright.config.*`, `vitest.workspace.*`, `jest.preset.*` / `jest-preset.*`, and named variants such as `vitest.unit.config.ts`), the `jest` key of `package.json` |
-| Lockfiles (and level) | `pnpm-lock.yaml` (lockfile 6.x and 9.0) and `package-lock.json` (v2/v3): **L1** by default, **L2** opt-in. `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb`: **L0**. See [lockfiles](../lockfiles.md) |
+| Lockfiles (and level) | `pnpm-lock.yaml` (lockfile 6.x and 9.0) and `package-lock.json` (v2/v3): **L1** by default, **L2** opt-in. `yarn.lock` (classic and yarn 2+) and `bun.lock`: **L1** (L2 falls back to L1: install scripts are not recorded). `npm-shrinkwrap.json`, `bun.lockb`: **L0**. See [lockfiles](../lockfiles.md) |
 | Dynamic layer | Yes, record-based narrowing per test file: see [dynamic layer](../dynamic-layer.md) (Node section) |
 
 ## Supported layouts
@@ -165,7 +165,7 @@ See [CLI](../cli.md) for `--json` and `--list-dir`.
 - **One runner per project.** A project with both Vitest and Playwright (or Jest) gets the first detected runner for all its test files, and commands run from the nearest `package.json`; a runner configured only at a monorepo root must be able to run from there.
 - **Barrels and package entry points** create real but wide fan-in: changing a file re-exported by an `index.ts` selects every test that imports the barrel.
 - **Manifest and config widenings are not limited to Node units**: a `package.json`, tsconfig or runner config change selects every test unit under its scope directory, including units of other ecosystems there.
-- **Package-level edges at L1**: a lockfile change selects every test of each project whose closure changed; L2 narrows only npm and pnpm 6.x lockfiles.
+- **Package-level edges at L1**: a lockfile change selects every test of each project whose closure changed; L2 narrows only npm and pnpm 6.x lockfiles (pnpm 9.0, yarn and bun lockfiles do not record install scripts).
 - **Not seen by the scanner:** files read through `fs` at run time, scripts run through `child_process`, stylesheet-to-stylesheet `@import` outside SFC files, imports inside HTML or other template formats. Such files usually have no dependents and widen their project (`unreferenced_file`, `unknown_file`) instead of being missed.
 - **Tool configs the ecosystem does not know** (ESLint, Prettier…) widen their project as unreferenced or unknown files; declare them with a `[[rule]]` `affects = "none"`.
 - Module resolution roots that are not modeled (`NODE_PATH`, Babel module-resolver) are approximated by the suffix globs of undeclared bare imports. (A Jest `moduleDirectories` or `modulePaths` key is `config_is_code`, see above.)

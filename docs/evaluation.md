@@ -173,6 +173,9 @@ These checks are not a release gate: the dynamic layer stays off by default.
 | pnpm 6.0 | 3 | 60 | 1,294 | 0 | 0 |
 | npm v2/v3 | 12 | 271 | 549 | 0 | 0 |
 | Cargo v3/v4 | 8 | 176 | 5,137 | 0 | 4 (corrupt upstream lockfiles that cargo also rejects) |
+| yarn classic (v1) | 5 | 101 | 3,002 | 0 | 1 (a stale lockfile missing a pattern yarn would add) |
+| yarn Berry (`__metadata` 4, 5, 6, 8, 9, 10) | 4 | 150 | 11,123 | 0 | 0 |
+| bun.lock (`lockfileVersion` 1) | 3 | 82 | 1,680 | 0 | 0 |
 | uv.lock v1 (revisions 0–5) | 8 | 169 | 740 | 0 | 0 |
 | poetry.lock 1.1/2.0/2.1 | 3 | 87 | 87 | 0 | 0 (2 more commits whose `pyproject.toml` poetry itself rejects as out of sync) |
 
@@ -184,6 +187,15 @@ changed must be among the projects bgraph reports as changed (uv 674 project che
 pnpm 5.4 and npm lockfile v1 are unsupported and stay at L0. The check found and fixed two parser bugs before L1 was
 enabled (a two-document `pnpm-lock.yaml` whose closures were read as empty, and a Cargo path crate shadowing a registry
 crate of the same name).
+
+The yarn and bun references read the package manager's own resolution: `yarn list --json` (yarn classic's resolver
+and hoister, without installing), `yarn info -AR --json` (yarn Berry, with the release each commit pins), and a
+`bun install --frozen-lockfile` whose `node_modules` is walked with Node's module lookup. Besides the per-commit
+superset check, every compared pair is checked against the tool: a project whose package set the tool reports as
+changed must be among the projects Compare marks as changed (0 misses over 2,795 yarn classic, 10,080 Berry and
+1,440 bun project pairs). The check found what the lockfiles do not record and the parsers now model: the root
+manifest's `resolutions` and `.yarnrc.yml` catalogs (Berry), dependencies added by yarn's built-in package extensions
+(even to workspaces), and peers that bun's isolated linker resolves outside the install path.
 
 ## Known limits of the evidence
 

@@ -41,9 +41,13 @@ type LockdiffOpts struct {
 	// PnpmConvert: a pnpm 9 command that rewrites a 6.x lockfile as 9.0 (install --lockfile-only --frozen-lockfile)
 	// before Pnpm lists it: pnpm list --lockfile-only exists only in pnpm 10, which cannot read 6.x.
 	PnpmConvert []string
-	Uv, Poetry  string   // uv and poetry commands (poetry with poetry-plugin-export)
-	Env         []string // extra environment for the tool
-	Log         func(string, ...any)
+	Uv, Poetry  string // uv and poetry commands (poetry with poetry-plugin-export)
+	// Yarn1 runs yarn classic (yarn list); YarnBerry runs yarn 2+ (yarn info) when the commit pins no yarnPath; Bun
+	// runs bun install. Each is a command and its leading arguments.
+	Yarn1, YarnBerry, Bun []string
+	BunLinker             string   // bun install --linker (isolated | hoisted); empty: the project's own
+	Env                   []string // extra environment for the tool
+	Log                   func(string, ...any)
 }
 
 // LockdiffMismatch: packages the tool reports for a project that our closure lacks.
@@ -114,6 +118,10 @@ func lockBase(format string) []string {
 		return []string{"uv.lock"}
 	case lockfile.FormatPoetry:
 		return []string{"poetry.lock"}
+	case lockfile.FormatYarn:
+		return []string{"yarn.lock"}
+	case lockfile.FormatBun:
+		return []string{"bun.lock"}
 	}
 	return nil
 }
@@ -202,6 +210,14 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 	var prevC string
 	var prevTool map[string]map[string]bool // our project key → tool package set of prev (nil: not read)
 	var prevData string
+	var curDst string // materialized tree of the current commit (yarn, bun)
+	cleanDst := func() {
+		if curDst != "" {
+			os.RemoveAll(curDst)
+			curDst = ""
+		}
+	}
+	defer cleanDst()
 	for _, c := range commits {
 		if ctx.Err() != nil {
 			break
@@ -216,7 +232,21 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 			continue
 		}
 		cr.LockVersion = sniffLockVersion(o.Format, data)
-		g, perr := lockfile.Parse(path.Base(lockPath), lockDir, []byte(data))
+		cleanDst()
+		var files lockfile.Files
+		if lockdiffTreeFormat(o.Format) {
+			// yarn and bun read the manifests and settings of the commit: materialize them before parsing.
+			curDst = filepath.Join(o.Tmp, o.Format+"-"+repo+"-"+c[:10])
+			os.RemoveAll(curDst)
+			if err := lockdiffMaterializeKeep(ctx, repoDir, c, lockPath, curDst, jsKeep(lockPath, keepYarnBun)); err != nil {
+				cr.Status, cr.Err = "tool-error", "materialize: "+err.Error()
+				res.Commits = append(res.Commits, cr)
+				prev, prevTool = nil, nil
+				continue
+			}
+			files = matFiles{root: curDst, dir: lockDir}
+		}
+		g, perr := lockfile.ParseFiles(path.Base(lockPath), lockDir, []byte(data), files)
 		if perr != nil {
 			cr.Status, cr.Err = "parse-error", perr.Error()
 			if strings.Contains(perr.Error(), "not supported") {
@@ -268,6 +298,10 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 			tool, unreadable, terr = lockdiffCargo(ctx, o, repoDir, wt, c, lockDir)
 		case lockfile.FormatUv, lockfile.FormatPoetry:
 			tool, unreadable, terr = lockdiffPy(ctx, o, repo, repoDir, c, lockPath, g)
+		case lockfile.FormatYarn:
+			tool, unreadable, terr = lockdiffYarn(ctx, o, g, curDst, lockDir)
+		case lockfile.FormatBun:
+			tool, unreadable, terr = lockdiffBun(ctx, o, g, curDst, lockDir)
 		}
 		if terr != nil {
 			cr.Status, cr.Err = "tool-error", terr.Error()
@@ -322,6 +356,7 @@ var (
 	reCargoVer = regexp.MustCompile(`(?m)^version\s*=\s*([0-9]+)`)
 	reUvRev    = regexp.MustCompile(`(?m)^revision\s*=\s*([0-9]+)`)
 	rePoetry   = regexp.MustCompile(`(?m)^lock-version\s*=\s*"([^"]*)"`)
+	reBerryVer = regexp.MustCompile(`(?m)^"?__metadata"?:\s*\r?\n(?:  .*\r?\n)*?  version:\s*([0-9]+)`)
 )
 
 func sniffLockVersion(format, data string) string {
@@ -350,6 +385,15 @@ func sniffLockVersion(format, data string) string {
 		}
 	case lockfile.FormatPoetry:
 		m = rePoetry.FindStringSubmatch(data)
+	case lockfile.FormatYarn:
+		if m = reBerryVer.FindStringSubmatch(data); m != nil {
+			return "berry-" + m[1]
+		}
+		if strings.Contains(data, "# yarn lockfile v1") {
+			return "1"
+		}
+	case lockfile.FormatBun:
+		m = reNpmVer.FindStringSubmatch(data)
 	}
 	if m == nil {
 		return "?"
@@ -445,7 +489,7 @@ func lockdiffPairCheck(base, head *lockfile.Graph, d *lockfile.Diff, bt, ht map[
 		kindOnly := true
 		for _, m := range []struct{ a, b map[string]bool }{{bs, hs}, {hs, bs}} {
 			for pkg := range m.a {
-				if !m.b[pkg] && (!bo[pkg] || !ho[pkg]) {
+				if !m.b[pkg] && (!oursHas(bo, pkg) || !oursHas(ho, pkg)) {
 					kindOnly = false
 				}
 			}
@@ -472,6 +516,16 @@ func lockdiffEffective(g *lockfile.Graph, p, lockDir string) map[string]bool {
 	return ours
 }
 
+// oursHas reports whether the tool's package name@version is in our set: by version, or as a package our lockfile
+// records only by reference (tarball, git, path).
+func oursHas(ours map[string]bool, pkg string) bool {
+	if ours[pkg] {
+		return true
+	}
+	name, _, ok := splitNameVersion(pkg)
+	return ok && ours[name+"@<ref>"]
+}
+
 // lockdiffOurs returns the name@version set of the closure of node id (with name@* for every name).
 func lockdiffOurs(g *lockfile.Graph, id string) map[string]bool {
 	ours := map[string]bool{}
@@ -484,6 +538,10 @@ func lockdiffOurs(g *lockfile.Graph, id string) map[string]bool {
 		ours[n.Name+"@"+n.Version] = true
 		ours[n.Package+"@*"] = true
 		ours[n.Name+"@*"] = true
+		if strings.Contains(n.Version, ":") { // a tarball, git or path reference: the installed version is not recorded
+			ours[n.Package+"@<ref>"] = true
+			ours[n.Name+"@<ref>"] = true
+		}
 	}
 	return ours
 }
@@ -519,7 +577,7 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 		ours := lockdiffEffective(g, ourKey, lockDir)
 		var miss []string
 		for pkg := range tool[p] {
-			if !ours[pkg] {
+			if !oursHas(ours, pkg) {
 				miss = append(miss, pkg)
 			}
 		}
@@ -547,13 +605,19 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 // lockdiffMaterialize writes the files of commit c the JS package manager reads (lockfile, manifests, workspace and
 // npm settings, patches) under dst.
 func lockdiffMaterialize(ctx context.Context, repoDir, c, lockPath, dst string) error {
-	return lockdiffMaterializeKeep(ctx, repoDir, c, lockPath, dst, func(rel string) bool {
+	return lockdiffMaterializeKeep(ctx, repoDir, c, lockPath, dst, jsKeep(lockPath, nil))
+}
+
+// jsKeep accepts the files a JS package manager reads (see lockdiffMaterialize), and those extra accepts.
+func jsKeep(lockPath string, extra func(rel string) bool) func(rel string) bool {
+	return func(rel string) bool {
 		if strings.Contains("/"+rel, "/node_modules/") {
 			return false
 		}
 		return path.Base(rel) == "package.json" || rel == path.Base(lockPath) || rel == "pnpm-workspace.yaml" || rel == ".npmrc" ||
-			(strings.HasPrefix(rel, "patches/") || strings.Contains(rel, "/patches/")) && strings.HasSuffix(rel, ".patch")
-	})
+			(strings.HasPrefix(rel, "patches/") || strings.Contains(rel, "/patches/")) && strings.HasSuffix(rel, ".patch") ||
+			extra != nil && extra(rel)
+	}
 }
 
 // lockdiffMaterializeKeep writes the files of commit c under the lockfile's directory that keep accepts (by path
@@ -1218,7 +1282,55 @@ func LockdiffSummary(format string, all []LockdiffRepo) string {
 	for _, k := range vk {
 		fmt.Fprintf(&b, " %s×%d", k, versions[k])
 	}
-	b.WriteString("\n\n## Mismatches (tool package missing from our closure)\n\n")
+	b.WriteString("\n\n## By lockfile version\n\n")
+	b.WriteString("A pair counts under the version of its head commit.\n\n")
+	b.WriteString("| version | repos | commits | ok | parse-error | project checks | mismatching checks | pairs | pairs at L0 | missed |\n|---|---|---|---|---|---|---|---|---|---|\n")
+	type vtot struct {
+		repos                                               map[string]bool
+		commits, ok, perr, checks, mism, pairs, l0p, missed int
+	}
+	byVer := map[string]*vtot{}
+	vt := func(v string) *vtot {
+		if byVer[v] == nil {
+			byVer[v] = &vtot{repos: map[string]bool{}}
+		}
+		return byVer[v]
+	}
+	for _, r := range all {
+		verOf := map[string]string{}
+		for _, c := range r.Commits {
+			verOf[c.Commit] = c.LockVersion
+			t := vt(c.LockVersion)
+			t.repos[r.Repo] = true
+			t.commits++
+			if c.Status == "ok" {
+				t.ok++
+			}
+			if c.Status == "parse-error" {
+				t.perr++
+			}
+			t.checks += c.Checked
+			t.mism += len(c.Mismatches)
+		}
+		for _, p := range r.Pairs {
+			t := vt(verOf[p.Head])
+			t.pairs++
+			if len(p.L0) > 0 {
+				t.l0p++
+			}
+			t.missed += len(p.Missed)
+		}
+	}
+	vkeys := make([]string, 0, len(byVer))
+	for k := range byVer {
+		vkeys = append(vkeys, k)
+	}
+	sort.Strings(vkeys)
+	for _, k := range vkeys {
+		t := byVer[k]
+		fmt.Fprintf(&b, "| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n", k, len(t.repos), t.commits, t.ok, t.perr, t.checks, t.mism, t.pairs, t.l0p, t.missed)
+	}
+	b.WriteString("\n## Mismatches (tool package missing from our closure)\n\n")
 	n := 0
 	for _, r := range all {
 		for _, c := range r.Commits {
