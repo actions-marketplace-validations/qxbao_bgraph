@@ -86,7 +86,8 @@ func w(reason, p, scope, detail string) model.Widening {
 	return model.Widening{Tier: model.TierModule, Reason: reason, Path: p, Scope: scope, Eco: Name, Detail: detail}
 }
 
-// ClassifyChange classifies pytest and packaging configuration (docs/ecosystems/python.md; lockfile level L0).
+// ClassifyChange classifies pytest and packaging configuration (docs/ecosystems/python.md); uv.lock and poetry.lock are
+// compared at lockfile level L1 (lock.go, docs/lockfiles.md), every other dependency file stays at level L0.
 func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([]model.Widening, bool) {
 	if !hasPython(a) || skipPath(p) {
 		return nil, false
@@ -106,6 +107,8 @@ func (e *Eco) ClassifyChange(p string, base, head tree.Tree, a *eco.Analysis) ([
 		return []model.Widening{w(model.ReasonTestConfig, p, dir, "pytest configuration changed")}, true
 	case name == "tox.ini" || name == "noxfile.py":
 		return []model.Widening{w(model.ReasonTestConfig, p, dir, name+" decides how the tests are launched (and may hold pytest settings)")}, true
+	case l1Formats[name]:
+		return e.classifyLock(p, base, head, a), true
 	case isLockfile(name) || isRequirementsFile(p):
 		return []model.Widening{w(model.ReasonLockChanged, p, projectDir(a, p), "dependency file at level L0 (resolved versions not compared)")}, true
 	case harmlessFile(name) || isHarmlessScript(p):

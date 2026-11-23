@@ -10,7 +10,7 @@ bgraph selects affected pytest tests (and tests of projects driven by Django's o
 | Unit ID format | Repo-relative path of the test file, e.g. `tests/test_api.py`; a directory for a collection-hook scope, e.g. `tests/examplefiles`; `<py-all-tests:DIR>` for a whole-project unit, e.g. `<py-all-tests:.>` |
 | Runners | pytest (`python -m pytest`); Django's runner (`tests/runtests.py`, `runtests.py`, `manage.py test`) |
 | Manifests/configs read | `pyproject.toml`, `setup.cfg`, `setup.py` (text only), `pytest.ini`, `.pytest.ini`, `pytest.toml`, `.pytest.toml`, `tox.ini`, `Pipfile`, requirements files, `conftest.py` |
-| Lockfiles (and level) | `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files: **L0** only. See [lockfiles](../lockfiles.md) |
+| Lockfiles (and level) | `uv.lock` (version 1) and `poetry.lock` (lock-version 1.x, 2.x): **L1**; `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files: **L0**. See [lockfiles](../lockfiles.md) |
 | Dynamic layer | Yes, record-based narrowing per test file: see [dynamic layer](../dynamic-layer.md) (Python collector and environment fingerprint sections) |
 
 ## Supported layouts
@@ -91,10 +91,31 @@ Widenings below, except the global `.python-version` row, are `module` tier and 
 | `Pipfile` | `manifest_changed`, scope = its directory |
 | `pytest.ini`, `.pytest.ini`, `pytest.toml`, `.pytest.toml` | `test_config_changed`, scope = its directory |
 | `tox.ini`, `noxfile.py` | `test_config_changed`, scope = its directory |
-| `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock.toml`, `pylock.*.toml`; requirements files: a `.txt` or `.in` whose name starts with `requirements`, `constraints` or `requirement-`, or ends with `-requirements`/`_requirements` (case-insensitive), or any `.txt`/`.in` in a directory named `requirements`, `reqs` or `requirement` | `lock_changed` at L0, scope = the deepest enclosing Python project (the repository root when none) |
+| `uv.lock`, `poetry.lock` | `lock_changed` at [level L1](../lockfiles.md#level-l1): the projects whose resolved dependency closure changed, plus the rules for the shared environment below; L0 (as the next row) when the lockfile cannot be compared |
+| `pdm.lock`, `Pipfile.lock`, `pylock.toml`, `pylock.*.toml`; requirements files: a `.txt` or `.in` whose name starts with `requirements`, `constraints` or `requirement-`, or ends with `-requirements`/`_requirements` (case-insensitive), or any `.txt`/`.in` in a directory named `requirements`, `reqs` or `requirement` | `lock_changed` at L0, scope = the deepest enclosing Python project (the repository root when none) |
 | `.flake8`, `.pylintrc`, `.isort.cfg`, `mypy.ini`, `ruff.toml`, `.coveragerc`, `.pre-commit-config.yaml`, `.editorconfig`, `MANIFEST.in`, `codecov.yml`, `.readthedocs.yaml`, `pyrightconfig.json`… and `docs/conf.py` (in `docs/`, `doc/`, `source/`) | Nothing |
 | Native sources (`.pyx`, `.pxd`, `.pxi`, `.c`, `.h`, `.cpp`, `.f90`, `.rs`, `.cu`…, `meson.build`, `CMakeLists.txt`) in a project that builds extensions | `unknown_file`, scope = the project |
 | `.python-version` | `full`, `global_input` (global table, see [architecture](../architecture.md)) |
+
+### Lockfiles at level L1
+
+A `uv.lock` or `poetry.lock` is compared closure by closure (see [lockfiles](../lockfiles.md#level-l1)). The lockfile
+projects are the uv workspace members and path dependencies in the repository, plus the lockfile's own directory (the
+root package, or for a virtual workspace root the root's dependency groups); a `poetry.lock` has one project, its
+directory, whose closure is every locked package. A Python project that is not itself in the lockfile belongs to the
+nearest lockfile project containing it.
+
+- A lockfile project whose closure changed: its tests are selected, and its files count as changed so that importers in
+  other projects follow. When it is the lockfile's root, every project under the lockfile's directory is selected: uv
+  installs the root's dependency groups with every member.
+- One environment serves every project of the lockfile, so two more rules apply when a package changed:
+  - pytest loads every installed plugin whether a test imports it or not: a changed package that may be a plugin (its
+    name contains `pytest`, or a known plugin distribution such as `hypothesis`, `anyio`, `faker`, `pluggy`,
+    `syrupy`...), or that such a package depends on, selects every project under the lockfile's directory;
+  - an import that no package of the project's closure (nor of the root's) provides by name may resolve to any
+    installed package: such a project is selected too. A name provides a module when it is the module's name
+    normalized (PEP 503), a known distribution for it (`yaml` → `pyyaml`, `PIL` → `pillow`...), or a namespace
+    distribution under it (`google-*` for `google`).
 
 A Python file that nothing imports (a script a test may run) widens its project (`unreferenced_file`); a data or native file nobody references widens its project (`unknown_file`). See [architecture](../architecture.md).
 
@@ -156,7 +177,7 @@ See [CLI](../cli.md) for `--json` and `--list-dir`.
 - **`pytest11` entry points** declared anywhere in the repo are inputs of every test of the repo.
 - **One declared-dependency set for the repository**: a distribution declared by one project counts as declared for imports in every project.
 - **Manifest changes** (`version` included) widen to the whole project, since installed metadata is visible at run time.
-- **Lockfiles and requirements files** stay at L0: any change selects every Python test of the project.
+- **Lockfiles.** `pdm.lock`, `Pipfile.lock`, `pylock.toml` and requirements files stay at L0: any change selects every Python test of the project. For `uv.lock` and `poetry.lock` (L1), markers are not evaluated (an edge counts for every platform and Python version), every extra and group is part of the closure, and a pytest plugin is recognized by name: a plugin whose distribution name neither mentions pytest nor is listed, declared only by another member of a uv workspace, is not seen as a plugin. A `poetry.lock` has a single project, so any package change selects every test of it.
 - **Not seen by the scanner:** files read with `open()` at run time, subprocesses, and plugins enabled outside the repository configuration (environment variables, command-line `-p`). Unreferenced files widen their project instead of being missed.
 - Only `tox.ini`'s `[pytest]` section is read as configuration; tox environments themselves are not modeled (a `tox.ini` change widens the project).
 

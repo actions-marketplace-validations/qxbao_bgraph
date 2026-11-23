@@ -39,7 +39,7 @@ there). Review narrowing entries like code, and re-check them when what they des
 | [`[[config]]`](#config) | narrowing | Node | runner-config keys computed in code |
 | [`[[dynamic]]`](#dynamic) | narrowing | Python | what dynamic imports of a file can load |
 | [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM | enable the record-based dynamic layer |
-| [`[lockfile]`](#lockfile) | narrowing at `L2` | Node, Rust | lockfile comparison level |
+| [`[lockfile]`](#lockfile) | narrowing at `L2` | Node, Rust, Python | lockfile comparison level |
 | [`[options]`](#options) | – | selector | thresholds |
 
 ## `[[rule]]`

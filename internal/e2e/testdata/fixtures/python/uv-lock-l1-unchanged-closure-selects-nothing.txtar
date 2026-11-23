@@ -1,0 +1,185 @@
+uv.lock rewritten without any resolution change (artifact upload-time added) -> nothing is selected.
+-- base/pyproject.toml --
+[project]
+name = "root"
+version = "0.1.0"
+
+[dependency-groups]
+dev = ["pytest"]
+
+[tool.uv.workspace]
+members = ["packages/*"]
+-- base/tests/test_root.py --
+import os
+
+
+def test_root():
+    assert os.sep
+-- base/packages/a/pyproject.toml --
+[project]
+name = "a"
+version = "0.1.0"
+dependencies = ["requests"]
+-- base/packages/a/a/__init__.py --
+import requests
+
+X = requests
+-- base/packages/a/tests/test_a.py --
+import pytest
+from a import X
+
+
+def test_a():
+    assert X
+-- base/packages/b/pyproject.toml --
+[project]
+name = "b"
+version = "0.1.0"
+dependencies = ["click"]
+-- base/packages/b/b/__init__.py --
+import click
+
+Y = click
+-- base/packages/b/tests/test_b.py --
+import pytest
+from b import Y
+
+
+def test_b():
+    assert Y
+-- base/uv.lock --
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[manifest]
+members = ["a", "b", "root"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+dependencies = [
+    { name = "requests" },
+]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [
+    { name = "click" },
+]
+
+[[package]]
+name = "click"
+version = "8.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://example.invalid/click-8.1.0.tar.gz", hash = "sha256:c8.1.0" }
+
+[[package]]
+name = "pluggy"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pluggy" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "urllib3" },
+]
+
+[[package]]
+name = "root"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[[package]]
+name = "urllib3"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+-- head/uv.lock --
+version = 1
+revision = 3
+requires-python = ">=3.10"
+
+[manifest]
+members = ["a", "b", "root"]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = { editable = "packages/a" }
+dependencies = [
+    { name = "requests" },
+]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = { editable = "packages/b" }
+dependencies = [
+    { name = "click" },
+]
+
+[[package]]
+name = "click"
+version = "8.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://example.invalid/click-8.1.0.tar.gz", hash = "sha256:c8.1.0", upload-time = "2026-01-01T00:00:00Z" }
+
+[[package]]
+name = "pluggy"
+version = "1.5.0"
+source = { registry = "https://pypi.org/simple" }
+
+[[package]]
+name = "pytest"
+version = "8.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pluggy" },
+]
+
+[[package]]
+name = "requests"
+version = "2.31.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "urllib3" },
+]
+
+[[package]]
+name = "root"
+version = "0.1.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[[package]]
+name = "urllib3"
+version = "2.0.0"
+source = { registry = "https://pypi.org/simple" }
+-- want --
+notfull
+nowiden lock_changed
+noselect tests/test_root.py
+noselect packages/a/tests/test_a.py
+noselect packages/b/tests/test_b.py

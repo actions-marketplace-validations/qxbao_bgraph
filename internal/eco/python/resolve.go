@@ -154,6 +154,12 @@ func (b *builder) isExternal(top string) bool {
 // moduleNode is the virtual graph node of an unresolved absolute module.
 func moduleNode(spec string) string { return "<pymod:" + spec + ">" }
 
+// extNode is the virtual graph node of an external (installed) top-level module: the target of every import no root
+// resolves, read by the lockfile comparison (lock.go).
+func extNode(top string) string { return extPrefix + top + ">" }
+
+const extPrefix = "<pyext:"
+
 // patterns of a module that may live under a root we do not know about: **/a/b/c.py, **/a/b/c/__init__.py and the __init__.py of
 // every ancestor package.
 func modulePatterns(comps []string) []string {

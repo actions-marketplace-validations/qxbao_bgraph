@@ -173,6 +173,13 @@ These checks are not a release gate: the dynamic layer stays off by default.
 | pnpm 6.0 | 3 | 60 | 1,294 | 0 | 0 |
 | npm v2/v3 | 12 | 271 | 549 | 0 | 0 |
 | Cargo v3/v4 | 8 | 176 | 5,137 | 0 | 4 (corrupt upstream lockfiles that cargo also rejects) |
+| uv.lock v1 (revisions 0–5) | 8 | 169 | 740 | 0 | 0 |
+| poetry.lock 1.1/2.0/2.1 | 3 | 87 | 87 | 0 | 0 (2 more commits whose `pyproject.toml` poetry itself rejects as out of sync) |
+
+For uv the reference is `uv export --frozen --all-extras --all-groups` per workspace member (split per extra where
+declared conflicts forbid exporting them together), and for poetry `poetry export --all-groups --all-extras`. Besides
+the superset check, every pair of consecutive commits is checked the other way: a project whose exported package set
+changed must be among the projects bgraph reports as changed (uv 674 project checks, poetry 76: no miss).
 
 pnpm 5.4 and npm lockfile v1 are unsupported and stay at L0. The check found and fixed two parser bugs before L1 was
 enabled (a two-document `pnpm-lock.yaml` whose closures were read as empty, and a Cargo path crate shadowing a registry

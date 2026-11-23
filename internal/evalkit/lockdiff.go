@@ -2,7 +2,7 @@ package evalkit
 
 // Lockfile differential check (gate of level L1, docs/lockfiles.md): for every sampled lockfile commit, the dependency closure
 // that internal/lockfile computes for each project must be a superset of the package set the package manager itself
-// reports for that project (pnpm list, npm ls, cargo metadata).
+// reports for that project (pnpm list, npm ls, cargo metadata, uv export, poetry export).
 
 import (
 	"bufio"
@@ -26,11 +26,13 @@ import (
 
 	"github.com/qxbao/bgraph/internal/lockfile"
 	"gopkg.in/yaml.v3"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 // LockdiffOpts configures one format's run.
 type LockdiffOpts struct {
-	Format  string // pnpm | npm | cargo
+	Format  string // pnpm | npm | cargo | uv | poetry
 	Work    string // work dir holding repos/<owner__name>
 	Tmp     string // scratch dir for materialized trees and worktrees (removed after use)
 	Commits int    // lockfile-changing commits per repo
@@ -39,6 +41,7 @@ type LockdiffOpts struct {
 	// PnpmConvert: a pnpm 9 command that rewrites a 6.x lockfile as 9.0 (install --lockfile-only --frozen-lockfile)
 	// before Pnpm lists it: pnpm list --lockfile-only exists only in pnpm 10, which cannot read 6.x.
 	PnpmConvert []string
+	Uv, Poetry  string   // uv and poetry commands (poetry with poetry-plugin-export)
 	Env         []string // extra environment for the tool
 	Log         func(string, ...any)
 }
@@ -107,6 +110,10 @@ func lockBase(format string) []string {
 		return []string{"package-lock.json"}
 	case lockfile.FormatCargo:
 		return []string{"Cargo.lock"}
+	case lockfile.FormatUv:
+		return []string{"uv.lock"}
+	case lockfile.FormatPoetry:
+		return []string{"poetry.lock"}
 	}
 	return nil
 }
@@ -259,6 +266,8 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 			tool, unreadable, terr = lockdiffJS(ctx, o, repo, repoDir, c, lockPath, projects)
 		case lockfile.FormatCargo:
 			tool, unreadable, terr = lockdiffCargo(ctx, o, repoDir, wt, c, lockDir)
+		case lockfile.FormatUv, lockfile.FormatPoetry:
+			tool, unreadable, terr = lockdiffPy(ctx, o, repo, repoDir, c, lockPath, g)
 		}
 		if terr != nil {
 			cr.Status, cr.Err = "tool-error", terr.Error()
@@ -274,13 +283,13 @@ func LockdiffRun(ctx context.Context, o LockdiffOpts, spec string) LockdiffRepo 
 			prevTool = nil
 			continue
 		}
-		curTool := lockdiffCheck(o.Format, g, tool, &cr)
+		curTool := lockdiffCheck(o.Format, g, tool, &cr, lockDir)
 		cr.Status = "ok"
 		cr.Seconds = time.Since(start).Seconds()
 		res.Commits = append(res.Commits, cr)
 		if pr != nil {
 			if pd != nil && prevTool != nil {
-				lockdiffPairCheck(prevG, g, pd, prevTool, curTool, pr)
+				lockdiffPairCheck(prevG, g, pd, prevTool, curTool, pr, lockDir)
 			}
 			res.Pairs = append(res.Pairs, *pr)
 			if len(pr.Missed) > 0 {
@@ -311,6 +320,8 @@ var (
 	rePnpmVer  = regexp.MustCompile(`(?m)^lockfileVersion:\s*'?"?([0-9.]+)`)
 	reNpmVer   = regexp.MustCompile(`"lockfileVersion"\s*:\s*([0-9]+)`)
 	reCargoVer = regexp.MustCompile(`(?m)^version\s*=\s*([0-9]+)`)
+	reUvRev    = regexp.MustCompile(`(?m)^revision\s*=\s*([0-9]+)`)
+	rePoetry   = regexp.MustCompile(`(?m)^lock-version\s*=\s*"([^"]*)"`)
 )
 
 func sniffLockVersion(format, data string) string {
@@ -328,6 +339,17 @@ func sniffLockVersion(format, data string) string {
 		if m == nil {
 			return "1-2"
 		}
+	case lockfile.FormatUv:
+		m = reCargoVer.FindStringSubmatch(data)
+		if m != nil {
+			r := "0"
+			if rm := reUvRev.FindStringSubmatch(data); rm != nil {
+				r = rm[1]
+			}
+			return m[1] + "." + r
+		}
+	case lockfile.FormatPoetry:
+		m = rePoetry.FindStringSubmatch(data)
 	}
 	if m == nil {
 		return "?"
@@ -338,6 +360,21 @@ func sniffLockVersion(format, data string) string {
 // formerL0 adds to the L0 reasons of a pnpm pair the top-level keys that used to force level L0 and no longer do.
 func formerL0(format string, l0 []string, base, head string) []string {
 	out := append([]string(nil), l0...)
+	switch format {
+	case lockfile.FormatUv, lockfile.FormatPoetry:
+		// Keys compared through the resolved graph rather than as settings (uv [options], [manifest], requires-python
+		// and markers; poetry content-hash): a pair where they differ would be at L0 if they were settings.
+		keys := map[string][]string{lockfile.FormatUv: {"options", "manifest", "requires-python", "resolution-markers", "supported-markers", "required-markers"},
+			lockfile.FormatPoetry: {"metadata.content-hash", "metadata.python-versions"}}[format]
+		b, h := tomlKeys(base), tomlKeys(head)
+		for _, k := range keys {
+			if b != nil && h != nil && !reflect.DeepEqual(b[k], h[k]) && !slices.Contains(out, k) {
+				out = append(out, k)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
 	if format != lockfile.FormatPnpm {
 		return out
 	}
@@ -383,7 +420,11 @@ func changedPatches(base, head *lockfile.Graph) []string {
 
 // lockdiffPairCheck checks Compare's verdict on a pair against the tool: a project present on both sides whose tool
 // package set changed must be in d.Changed.
-func lockdiffPairCheck(base, head *lockfile.Graph, d *lockfile.Diff, bt, ht map[string]map[string]bool, pr *LockdiffPair) {
+//
+// uv: a member's tool set includes the workspace root's dependency groups, and a change of the root's closure widens
+// every project (docs/lockfiles.md): the member counts as changed when the root does, and its closure is taken
+// together with the root's.
+func lockdiffPairCheck(base, head *lockfile.Graph, d *lockfile.Diff, bt, ht map[string]map[string]bool, pr *LockdiffPair, lockDir string) {
 	for p := range head.Projects {
 		if _, ok := base.Projects[p]; !ok {
 			continue
@@ -394,13 +435,13 @@ func lockdiffPairCheck(base, head *lockfile.Graph, d *lockfile.Diff, bt, ht map[
 			continue
 		}
 		pr.ToolChecked++
-		if maps.Equal(bs, hs) || d.Changed[p] {
+		if maps.Equal(bs, hs) || d.Changed[p] || (base.Format == lockfile.FormatUv && d.Changed[lockDir]) {
 			continue
 		}
 		// A package the tool adds or drops while our closure holds it on both sides changed only its dependency kind
 		// (e.g. a workspace package's dependency moved to devDependencies, which the tool does not follow through the
 		// link, while the closure includes every kind): nothing installed changed.
-		bo, ho := lockdiffOurs(base, base.Projects[p]), lockdiffOurs(head, head.Projects[p])
+		bo, ho := lockdiffEffective(base, p, lockDir), lockdiffEffective(head, p, lockDir)
 		kindOnly := true
 		for _, m := range []struct{ a, b map[string]bool }{{bs, hs}, {hs, bs}} {
 			for pkg := range m.a {
@@ -417,6 +458,18 @@ func lockdiffPairCheck(base, head *lockfile.Graph, d *lockfile.Diff, bt, ht map[
 	}
 	sort.Strings(pr.Missed)
 	sort.Strings(pr.KindOnly)
+}
+
+// lockdiffEffective returns lockdiffOurs of project p, with the closure of the lockfile's root project added for uv
+// (the root's dependency groups are installed with every member; a change there widens every project).
+func lockdiffEffective(g *lockfile.Graph, p, lockDir string) map[string]bool {
+	ours := lockdiffOurs(g, g.Projects[p])
+	if g.Format == lockfile.FormatUv {
+		if r, ok := g.Projects[lockDir]; ok {
+			maps.Copy(ours, lockdiffOurs(g, r))
+		}
+	}
+	return ours
 }
 
 // lockdiffOurs returns the name@version set of the closure of node id (with name@* for every name).
@@ -437,7 +490,7 @@ func lockdiffOurs(g *lockfile.Graph, id string) map[string]bool {
 
 // lockdiffCheck fills the superset comparison of one commit. tool maps a project key to its package set (name@version).
 // It returns the tool's package set by our project key.
-func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]bool, cr *LockdiffCommit) map[string]map[string]bool {
+func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]bool, cr *LockdiffCommit, lockDir string) map[string]map[string]bool {
 	cr.OurProjects, cr.ToolProjects = len(g.Projects), len(tool)
 	byOurs := map[string]map[string]bool{}
 	matched := map[string]bool{}
@@ -456,15 +509,14 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 			}
 			ourKey = k
 		}
-		id, ok := g.Projects[ourKey]
-		if !ok {
+		if _, ok := g.Projects[ourKey]; !ok {
 			cr.ToolOnly = append(cr.ToolOnly, p)
 			continue
 		}
 		matched[ourKey] = true
 		byOurs[ourKey] = tool[p]
 		cr.Checked++
-		ours := lockdiffOurs(g, id)
+		ours := lockdiffEffective(g, ourKey, lockDir)
 		var miss []string
 		for pkg := range tool[p] {
 			if !ours[pkg] {
@@ -495,6 +547,18 @@ func lockdiffCheck(format string, g *lockfile.Graph, tool map[string]map[string]
 // lockdiffMaterialize writes the files of commit c the JS package manager reads (lockfile, manifests, workspace and
 // npm settings, patches) under dst.
 func lockdiffMaterialize(ctx context.Context, repoDir, c, lockPath, dst string) error {
+	return lockdiffMaterializeKeep(ctx, repoDir, c, lockPath, dst, func(rel string) bool {
+		if strings.Contains("/"+rel, "/node_modules/") {
+			return false
+		}
+		return path.Base(rel) == "package.json" || rel == path.Base(lockPath) || rel == "pnpm-workspace.yaml" || rel == ".npmrc" ||
+			(strings.HasPrefix(rel, "patches/") || strings.Contains(rel, "/patches/")) && strings.HasSuffix(rel, ".patch")
+	})
+}
+
+// lockdiffMaterializeKeep writes the files of commit c under the lockfile's directory that keep accepts (by path
+// relative to that directory) under dst.
+func lockdiffMaterializeKeep(ctx context.Context, repoDir, c, lockPath, dst string, keep func(rel string) bool) error {
 	lockDir := path.Dir(lockPath)
 	args := []string{"ls-tree", "-r", c}
 	if lockDir != "." {
@@ -519,13 +583,7 @@ func lockdiffMaterialize(ctx context.Context, repoDir, c, lockPath, dst string) 
 		if lockDir != "." {
 			rel = strings.TrimPrefix(p, lockDir+"/")
 		}
-		if strings.Contains("/"+rel, "/node_modules/") {
-			continue
-		}
-		b := path.Base(rel)
-		keep := b == "package.json" || rel == path.Base(lockPath) || rel == "pnpm-workspace.yaml" || rel == ".npmrc" ||
-			(strings.HasPrefix(rel, "patches/") || strings.Contains(rel, "/patches/")) && strings.HasSuffix(rel, ".patch")
-		if keep {
+		if keep(rel) {
 			ents = append(ents, ent{f[2], rel})
 		}
 	}
@@ -865,6 +923,150 @@ func walkNpm(name string, d *npmDep, set map[string]bool, full map[string][]map[
 	}
 }
 
+// tomlKeys decodes a TOML lockfile into its top-level keys, with [metadata] keys flattened as "metadata.<key>"; nil
+// when it does not decode.
+func tomlKeys(data string) map[string]any {
+	var m map[string]any
+	if toml.Unmarshal([]byte(data), &m) != nil {
+		return nil
+	}
+	if md, ok := m["metadata"].(map[string]any); ok {
+		for k, v := range md {
+			m["metadata."+k] = v
+		}
+	}
+	return m
+}
+
+// lockdiffPy runs the Python package manager on the materialized tree of commit c (every pyproject.toml under the
+// lockfile's directory and the lockfile) and returns each project's package set (normalized name@version), keyed by
+// repo-relative project directory.
+//
+// uv: uv export --frozen --all-extras --all-groups for every workspace member (our graph's local packages; one that
+// uv does not know as a member is left out). poetry: poetry export --all-groups --all-extras for the lockfile's project.
+// Both read the lockfile only (no resolution, no install) and keep every marker (universal lockfiles).
+func lockdiffPy(ctx context.Context, o LockdiffOpts, repo, repoDir, c, lockPath string, g *lockfile.Graph) (map[string]map[string]bool, bool, error) {
+	dst := filepath.Join(o.Tmp, o.Format+"-"+repo+"-"+c[:10])
+	os.RemoveAll(dst)
+	defer os.RemoveAll(dst)
+	base := path.Base(lockPath)
+	err := lockdiffMaterializeKeep(ctx, repoDir, c, lockPath, dst, func(rel string) bool {
+		return rel == base || path.Base(rel) == "pyproject.toml" || rel == "poetry.toml" || rel == "uv.toml"
+	})
+	if err != nil {
+		return nil, false, err
+	}
+	lockDir := path.Dir(lockPath)
+	res := map[string]map[string]bool{}
+	if o.Format == lockfile.FormatPoetry {
+		out, errb, err := runTool(ctx, dst, o.Env, o.Poetry, "export", "--all-groups", "--all-extras", "--without-hashes", "-f", "requirements.txt",
+			"--no-interaction", "--no-ansi")
+		if err != nil {
+			msg := firstLine(strings.Join(strings.Fields(string(out)+" "+string(errb)), " "))
+			return nil, strings.Contains(msg, "poetry.lock"), fmt.Errorf("poetry export: %v: %s", err, msg)
+		}
+		res[lockDir] = parseRequirements(string(out))
+		return res, false, nil
+	}
+	dirs := make([]string, 0, len(g.Projects))
+	for d := range g.Projects {
+		dirs = append(dirs, d)
+	}
+	sort.Strings(dirs)
+	for _, d := range dirs {
+		n := g.Nodes[g.Projects[d]]
+		if n == nil || n.Package == "" { // a synthetic virtual workspace root
+			continue
+		}
+		export := func(sel ...string) ([]byte, []byte, error) {
+			args := append([]string{"export", "--frozen", "--no-hashes", "--no-header", "--no-annotate", "--package", n.Package}, sel...)
+			return runTool(ctx, dst, o.Env, o.Uv, args...)
+		}
+		out, errb, err := export("--all-extras", "--all-groups")
+		if err != nil && strings.Contains(string(errb), "declared conflicts") {
+			// Declared conflicts forbid exporting every extra with every group at once: the union of every group without
+			// extras and of sets of extras without groups, split at each conflict uv names until every set exports.
+			o1, e1, err1 := export("--all-groups")
+			out, errb, err = o1, e1, err1
+			var extras []string
+			for k := range n.Deps {
+				if e, ok := strings.CutPrefix(k, "optional-dependencies:"); ok {
+					e, _, _ = strings.Cut(e, " ")
+					if !slices.Contains(extras, e) {
+						extras = append(extras, e)
+					}
+				}
+			}
+			sort.Strings(extras)
+			queue, seen := [][]string{extras}, map[string]bool{}
+			for len(queue) > 0 && err == nil {
+				set := queue[0]
+				queue = queue[1:]
+				key := strings.Join(set, ",")
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				args := []string{"--no-default-groups"}
+				for _, e := range set {
+					args = append(args, "--extra", e)
+				}
+				o2, e2, err2 := export(args...)
+				if m := reConflictExtras.FindStringSubmatch(string(e2)); err2 != nil && m != nil && (slices.Contains(set, m[1]) || slices.Contains(set, m[2])) {
+					queue = append(queue, without(set, m[2]), without(set, m[1]))
+					continue
+				}
+				out, errb, err = append(out, o2...), append(errb, e2...), err2
+			}
+		}
+		if err != nil {
+			msg := firstLine(strings.Join(strings.Fields(string(out)+" "+string(errb)), " "))
+			if strings.Contains(msg, "not found in workspace") || strings.Contains(msg, "is not a workspace member") {
+				continue // a path dependency, not a member
+			}
+			return nil, strings.Contains(msg, "uv.lock") || strings.Contains(msg, "lockfile"), fmt.Errorf("uv export --package %s: %v: %s", n.Package, err, msg)
+		}
+		res[d] = parseRequirements(string(out))
+	}
+	return res, false, nil
+}
+
+// reConflictExtras matches uv's refusal to export two extras declared as conflicting.
+var reConflictExtras = regexp.MustCompile("Extras `([^`]+)` and `([^`]+)` are incompatible")
+
+// without returns s without x.
+func without(s []string, x string) []string {
+	return slices.DeleteFunc(slices.Clone(s), func(e string) bool { return e == x })
+}
+
+// parseRequirements reads an exported requirements file: "name==version ; marker" gives name@version, "name @ url"
+// gives name@* (normalized names); editable and local path lines (projects) and comments are skipped.
+func parseRequirements(s string) map[string]bool {
+	set := map[string]bool{}
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") || strings.HasPrefix(line, ".") || strings.HasPrefix(line, "/") {
+			continue
+		}
+		req, _, _ := strings.Cut(line, ";")
+		req = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(req), `\`))
+		if name, ver, ok := strings.Cut(req, "=="); ok {
+			if i := strings.IndexByte(name, '['); i >= 0 {
+				name = name[:i]
+			}
+			set[lockfile.NormalizeName(strings.TrimSpace(name))+"@"+strings.TrimSpace(ver)] = true
+			continue
+		}
+		if name, _, ok := strings.Cut(req, " @ "); ok {
+			if i := strings.IndexByte(name, '['); i >= 0 {
+				name = name[:i]
+			}
+			set[lockfile.NormalizeName(strings.TrimSpace(name))+"@*"] = true
+		}
+	}
+	return set
+}
+
 type cargoMetaOut struct {
 	Packages []struct {
 		ID      string `json:"id"`
@@ -1067,7 +1269,7 @@ func LockdiffSummary(format string, all []LockdiffRepo) string {
 	}
 	fmt.Fprintf(&b, "Project checks: %d; missed: %d; dependency-kind-only changes (not misses): %d. Pairs with a changed patch (compared, patched packages marked): %d.\n", checked, missed, kindOnly, patchPairs)
 	b.WriteString("\n## Pairs at level L0 by reason\n\n")
-	fmt.Fprintf(&b, "Pairs at L0: %d (before overrides and patches were compared: %d). A pair counts under every reason it has.\n\n", l0Pairs, formerPairs)
+	fmt.Fprintf(&b, "Pairs at L0: %d (if the keys compared through the graph were settings — pnpm overrides and patches, uv options, manifest, requires-python and markers, poetry content-hash: %d). A pair counts under every reason it has.\n\n", l0Pairs, formerPairs)
 	b.WriteString("| reason | pairs at L0 | before |\n|---|---|---|\n")
 	keys := map[string]int{}
 	for k := range formerReasons {

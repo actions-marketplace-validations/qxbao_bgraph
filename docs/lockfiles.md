@@ -21,8 +21,10 @@ ecosystem's tests.
 | `pnpm-lock.yaml`, lockfile 6.x and 9.0 | Node | L2 (6.x) / L1 (9.0) | 9.0 does not record install scripts, so L2 always falls back to L1 |
 | `package-lock.json`, `lockfileVersion` 2 and 3 | Node | L2 | the `packages` section is read; version 1 stays at L0 |
 | `Cargo.lock`, version 3 and 4 | Rust | L1 | no L2: units are whole Cargo targets |
+| `uv.lock`, version 1 (revisions up to 5) | Python | L1 | no L2 |
+| `poetry.lock`, lock-version 1.0, 1.1, 2.0, 2.1 | Python | L1 | no L2; one project per lockfile |
 | `npm-shrinkwrap.json`, `yarn.lock`, `bun.lock`, `bun.lockb` | Node | L0 | |
-| `poetry.lock`, `uv.lock`, `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files (`requirements*.txt` / `.in`, `constraints*.txt` / `.in`, `*-requirements.txt`, `*_requirements.txt`, any `.txt` / `.in` in a `requirements/` or `reqs/` directory) | Python | L0 | scope: the file's Python project |
+| `pdm.lock`, `Pipfile.lock`, `pylock.toml` / `pylock.*.toml`, requirements and constraints files (`requirements*.txt` / `.in`, `constraints*.txt` / `.in`, `*-requirements.txt`, `*_requirements.txt`, any `.txt` / `.in` in a `requirements/` or `reqs/` directory) | Python | L0 | scope: the file's Python project |
 | `go.sum` | Go | L1 (lines only added) / L0 | lines only added change no build: nothing widens; a removed or changed line widens the module (and the other members of its `go.work`); `vendor/` changes widen their module too |
 | `packages.lock.json` | .NET | L0 | scope: the lockfile's directory |
 
@@ -35,8 +37,9 @@ them (see [JVM](ecosystems/jvm.md)).
 Both sides of the lockfile are parsed into a dependency graph with one node per installed package and one node per
 project (workspace member). The **closure** of a project is everything reachable from its node: direct and transitive
 dependencies, through workspace links and path dependencies, including dev, build, optional and target-specific ones
-(Cargo records the union of every kind, target and feature). Two closures are equal when the same packages, compared by
-their full lockfile entry (version, integrity, source, resolution...), are reached through the same edges.
+(Cargo records the union of every kind, target and feature; for uv and poetry every extra and dependency group is
+included and markers are not evaluated). Two closures are equal when the same packages, compared by their full lockfile
+entry (version, integrity, source, resolution...), are reached through the same edges.
 
 Effect of a changed closure:
 
@@ -52,6 +55,21 @@ Effect of a changed closure:
   selects the members that depend on it. Build dependencies and proc-macros need no special rule: they are in the
   closure of every member that uses them. A package at the repository root is scoped to the root, which selects every
   Rust unit.
+- **Python, uv.** The projects are the workspace members and path dependencies inside the repository, keyed by
+  directory, and the lockfile's directory: the root package, or for a virtual workspace root (no `[project]`) the
+  root's dependency groups and requirements recorded in `[manifest]`. An edge keeps its kind (dependency, extra, group)
+  and its marker, so moving a dependency between groups or changing its marker is a closure change. A reference that
+  matches several packages of the same name is ambiguous (L0). Package content excludes the artifacts' `upload-time`
+  and `size` (the hash identifies the artifact) and a local package's `metadata` (specifiers, whose effect is in the
+  edges).
+- **Python, poetry.** The lockfile resolves one project, its directory, and every locked package is in its closure.
+  Dependencies are recorded by name: a name shared by several entries (one per marker range) has an edge to each.
+- **Python, effect.** A changed project selects its tests and seeds its files, as for Node; the lockfile's root project
+  carries dependency groups uv installs with every member, so its change selects every project under the lockfile's
+  directory. The environment is shared by every project of the lockfile, so when packages changed, a changed package
+  that may be a pytest plugin (or that such a package depends on) selects every project, and a project with an import
+  that no package of its closure (or of the root's) provides by name is selected. See
+  [Python](ecosystems/python.md#lockfiles-at-level-l1).
 
 An unchanged closure selects nothing: a lockfile edit that only touches other projects costs nothing.
 
@@ -61,9 +79,10 @@ An unchanged closure selects nothing: a lockfile edit that only touches other pr
 |---|---|
 | one side is absent, unreadable or does not parse | nothing to compare |
 | the format or the format version changed | closures are not comparable |
-| a top-level key outside the package graph changed: pnpm `settings` (`autoInstallPeers`, `excludeLinksFromLockfile`, `injectWorkspacePackages`...), `packageExtensionsChecksum`, `pnpmfileChecksum`, `ignoredOptionalDependencies`, build allow/deny lists, the env lockfile document (the package manager's pinned version); npm keys other than `packages`; Cargo keys other than `package` | it can change resolution or installation in ways the graph does not show |
+| a top-level key outside the package graph changed: pnpm `settings` (`autoInstallPeers`, `excludeLinksFromLockfile`, `injectWorkspacePackages`...), `packageExtensionsChecksum`, `pnpmfileChecksum`, `ignoredOptionalDependencies`, build allow/deny lists, the env lockfile document (the package manager's pinned version); npm keys other than `packages`; Cargo keys other than `package`; uv `conflicts` and unknown keys; poetry top-level `[extras]` and unknown keys | it can change resolution or installation in ways the graph does not show |
 | a changed pnpm patch whose selector is a version range, or that selects no package of either side | the patched packages cannot be identified |
-| a Cargo package matches several lockfile entries | ambiguous |
+| a Cargo package matches several lockfile entries; a uv dependency reference matches several packages | ambiguous |
+| uv `revision` or poetry `lock-version` changed, or is newer than bgraph knows | the format version changed |
 | `[lockfile] level = "L0"` | configured |
 
 The detail of the widening says `lockfile at level L0 (<why>)`; for a changed top-level key it names the keys.
@@ -75,6 +94,15 @@ pnpm keys outside the importers and packages that do **not** force L0:
 | `catalogs` | a catalog version is the version every importer that uses it references: compared through the closures |
 | `overrides` | an override only steers resolution: an overridden version is the version an importer or a package entry references, so the closures show every effect; an override that matches nothing installed changes nothing |
 | `patchedDependencies` | a patch whose entry (hash or path) changed, or that was added or removed, marks the packages it selects as changed (`name@version`: that version; `name`: every version), so every project whose closure contains one of them is selected |
+
+uv and poetry keys outside the packages that do **not** force L0:
+
+| Key | Handling |
+|---|---|
+| uv `[options]` (`exclude-newer`, resolution and prerelease modes), `[manifest]` (members, constraints, overrides) | they only steer resolution or list the members: the resolved graph shows every effect |
+| uv `requires-python`, `resolution-markers`, `supported-markers`, `required-markers` | they bound the environments: their effect is in the package versions, per-package resolution markers and edge markers |
+| poetry `[metadata]` `content-hash` | a hash of the `pyproject.toml` dependency sections: with the same packages, nothing installed changes |
+| poetry `[metadata]` `python-versions` | the project's Python range: its effect is in the locked packages and their markers |
 
 ## Level L2 (opt-in)
 

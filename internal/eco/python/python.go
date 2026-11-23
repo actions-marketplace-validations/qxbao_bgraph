@@ -53,7 +53,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "python-4"
+const AnalyzerVersion = "python-5"
 
 // Eco is the Python ecosystem.
 type Eco struct {
@@ -773,8 +773,13 @@ func (b *builder) addImport(from, proj string, im model.ImportRef) {
 		}
 		return
 	}
-	// No root has it. A module of that name somewhere in the repo (an unknown root: PYTHONPATH, conftest tricks, a plugin that
-	// edits sys.path) is tracked by glob so that files added later are caught.
+	// No root has it: it may come from an installed distribution. The edge to its virtual node records which files import
+	// which external top-level modules (lockfile level L1, lock.go); nothing seeds it otherwise.
+	if !stdlib[comps[0]] {
+		b.edge(from, extNode(comps[0]), model.EdgeImport, im.Spec, im.Line)
+	}
+	// A module of that name somewhere in the repo (an unknown root: PYTHONPATH, conftest tricks, a plugin that edits sys.path)
+	// is tracked by glob so that files added later are caught.
 	switch {
 	case b.suffixMatches(comps):
 		b.moduleGlobs(from, im, comps, names)

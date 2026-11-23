@@ -144,7 +144,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 | Feature | What it does |
 |---|---|
 | 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
-| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json` and `Cargo.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
+| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
 | ▶️ **Ready-to-run commands** | `bgraph command` prints `vitest run ...`, `pytest ...`, `cargo test -p ...`, `mvn -pl ...`, `dotnet test ...`, `go test ...`, batched for long lists. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
 | ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python, Node and JVM test classes. [Dynamic layer](docs/dynamic-layer.md) |

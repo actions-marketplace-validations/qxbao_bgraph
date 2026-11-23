@@ -165,6 +165,7 @@ Some units are not files. Their unit's file list holds a single virtual node, an
 | `<npm:package>` | an external npm package (lockfile level L2 only) |
 | `<bare:spec>` | an undeclared bare Node specifier (tracked through glob edges) |
 | `<pymod:module>` | a Python absolute import no import root resolves (tracked through glob edges) |
+| `<pyext:module>` | an external top-level Python module no import root resolves (read by the `uv.lock` / `poetry.lock` comparison) |
 
 Selection of such a unit is reachability of its virtual node.
 

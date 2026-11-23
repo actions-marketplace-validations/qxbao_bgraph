@@ -14,11 +14,11 @@ import (
 	"github.com/qxbao/bgraph/internal/evalkit"
 )
 
-// cmdLockdiff: bgraph-eval lockdiff --format pnpm|npm|cargo --work DIR --repos a__b[:path/to/lockfile],... --out DIR
+// cmdLockdiff: bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry --work DIR --repos a__b[:path/to/lockfile],... --out DIR
 // (lockfile closures vs the package manager's own per-project dependency sets; gate L1).
 func cmdLockdiff(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("lockdiff", flag.ExitOnError)
-	format := fs.String("format", "", "pnpm | npm | cargo")
+	format := fs.String("format", "", "pnpm | npm | cargo | uv | poetry")
 	evalDir := evalkit.EvalDir()
 	work := fs.String("work", filepath.Join(evalDir, "work"), "work directory (repos/<owner__name>; default under $BGRAPH_EVAL_DIR)")
 	tmp := fs.String("tmp", filepath.Join(evalDir, "tmp", "lockdiff"), "scratch directory (materialized trees and worktrees, removed after use)")
@@ -31,6 +31,8 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 	pnpm := fs.String("pnpm", "", "pnpm command (space-separated), e.g. \"node /path/to/pnpm/bin/pnpm.cjs\"")
 	pnpmConvert := fs.String("pnpm-convert", "", "pnpm 9 command that rewrites 6.x lockfiles as 9.0 before listing, e.g. \"node /path/to/pnpm9/node_modules/pnpm/bin/pnpm.cjs\"")
 	cargoHome := fs.String("cargo-home", evalkit.ToolPath("cargo-home", os.Getenv("CARGO_HOME")), "CARGO_HOME (default $BGRAPH_EVAL_TOOLS/cargo-home, else $CARGO_HOME; empty: inherited)")
+	uv := fs.String("uv", evalkit.ToolPath("uv-bin/uv", "uv"), "uv command (default $BGRAPH_EVAL_TOOLS/uv-bin/uv, else uv on PATH)")
+	poetry := fs.String("poetry", evalkit.ToolPath("uv-bin/poetry", "poetry"), "poetry command with poetry-plugin-export (default $BGRAPH_EVAL_TOOLS/uv-bin/poetry, else poetry on PATH)")
 	fs.Parse(args)
 	if *format == "" || len(repos) == 0 {
 		return fmt.Errorf("--format and --repos are required")
@@ -65,6 +67,13 @@ func cmdLockdiff(ctx context.Context, args []string) error {
 		o.Env = []string{"RUSTUP_TOOLCHAIN=stable", "CARGO_NET_GIT_FETCH_WITH_CLI=true"}
 		if *cargoHome != "" {
 			o.Env = append(o.Env, "CARGO_HOME="+*cargoHome)
+		}
+	case "uv", "poetry":
+		o.Uv, o.Poetry = *uv, *poetry
+		// Read the lockfile only: never download an interpreter, never resolve, keep caches next to the other tools.
+		o.Env = []string{"UV_PYTHON_DOWNLOADS=never", "UV_NO_PROGRESS=1", "POETRY_VIRTUALENVS_CREATE=false", "POETRY_NO_INTERACTION=1"}
+		if evalkit.ToolsDir() != "" {
+			o.Env = append(o.Env, "UV_CACHE_DIR="+evalkit.ToolPath("uv-cache", ""), "POETRY_CACHE_DIR="+evalkit.ToolPath("poetry-cache", ""))
 		}
 	default:
 		return fmt.Errorf("unknown format %q", *format)
