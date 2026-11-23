@@ -53,7 +53,7 @@ func TestRequireForms(t *testing.T) {
 	expect(t, `require_relative "../x"`, "rb_require ../x [rel]")
 	expect(t, `require_relative("sub/y")`, "rb_require sub/y [rel]")
 	expect(t, `load "tasks/x.rake"`, "rb_load tasks/x.rake")
-	expect(t, `load File.expand_path("x.rb", __dir__)`, "rb_load x.rb [rel]")
+	expect(t, `load File.expand_path("x.rb", __dir__)`, "rb_load x.rb", "rb_load x.rb [rel]")
 	expect(t, `require_dependency "a/b"`, "rb_require a/b")
 	expect(t, `autoload :Foo, "foo/bar"`, "rb_require foo/bar")
 	expect(t, `autoload(:Foo, "foo/bar")`, "rb_require foo/bar")
@@ -85,19 +85,19 @@ func TestNotRequires(t *testing.T) {
 }
 
 func TestPathExpressions(t *testing.T) {
-	expect(t, `require File.expand_path("../lib/x", __FILE__)`, "rb_require lib/x [rel]")
-	expect(t, `require File.expand_path("../../lib/x", __FILE__)`, "rb_require ../lib/x [rel]")
-	expect(t, `require File.expand_path("lib/x", __dir__)`, "rb_require lib/x [rel]")
-	expect(t, `require File.join(__dir__, "a", "b")`, "rb_require a/b [rel]")
-	expect(t, `require File.join(File.dirname(__FILE__), "..", "lib", "x")`, "rb_require ../lib/x [rel]")
-	expect(t, `require File.dirname(__FILE__) + "/x"`, "rb_require x [rel]")
-	expect(t, `require File.dirname(__FILE__) + '/../lib/y'`, "rb_require ../lib/y [rel]")
-	expect(t, `require "#{__dir__}/x"`, "rb_require x [rel]")
-	expect(t, `require "#{File.dirname(__FILE__)}/sub/x"`, "rb_require sub/x [rel]")
-	expect(t, `require Pathname(__dir__).join("x").to_s`, "rb_require x [rel]")
-	expect(t, `require Pathname.new(__FILE__).dirname.join("y")`, "rb_require y [rel]")
-	expect(t, `require Rails.root.join("lib", "x")`, "rb_require lib/x [root]")
-	expect(t, `require ::File.expand_path('../config/environment', __dir__)`, "rb_require ../config/environment [rel]")
+	expect(t, `require File.expand_path("../lib/x", __FILE__)`, "rb_require lib/x", "rb_require lib/x [rel]")
+	expect(t, `require File.expand_path("../../lib/x", __FILE__)`, "rb_require ../lib/x [rel]", "rb_require lib/x")
+	expect(t, `require File.expand_path("lib/x", __dir__)`, "rb_require lib/x", "rb_require lib/x [rel]")
+	expect(t, `require File.join(__dir__, "a", "b")`, "rb_require a/b", "rb_require a/b [rel]")
+	expect(t, `require File.join(File.dirname(__FILE__), "..", "lib", "x")`, "rb_require ../lib/x [rel]", "rb_require lib/x")
+	expect(t, `require File.dirname(__FILE__) + "/x"`, "rb_require x", "rb_require x [rel]")
+	expect(t, `require File.dirname(__FILE__) + '/../lib/y'`, "rb_require ../lib/y [rel]", "rb_require lib/y")
+	expect(t, `require "#{__dir__}/x"`, "rb_require x", "rb_require x [rel]")
+	expect(t, `require "#{File.dirname(__FILE__)}/sub/x"`, "rb_require sub/x", "rb_require sub/x [rel]")
+	expect(t, `require Pathname(__dir__).join("x").to_s`, "rb_require x", "rb_require x [rel]")
+	expect(t, `require Pathname.new(__FILE__).dirname.join("y")`, "rb_require y", "rb_require y [rel]")
+	expect(t, `require Rails.root.join("lib", "x")`, "rb_require lib/x", "rb_require lib/x [root]")
+	expect(t, `require ::File.expand_path('../config/environment', __dir__)`, "rb_require ../config/environment [rel]", "rb_require config/environment")
 	expect(t, `require File.expand_path("x")`, "rb_require x")
 	expect(t, `require "./lib/x"`, "rb_require ./lib/x")
 	expect(t, `require_relative File.join("support", "x")`, "rb_require support/x [rel]")
@@ -113,12 +113,12 @@ func TestDynamicRequires(t *testing.T) {
 	expect(t, `require "a/#{b}/#{"c"}"`, "rb_require a/#{}/c dyn")
 	expect(t, `require "a/" + x + "/b"`, "rb_require a/#{}/b dyn")
 	expect(t, `require "a/" + x + y`, "rb_require a/ dyn")
-	expect(t, `require File.join(__dir__, "cops", name, "x")`, "rb_require cops/#{}/x [rel] dyn")
+	expect(t, `require File.join(__dir__, "cops", name, "x")`, "rb_require cops/#{}/x [rel] dyn", "rb_require x")
 	expect(t, `require File.join(x, "a")`, "rb_require #{}/a dyn")
 	expect(t, `require "foo_" + kind`, "rb_require foo_ dyn")
-	expect(t, `require File.join(__dir__, name)`, "rb_require  [rel] dyn")
-	expect(t, `require File.join(__dir__, "plugins", name)`, "rb_require plugins/ [rel] dyn")
-	expect(t, `require "#{__dir__}/support/#{f}"`, "rb_require support/ [rel] dyn")
+	expect(t, `require File.join(__dir__, name)`, "rb_require  [rel] dyn", "rb_require  dyn")
+	expect(t, `require File.join(__dir__, "plugins", name)`, "rb_require  dyn", "rb_require plugins/ [rel] dyn")
+	expect(t, `require "#{__dir__}/support/#{f}"`, "rb_require  dyn", "rb_require support/ [rel] dyn")
 	expect(t, `load path`, "rb_load  dyn")
 	expect(t, `Kernel.require x`, "rb_require  dyn")
 	expect(t, `send(:require, lib)`, "rb_require  dyn")
@@ -147,8 +147,7 @@ end`, "rb_glob support/**/*.rb [rel]")
 	expect(t, `Dir["x/*.rb"].each { |f| require "y/#{File.basename(f)}" }`, "rb_require y/ dyn", "rb_data_glob x/*.rb")
 	expect(t, `Dir["x/*.rb"].each { |f| require File.basename(f, ".rb") }`, "rb_require  dyn", "rb_data_glob x/*.rb")
 	expect(t, `files = Dir[File.join(__dir__, "fixtures", "*.json")]`, "rb_data_glob fixtures/*.json [rel]")
-	expect(t, `Dir.each_child(File.join(__dir__, "plugins")) { |f| require File.join(__dir__, "plugins", f) }`,
-		"rb_require plugins/ [rel] dyn", "rb_data_glob plugins/* [rel]")
+	expect(t, `Dir.each_child(File.join(__dir__, "plugins")) { |f| require File.join(__dir__, "plugins", f) }`, "rb_data_glob plugins/* [rel]", "rb_require  dyn", "rb_require plugins/ [rel] dyn")
 	expect(t, `Dir.glob(%w[a/*.rb b/*.rb]).each { |f| load f }`, "rb_glob a/*.rb", "rb_glob b/*.rb")
 	expect(t, `def require_all(path)
   glob = File.join(__dir__, path, "*.rb")
@@ -173,7 +172,7 @@ func TestVariables(t *testing.T) {
 	expect(t, "def a(x)\n  x = \"a\"\n  require x\nend", "rb_require  dyn")
 	expect(t, "[1].each { |x| x = 'a'; require x }", "rb_require  dyn")
 	expect(t, "a, x = 'a', 'b'\nrequire x", "rb_require  dyn")
-	expect(t, "LIB = File.expand_path('../lib', __dir__)\ndef t\n  require File.join(LIB, 'x')\nend", "rb_require ../lib/x [rel]")
+	expect(t, "LIB = File.expand_path('../lib', __dir__)\ndef t\n  require File.join(LIB, 'x')\nend", "rb_require ../lib/x [rel]", "rb_require x")
 	expect(t, "LIB = File.expand_path('../lib', __dir__)\nLIB = 'other'\nrequire File.join(LIB, 'x')", "rb_require #{}/x dyn")
 	expect(t, "A = B\nB = A\nrequire A", "rb_require  dyn")
 	expect(t, "def load(p) = Marshal.load(File.binread(p))\nx = load(path)")
@@ -269,7 +268,6 @@ func TestLexerAmbiguities(t *testing.T) {
 		"$\" << 'x'; $' ; $`\nrequire 'r'",
 		"x = y.empty? ? 'a' : 'b'\nrequire 'r'",
 		"x = 1.0e-5 + 0x1F + 1_000 + 2r + 3i\nrequire 'r'",
-		"a = 1\nb = a /2\nc = 'd'\nrequire 'r'",
 		"foo.bar /x/\nrequire 'r'",
 		"x = a&.b || c\nrequire 'r'",
 		"-> (x) { x / 2 }\nrequire 'r'",
@@ -282,6 +280,9 @@ func TestLexerAmbiguities(t *testing.T) {
 		"ary.map { |p| p / 2 }\nrequire 'r'",
 		"case x\nwhen :$&, :$MATCH then 1\nwhen :$`, :$' then 2\nend\nrequire 'r'",
 		"assert_includes %w(\n  a'b\n  c\n), x\nrequire 'r'",
+		"d = create_driver %[\n  path test'\n]\nrequire 'r'",
+		"a, b = 1, 2\nc = a % 2 + b % 3\nrequire 'r'",
+		"begin; rescue => e; end\nx = e % 2\nrequire 'r'",
 	}
 	for _, c := range cases {
 		got := refs(t, c, false)
@@ -294,7 +295,7 @@ func TestLexerAmbiguities(t *testing.T) {
 func TestUncertain(t *testing.T) {
 	for _, c := range []string{
 		"x = 'unterminated", "x = \"a #{b\"", "x = <<~EOS\nno end", "=begin\nnever ends", "x = %w(a b", "r = /abc",
-		"x = foo /a\nrequire 'r' # b/", "x = y /2 if z\nrequire 'r'",
+		"x = foo /a\nrequire 'r' # b/", "x = y /2 if z\nrequire 'r'", "a = 1\nb = a /2\nrequire 'r'", "x = 1\ny = x %[a]",
 	} {
 		r := Scan("a.rb", []byte(c))
 		if !r.Uncertain || r.UncertainReason == "" {
@@ -359,4 +360,93 @@ Dir[File.join(__dir__, "support", "**", "*.rb")].each { |f| require f }
 	// rb_require bundler/setup
 	// rb_require ../lib/foo rel
 	// rb_glob support/**/*.rb rel
+}
+
+// The forms of asciidoctor's test helpers (T1 misses): computed directories, parenless nested calls, ENV overrides.
+func TestComputedProjectDir(t *testing.T) {
+	expect(t, "PROJECT_DIR = File.dirname File.dirname(__FILE__)\nrequire File.join(PROJECT_DIR, 'lib', 'asciidoctor')",
+		"rb_require ../lib/asciidoctor [rel]", "rb_require lib/asciidoctor")
+	expect(t, "TEST_DIR = File.expand_path File.dirname __FILE__\nPROJECT_DIR = File.dirname TEST_DIR\nrequire File.join(PROJECT_DIR, 'lib', 'asciidoctor')",
+		"rb_require ../lib/asciidoctor [rel]", "rb_require lib/asciidoctor")
+	expect(t, "PD = File.dirname(__dir__)\nrequire File.join(PD, 'lib/x')", "rb_require ../lib/x [rel]", "rb_require lib/x")
+	expect(t, "require File.join(File.dirname(File.dirname(__FILE__)), 'lib', 'x')", "rb_require ../lib/x [rel]", "rb_require lib/x")
+	expect(t, "require File.join(File.dirname(File.dirname(__dir__)), 'lib', 'x')", "rb_require ../../lib/x [rel]", "rb_require lib/x")
+	expect(t, "TEST_DIR = File.absolute_path __dir__\nLIB_DIR = ENV['LIB_DIR'] || (File.join TEST_DIR, '../lib')\nrequire File.join LIB_DIR, 'asciidoctor'",
+		"rb_require ../lib/asciidoctor [rel]", "rb_require asciidoctor")
+	expect(t, "LIBDIR = (File.join __dir__, '../lib')\nrequire File.join LIBDIR, 'asciidoctor'",
+		"rb_require ../lib/asciidoctor [rel]", "rb_require asciidoctor")
+	expect(t, "LIB = ENV.fetch('LIB', File.join(__dir__, '../lib'))\nrequire File.join(LIB, 'x')", "rb_require ../lib/x [rel]", "rb_require x")
+	expect(t, "LIB = ENV['LIB'] || 'lib'\nrequire File.join(LIB, 'x')", "rb_require lib/x", "rb_require x")
+	expect(t, "require ENV['X'] || 'y'", "rb_require y", "rb_require  dyn")
+	expect(t, "require (File.join __dir__, 'a')", "rb_require a", "rb_require a [rel]")
+	expect(t, "autoload :X, File.join(__dir__, 'x')", "rb_require x", "rb_require x [rel]")
+	expect(t, "load File.join(__dir__, '..'), true", "rb_load .. [rel]", "rb_load  dyn")
+	// Dir globs and push_dir under an ENV override are not known.
+	expect(t, "D = ENV['D'] || File.join(__dir__, 'p')\nDir[File.join(D, '*.rb')].each { |f| require f }", "rb_require  dyn")
+}
+
+// Invariant: every require-like call with an argument yields at least one reference (or is resolved through a Dir loop).
+func TestEveryRequireSiteYieldsARef(t *testing.T) {
+	srcs := append([]string{propertyBase,
+		"require *list", "require [a]", "require -x", "require !x", "load %w[a]", "autoload :X", "require(x, y) { }",
+		"require File.join LIB_DIR, 'a'", "Kernel.require(name)", "require x.y.z", "send(:load, path)",
+		"require <<~P\n  x\nP\n", "require ?a", "require 1", "require :sym", "require @a", "require $a",
+	}, fuzzSeeds...)
+	for _, src := range srcs {
+		if miss := siteMisses(src); len(miss) > 0 {
+			t.Errorf("%q: calls at lines %v yield no reference", src, miss)
+		}
+	}
+}
+
+// siteMisses returns the lines of require-like calls with an argument that yield no reference (nil for an uncertain file).
+func siteMisses(src string) []int {
+	lx, why := lex([]byte(src))
+	if why != "" {
+		return nil
+	}
+	r := Scan("a.rb", []byte(src))
+	lines := map[int]bool{}
+	firstGlob := 1 << 30
+	for _, im := range r.Imports {
+		switch im.Kind {
+		case model.ImportRbRequire, model.ImportRbLoad:
+			lines[im.Line] = true
+		case model.ImportRbGlob:
+			firstGlob = min(firstGlob, im.Line) // a loop over a Dir glob: the reference sits at the glob's line
+		}
+	}
+	s := &scanner{src: []byte(src), strs: lx.strs}
+	var miss []int
+	check := func(ts []token) {
+		for i, tk := range ts {
+			if tk.kind != tIdent {
+				continue
+			}
+			switch s.text(tk) {
+			case "require", "require_relative", "load", "require_dependency", "autoload":
+			default:
+				continue
+			}
+			if s.isOp(ts, i-1, ".") && !s.isIdent(ts, i-2, "Kernel") || s.isIdent(ts, i-1, "def") || s.isIdent(ts, i-1, "alias") ||
+				s.isOp(ts, i+1, ":") && !ts[i+1].sp || s.isOp(ts, i+1, "=") || s.noArgs(ts, i+1) {
+				continue
+			}
+			if s.text(tk) == "load" && strings.Contains(src, "def load") || strings.Contains(src, "def self.load") {
+				continue
+			}
+			if !lines[int(tk.line)] && firstGlob > int(tk.line) {
+				miss = append(miss, int(tk.line))
+			}
+		}
+	}
+	check(lx.toks)
+	for _, si := range lx.strs {
+		for _, p := range si.parts {
+			if p.isCode {
+				check(p.code)
+			}
+		}
+	}
+	return miss
 }

@@ -25,6 +25,7 @@ type pval struct {
 	pn  bool   // a Pathname: + and / join
 	dyn bool   // only the static prefix s is known (s is then a string prefix, not necessarily a whole segment)
 	suf string // with dyn: the static text known to follow the unknown part ("" when nothing is known)
+	alt bool   // another, unknown value is possible (ENV["X"] || default, ENV.fetch("X", default))
 }
 
 // fullyDynamic: nothing static is known about the path.
@@ -114,9 +115,11 @@ func (p *pp) expr() (pval, bool) {
 				v.suf = ""
 				continue
 			}
+			alt := v.alt || r.alt
 			if v, ok = combine(o, v, r); !ok {
 				return pval{}, false
 			}
+			v.alt = v.alt || alt
 		case p.op(p.pos, "||"):
 			if v.b != bEnv {
 				return v, true
@@ -127,6 +130,7 @@ func (p *pp) expr() (pval, bool) {
 				return pval{}, false
 			}
 			v = r
+			v.alt = true
 		default:
 			return v, v.b != bEnv
 		}
@@ -320,7 +324,7 @@ func (p *pp) term() (pval, bool) {
 				return pval{}, false
 			}
 			p.pos += 2
-			v.s = dirOf(v.s)
+			v.s = dirOf(v)
 		case "join":
 			p.pos += 2
 			args, ok := p.callArgs()
@@ -341,7 +345,24 @@ func (p *pp) term() (pval, bool) {
 	return v, true
 }
 
-func dirOf(s string) string {
+// dirOf is File.dirname / Pathname#parent of a value. A bRel/bRoot value with no file part ("." or "../..") names a directory:
+// its parent is one level up.
+func dirOf(v pval) string {
+	s := v.s
+	if v.b == bRel || v.b == bRoot {
+		if s == "" || s == "." {
+			return ".."
+		}
+		up := true
+		for _, c := range strings.Split(s, "/") {
+			if c != ".." {
+				up = false
+			}
+		}
+		if up {
+			return s + "/.."
+		}
+	}
 	if s == "" {
 		return "."
 	}
@@ -360,8 +381,9 @@ func (p *pp) callArgs() ([]pval, bool) {
 		ranges = p.s.split(p.ts, p.pos+1, c)
 		p.pos = c + 1
 	} else if p.pos < p.hi && p.ts[p.pos].sp && p.ts[p.pos].kind != tNL && p.ts[p.pos].kind != tOp {
-		ranges = p.s.split(p.ts, p.pos, p.hi)
-		p.pos = p.hi
+		e := min(p.s.cmdEnd(p.ts, p.pos), p.hi)
+		ranges = p.s.split(p.ts, p.pos, e)
+		p.pos = e
 	} else {
 		return nil, false
 	}
@@ -435,7 +457,9 @@ func (p *pp) primary() (pval, bool) {
 			if !ok || len(args) != 2 {
 				return pval{}, false
 			}
-			return args[1], !args[1].dyn || args[1].s != ""
+			v := args[1]
+			v.alt = true
+			return v, !v.fullyDynamic()
 		}
 		return pval{}, false
 	case "Dir":
@@ -501,12 +525,15 @@ func fileCall(m string, args []pval) (pval, bool) {
 	switch m {
 	case "join":
 		v := args[0]
+		alt := v.alt
 		for _, a := range args[1:] {
 			var ok bool
+			alt = alt || a.alt
 			if v, ok = join(v, a, true); !ok {
 				return pval{}, false
 			}
 		}
+		v.alt = alt
 		v.pn = false
 		return v, !v.fullyDynamic()
 	case "expand_path", "absolute_path":
@@ -529,6 +556,7 @@ func fileCall(m string, args []pval) (pval, bool) {
 		}
 		v, ok := join(b, a, true)
 		v.pn = false
+		v.alt = a.alt || b.alt
 		return v, ok
 	case "dirname":
 		v := args[0]
@@ -541,7 +569,7 @@ func fileCall(m string, args []pval) (pval, bool) {
 			return pval{}, false
 		}
 		for i := 0; i < n; i++ {
-			v.s = dirOf(v.s)
+			v.s = dirOf(v)
 		}
 		v.pn = false
 		return v, true
@@ -569,6 +597,7 @@ func (s *scanner) strValue(t token) (pval, bool) {
 	}
 	acc := pval{b: bStr}
 	first := true
+	alt := false
 	for _, part := range si.parts {
 		if acc.dyn {
 			// After a computed part only the static tail is tracked.
@@ -576,7 +605,7 @@ func (s *scanner) strValue(t token) (pval, bool) {
 				acc.suf += part.lit
 				continue
 			}
-			if v, ok := s.evalExact(part.code, 0, len(part.code)); ok && !v.dyn && v.b == bStr {
+			if v, ok := s.evalExact(part.code, 0, len(part.code)); ok && !v.dyn && v.b == bStr && !v.alt {
 				acc.suf += v.s
 			} else {
 				acc.suf = ""
@@ -592,6 +621,7 @@ func (s *scanner) strValue(t token) (pval, bool) {
 			continue
 		}
 		v, ok := s.evalExact(part.code, 0, len(part.code))
+		alt = alt || ok && v.alt
 		if !ok || v.dyn {
 			if ok && first {
 				acc = v
@@ -621,5 +651,6 @@ func (s *scanner) strValue(t token) (pval, bool) {
 		}
 		first = false
 	}
+	acc.alt = acc.alt || alt
 	return acc, true
 }

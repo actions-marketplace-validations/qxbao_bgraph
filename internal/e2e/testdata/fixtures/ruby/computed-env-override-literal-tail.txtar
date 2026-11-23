@@ -1,0 +1,21 @@
+LIB_DIR = ENV["LIB_DIR"] || default: the value may come from the environment, so the literal tail ("foo") is matched by suffix anywhere (a build copy of the library is reached too).
+-- base/foo.gemspec --
+Gem::Specification.new { |s| s.name = "foo" }
+-- base/lib/foo.rb --
+module Foo; end
+-- base/pkg/build/foo.rb --
+module Foo; BUILT = 1; end
+-- base/test/test_helper.rb --
+LIB_DIR = ENV['LIB_DIR'] || File.expand_path('../lib', __dir__)
+require File.join(LIB_DIR, 'foo')
+-- base/test/plain_test.rb --
+require "minitest/autorun"
+-- base/test/bar_test.rb --
+require_relative 'test_helper'
+-- head/pkg/build/foo.rb --
+module Foo; BUILT = 2; end
+-- want --
+notfull
+nowiden dynamic_import
+select test/bar_test.rb
+noselect test/plain_test.rb

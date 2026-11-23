@@ -93,6 +93,8 @@ type lexer struct {
 	depth   int
 	// ambiguous is set when the last regex / percent literal / heredoc decision was a heuristic (an identifier followed by a space).
 	ambiguous bool
+	// localSp: the previous token is the name of a local variable (of some scope of the file) followed by white space.
+	localSp bool
 }
 
 // lex lexes a Ruby source. A non-empty reason means the token stream cannot be trusted.
@@ -191,6 +193,10 @@ func (lx *lexer) state(toks []token, sp bool) prevState {
 		afterDot := len(toks) >= 2 && toks[len(toks)-2].kind == tOp && (lx.opIs(toks[len(toks)-2], ".") || lx.opIs(toks[len(toks)-2], "&."))
 		if lower := txt[0] >= 'a' && txt[0] <= 'z' || txt[0] == '_'; sp && lower && (afterDot || !lx.locals[txt]) {
 			return pIdentSp
+		} else if sp && lower {
+			// A local variable somewhere in the file: Ruby reads `x %(..)` / `x /re/` as an operator only when x is a local in
+			// the current scope, which this lexer does not track.
+			lx.localSp = true
 		}
 		return pValue
 	}
@@ -290,6 +296,7 @@ func (lx *lexer) code(stop byte) []token {
 			}
 			continue
 		}
+		lx.localSp = false
 		st := lx.state(toks, sp)
 		lx.ambiguous = false
 		switch {
@@ -346,6 +353,10 @@ func (lx *lexer) code(stop byte) []token {
 				break
 			}
 			next := lx.at(lx.pos + 1)
+			if lx.localSp && !isSpace(next) && next != '=' && next != '\n' {
+				lx.fail("ambiguous / after a local variable name")
+				break
+			}
 			if st == pBeg || st == pIdentSp && !isSpace(next) && next != '=' {
 				amb := st == pIdentSp
 				lx.pos++
@@ -353,6 +364,7 @@ func (lx *lexer) code(stop byte) []token {
 				l0 := lx.line
 				lx.strs[idx].parts = lx.strBody('/', 0, true)
 				lx.regexFlags()
+				lx.namedCaptures(idx)
 				if amb && lx.line != l0 {
 					lx.fail("ambiguous / spans lines")
 				}
@@ -364,6 +376,10 @@ func (lx *lexer) code(stop byte) []token {
 			if st == pDef {
 				lx.pos++
 				toks = lx.emit(toks, tIdent, start, sp, line, -1)
+				break
+			}
+			if lx.localSp && percentStart(lx.at(lx.pos+1), lx.at(lx.pos+2)) {
+				lx.fail("ambiguous % after a local variable name")
 				break
 			}
 			if (st == pBeg || st == pIdentSp && !isSpace(lx.at(lx.pos+1)) && lx.at(lx.pos+1) != '=') && lx.percentLiteral(st == pIdentSp) {
@@ -472,6 +488,54 @@ func (lx *lexer) noteLocal(toks []token, name []byte) {
 		(c == '|' || c == '&') && d == c && lx.at(i+2) == '=' {
 		lx.locals[string(name)] = true
 		return
+	}
+	// A multiple assignment `a, b = ...` / `a, *b = ...`: the rest of the line is ", name"... then "=".
+	if c == ',' {
+		j := i
+		for j < lx.end && (isSpace(lx.src[j]) || lx.src[j] == ',' || lx.src[j] == '*' || isIdentChar(lx.src[j])) {
+			j++
+		}
+		if lx.at(j) == '=' && lx.at(j+1) != '=' && lx.at(j+1) != '~' && lx.at(j+1) != '>' {
+			lx.locals[string(name)] = true
+			return
+		}
+	}
+	if n := len(toks); n >= 2 {
+		prev := toks[n-2]
+		// rescue => e, expr => name (rightward assignment, pattern binding)
+		if lx.opIs(prev, "=>") {
+			lx.locals[string(name)] = true
+			return
+		}
+		// for a, b in ...; pattern matching `in [x, {y:}]`; lambda parameters ->(x, y)
+		for j := n - 2; j >= 0 && j >= n-60; j-- {
+			if toks[j].kind == tNL {
+				if j+1 < n && toks[j+1].kind == tIdent && string(lx.src[toks[j+1].start:toks[j+1].end]) == "in" {
+					lx.locals[string(name)] = true
+				}
+				break
+			}
+			if toks[j].kind == tIdent {
+				switch string(lx.src[toks[j].start:toks[j].end]) {
+				case "for":
+					lx.locals[string(name)] = true
+					return
+				case "in":
+					if j == 0 {
+						lx.locals[string(name)] = true
+						return
+					}
+				}
+			}
+			if lx.opIs(toks[j], "->") {
+				lx.locals[string(name)] = true
+				return
+			}
+			if j == 0 && toks[0].kind == tIdent && string(lx.src[toks[0].start:toks[0].end]) == "in" {
+				lx.locals[string(name)] = true
+				return
+			}
+		}
 	}
 	// Parameters: an identifier right after `(` or `,` of a def's parameter list.
 	if n := len(toks); n >= 2 && toks[n-2].kind == tOp && (lx.opIs(toks[n-2], "(") || lx.opIs(toks[n-2], ",") || lx.opIs(toks[n-2], "*") ||
@@ -680,19 +744,28 @@ func (lx *lexer) percentLiteral(heuristic bool) bool {
 	if heuristic && i == lx.pos+1 && closer(d) == 0 && d != '|' && d != '!' {
 		return false // `x %foo` after a method name is too ambiguous to be a literal with an exotic delimiter
 	}
-	typeless := i == lx.pos+1 // %(...) rather than %w(...): more ambiguous after a method name
 	lx.pos = i + 1
 	idx := lx.newStr(kind)
 	interp := kind == sDouble || kind == sIWords || kind == sRegex || kind == sXStr
-	l0 := lx.line
 	lx.strs[idx].parts = lx.strBody(orClose(d), opener(d), interp)
 	if kind == sRegex {
 		lx.regexFlags()
+		lx.namedCaptures(idx)
 	}
-	if heuristic && typeless && lx.line != l0 {
-		lx.fail("ambiguous % literal spans lines")
-	}
+	// No uncertainty when the literal spans lines: Ruby reads `meth %[...]` as a literal whenever meth is not a local variable,
+	// and every name assigned anywhere in the file counts as a local here.
 	return true
+}
+
+// percentStart: the two bytes after % would start a percent literal.
+func percentStart(t, d byte) bool {
+	if t == 0 || isSpace(t) || t == '\n' || t == '=' {
+		return false
+	}
+	if strings.IndexByte("qQwWiIrsx", t) >= 0 {
+		return d != 0 && !isIdentChar(d) && !isSpace(d) && d != '\n'
+	}
+	return !isIdentChar(t)
 }
 
 func orClose(d byte) byte {
@@ -939,4 +1012,25 @@ func (lx *lexer) heredocParts() []strPart {
 		parts = append(parts, strPart{lit: string(b)})
 	}
 	return parts
+}
+
+// namedCaptures records the names of (?<name>...) groups of a regex literal as local variables (`/(?<x>.)/ =~ s` defines x).
+func (lx *lexer) namedCaptures(idx int32) {
+	for _, p := range lx.strs[idx].parts {
+		lit := p.lit
+		for {
+			i := strings.Index(lit, "(?<")
+			if i < 0 {
+				break
+			}
+			lit = lit[i+3:]
+			j := 0
+			for j < len(lit) && isIdentChar(lit[j]) {
+				j++
+			}
+			if j > 0 && j < len(lit) && lit[j] == '>' {
+				lx.locals[lit[:j]] = true
+			}
+		}
+	}
 }

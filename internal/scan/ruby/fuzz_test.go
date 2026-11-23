@@ -48,6 +48,9 @@ func FuzzScan(f *testing.F) {
 				t.Fatalf("internal marker leaked: %+v", r)
 			}
 		}
+		if miss := siteMisses(src); len(miss) > 0 {
+			t.Fatalf("require-like calls at lines %v yield no reference: %+v", miss, a.Imports)
+		}
 		GemspecFingerprint([]byte(src))
 	})
 }

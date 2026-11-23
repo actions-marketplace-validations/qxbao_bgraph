@@ -31,6 +31,7 @@
 package ruby
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/model"
@@ -45,6 +46,7 @@ func Scan(_ string, src []byte) model.ScanResult {
 		return model.ScanResult{Imports: []model.ImportRef{}, Uncertain: true, UncertainReason: why}
 	}
 	s := &scanner{src: src, strs: lx.strs, seen: map[refKey]bool{}, used: map[int32]bool{}, top: lx.toks, ctx: -1}
+	s.sites = map[int32]*site{}
 	s.collectVars(lx.toks)
 	s.run(lx.toks)
 	// Interpolations: every code part is scanned too (a require inside "#{...}" is still a require).
@@ -55,16 +57,50 @@ func Scan(_ string, src []byte) model.ScanResult {
 			}
 		}
 	}
+	s.closeSites()
 	if s.res == nil {
 		s.res = []model.ImportRef{}
 	}
 	return model.ScanResult{Imports: s.res}
 }
 
+// closeSites: a require-like call that produced no reference is a computed require (the invariant every caller relies on).
+func (s *scanner) closeSites() {
+	starts := make([]int32, 0, len(s.sites))
+	for k := range s.sites {
+		starts = append(starts, k)
+	}
+	slices.Sort(starts)
+	for _, k := range starts {
+		if st := s.sites[k]; !st.done {
+			s.add(st.kind, "", "", true, st.line)
+		}
+	}
+}
+
+// noArgs: the token after a require-like name cannot start an argument (`respond_to?(:require)`-like uses, `require` alone).
+func (s *scanner) noArgs(ts []token, j int) bool {
+	if j >= len(ts) || ts[j].kind == tNL {
+		return true
+	}
+	t := ts[j]
+	switch t.kind {
+	case tOp:
+		switch s.text(t) {
+		case ";", ")", "]", "}", ",", ".", "&.", "==", "!=", "||", "&&", "?", ":", "=>", "=":
+			return true
+		}
+	case tIdent:
+		return stmtEnders[s.text(t)] && !(s.isOp(ts, j+1, ":") && !ts[j+1].sp)
+	}
+	return false
+}
+
 type refKey struct {
 	kind         model.ImportKind
 	spec, suffix string
 	dyn          bool
+	line         int32 // require/load: every call site is reported
 }
 
 type scanner struct {
@@ -85,12 +121,24 @@ type scanner struct {
 	defsLoad bool
 	// ctx: while a string's interpolations are evaluated, the index of that string in the top-level list (-1: none).
 	ctx int
+	// sites: the require-like call sites seen (by token start) and whether they produced a reference. Every site must: one
+	// left without (an argument form nothing recognizes) becomes a dynamic reference at the end of Scan.
+	sites map[int32]*site
+}
+
+type site struct {
+	line int32
+	kind model.ImportKind
+	done bool
 }
 
 func (s *scanner) text(t token) string { return string(s.src[t.start:t.end]) }
 
 func (s *scanner) add(kind model.ImportKind, spec, suffix string, dyn bool, line int32) {
-	k := refKey{kind, spec, suffix, dyn}
+	k := refKey{kind: kind, spec: spec, suffix: suffix, dyn: dyn}
+	if kind == model.ImportRbRequire || kind == model.ImportRbLoad {
+		k.line = line
+	}
 	if s.seen[k] || len(s.res) >= maxRefs {
 		return
 	}
@@ -308,9 +356,8 @@ func (s *scanner) run(ts []token) {
 		t := ts[i]
 		switch t.kind {
 		case tIdent:
-			if n := s.ident(ts, i); n > i {
-				i = n - 1
-			}
+			// Every token is visited, even inside a construct already handled: a require nested in any argument is still seen.
+			s.ident(ts, i)
 		case tGVar:
 			if txt := s.text(t); (txt == "$LOAD_PATH" || txt == "$:") && !s.loadP {
 				s.loadP = true
@@ -357,17 +404,27 @@ func (s *scanner) ident(ts []token, i int) int {
 				return i
 			}
 		}
-		if s.handled[t.start] {
+		if s.isOp(ts, i+1, "=") || name == "load" && !afterDot && s.defsLoad || s.noArgs(ts, i+1) {
 			return i
 		}
-		if s.isOp(ts, i+1, "=") || name == "load" && !afterDot && s.defsLoad {
+		kind := model.ImportRbRequire
+		if name == "load" {
+			kind = model.ImportRbLoad
+		}
+		st := s.sites[t.start]
+		if st == nil {
+			st = &site{line: t.line, kind: kind}
+			s.sites[t.start] = st
+		}
+		if s.handled[t.start] {
+			st.done = true // resolved through a Dir loop
 			return i
 		}
 		ranges, end := s.callRanges(ts, i)
 		if end < 0 {
-			return i
+			return i // no argument recognized: closeSites makes it dynamic
 		}
-		s.requireCall(ts, name, ranges, t.line)
+		s.requireCall(ts, i, name, ranges, !s.isOp(ts, i+1, "(") || ts[i+1].sp)
 		return i + 1
 	case "send", "public_send", "__send__":
 		ranges, end := s.callRanges(ts, i)
@@ -386,11 +443,18 @@ func (s *scanner) ident(ts []token, i int) int {
 		}
 		switch m {
 		case "require", "require_relative", "load", "require_dependency", "autoload":
-			s.requireCall(ts, m, ranges[1:], t.line)
+			kind := model.ImportRbRequire
+			if m == "load" {
+				kind = model.ImportRbLoad
+			}
+			if s.sites[t.start] == nil {
+				s.sites[t.start] = &site{line: t.line, kind: kind}
+			}
+			s.requireCall(ts, i, m, ranges[1:], false)
 		}
 		return i
 	case "Dir", "Pathname":
-		if afterDot {
+		if afterDot || s.used[ts[i].start] {
 			return i
 		}
 		return s.dirCall(ts, i)
@@ -411,7 +475,7 @@ func (s *scanner) ident(ts []token, i int) int {
 		v, ok := s.evalExact(ts, r[0], r[1])
 		s.markUsed(ts, r[0], r[1])
 		switch {
-		case !ok || !v.usable():
+		case !ok || !v.usable() || v.alt:
 			s.add(model.ImportRbPushDir, "", "", true, t.line)
 		default:
 			s.add(model.ImportRbPushDir, v.s, baseTag(v.b), v.dyn, t.line)
@@ -510,6 +574,9 @@ func (s *scanner) ident(ts []token, i int) int {
 
 // pathRef records an evaluated path expression starting at i as a string reference.
 func (s *scanner) pathRef(ts []token, i int) int {
+	if s.used[ts[i].start] {
+		return i // part of a construct already recorded
+	}
 	v, end, ok := s.evalGreedy(ts, i, len(ts))
 	if !ok || end <= i+1 || !v.usable() {
 		return i
@@ -528,25 +595,62 @@ func (s *scanner) pathRef(ts []token, i int) int {
 	return end
 }
 
-// requireCall records require-like call with argument ranges.
-func (s *scanner) requireCall(ts []token, name string, ranges [][2]int, line int32) {
+// requireCall records a require-like call at token i with argument ranges (cmd: a parenless call).
+//
+// Besides the evaluated path, every argument whose value is not built from literals alone (it depends on __dir__/__FILE__,
+// Rails.root, an ENV override, or cannot be evaluated) also yields its literal tail as a feature: a suffix match that holds
+// whatever the computed part is (tail.go). An alternative without a literal tail makes the call dynamic.
+func (s *scanner) requireCall(ts []token, i int, name string, ranges [][2]int, cmd bool) {
+	line := ts[i].line
+	kind := model.ImportRbRequire
+	if name == "load" {
+		kind = model.ImportRbLoad
+	}
+	st := s.sites[ts[i].start]
+	add := func(spec, suffix string, dyn bool) {
+		if st != nil {
+			st.done = true
+		}
+		s.add(kind, spec, suffix, dyn, line)
+	}
 	arg := 0
 	if name == "autoload" || name == "autoload_relative" {
 		arg = 1
 	}
 	if len(ranges) <= arg {
+		add("", "", true)
 		return
 	}
 	r := ranges[arg]
-	kind := model.ImportRbRequire
-	if name == "load" {
-		kind = model.ImportRbLoad
+	if cmd && s.nestedCommand(ts, r[0], ranges[len(ranges)-1][1]) {
+		// `require File.join DIR, "x"`: the commas belong to the inner call.
+		r[1] = ranges[len(ranges)-1][1]
 	}
 	relative := name == "require_relative" || name == "autoload_relative"
 	v, ok := s.evalExact(ts, r[0], r[1])
 	s.markUsed(ts, r[0], r[1])
+	// A value built only from literals (and unknown parts, matched by its own prefix/suffix patterns) needs no tail; one that
+	// depends on the file's location, the project root or an ENV override does.
+	literalOnly := ok && v.b == bStr && !v.alt && v.usable() && !v.fullyDynamic()
+	if _, plain := s.staticStr(ts, r[0], r[1]); !plain && !literalOnly {
+		at := r[0]
+		if !s.sameList(ts) {
+			at = s.ctx
+		}
+		unknown := false
+		for _, t := range s.litTails(ts, r[0], r[1], at, 0) {
+			if t == "" {
+				unknown = true
+				continue
+			}
+			add(t, "", false)
+		}
+		if unknown {
+			add("", "", true)
+		}
+	}
 	if !ok || !v.usable() || v.fullyDynamic() {
-		s.add(kind, "", "", true, line)
+		add("", "", true)
 		return
 	}
 	b := v.b
@@ -554,10 +658,10 @@ func (s *scanner) requireCall(ts []token, name string, ranges [][2]int, line int
 		b = bRel
 	}
 	if b == bRel && !v.dyn && (v.s == "." || v.s == "") {
-		s.add(kind, "", "", true, line) // a directory is not a file: not understood
+		add("", "", true) // a directory is not a file: not understood
 		return
 	}
-	s.add(kind, v.spec(), baseTag(b), v.dyn, line)
+	add(v.spec(), baseTag(b), v.dyn)
 }
 
 // kwString returns the literal string of keyword argument `key: "x"` in range r.
@@ -789,7 +893,7 @@ func (s *scanner) dirCall(ts []token, i int) int {
 	for k, r := range ranges {
 		if r[1]-r[0] >= 3 && ts[r[0]].kind == tIdent && s.isOp(ts, r[0]+1, ":") && !ts[r[0]+1].sp {
 			if s.text(ts[r[0]]) == "base" {
-				if v, ok := s.evalExact(ts, r[0]+2, r[1]); ok && v.usable() && !v.dyn {
+				if v, ok := s.evalExact(ts, r[0]+2, r[1]); ok && v.usable() && !v.dyn && !v.alt {
 					baseV = &v
 				} else {
 					unknown = true
@@ -812,7 +916,7 @@ func (s *scanner) dirCall(ts []token, i int) int {
 		}
 		if s.isOp(ts, r[0], "[") && s.closeOf(ts, r[0], r[1]) == r[1]-1 {
 			for _, e := range s.split(ts, r[0]+1, r[1]-1) {
-				if v, ok := s.evalExact(ts, e[0], e[1]); ok && v.usable() {
+				if v, ok := s.evalExact(ts, e[0], e[1]); ok && v.usable() && !v.alt {
 					globs = append(globs, v)
 				} else {
 					unknown = true
@@ -820,7 +924,7 @@ func (s *scanner) dirCall(ts []token, i int) int {
 			}
 			continue
 		}
-		if v, ok := s.evalExact(ts, r[0], r[1]); ok && v.usable() && !(v.dyn && v.s == "" && v.b == bStr) {
+		if v, ok := s.evalExact(ts, r[0], r[1]); ok && v.usable() && !v.alt && !(v.dyn && v.s == "" && v.b == bStr) {
 			globs = append(globs, v)
 		} else {
 			unknown = true

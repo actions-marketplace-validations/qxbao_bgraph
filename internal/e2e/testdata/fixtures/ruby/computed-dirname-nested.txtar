@@ -1,0 +1,25 @@
+File.dirname(File.dirname(__FILE__)) is the project root: test_helper requires lib/foo.rb through a path built from it (asciidoctor's test helper before 2.0). A change to lib/foo/bar.rb must select the test.
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+end
+-- base/lib/foo.rb --
+require "foo/bar"
+-- base/lib/foo/bar.rb --
+module Foo; end
+-- base/test/test_helper.rb --
+PROJECT_DIR = File.dirname File.dirname(__FILE__)
+require File.join(PROJECT_DIR, 'lib', 'foo')
+-- base/test/plain_test.rb --
+require "minitest/autorun"
+-- base/test/bar_test.rb --
+require_relative 'test_helper'
+-- head/lib/foo/bar.rb --
+module Foo; X = 1; end
+-- want --
+notfull
+nowiden dynamic_import
+select test/bar_test.rb
+noselect test/plain_test.rb

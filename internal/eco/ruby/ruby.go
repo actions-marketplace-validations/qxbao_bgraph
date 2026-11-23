@@ -51,7 +51,11 @@
 //     File.join(__dir__, ...), File.dirname(__FILE__) + "/x", "#{__dir__}/x", Pathname(__dir__).join, Rails.root.join (the
 //     project root), Dir.pwd (working directory: suffix union), single-assignment locals and constants holding such a path):
 //     the exact file (x.rb for require). A missing target keeps the exact edge (adding the file is caught) and is reported
-//     (unknown, no widening); a target outside the repository is reported only.
+//     (unknown, no widening); a target outside the repository is reported only. Because the evaluation may be wrong (or an
+//     ENV["X"] || default override may win), every such argument also yields its literal tail as a suffix-union feature:
+//     the literal components after the last computed part or "..", e.g. File.join(DIR, "lib", "foo") → lib/foo,
+//     File.expand_path("../lib/foo", __dir__) → lib/foo. An argument with no literal tail is dynamic. Every require-like call
+//     with an argument yields at least one reference: one the scanner cannot classify is dynamic.
 //   - a partly computed path: pattern edges to every file the static parts allow. require "a/#{x}" depends on **/a/*.rb and
 //     **/a/*/**/*.rb; with a static tail, require "a/#{x}/version" depends on **/a/*/version.rb and **/a/*/**/*/version.rb;
 //     relative ones (File.join(__dir__, "plugins", x)) are anchored at the file's directory.
@@ -144,7 +148,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "ruby-3"
+const AnalyzerVersion = "ruby-4"
 
 // Eco is the Ruby ecosystem.
 type Eco struct{}

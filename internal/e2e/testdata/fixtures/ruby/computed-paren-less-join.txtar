@@ -1,0 +1,26 @@
+A constant assigned `ENV[...] || (File.join DIR, '../lib')` and a paren-less `require File.join LIB_DIR, 'foo'` (asciidoctor's test helper since 2.0) load lib/foo.rb. A change to lib/foo/bar.rb must select the test.
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+end
+-- base/lib/foo.rb --
+require_relative "foo/bar"
+-- base/lib/foo/bar.rb --
+module Foo; end
+-- base/test/test_helper.rb --
+TEST_DIR = File.absolute_path __dir__
+LIB_DIR = ENV['LIB_DIR'] || (File.join TEST_DIR, '../lib')
+require File.join LIB_DIR, 'foo'
+-- base/test/plain_test.rb --
+require "minitest/autorun"
+-- base/test/bar_test.rb --
+require_relative 'test_helper'
+-- head/lib/foo/bar.rb --
+module Foo; X = 1; end
+-- want --
+notfull
+nowiden dynamic_import
+select test/bar_test.rb
+noselect test/plain_test.rb
