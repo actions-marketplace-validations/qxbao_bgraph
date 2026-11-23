@@ -57,6 +57,33 @@ func TestReadRbLit(t *testing.T) {
 	}
 }
 
+func TestReadRbLitConcat(t *testing.T) {
+	for in, want := range map[string]rbLit{
+		"'a ' \\\n     'b' do":       {"a b"},
+		"'a ' 'b' \"c#{x}d\" do":     {"a bc", "d"},
+		"'a' do\n  it 'b'":           {"a"},
+		"'a', 'b'":                   {"a"},
+		"\"x #{y} \" \\\r\n  'z' do": {"x ", " z"},
+	} {
+		if got, ok := readRbLitConcat(in); !ok || !reflect.DeepEqual(got, want) {
+			t.Errorf("%q: got %q %v want %q", in, got, ok, want)
+		}
+	}
+}
+
+func TestRbMethodKey(t *testing.T) {
+	for in, want := range map[string]string{
+		"test_:backend option should override": "test_backend_option_should_override",
+		"test_backend_option_should_override":  "test_backend_option_should_override",
+		"test: Do not retry (when) x":          "test_Do_not_retry_when_x",
+		"test_rpc__server":                     "test_rpc_server",
+	} {
+		if got := rbMethodKey(in); got != want {
+			t.Errorf("%q: got %q want %q", in, got, want)
+		}
+	}
+}
+
 func TestRbIsTestFile(t *testing.T) {
 	for p, want := range map[string]bool{
 		"spec/a/foo_spec.rb": true, "test/test_foo.rb": true, "test/foo_test.rb": true, "fastlane/spec/x_spec.rb": true,
@@ -84,6 +111,10 @@ func TestLocateRuby(t *testing.T) {
 		"fastlane/spec/zip_spec.rb":     "describe Fastlane do\nend\n",
 		"features/post_data.feature":    "Feature: x\n",
 		"spec/fixtures/ignored_spec.rb": "it 'registers an offense' do\nend\n",
+		"test/helper.rb":                "class JekyllUnitTest < Minitest::Test\n  def test_dir(*subdirs)\n  end\nend\n",
+		"test/test_url.rb":              "class TestURL < JekyllUnitTest\nend\n",
+		"spec/rubocop/cop/c_spec.rb":    "RSpec.describe C do\n  it 'registers an offense when using ' \\\n     'two lines' do\n  end\nend\n",
+		"test/document_test.rb":         "context 'Document' do\n  test ':backend option should override' do\n  end\nend\n",
 	})
 	names := []string{
 		"Minitest::Test::TestAPI::TestConvert#test_should_convert_file_to_x", // method in two files, the class picks one
@@ -102,6 +133,9 @@ func TestLocateRuby(t *testing.T) {
 		"zips - ./fastlane/spec/zip_spec.rb[1:1]",
 		"features/post_data.feature:30  Scenario: Use page.name variable",
 		"nothing matches this",
+		"TestURL#test_dir",
+		"registers an offense when using two lines",
+		"test_backend_option_should_override",
 	}
 	patch := map[string]bool{"spec/rubocop/cop/a_spec.rb": true}
 	got := LocateRubyTests(mt, names, patch)
@@ -126,6 +160,9 @@ func TestLocateRuby(t *testing.T) {
 		{[]string{"fastlane/spec/zip_spec.rb"}, "path", false},
 		{[]string{"features/post_data.feature"}, "path", true},
 		{nil, "", false},
+		{[]string{"test/test_url.rb"}, "class-inherited", false},
+		{[]string{"spec/rubocop/cop/c_spec.rb"}, "desc", false},
+		{[]string{"test/document_test.rb"}, "method", false},
 	}
 	for i, w := range want {
 		g := got[i]

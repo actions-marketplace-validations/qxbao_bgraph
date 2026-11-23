@@ -112,6 +112,9 @@ var (
 	rbBareMethod  = regexp.MustCompile(`^test_\w*[?!]?(?:\[[^\]]*\])?$`)
 	rbLabelSuffix = regexp.MustCompile(`\[[^\[\]]*\]$`)
 	rbNonWord     = regexp.MustCompile(`[^\p{L}\p{N}_]+`)
+	rbKeySep      = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+	// What may separate adjacent literals that Ruby concatenates ('a ' 'b', or 'a ' \ newline 'b').
+	rbLitJoin = regexp.MustCompile(`^[ \t]*(?:\\\r?\n[ \t]*)?`)
 )
 
 func parseRbName(name string) rbName {
@@ -152,9 +155,11 @@ func shouldaDesc(m string) (string, bool) {
 	return "", false
 }
 
-// rbMethodKey normalizes a test method name or a test DSL description: runs of non-word characters become "_", trimmed.
+// rbMethodKey normalizes a test method name or a test DSL description: runs of characters other than letters and digits
+// (underscores included) become one "_", trimmed. `test ':backend option'` defines test_backend_option with one helper version
+// and test__backend_option with another; both meet here.
 func rbMethodKey(s string) string {
-	return strings.Trim(rbNonWord.ReplaceAllString(s, "_"), "_")
+	return strings.Trim(rbKeySep.ReplaceAllString(s, "_"), "_")
 }
 
 // ---- file scan ----
@@ -219,7 +224,7 @@ func scanRbTest(src []byte) *rbFileScan {
 	for _, m := range rbCallRe.FindAllStringSubmatchIndex(s, -1) {
 		kw := strings.TrimPrefix(s[m[2]:m[3]], "RSpec.")
 		rest := s[m[1]:]
-		lit, ok := readRbLit(rest)
+		lit, ok := readRbLitConcat(rest)
 		if !ok {
 			// A constant group argument (describe Foo::Bar, "#baz"), possibly followed by a string literal.
 			c := rbConstRe.FindString(rest)
@@ -285,6 +290,48 @@ func rbContextClass(name string) string {
 		b.WriteString(strings.ToUpper(w[:1]) + w[1:])
 	}
 	return b.String()
+}
+
+// readRbLitConcat reads a string literal and the quoted literals adjacent to it (Ruby concatenates them at parse time).
+func readRbLitConcat(s string) (rbLit, bool) {
+	lit, ok := readRbLit(s)
+	if !ok {
+		return nil, false
+	}
+	for {
+		n := rbLitEnd(s)
+		if n < 0 {
+			return lit, true
+		}
+		s = s[n:]
+		s = s[len(rbLitJoin.FindString(s)):]
+		if rbLitEnd(s) < 0 {
+			return lit, true
+		}
+		next, ok := readRbLit(s)
+		if !ok {
+			return lit, true
+		}
+		lit[len(lit)-1] += next[0]
+		lit = append(lit, next[1:]...)
+	}
+}
+
+// rbLitEnd is the length of the quoted literal ('...' or "...") at the start of s, or -1.
+func rbLitEnd(s string) int {
+	if s == "" || (s[0] != '\'' && s[0] != '"') {
+		return -1
+	}
+	q := s[0]
+	for i := 1; i < len(s); i++ {
+		switch s[i] {
+		case '\\':
+			i++
+		case q:
+			return i + 1
+		}
+	}
+	return -1
 }
 
 // readRbLit reads a string literal at the start of s: '...', "...", %q(...), %Q[...], %(...). Interpolations (#{...}, #@x, #$x) in
@@ -600,6 +647,8 @@ func locateRb(t tree.Tree, ix *rbIndex, names []string, patch map[string]bool) [
 					files, l.Via = both, l.Via+"+class"
 				case len(files) == 0 && len(cf) > 0:
 					files, l.Via = cf, "class-only"
+				case len(cf) > 0: // an inherited method (jekyll's helper JekyllUnitTest#test_dir runs in every subclass)
+					files, l.Via = cf, "class-inherited"
 				}
 			}
 			if len(files) == 0 { // test-unit `test "a b"` reported as "test_a_b"? already covered by the key; try it as a description
