@@ -1,81 +1,117 @@
-// Package ruby is bgraph's Ruby ecosystem (RSpec, Minitest / Test::Unit, Rails test; Bundler), at test-file granularity.
+// Package ruby is bgraph's Ruby ecosystem (RSpec, Minitest / Test::Unit, Rails test; Bundler), at test-file granularity: Ruby
+// loads code with require/require_relative/load/autoload into one process, so a test file's dependencies are the transitive
+// closure of what it loads. The scanner is internal/scan/ruby.
 //
 // # Projects
 //
 // A Ruby project is a directory holding a Gemfile, gems.rb, a *.gemspec, a Rakefile (rakefile, Rakefile.rb) or a .rspec file,
 // plus the repository root when a Ruby file lies outside every such directory. Markers below a test-data directory (a path
-// segment spec, test, tests, fixtures, fixture, tmp, node_modules, .bundle, or vendor/bundle) are data, not projects: an engine's
+// segment spec, test, tests, fixtures, fixture, tmp, vendor, node_modules or .bundle) are data, not projects: an engine's
 // test/dummy app or a spec/fixtures gem belongs to the enclosing project. A repository with no marker is not analyzed (a stray
-// .rb file is left to the general rules), and so is a repository without any .rb, Gemfile or *.gemspec (cost ~0). Every file
-// belongs to its nearest project.
+// .rb file is left to the general rules), and a repository without any .rb, Gemfile or *.gemspec returns at once. Every file
+// belongs to its nearest project. node_modules, .bundle and vendor/bundle are never repository code.
 //
-// Ruby files: .rb, .rake, .ru, .gemspec, Gemfile, Rakefile, and extensionless files directly under a bin/, exe/ or libexec/
-// directory whose shebang names ruby (executables).
+// Ruby files: .rb, .rake, .ru, .gemspec, Gemfile, Rakefile, and extensionless files directly below a bin/, exe/ or libexec/
+// directory whose shebang line names ruby (executables, scanned without the cache).
 //
 // # Test units
 //
-// One model.TestUnit per test file: Eco "ruby", ID = the repo-relative file, Files = [the file], Project = its project. A file is a
-// test when it is a .rb file outside the never-unit directories (fixtures, fixture, vendor, tmp, node_modules, .bundle) and
+// One model.TestUnit per test file: Eco "ruby", ID = the repo-relative file (e.g. spec/rubocop/cop/style/foo_spec.rb),
+// Files = [the file], Project = its project. A file is a test when it is a .rb file outside the never-unit directories (fixtures,
+// fixture, vendor, tmp, node_modules, .bundle), is not a helper (test_helper.rb, spec_helper.rb, rails_helper.rb, helper.rb:
+// sources, so that a helper nothing is known to load widens) and
 //
 //   - it lies below a directory named spec or test and its name matches *_spec.rb, *_test.rb, test_*.rb or tc_*.rb; or
-//   - it matches a literal test pattern of its project: .rspec / .rspec-local / .rspec-parallel --pattern (also below
-//     --default-path), Rake::TestTask / RSpec::Core::RakeTask `pattern =` / `test_files =` (FileList[...], Dir[...], Dir.glob,
-//     %w[...], ENV["X"] || "literal"), and Rake::TestTask's default test/test*.rb when a task sets neither.
+//   - it matches a literal test pattern of its project: .rspec / .rspec-local / .rspec-parallel / spec/spec.opts --pattern (also
+//     below --default-path, where *_spec.rb files are tests too), Rake::TestTask / RSpec::Core::RakeTask `pattern =` /
+//     `test_files =` (strings, %w[], FileList[...], Dir[...], Dir.glob, FileList.new, ENV["X"] || "literal", ENV.fetch("X",
+//     "literal"); .exclude and `- list` only narrow and are ignored), and Rake::TestTask's default test/test*.rb when no task
+//     sets either. Patterns are relative to the project directory (rake runs in the Rakefile's directory).
 //
-// Runner "rspec" for a *_spec.rb file whose nearest spec/test ancestor is spec (or below the .rspec --default-path) and for files
-// matched by an RSpec pattern; "rails" for files below test/ of a Rails application (bin/rails and config/application.rb);
-// "minitest" otherwise. Config is the Gemfile bundler uses (the nearest Gemfile or gems.rb at or above the project, "" for
-// none), followed for minitest units by "|" and the comma-separated -I directories (Rake::TestTask libs when literal, else lib
-// and the unit's top test directory). A computed test pattern (or ERB in .rspec) adds a whole-project unit
-// ID "<rb-all-tests:DIR>" (Whole, Runner "rake" or "rspec"), selected on any change (config_is_code).
+// Runner "rspec" for a *_spec.rb file whose nearest spec/test ancestor is spec (unless a Rake::TestTask pattern claims it),
+// below the .rspec --default-path, or matched by an RSpec pattern; "rails" for a file below test/ of a Rails application (a
+// project with bin/rails and config/application.rb); "minitest" otherwise. Config is the Gemfile bundler uses (the nearest
+// Gemfile or gems.rb at or above the project, "" for none); for minitest units it is followed by "|" and the comma-separated
+// -I directories: lib plus the literal Rake::TestTask libs, or lib plus the unit's top test directory when there are none.
+//
+// A computed test pattern (a non-literal `pattern =`, `test_files =` or `ruby_opts`, a pattern bgraph cannot compile, ERB in an
+// .rspec file) adds the whole-project unit ID "<rb-all-tests:DIR>" (WholeUnitID / ParseWholeUnitID; DIR is the project, "." for
+// the root; Whole, Runner "rake" or "rspec", no Files), which the selector runs on any change (config_is_code).
 //
 // # Graph (From depends on To)
 //
-//   - require / require_dependency / autoload "a/b" (and load "a/b.rb"): suffix union. The importer depends on the virtual node
-//     <rbreq:a/b> (load: <rbload:a/b.rb>), which depends on every Ruby file whose path is a/b.rb or ends with /a/b.rb, plus a
-//     pattern edge **/a/b.rb so a file added later is caught. This is a superset of every $LOAD_PATH and working-directory
-//     interpretation inside the repository, so $LOAD_PATH edits need no evaluation. Leading ./ and ../ (working-directory
-//     paths) are dropped before the suffix match. Nothing found: an external gem or the standard library (no widening).
-//   - require_relative "x" and evaluated path expressions (File.expand_path("x", __dir__), File.join(__dir__, ...),
-//     File.dirname(__FILE__) + "/x", "#{__dir__}/x", Pathname(__dir__).join, Rails.root.join): the exact file (x.rb for require);
-//     a missing target keeps the exact edge (adding it is caught) and is reported (unknown, no widening).
-//   - a static prefix (require "a/#{x}", File.join(__dir__, "plugins", x)): pattern edges to every .rb file under the prefix.
-//   - Dir[...] / Dir.glob / Pathname.glob whose files a block requires or loads (`.each { |f| require f }`,
-//     `&method(:require)`): pattern edges to the glob (relative to the file, the project root for Rails.root, or by suffix for a
-//     working-directory glob).
+//   - require / require_dependency / autoload / Bundler features "a/b": suffix union. The importer depends on the virtual node
+//     <rbreq:a/b>, which depends on every Ruby file whose path is a/b.rb or ends with /a/b.rb, plus a pattern edge **/a/b.rb
+//     (which also matches a/b.rb at the root) so that a file added later, or a non-Ruby file loaded under that name, is caught.
+//     load "x/y.rake" uses <rbload:x/y.rake> and the exact file name (load adds no extension). The union is a superset of every
+//     $LOAD_PATH and working-directory interpretation inside the repository, so $LOAD_PATH edits are only recorded. Leading
+//     ./, ../ and / (working-directory or absolute paths) are dropped before the match. Nothing matching: an external gem or
+//     the standard library (no widening; the pattern edge stays). .so/.bundle features are compiled code (no edge).
+//   - require_relative "x" and evaluated path expressions (File.expand_path("x", __dir__), File.expand_path("../x", __FILE__),
+//     File.join(__dir__, ...), File.dirname(__FILE__) + "/x", "#{__dir__}/x", Pathname(__dir__).join, Rails.root.join (the
+//     project root), Dir.pwd (working directory: suffix union), single-assignment locals and constants holding such a path):
+//     the exact file (x.rb for require). A missing target keeps the exact edge (adding the file is caught) and is reported
+//     (unknown, no widening); a target outside the repository is reported only.
+//   - a partly computed path: pattern edges to every file the static parts allow. require "a/#{x}" depends on **/a/*.rb and
+//     **/a/*/**/*.rb; with a static tail, require "a/#{x}/version" depends on **/a/*/version.rb and **/a/*/**/*/version.rb;
+//     relative ones (File.join(__dir__, "plugins", x)) are anchored at the file's directory.
+//   - Dir[...] / Dir.glob / Pathname.glob whose files are required or loaded by a block over them (`.each { |f| require f }`,
+//     `.each(&method(:require))`, also through a single-assignment variable, f possibly wrapped in File.expand_path / to_s /
+//     sub / chomp): pattern edges to the glob, relative to the file's directory, the project root (Rails.root) or, for a
+//     working-directory glob, **/<glob>. A require_relative over a working-directory glob gets the file-relative glob too.
 //   - Zeitwerk::Loader.for_gem / for_gem_extension: every .rb below the calling file's directory; loader.push_dir(d): every .rb
-//     below d. A class inheriting Rails::Application or Rails::Engine depends on every file of its project outside the test
-//     directories (pattern edges DIR/<top-level dir>/** for app, lib, config, db, vendor and every other top-level directory
-//     except spec, test, tests, tmp, log, coverage, node_modules, doc, docs).
-//   - Bundler.require: the features of the gems of the nearest Gemfile (gem name, its require: option, name with - as /, and the
-//     gemspecs named by `gemspec`).
-//   - every RSpec unit depends on the --require / -r features of its project's .rspec files; every minitest unit on the
-//     Rake::TestTask ruby_opts -r features (implicit edges);
-//   - test and test-support files (any file below a spec/test/tests directory, and every unit) depend on the existing files and
-//     directories their path-like string literals and path expressions name, relative to the file's directory, the project root,
-//     the repository root or a fixtures directory of the project (fixture_data edges; heuristic and add-only), on the files of
-//     their data Dir globs (pattern edges), on executables named by Gem.bin_path, and on test/fixtures/** and spec/fixtures/**
-//     for `fixtures :all`. Executables are sources: a test naming exe/x depends on it, and it depends on what it requires.
+//     below d (a partly computed d: below its static prefix).
+//   - a class inheriting Rails::Application or Rails::Engine depends on every file of its project outside the test
+//     directories: pattern edges DIR/<d>/** for app, lib, config, db, vendor and every other top-level directory of the project
+//     except spec, test, tests, tmp, log, coverage, node_modules, doc, docs, .git, .github, .bundle (templates, assets, locales
+//     and config/*.yml included: request and system specs render them). Nested projects are reached through their features.
+//   - Bundler.require: the features of the gems of the nearest Gemfile (and of files it loads with eval_gemfile): the gem name
+//     (and the name with - as /) or its require: option, nothing for require: false, and the gem names of the gemspecs named
+//     by `gemspec`.
+//   - every unit of a project depends on the --require / -r features of the project's .rspec option files and on the
+//     Rake::TestTask ruby_opts -r features (implicit edges; whatever the unit's runner, an extra dependency only over-selects).
+//   - test and test-support files (every unit and any file below a spec/test/tests directory) depend on the existing files and
+//     directories their path-like string literals and evaluated path expressions name, relative to the file's directory, the
+//     project root, the repository root or a fixtures directory of the project (fixture_data edges, pattern edges dir/** for a
+//     directory other than an ancestor or a project root); on a partly computed path's prefix (pattern edges); on the files
+//     of their other Dir globs (pattern edges relative to the project and the repository root); on the executables named by
+//     Gem.bin_path; and on test/fixtures/** and spec/fixtures/** for `fixtures :all`. These edges are heuristic and add-only.
+//     Executables are sources: a test naming exe/x depends on it, and the executable depends on what it requires; a bare
+//     program name ("rubocop") is not a reference.
+//
+// Roles: tests; Gemfile, gems.rb and *.gemspec of a project: manifest; Rakefile of a project, *.rake below tasks/ or rakelib/,
+// .rspec*, spec/spec.opts and .simplecov of a project: config; Gemfile.lock / gems.locked of a project: lock; other Ruby files:
+// source; .erb, .haml, .slim, .builder, .jbuilder, .yml, .yaml files of a project and every file below a spec/test/tests
+// directory of a project: data (a sub-tree holding another ecosystem's manifest and no Ruby file is left out). Marker-like
+// files below test-data directories get no manifest/config/lock role: those roles are exempt from the unreferenced-file
+// widening, test data must not be.
 //
 // # Unresolved
 //
-// A require, load, autoload, push_dir or Dir loop whose path is computed, `send(:require, x)` and eval(File.read(x)) are
-// dynamic; a file the lexer cannot read reliably is uncertain_scan. Both are Unresolved at repository scope with
-// TriggerGlobs on Ruby files (*.rb, *.rake, *.ru, *.gemspec, bin/*, exe/*, libexec/*): a Ruby file added, changed or deleted
-// anywhere seeds the file with the dynamic site, and every test reaching it is selected.
+// A require, load, autoload, push_dir or Dir loop whose path is fully computed, `send(:require, x)`, eval/instance_eval/
+// class_eval of File.read(x) and a Bundler.require whose Gemfile cannot be read are dynamic; a file the lexer cannot read
+// reliably is uncertain_scan (its references found so far still count). Both are Unresolved at repository scope with
+// TriggerGlobs on the files a require or load can execute (**/*.rb, **/*.rake, **/*.ru, **/*.gemspec, **/bin/*, **/exe/*,
+// **/libexec/*): such a file added, changed or deleted anywhere seeds the file with the dynamic site, and every test reaching
+// it is selected. A bare load(x) in a file that defines its own `load` method is that method, not Kernel#load.
 //
 // # Widenings (ClassifyChange, all with Eco "ruby")
 //
-// Gemfile / gems.rb: manifest_changed at its directory. *.gemspec: nothing when only summary, description, homepage,
-// author(s), email, metadata, license(s), post_install_message, rdoc_options or extra_rdoc_files assignments changed (the
-// scanner's GemspecFingerprint), manifest_changed at its directory otherwise. Gemfile.lock / gems.locked: lock_changed (level L0)
-// at its directory. .rspec, .rspec-local, .rspec-parallel, spec/spec.opts, Rakefile, *.rake below tasks/ or rakelib/, and
-// .simplecov: test_config_changed at the project. .rubocop.yml, .rubocop_todo.yml, .reek.yml, .yardopts, .document,
-// .standard.yml at a project root, CHANGELOG* and *.rdoc in a project: nothing. Native extension sources (below an ext/
-// directory: C/C++/Java sources and extconf.rb): unknown_file at the project. Marker files outside any project (test data) are
-// left to the general rules.
+// Only marker files at a Ruby project are claimed; the same names below test-data directories are left to the general rules.
 //
-// AnalyzerVersion must be bumped on every change of these rules.
+//   - Gemfile / gems.rb: manifest_changed at its directory (it is code: groups, sources and path gems change what is loaded).
+//   - *.gemspec: nothing when only summary, description, homepage, author(s), email, metadata, license(s),
+//     post_install_message, rdoc_options or extra_rdoc_files assignments changed (comments and layout ignored; the scanner's
+//     GemspecFingerprint); manifest_changed at its directory otherwise, or when it was added, deleted or cannot be lexed.
+//   - Gemfile.lock / gems.locked: lock_changed (level L0) at its directory, every Ruby project below it included.
+//   - .rspec, .rspec-local, .rspec-parallel, spec/spec.opts, Rakefile, *.rake below tasks/ or rakelib/, .simplecov:
+//     test_config_changed at the project (nested projects included: a root Rakefile often runs them).
+//   - .rubocop.yml, .rubocop_todo.yml, .reek.yml, .yardopts, .document, .standard.yml at a project root, CHANGELOG* and *.rdoc
+//     in a project (not below a test directory): nothing. A test naming such a file still reaches it through the graph.
+//   - native extension sources below an ext/ directory (C, C++, Java, Objective-C, yacc sources, extconf.rb, depend):
+//     unknown_file at the project.
+//
+// AnalyzerVersion must be bumped on every change of these rules (analysis snapshots are keyed by it).
 package ruby
 
 import (
@@ -106,7 +142,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "ruby-1"
+const AnalyzerVersion = "ruby-2"
 
 // Eco is the Ruby ecosystem.
 type Eco struct{}

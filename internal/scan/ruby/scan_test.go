@@ -202,6 +202,7 @@ end`, "rb_test_task rake", "rb_test_pattern test/a_test.rb [rake]", "rb_test_pat
 	expect(t, `Rake::TestTask.new { |t| t.pattern = ENV["TEST"] || "test/**/test_*.rb" }`,
 		"rb_test_task rake", "rb_test_pattern test/**/test_*.rb [rake]")
 	expect(t, `Rake::TestTask.new { |t| t.test_files = TEST_FILES }`, "rb_test_task rake", "rb_test_pattern  [rake] dyn")
+	expect(t, `Rake::TestTask.new { |t| t.ruby_opts << "-r#{HELPER}" }`, "rb_test_task rake", "rb_test_pattern  [rake] dyn")
 	expect(t, `RSpec::Core::RakeTask.new(:spec) { |t| t.pattern = "spec/**/*_spec.rb" }`,
 		"rb_test_task rspec", "rb_test_pattern spec/**/*_spec.rb [rspec]")
 	expect(t, `Rake::TestTask.new { |t| t.test_files = Dir.glob("t/**/*_test.rb") - Dir["t/slow/*"] }`,

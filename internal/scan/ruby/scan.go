@@ -664,6 +664,10 @@ func (s *scanner) rakeAttr(ts []token, i int, name string) int {
 			s.add(model.ImportRbTestPattern, "", s.rake, true, line)
 		}
 	case "ruby_opts":
+		if dyn {
+			// A computed option may load any file before every test: the project's suite is computed too.
+			s.add(model.ImportRbTestPattern, "", s.rake, true, line)
+		}
 		var words []string
 		for _, p := range strs {
 			words = append(words, strings.Fields(p)...)
@@ -726,9 +730,7 @@ func (s *scanner) literalList(ts []token, lo, hi int) ([]string, bool) {
 			si := &s.strs[t.aux]
 			switch si.kind {
 			case sWords:
-				for _, w := range strings.Fields(si.parts[0].lit) {
-					out = append(out, w)
-				}
+				out = append(out, strings.Fields(si.parts[0].lit)...)
 			case sSingle, sDouble:
 				if v, ok := si.static(); ok {
 					out = append(out, v)
