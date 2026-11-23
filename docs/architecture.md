@@ -22,7 +22,7 @@ does not have (code that computes import paths, build logic it cannot evaluate),
 | Term | Meaning |
 |---|---|
 | **Change** | The files that differ between a *base* commit and a *head* (a commit, or the working tree including staged, unstaged and untracked files). |
-| **Test unit** | The smallest thing a test runner can run on its own: a test file (Node, Python), a Cargo target, a Go package, a Maven module or Gradle project, an MSBuild project. |
+| **Test unit** | The smallest thing bgraph can select soundly: a test file (Node, Python), a Cargo target, a Go package, a Maven module or Gradle project, an MSBuild project, or a PHP project. |
 | **Project** | An ecosystem's project directory (`package.json`, Python project, crate, Go module, Maven module, .NET project...). Widenings are scoped to projects. |
 | **Ecosystem** | A language integration: it analyzes one tree into roles, edges, unresolved imports and test units, and classifies changes to its own manifests, configs and lockfiles. |
 | **Widening** | A record `{tier, reason, path, scope, detail, suggest}` explaining why the selection is wider than the graph alone. |

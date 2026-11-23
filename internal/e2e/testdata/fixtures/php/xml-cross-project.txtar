@@ -1,0 +1,24 @@
+PHPUnit XML suite paths can point into another project.
+-- base/composer.json --
+{"name":"demo/app","description":"Original","require-dev":{"phpunit/phpunit":"^10"}}
+-- base/phpunit.xml.dist --
+<phpunit><testsuites><testsuite name="nested"><directory>suite/tests</directory></testsuite></testsuites></phpunit>
+-- base/tests/AppTest.php --
+<?php
+-- base/src/Service.php --
+<?php function demo() { return 1; }
+-- base/web/package.json --
+{"devDependencies":{"vitest":"1.0.0"}}
+-- base/web/check.test.ts --
+export {}
+-- base/suite/composer.json --
+{"require-dev":{"phpunit/phpunit":"^10"}}
+-- base/suite/tests/NestedTest.php --
+<?php
+-- head/suite/tests/NestedTest.php --
+<?php // changed
+-- want --
+select .::php
+select suite::php
+noselect web/check.test.ts
+notfull

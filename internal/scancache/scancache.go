@@ -21,6 +21,7 @@ import (
 	"github.com/qxbao/bgraph/internal/model"
 	goscan "github.com/qxbao/bgraph/internal/scan/golang"
 	jsscan "github.com/qxbao/bgraph/internal/scan/js"
+	phpscan "github.com/qxbao/bgraph/internal/scan/php"
 	pyscan "github.com/qxbao/bgraph/internal/scan/python"
 	rsscan "github.com/qxbao/bgraph/internal/scan/rust"
 	sfcscan "github.com/qxbao/bgraph/internal/scan/sfc"
@@ -28,7 +29,7 @@ import (
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2"
+const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
@@ -116,6 +117,9 @@ func (c *Cache) warn(format string, a ...any) {
 
 // lang picks the scanner by file extension.
 func lang(p string) string {
+	if phpscan.Source(p) {
+		return "php"
+	}
 	switch path.Ext(p) {
 	case ".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts":
 		return "js"
@@ -200,6 +204,8 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 		r = pyscan.Scan(p, b)
 	case "go":
 		r = goscan.Scan(p, b)
+	case "php":
+		r = phpscan.Scan(b)
 	default:
 		r = jsscan.Scan(p, b)
 	}

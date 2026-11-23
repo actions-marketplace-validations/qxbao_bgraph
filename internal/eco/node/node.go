@@ -20,7 +20,7 @@ import (
 const Name = "node"
 
 // AnalyzerVersion: bump whenever the analysis/resolution rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "node-23"
+const AnalyzerVersion = "node-24"
 
 // Eco is the Node ecosystem.
 type Eco struct {
@@ -87,8 +87,9 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	if len(pkgs) == 0 {
 		return a, nil
 	}
-	projDirs := make([]eco.Project, len(a.Projects))
-	copy(projDirs, a.Projects)
+	// Visit projects in directory order so fresh analyses emit the same reasons as cached snapshots.
+	projDirs := slices.Clone(a.Projects)
+	slices.SortFunc(projDirs, func(a, b eco.Project) int { return strings.Compare(a.Dir, b.Dir) })
 
 	// 2. Per-project runner config: aliases, implicit dependencies, unreadable parts.
 	// Runner config files in EVERY directory, assigned to the nearest project (nested config such as tests/unit/jest.config.mjs).
@@ -102,7 +103,8 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	}
 	configs := map[string]testConfig{}
 	var aliases []resolve.Alias
-	for dir, pi := range pkgs {
+	for _, pr := range projDirs {
+		dir, pi := pr.Dir, pkgs[pr.Dir]
 		tc := readTestConfig(t, dir, pi.Jest, cfgByProj[dir])
 		configs[dir] = tc
 		aliases = append(aliases, tc.aliases...)
@@ -231,12 +233,14 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	}
 	// Test-file pattern computed by code (template/variable): unknown which files are tests → "whole project" unit (the runner runs the whole project).
 	// Without it, an unrecognized test would never be selected (babel: testRegex is a template with expressions).
-	for dir, tc := range configs {
+	for _, pr := range projDirs {
+		dir, tc := pr.Dir, configs[pr.Dir]
 		if tc.testsOpaque {
 			a.Tests = append(a.Tests, model.TestUnit{Eco: Name, ID: wholeUnitID(dir), Project: dir, Runner: detectRunner(pkgs, dir), Whole: true})
 		}
 	}
-	for dir, tc := range configs {
+	for _, pr := range projDirs {
+		dir, tc := pr.Dir, configs[pr.Dir]
 		var projTests []string
 		for _, tf := range tests {
 			if projectOf(tf) == dir || (eco.Within(tf, dir) && dir == ".") {

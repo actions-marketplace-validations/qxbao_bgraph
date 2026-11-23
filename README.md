@@ -44,7 +44,7 @@ is a regression shipped to production. bgraph is built around that constraint:
 
 <table>
   <tr>
-    <td align="center" width="25%"><h3>1,381</h3>real bug-fix tasks replayed<br>across six ecosystems</td>
+    <td align="center" width="25%"><h3>1,650</h3>real bug-fix tasks replayed<br>across seven ecosystems</td>
     <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 327 mutation kills</td>
     <td align="center" width="25%"><h3>3–13%</h3>of the suite selected on<br>well-structured repositories</td>
     <td align="center" width="25%"><h3>&lt; 1 s</h3>typical selection time,<br>index cached between runs</td>
@@ -135,6 +135,7 @@ and per-task causes: [docs/benchmarks.md](docs/benchmarks.md).
 | <img src="https://cdn.simpleicons.org/openjdk/ED8B00" width="20" alt=""> | [**JVM** (Java / Kotlin)](docs/ecosystems/jvm.md) | Maven module, Gradle project | Maven, Gradle (wrappers detected) |
 | <img src="https://cdn.simpleicons.org/dotnet" width="20" alt=""> | [**.NET** (C# / F# / VB)](docs/ecosystems/dotnet.md) | MSBuild project | `dotnet test` (VSTest, Microsoft.Testing.Platform) |
 | <img src="https://cdn.simpleicons.org/go" width="20" alt=""> | [**Go**](docs/ecosystems/go.md) | package | `go test`, modules, `go.work`, vendoring |
+| <img src="https://cdn.simpleicons.org/php" width="20" alt=""> | [**PHP**](docs/ecosystems/php.md) | Composer project | PHPUnit, Pest |
 
 Polyglot repositories work out of the box: every ecosystem selects independently, and a change in one does not select
 another's tests unless it is a shared input (CI definitions, toolchain pins).
@@ -145,7 +146,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 |---|---|
 | 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
 | 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
-| ▶️ **Ready-to-run commands** | `bgraph command` prints `vitest run ...`, `pytest ...`, `cargo test -p ...`, `mvn -pl ...`, `dotnet test ...`, `go test ...`, batched for long lists. [CLI](docs/cli.md#command) |
+| ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest and more. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
 | ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files and for JVM and .NET test classes. [Dynamic layer](docs/dynamic-layer.md) |
 | 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |

@@ -1,0 +1,21 @@
+A Composer script exposes custom PHPUnit discovery without assigning guessed test operands.
+-- base/packages/custom/composer.json --
+{"scripts":{"test":["@php vendor/bin/phpunit --configuration checks/suite.xml"]}}
+-- base/packages/custom/checks/suite.xml --
+<phpunit><testsuite name="custom"><file>Check.php</file></testsuite></phpunit>
+-- base/packages/custom/checks/Check.php --
+<?php
+-- base/packages/custom/tests/SmokeTest.php --
+<?php
+-- base/packages/custom/src/Service.php --
+<?php
+-- base/other/composer.json --
+{"require-dev":{"phpunit/phpunit":"^10"}}
+-- base/other/tests/OtherTest.php --
+<?php
+-- head/packages/custom/src/Service.php --
+<?php // changed
+-- want --
+widened packages/custom::php
+noselect other::php
+scope graph

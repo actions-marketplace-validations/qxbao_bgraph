@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qxbao/bgraph/internal/eco/php"
 	"github.com/qxbao/bgraph/internal/model"
 )
 
@@ -91,7 +92,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests, goTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, phpTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -103,6 +104,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == "maven" || t.Runner == "gradle" {
 			jvmTests = append(jvmTests, t) // units are modules/projects: dedicated adapter (maven.go, gradle.go)
+			continue
+		}
+		if t.Runner == php.RunnerPHPUnit || t.Runner == php.RunnerPest {
+			phpTests = append(phpTests, t)
 			continue
 		}
 		if t.Runner == "go" {
@@ -193,6 +198,13 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		cmds, notes := goCommands(goTests, opt)
 		plan.Commands = append(plan.Commands, cmds...)
 		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(phpTests) > 0 {
+		cmds, ok := phpCommands(phpTests, opt)
+		if !ok {
+			return full("PHP project does not have a representable runner command: run the full suite")
+		}
+		plan.Commands = append(plan.Commands, cmds...)
 	}
 	return plan, nil
 }

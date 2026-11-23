@@ -61,6 +61,7 @@ type T1Result struct {
 	Py      *PyT1Info     `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
 	JVM     *JVMT1Info    `json:"jvm,omitempty"`           // JVM oracle details (ecosystem jvm only)
 	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"`        // .NET oracle details (ecosystem dotnet only)
+	PHP     *PHPT1Info    `json:"php,omitempty"`           // PHP oracle details (ecosystem php only)
 	Go      *GoT1Info     `json:"go,omitempty"`            // Go oracle details (ecosystem go only)
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
@@ -311,12 +312,14 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	dir := rr.mirror
 	var ib *indexBuilder
 	var wt, gp string
+	emptyPHPTestPatch := rr.cfg.Ecosystem == "php" && strings.TrimSpace(t.TestPatch) == ""
 	if !useWT {
 		idir := filepath.Join(rr.cfg.Work, "idx")
 		if err := os.MkdirAll(idir, 0o755); err != nil {
 			return skip("checkout", err)
 		}
 		ib = newIndexBuilder(rr.mirror, filepath.Join(idir, tag+".index"), t.BaseCommit)
+		ib.allowPromisedBlobs = rr.cfg.Ecosystem == "php"
 		defer ib.Close()
 	} else {
 		wt = filepath.Join(rr.cfg.Work, "wt", tag)
@@ -342,8 +345,10 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		os.WriteFile(gp, []byte(t.Patch), 0o644)
 		defer os.Remove(tp)
 		defer os.Remove(gp)
-		if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", tp); err != nil {
-			return skip("apply", fmt.Errorf("test_patch: %w", err))
+		if !emptyPHPTestPatch {
+			if _, err := git(ctx, wt, "apply", "--whitespace=nowarn", tp); err != nil {
+				return skip("apply", fmt.Errorf("test_patch: %w", err))
+			}
 		}
 		if ov != nil {
 			if err := os.WriteFile(filepath.Join(wt, "bgraph.toml"), ov, 0o644); err != nil {
@@ -363,12 +368,15 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.P = strings.TrimSpace(p)
 	}
 	if !useWT {
-		p, err := ib.Apply(ctx, t.TestPatch, "eval: test patch")
-		if err != nil {
-			res.Detail = "test_patch: " + err.Error()
-			return res, true
+		res.P = t.BaseCommit
+		if !emptyPHPTestPatch {
+			p, err := ib.Apply(ctx, t.TestPatch, "eval: test patch")
+			if err != nil {
+				res.Detail = "test_patch: " + err.Error()
+				return res, true
+			}
+			res.P = p
 		}
-		res.P = p
 		if ov != nil {
 			if res.P, err = ib.AddFile(ctx, "bgraph.toml", ov, "eval: rules overlay"); err != nil {
 				return skip("apply", err)
@@ -382,8 +390,13 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		return skip("apply", err)
 	}
 	files := map[string]string{}
+	phpTouched := map[string]bool{}
 	parts := strings.Split(ns, "\x00")
 	for i := 0; i+1 < len(parts); i += 2 {
+		if rr.cfg.Ecosystem == "php" {
+			phpTouched[parts[i+1]] = true
+			continue
+		}
 		if parts[i] == "D" {
 			continue
 		}
@@ -430,6 +443,15 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Required = req
 		if len(req) == 0 {
 			return skip("unmapped", nil)
+		}
+	} else if rr.cfg.Ecosystem == "php" {
+		req, res.PHP, err = phpRequired(ctx, dir, res.P, ids, phpTouched, t.F2PKind)
+		res.Required = req
+		if err != nil {
+			return skip("php_oracle", err)
+		}
+		if len(req) == 0 || res.PHP.NotFound > 0 || res.PHP.NoOwner > 0 {
+			return skip("unmapped", fmt.Errorf("names %d, not found %d, ownerless files %d", res.PHP.Names, res.PHP.NotFound, res.PHP.NoOwner))
 		}
 	} else if rr.cfg.Ecosystem == "go" {
 		greq, info, err := goRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch), t.F2PKind)
@@ -509,6 +531,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Missing = jvmMissing(req, su, res.JVM, sel.Changed)
 	} else if rr.cfg.Ecosystem == "dotnet" {
 		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
+	} else if rr.cfg.Ecosystem == "php" {
+		res.Missing = phpMissing(req, su, res.PHP)
 	} else if rr.cfg.Ecosystem == "go" {
 		res.Missing = goMissing(req, su, res.Go, sel.Changed)
 	} else if rr.cfg.Ecosystem == "python" {
@@ -533,7 +557,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			goDiagnose(res.Go)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
-		} else if rr.cfg.Ecosystem != "rust" {
+		} else if rr.cfg.Ecosystem != "rust" && rr.cfg.Ecosystem != "php" {
 			res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
 		}
 	}

@@ -29,13 +29,14 @@ commit as the feature:
 | JVM (Maven, Gradle) | module / project | – | test classes | [jvm](ecosystems/jvm.md) |
 | .NET (VSTest, Microsoft.Testing.Platform) | MSBuild project | – | test classes | [dotnet](ecosystems/dotnet.md) |
 | Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
+| PHP | Composer project | – | – | [php](ecosystems/php.md) |
 
 ## New ecosystems
 
 | Item | Status | Priority | Notes | Page |
 |---|---|---|---|---|
 | Ruby (RSpec, Minitest; Bundler, `Gemfile.lock`) | planned | 1 | `require_relative` is static; Rails autoloading (Zeitwerk) maps constants to paths by convention and needs its own rules; dynamic `require` widens | |
-| PHP (PHPUnit, Pest; Composer, `composer.lock`) | planned | 1 | PSR-4 / PSR-0 / classmap autoload from `composer.json` gives class → file; `include` of computed paths widens | |
+| PHP (PHPUnit, Pest; Composer, `composer.lock`) | done (unreleased) | 1 | Project ownership, Composer autoload roots, and static and computed includes | [php](ecosystems/php.md) |
 | Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
 | Swift (SwiftPM, `swift test`, `Package.resolved`) | planned | 2 | Module granularity like Cargo targets | |
 | Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | planned | 2 | Static imports; package granularity; Flutter golden files are test data | |
@@ -54,6 +55,7 @@ commit as the feature:
 | More than one runner per project (e.g. Vitest + Playwright) | Node | planned | 2 | Today the first detected runner runs every test file of the project | |
 | pytest-django | Python | planned | 2 | Settings and the app registry are loaded by name at run time | |
 | TUnit (Microsoft.Testing.Platform) | .NET | planned | 3 | Needs `--treenode-filter` in the recorder and the runner; TUnit projects run whole under the class layer today | |
+| Composer scripts and custom PHPUnit/Pest invocations | PHP | planned | 3 | Resolve project-defined launchers, configuration paths and additional suite flags | [php](ecosystems/php.md) |
 
 ## Lockfiles
 
@@ -63,6 +65,7 @@ commit as the feature:
 | `bun.lockb` (binary) and `npm-shrinkwrap.json` to L1 | planned | 3 | `bun.lock` (text) and `package-lock.json` are read today | [lockfiles](lockfiles.md) |
 | `packages.lock.json` (.NET) to L1 | planned | 2 | L0 today | [lockfiles](lockfiles.md) |
 | Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
+| `composer.lock` to L1 | planned | 3 | L0 today. Compare local and transitive dependency resolution against Composer first. | [lockfiles](lockfiles.md) |
 
 ## Dynamic layer
 

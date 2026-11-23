@@ -17,8 +17,10 @@ external evaluation below got a fixture that fails before the fix.
 ### T1: FAIL_TO_PASS
 
 Real bug-fix tasks from SWE-bench-family datasets (SWE-bench Verified, SWE-bench Multilingual, Multi-SWE-bench,
-SWE-bench-Live MultiLang, SWE-Sharp-Bench). Each task has a parent commit P, the fixed commit C (gold patch + test
-patch) and the list of tests that fail at P and pass at C (FAIL_TO_PASS).
+SWE-bench-Live MultiLang, SWE-Sharp-Bench) and [BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
+commit P, the fixed commit C (gold patch + test patch) and the list of tests that fail at P and pass at C (FAIL_TO_PASS).
+BugsPHP reconstructs P by restoring the buggy versions of the source files on the fixed tree. C is the recorded fixed
+tree. The oracle takes PHPUnit tests recorded as failing or erroring at P and passing at C.
 
 - bgraph selects for the change P → C. A task is a **violation** when a required test's unit is not selected and the
   scope is not `full`.
@@ -51,6 +53,7 @@ the real tools:
 | Gradle project list | `gradle projects` |
 | .NET project references | `dotnet msbuild -getItem:ProjectReference` |
 | Go packages, imports and embeds | `go list -e -json -test ./...` |
+| PHP projects, autoload roots and runnable suites | `composer show --self`, `composer show --path`, PHPUnit and Pest test listing |
 | JVM selection superset | Gradle/Maven incremental-build plugin (GIB) |
 | .NET selection superset | dotnet-affected |
 | Node selection superset | Vitest / Jest `--changed` |
@@ -77,7 +80,8 @@ resolution. Any mismatch blocks the format.
 
 ## Results
 
-All numbers come from single runs on Windows 11. Median selection is selected units / all units on non-full tasks.
+The original six ecosystem results are from Windows 11. The PHP results are from macOS on arm64 with the native PHP
+suites run in a Linux arm64 container. Median selection is selected units / all units on non-full tasks.
 
 ### T1 summary
 
@@ -89,6 +93,7 @@ All numbers come from single runs on Windows 11. Median selection is selected un
 | JVM | 243 (holdout 81) | 0 | 5 % (dev 7 %, holdout 1 %) | 0.94 (holdout 0.82) | holdout 3.7 % |
 | .NET | 248 (holdout 75) | 0 (6 oracle artefacts) | 5 % | 0.89 (holdout 0.80) | holdout 4.0 % |
 | Go | 243 (dev 169, holdout 74) | 0 (26 oracle artefacts, hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
+| PHP | 269 (dev 162, holdout 107) | 0 | 0 % | 1.000 | holdout 2.8 % |
 
 Notes per ecosystem:
 
@@ -112,6 +117,9 @@ Notes per ecosystem:
   packages have no changed file in their closure (flaky or timing tests). An acceptance test that executes a binary built
   by a Makefile through a relative path (`../../../alertmanager`, from a helper package) was a real gap; it is now covered
   by tying such paths to the main package of that name. Median selection time 46 ms.
+- **PHP** (BugsPHP, 15 repositories). The raw set contained 513 tasks and the oracle located all 1,636 failing-to-passing
+  test names. The capped benchmark evaluated every task without a full fallback. Project-level selectivity varied with the
+  repository layout. The median selected fraction on the Symfony holdout was 0.430 across 40 tasks.
 
 ### T2 mutation summary
 
@@ -123,10 +131,14 @@ Notes per ecosystem:
 | JVM | gson (Maven), moshi (Gradle) | 40 | 0 | 0.875 / 0.708 |
 | .NET | Polly, RestSharp | 40 | 0 | 0.239 / 0.923 |
 | Go | hcl, prometheus/common, connect-go | 60 | 0 | 0.389 / 0.100 / 0.200 |
+| PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
 in-repository import paths now depend on that package.
+
+The three PHP repositories have one runnable project each. The native Composer path-dependency fixture adds a second
+suite to check that an unrelated PHP project stays unselected when the shared package breaks its consumer.
 
 ### Native-tool and provider checks
 
@@ -136,6 +148,7 @@ in-repository import paths now depend on that package.
 | JVM | Maven: 20/20 builds read correctly, 1,601 of 1,601 inter-module edges found. Gradle: 8/12 builds identical; the others differ by intermediate projects without files or by settings bgraph cannot evaluate (which fail closed with a full-scope widening). GIB: 34 tasks agree, 1 divergence classified as GIB over-approximation |
 | .NET | `ProjectReference`: 55 repositories / 151 commits, 9,086 edges outside dotnet/runtime, 0 missing; dotnet/runtime: 0 missing (377 edges, 278 of them covered by an unresolved-construct widening). dotnet-affected: 217 tasks without a real violation; 1 divergence by design (it counts a Markdown file under a docs-site project) |
 | Go | 25 repositories, 50 base commits, 656 modules, 7,234 packages with tests: every package with tests is a unit; 87,926 in-repo import edges and 6,602 embedded files covered. 107 extra units (packages excluded by build constraints on the host OS): over-selection only |
+| PHP | 15 revisions across 3 repositories matched the project and a source file in a PSR-4 root reported by Composer. The generated commands ran all three native suites. In a native two-project fixture, changing a Composer path dependency selected its one consumer. |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay

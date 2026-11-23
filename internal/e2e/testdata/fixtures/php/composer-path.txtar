@@ -1,0 +1,31 @@
+A Composer path repository links a dependent to a nested project.
+-- base/composer.json --
+{"require":{"demo/lib":"@dev"},"repositories":[{"type":"path","url":"suites/*"}]}
+-- base/phpunit.xml.dist --
+<phpunit><testsuites><testsuite name="unit"><directory>tests</directory></testsuite></testsuites></phpunit>
+-- base/tests/AppTest.php --
+<?php
+-- base/src/Service.php --
+<?php function demo() { return 1; }
+-- base/web/package.json --
+{"devDependencies":{"vitest":"1.0.0"}}
+-- base/web/check.test.ts --
+export {}
+-- base/suite/composer.json --
+{"require-dev":{"phpunit/phpunit":"^10"}}
+-- base/suite/tests/NestedTest.php --
+<?php
+-- base/suites/lib/composer.json --
+{"name":"demo/lib","require-dev":{"phpunit/phpunit":"^10"}}
+-- base/suites/lib/src/X.php --
+<?php function x() { return 1; }
+-- base/suites/lib/tests/LibTest.php --
+<?php
+-- head/suites/lib/src/X.php --
+<?php function x() { return 2; }
+-- want --
+select .::php
+select suites/lib::php
+noselect suite::php
+noselect web/check.test.ts
+notfull
