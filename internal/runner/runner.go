@@ -12,6 +12,7 @@
 //   - dotnet: units are MSBuild projects, one `dotnet test <project>` each; see dotnet.go.
 //   - maven, gradle: units are modules/projects built by the build tool; see maven.go and gradle.go.
 //   - go: units are package directories, one `go test ./<dir> ./<dir2>` per module (run in the module directory); see gotest.go.
+//   - rspec, rails, minitest, rake: Ruby test files, one command per (project, runner, Gemfile, -I directories); see ruby.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -91,7 +92,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests, goTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -107,6 +108,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == "go" {
 			goTests = append(goTests, t) // units are package directories: dedicated adapter (gotest.go)
+			continue
+		}
+		if t.Runner == "rspec" || t.Runner == "rails" || t.Runner == "minitest" || t.Runner == "rake" {
+			rbTests = append(rbTests, t) // dedicated adapter: bundle exec, minitest loader, -I directories (ruby.go)
 			continue
 		}
 		if t.Runner == "pytest" || t.Runner == "django" {
@@ -191,6 +196,11 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	}
 	if len(goTests) > 0 {
 		cmds, notes := goCommands(goTests, opt)
+		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(rbTests) > 0 {
+		cmds, notes := rubyCommands(rbTests, opt)
 		plan.Commands = append(plan.Commands, cmds...)
 		plan.Notes = append(plan.Notes, notes...)
 	}

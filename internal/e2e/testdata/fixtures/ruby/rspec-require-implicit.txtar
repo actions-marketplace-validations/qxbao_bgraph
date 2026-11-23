@@ -1,0 +1,32 @@
+.rspec --require spec_helper loads spec_helper before every spec: a spec_helper change selects every spec of the project, and its dependencies too.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/.rspec --
+--require spec_helper
+--format documentation
+-- base/spec/spec_helper.rb --
+require "foo/setup"
+-- base/lib/foo/setup.rb --
+S = 1
+-- base/spec/a_spec.rb --
+describe "a" do; end
+-- base/spec/b_spec.rb --
+describe "b" do; end
+-- base/test/x_test.rb --
+require "minitest/autorun"
+-- head/lib/foo/setup.rb --
+S = 2
+-- want --
+notfull
+select spec/a_spec.rb
+select spec/b_spec.rb
+noselect test/x_test.rb

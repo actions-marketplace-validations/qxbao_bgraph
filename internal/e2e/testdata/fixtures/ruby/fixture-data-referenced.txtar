@@ -1,0 +1,25 @@
+A fixture file named by a spec (path expression relative to the spec) selects that spec only.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/spec/parser_spec.rb --
+DATA = File.read(File.join(__dir__, "fixtures", "input.json"))
+-- base/spec/other_spec.rb --
+x = 1
+-- base/spec/fixtures/input.json --
+{}
+-- head/spec/fixtures/input.json --
+{"a": 1}
+-- want --
+notfull
+scope graph
+select spec/parser_spec.rb
+noselect spec/other_spec.rb

@@ -1,0 +1,31 @@
+Minitest layout: test/*_test.rb files requiring test_helper; a library change selects only the tests that reach it.
+-- base/Gemfile --
+source "https://rubygems.org"
+gem "minitest"
+-- base/Rakefile --
+require "rake/testtask"
+Rake::TestTask.new(:test) do |t|
+  t.libs << "test"
+  t.pattern = "test/**/*_test.rb"
+end
+-- base/lib/calc.rb --
+require "calc/add"
+-- base/lib/calc/add.rb --
+module Calc; def self.add(a, b) = a + b; end
+-- base/lib/strings.rb --
+module Strs; end
+-- base/test/test_helper.rb --
+require "minitest/autorun"
+-- base/test/calc_test.rb --
+require "test_helper"
+require "calc"
+-- base/test/strings_test.rb --
+require "test_helper"
+require "strings"
+-- head/lib/calc/add.rb --
+module Calc; def self.add(a, b) = b + a; end
+-- want --
+notfull
+scope graph
+select test/calc_test.rb
+noselect test/strings_test.rb

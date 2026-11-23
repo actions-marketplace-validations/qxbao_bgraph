@@ -1,0 +1,32 @@
+require text inside comments, strings, heredocs and =begin blocks is not a require.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/lib/foo/a.rb --
+A = 1
+-- base/spec/a_spec.rb --
+# require "foo/a"
+=begin
+require "foo/a"
+=end
+MSG = "require 'foo/a'"
+DOC = <<~TXT
+  require "foo/a"
+TXT
+-- base/spec/b_spec.rb --
+require "foo/a"
+-- head/lib/foo/a.rb --
+A = 2
+-- want --
+notfull
+scope graph
+select spec/b_spec.rb
+noselect spec/a_spec.rb

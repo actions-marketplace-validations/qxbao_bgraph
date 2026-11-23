@@ -1,0 +1,20 @@
+Bundler.require loads the Gemfile's gems: a path gem's file reached that way selects the test loading the app.
+-- base/Gemfile --
+source "https://rubygems.org"
+gem "widgets", path: "vendor/widgets"
+gem "rake", require: false
+-- base/vendor/widgets/lib/widgets.rb --
+module Widgets; end
+-- base/app.rb --
+require "bundler"
+Bundler.require
+-- base/test/app_test.rb --
+require_relative "../app"
+-- base/test/plain_test.rb --
+x = 1
+-- head/vendor/widgets/lib/widgets.rb --
+module Widgets; X = 1; end
+-- want --
+notfull
+select test/app_test.rb
+noselect test/plain_test.rb

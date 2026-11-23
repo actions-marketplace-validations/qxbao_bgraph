@@ -1,0 +1,30 @@
+A C source of a native extension widens to its Ruby project.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/ext/foo/foo.c --
+int x;
+-- base/ext/foo/extconf.rb --
+require "mkmf"
+create_makefile("foo/foo")
+-- base/spec/a_spec.rb --
+x = 1
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^1.0.0"}}
+-- base/web/src/a.test.ts --
+import { expect } from "vitest"
+-- head/ext/foo/foo.c --
+int y;
+-- want --
+notfull
+widen unknown_file
+select spec/a_spec.rb
+noselect web/src/a.test.ts

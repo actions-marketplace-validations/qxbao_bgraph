@@ -1,0 +1,31 @@
+A view template is loaded by the Rails application: a change selects the specs loading the app.
+-- base/Gemfile --
+source "https://rubygems.org"
+gem "rails"
+-- base/bin/rails --
+#!/usr/bin/env ruby
+require_relative "../config/boot"
+-- base/config/boot.rb --
+require "bundler/setup"
+-- base/config/application.rb --
+require "rails/all"
+module App
+  class Application < Rails::Application
+  end
+end
+-- base/config/environment.rb --
+require_relative "application"
+-- base/app/views/users/show.html.erb --
+<%= @user.name %>
+-- base/test/test_helper.rb --
+require_relative "../config/environment"
+-- base/test/controllers/users_controller_test.rb --
+require "test_helper"
+-- base/test/lib/pure_test.rb --
+require "minitest/autorun"
+-- head/app/views/users/show.html.erb --
+<%= @user.email %>
+-- want --
+notfull
+select test/controllers/users_controller_test.rb
+noselect test/lib/pure_test.rb

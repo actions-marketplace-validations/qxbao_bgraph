@@ -1,0 +1,15 @@
+A Ruby file outside every marker directory belongs to the root project: nothing requires it, so the orphan rule widens to the root project.
+-- base/gem/Gemfile --
+source "https://rubygems.org"
+-- base/gem/lib/g.rb --
+G = 1
+-- base/gem/spec/g_spec.rb --
+require "g"
+-- base/scripts/release.rb --
+puts "release"
+-- head/scripts/release.rb --
+puts "release!"
+-- want --
+notfull
+widen unreferenced_file
+select gem/spec/g_spec.rb

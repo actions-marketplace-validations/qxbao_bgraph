@@ -1,0 +1,28 @@
+A dynamic require only loads Ruby files: a documentation change does not seed the dynamic site.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/lib/foo/plugins.rb --
+def load_plugin(name) = require(name)
+-- base/spec/plugins_spec.rb --
+require "foo/plugins"
+-- base/README.md --
+a
+-- base/CHANGELOG.md --
+a
+-- head/README.md --
+b
+-- head/CHANGELOG.md --
+b
+-- want --
+notfull
+scope none
+noselect spec/plugins_spec.rb

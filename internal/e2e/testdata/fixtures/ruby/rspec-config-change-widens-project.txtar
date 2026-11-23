@@ -1,0 +1,30 @@
+A .rspec change is a test configuration change: every Ruby test of the project is selected.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/.rspec --
+--require spec_helper
+-- base/spec/spec_helper.rb --
+x = 1
+-- base/spec/a_spec.rb --
+describe "a" do; end
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^1.0.0"}}
+-- base/web/src/a.test.ts --
+import { expect } from "vitest"
+-- head/.rspec --
+--require spec_helper
+--order random
+-- want --
+notfull
+widen test_config_changed
+select spec/a_spec.rb
+noselect web/src/a.test.ts

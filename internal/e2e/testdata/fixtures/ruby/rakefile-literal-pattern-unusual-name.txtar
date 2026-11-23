@@ -1,0 +1,22 @@
+A Rake::TestTask literal pattern makes unconventionally named files tests.
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/Rakefile --
+require "rake/testtask"
+Rake::TestTask.new do |t|
+  t.test_files = FileList["checks/**/check_*.rb"]
+end
+-- base/lib/thing.rb --
+T = 1
+-- base/lib/other.rb --
+O = 1
+-- base/checks/check_thing.rb --
+require_relative "../lib/thing"
+-- base/checks/check_other.rb --
+require_relative "../lib/other"
+-- head/lib/thing.rb --
+T = 2
+-- want --
+notfull
+select checks/check_thing.rb
+noselect checks/check_other.rb

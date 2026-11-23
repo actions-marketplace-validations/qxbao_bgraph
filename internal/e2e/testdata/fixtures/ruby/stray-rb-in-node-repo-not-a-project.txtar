@@ -1,0 +1,17 @@
+A stray Ruby file in a repository without any Ruby project is left to the general rules (no Ruby project, no full widening).
+-- base/package.json --
+{"name":"web","devDependencies":{"vitest":"^1.0.0"}}
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- base/src/b.test.ts --
+import { expect } from 'vitest'
+-- base/tools/gen.rb --
+puts 1
+-- head/tools/gen.rb --
+puts 2
+-- want --
+notfull
+widen unknown_file
+select src/a.test.ts

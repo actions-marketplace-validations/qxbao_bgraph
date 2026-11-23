@@ -1,0 +1,18 @@
+A sub-gem's gemspec dependency change widens to that gem only.
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/alpha/alpha.gemspec --
+Gem::Specification.new { |s| s.name = "alpha" }
+-- base/alpha/spec/alpha_spec.rb --
+x = 1
+-- base/beta/beta.gemspec --
+Gem::Specification.new { |s| s.name = "beta" }
+-- base/beta/spec/beta_spec.rb --
+y = 1
+-- head/alpha/alpha.gemspec --
+Gem::Specification.new { |s| s.name = "alpha"; s.add_dependency "json" }
+-- want --
+notfull
+widen manifest_changed
+select alpha/spec/alpha_spec.rb
+noselect beta/spec/beta_spec.rb

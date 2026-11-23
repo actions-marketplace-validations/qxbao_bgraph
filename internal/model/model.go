@@ -120,6 +120,26 @@ const (
 	// and whose Suffix holds the comma-separated names of a `from <Spec> import <names>` statement ("*" for a star import).
 	ImportSysPath ImportKind = "sys_path" // sys.path.insert/append(...): Spec is a path relative to the file's directory, or "cwd:<path>"; Dynamic: not evaluable
 	ImportPlugin  ImportKind = "plugin"   // pytest_plugins = ["a.b"]
+	// Ruby (internal/scan/ruby documents Spec, Suffix and Dynamic for each kind). Suffix holds the base of a path ("" a feature or a
+	// path relative to an unknown directory, "rel" relative to the scanned file's directory, "root" relative to the project root).
+	ImportRbRequire     ImportKind = "rb_require"      // require / require_relative / require_dependency / autoload
+	ImportRbLoad        ImportKind = "rb_load"         // load (exact file name), eval(File.read(...))
+	ImportRbGlob        ImportKind = "rb_glob"         // a Dir glob whose files are required/loaded
+	ImportRbDataGlob    ImportKind = "rb_data_glob"    // a Dir glob read for data
+	ImportRbString      ImportKind = "rb_string"       // a string literal or path expression that may name a repo file
+	ImportRbZeitwerk    ImportKind = "rb_zeitwerk"     // Zeitwerk::Loader.for_gem / for_gem_extension
+	ImportRbPushDir     ImportKind = "rb_push_dir"     // loader.push_dir(dir)
+	ImportRbRails       ImportKind = "rb_rails"        // class X < Rails::Application (Spec "app") / Rails::Engine (Spec "engine")
+	ImportRbTestPattern ImportKind = "rb_test_pattern" // Rake::TestTask / RSpec::Core::RakeTask pattern or test_files (Suffix rake|rspec)
+	ImportRbTestTask    ImportKind = "rb_test_task"    // a Rake::TestTask (Spec rake) or RSpec::Core::RakeTask (Spec rspec) is defined
+	ImportRbRubyOpt     ImportKind = "rb_ruby_opt"     // Rake::TestTask ruby_opts "-r feature"
+	ImportRbTestLib     ImportKind = "rb_test_lib"     // Rake::TestTask libs entry
+	ImportRbGem         ImportKind = "rb_gem"          // gem "name" (Gemfile): Spec name, Suffix the require: option ("-" for false)
+	ImportRbGemspec     ImportKind = "rb_gemspec"      // gemspec (Gemfile): Spec the path: option
+	ImportRbBundler     ImportKind = "rb_bundler"      // Bundler.require
+	ImportRbBinPath     ImportKind = "rb_bin_path"     // Gem.bin_path("gem", "exe"): Spec the executable name
+	ImportRbFixturesAll ImportKind = "rb_fixtures_all" // fixtures :all (Rails)
+	ImportRbLoadPath    ImportKind = "rb_load_path"    // $LOAD_PATH / $: edit (recorded only)
 )
 
 // ImportRef is a reference found in the source text.

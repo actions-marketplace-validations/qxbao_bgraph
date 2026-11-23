@@ -1,0 +1,24 @@
+A gemspec below spec/fixtures is test data, not a project: a change there widens to the enclosing project.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/spec/fixtures/sample/sample.gemspec --
+Gem::Specification.new { |s| s.name = "sample" }
+-- base/spec/fixtures/sample/lib/sample.rb --
+S = 1
+-- base/spec/loader_spec.rb --
+x = 1
+-- head/spec/fixtures/sample/lib/sample.rb --
+S = 2
+-- want --
+notfull
+widen unreferenced_file
+select spec/loader_spec.rb

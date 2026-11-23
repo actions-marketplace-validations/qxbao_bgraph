@@ -25,6 +25,11 @@ var kinds = []model.ImportKind{
 	model.ImportStatic, model.ImportTypeOnly, model.ImportDynamic, model.ImportRequire, model.ImportResolve,
 	model.ImportMock, model.ImportGlob, model.ImportURL, model.ImportReExport, model.ImportTripleSlash,
 	model.ImportSysPath, model.ImportPlugin,
+	// Appended (never reorder: stored rows refer to kinds by index).
+	model.ImportRbRequire, model.ImportRbLoad, model.ImportRbGlob, model.ImportRbDataGlob, model.ImportRbString, model.ImportRbZeitwerk,
+	model.ImportRbPushDir, model.ImportRbRails, model.ImportRbTestPattern, model.ImportRbTestTask, model.ImportRbRubyOpt,
+	model.ImportRbTestLib, model.ImportRbGem, model.ImportRbGemspec, model.ImportRbBundler, model.ImportRbBinPath,
+	model.ImportRbFixturesAll, model.ImportRbLoadPath,
 }
 
 var kindIdx = func() map[model.ImportKind]byte {

@@ -1,0 +1,23 @@
+A feature is resolved by suffix over the whole repository: require "baz/util" reaches a nested gem's lib file whatever $LOAD_PATH is.
+-- base/Gemfile --
+source "https://rubygems.org"
+gem "baz", path: "gems/baz"
+-- base/gems/baz/baz.gemspec --
+Gem::Specification.new { |s| s.name = "baz" }
+-- base/gems/baz/lib/baz/util.rb --
+module Baz; module Util; end; end
+-- base/gems/baz/lib/baz/other.rb --
+module Baz; module Other; end; end
+-- base/app/main.rb --
+$LOAD_PATH.unshift(ENV["BAZ_LIB"])
+require "baz/util"
+-- base/spec/main_spec.rb --
+require_relative "../app/main"
+-- base/spec/other_spec.rb --
+require "baz/other"
+-- head/gems/baz/lib/baz/util.rb --
+module Baz; module Util; X = 1; end; end
+-- want --
+notfull
+select spec/main_spec.rb
+noselect spec/other_spec.rb

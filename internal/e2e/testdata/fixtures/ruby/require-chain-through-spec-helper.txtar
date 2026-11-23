@@ -1,0 +1,36 @@
+A change in a library file selects the specs that reach it through spec_helper and the library's root file, not a spec that loads nothing of it.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/lib/foo.rb --
+require "foo/version"
+require "foo/bar"
+-- base/lib/foo/version.rb --
+module Foo; VERSION = "1"; end
+-- base/lib/foo/bar.rb --
+module Foo; class Bar; end; end
+-- base/lib/other.rb --
+module Other; end
+-- base/spec/spec_helper.rb --
+require "foo"
+-- base/spec/bar_spec.rb --
+require "spec_helper"
+describe Foo::Bar do; end
+-- base/spec/other_spec.rb --
+require_relative "../lib/other"
+describe Other do; end
+-- head/lib/foo/bar.rb --
+module Foo; class Bar; def x; end; end; end
+-- want --
+notfull
+scope graph
+select spec/bar_spec.rb
+noselect spec/other_spec.rb

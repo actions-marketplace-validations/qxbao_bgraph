@@ -1,0 +1,27 @@
+spec_helper loads spec/support/**/*.rb through a Dir glob: a support file change selects every spec using spec_helper.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/spec/spec_helper.rb --
+Dir[File.join(__dir__, "support", "**", "*.rb")].sort.each { |f| require f }
+-- base/spec/support/matchers.rb --
+M = 1
+-- base/spec/a_spec.rb --
+require "spec_helper"
+-- base/spec/b_spec.rb --
+x = 1
+-- head/spec/support/matchers.rb --
+M = 2
+-- want --
+notfull
+nowiden dynamic_import
+select spec/a_spec.rb
+noselect spec/b_spec.rb
