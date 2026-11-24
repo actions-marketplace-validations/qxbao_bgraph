@@ -465,17 +465,19 @@ func BodyGuard(name string, base, head []byte) (spans []Span, shift bool, first 
 		}
 		spans = append(spans, Span{From: bf.start, To: bf.end, What: bf.id})
 	}
-	bl, hl := strings.Split(string(base), "\n"), strings.Split(string(head), "\n")
-	shift = len(bl) != len(hl)
-	first = 0
-	for i := 0; i < len(bl) && i < len(hl); i++ {
-		if bl[i] != hl[i] {
-			first = i + 1
-			break
+	shift, first = lineShift(base, head)
+	return spans, shift, first, ""
+}
+
+// lineShift reports whether the change moves any unchanged line of the file to another line number, and the first base line
+// (1-based) from which lines may have moved: the start of the first hunk whose base and head line counts differ (comment and
+// blank-line hunks included). A later hunk may compensate, but every line at or after that first unbalanced hunk is treated as
+// shifted (conservative).
+func lineShift(base, head []byte) (bool, int) {
+	for _, h := range diffHunks(strings.Split(string(base), "\n"), strings.Split(string(head), "\n")) {
+		if h.b1-h.b0 != h.h1-h.h0 {
+			return true, h.b0 + 1
 		}
 	}
-	if first == 0 && len(bl) != len(hl) {
-		first = min(len(bl), len(hl)) + 1
-	}
-	return spans, shift, first, ""
+	return false, 0
 }

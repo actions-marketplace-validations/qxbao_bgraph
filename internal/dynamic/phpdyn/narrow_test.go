@@ -418,3 +418,32 @@ func TestMultiOperand(t *testing.T) {
 		}
 	}
 }
+
+// A comment line added above one function and a blank line removed below another keep the line count but move every line in
+// between: a test file that executed one of those lines (an exception's getLine()) must be kept.
+func TestLineShiftWithSameLineCount(t *testing.T) {
+	base := with(nil)
+	h := strings.Replace(cartPHP, "    public function total(): int\n", "    // note\n    public function total(): int\n", 1)
+	h = strings.Replace(h, "    }\n\n    public function count", "    }\n    public function count", 1)
+	if strings.Count(h, "\n") != strings.Count(cartPHP, "\n") {
+		t.Fatal("edit changed the line count")
+	}
+	spans, shift, first, why := BodyGuard("src/Cart.php", []byte(cartPHP), []byte(h))
+	if why != "" || len(spans) != 0 || !shift || first != 6 {
+		t.Fatalf("spans %v shift %v first %d why %q", spans, shift, first, why)
+	}
+	head := with(map[string]string{"src/Cart.php": h})
+	recs := records(base)
+	recs[1].LineCov = map[string]string{"src/Cart.php": "8|"} // CartTest executed line 8 (moves to 9)
+	out, why := run(t, base, head, recs, selection("src/Cart.php"), change("src/Cart.php", model.RoleSource))
+	if why != "" {
+		t.Fatal(why)
+	}
+	if got := kept(out); !slices.Contains(got, "tests/CartTest.php") {
+		t.Fatalf("CartTest removed: kept %v", got)
+	}
+	// A comment change that keeps every line where it was moves nothing.
+	if _, shift, _, why := BodyGuard("x.php", []byte(cartPHP), []byte(strings.Replace(cartPHP, "namespace App;", "namespace App; // x", 1))); why != "" || shift {
+		t.Fatalf("in-place comment: shift %v why %q", shift, why)
+	}
+}

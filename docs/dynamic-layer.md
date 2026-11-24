@@ -1156,8 +1156,10 @@ the reason in the `dynamic` note of every PHP unit the layer would have consider
    3. a changed function's base span contains a line Xdebug saw executed in f's line table for c;
    4. a changed function's span contains no instrumentable line in f's table (a function defined by `eval`, excluded from
       coverage, a coverage gap: the change cannot be judged);
-   5. the change alters the line count of c and f executed a line of c at or below the first changed line (`__LINE__`,
-      exception lines and backtraces would differ).
+   5. **line shift**: some hunk of the line diff of c (comment and blank-line hunks included) has a different number of
+      base and head lines, and f executed a line of c at or after the start of the first such hunk (`__LINE__`, exception
+      lines and backtraces would differ; a later hunk may move the lines back, but every line after the first unbalanced
+      hunk counts as moved).
 
    Otherwise f is removed (only comments or white space changed, or none of the changed functions ran).
 
@@ -1263,8 +1265,6 @@ fail alone are never removed).
 - Files PHP touches without the `file://` wrapper: `glob()`, `realpath()` and existence through the include path resolver
   only tell whether a path exists (changed only by additions and deletions, which are refused); native extensions reading
   files themselves; destructors and shutdown functions registered after the collector's writer.
-- Line numbers below a changed function shift only within the changed file; a change that keeps the line count keeps
-  every line of the file where it was.
 - Code that runs only through a test file's interaction with others in one process (global state, static caches) is
   not observed in the isolated recording, as for the static layer.
 - Xdebug's develop mode changes `var_dump` and error output: a test that depends on them may fail while recorded and is
