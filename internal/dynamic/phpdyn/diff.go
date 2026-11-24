@@ -2,14 +2,7 @@ package phpdyn
 
 // Line diff, as in internal/dynamic/jvmdyn (the layers share no helper package).
 
-import "strings"
-
 type hunk struct{ b0, b1, h0, h1 int } // base lines [b0,b1), head lines [h0,h1), 0-based
-
-func splitLines(b []byte) []string {
-	s := strings.ReplaceAll(string(b), "\r\n", "\n")
-	return strings.Split(s, "\n")
-}
 
 // diffHunks computes the changed regions between a and b (Myers' O(ND) algorithm after trimming the common prefix and suffix).
 // When the edit distance is very large the middle is one hunk (wider, never narrower).
