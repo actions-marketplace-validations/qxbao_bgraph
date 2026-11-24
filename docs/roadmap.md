@@ -32,6 +32,7 @@ commit as the feature:
 | PHP | Composer project | – | – | [php](ecosystems/php.md) |
 | Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | test files, per changed method | [ruby](ecosystems/ruby.md) |
 | Swift (SwiftPM) | test target or package | – | – | [swift](ecosystems/swift.md) |
+| Dart / Flutter | test file | – | – | [dart](ecosystems/dart.md) |
 
 ## New ecosystems
 
@@ -43,7 +44,9 @@ commit as the feature:
 | PHP (PHPUnit, Pest; Composer, `composer.lock`) | done (unreleased) | 1 | Project ownership, Composer autoload roots, and static and computed includes | [php](ecosystems/php.md) |
 | Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
 | Swift (SwiftPM, `swift test`, `Package.resolved`) | done (unreleased) | 2 | SwiftPM test targets, package fallback for computed manifests, L0 lockfiles | [swift](ecosystems/swift.md) |
-| Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | planned | 2 | Static imports; package granularity; Flutter golden files are test data | |
+| Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | done (unreleased) | 2 | Test-file units (not package units: imports are static and each test file runs on its own); `package:` imports across pub workspaces, melos and path dependencies; golden and fixture files named in literals; `pubspec.lock` at L0 | [dart](ecosystems/dart.md) |
+| Dart: narrowing through library export files | planned | 2 | Most packages export their whole library through one file that tests import, so a change selects most of the package; following which exported names a test uses would narrow it | [dart](ecosystems/dart.md#known-gaps-and-over-selection) |
+| Dart: Flutter host-app directories | planned | 3 | A change under `android/`, `ios/` and the other platform directories widens to the Flutter package; only integration tests run the host app | [dart](ecosystems/dart.md#known-gaps-and-over-selection) |
 | C / C++ (CMake + CTest, Meson) | planned | 3 | Include paths and macros come from the build system: likely target granularity from the build graph, with heavy widening | |
 
 ## Build systems and runners inside existing ecosystems
@@ -73,6 +76,7 @@ commit as the feature:
 | Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
 | `composer.lock` to L1 | planned | 3 | L0 today. Compare local and transitive dependency resolution against Composer first. | [lockfiles](lockfiles.md) |
 | `Package.resolved` to L1 | planned | 3 | L0 today. Compare SwiftPM's resolved package dependencies before narrowing. | [lockfiles](lockfiles.md) |
+| `pubspec.lock` to L1 | planned | 2 | L0 today: any change selects every Dart test of the resolution (a workspace shares one). The lockfile lists packages, not edges, so a closure needs the packages' own pubspecs; gate with the differential check against `dart pub deps` | [lockfiles](lockfiles.md) |
 
 ## Dynamic layer
 
@@ -85,3 +89,6 @@ commit as the feature:
 | Go | planned | 3 | Package granularity is already fine; a test-function layer would need coverage per test | |
 | Ruby (test files, per changed method, from `Coverage` per test file) | done (unreleased) | 1 | Static selection is about 1.0 on the evaluated repositories (test helpers load the whole library); the method layer removes test files that ran none of the changed methods. Off by default | [dynamic layer §10](dynamic-layer.md#10-ruby-per-method-narrowing) |
 | Rust | planned | 3 | Same question at the Cargo-target level | |
+| Dart / Flutter (test files, from per-suite VM coverage) | planned | 2 | Static selection is about 0.85 on the evaluated tasks: most packages export their whole library through one file that tests import. `dart test --coverage=<dir>` already writes one coverage file per test suite (test file), which maps directly to the unit; a file addition, a `part`/`export` change or a `pubspec.yaml` change must refuse narrowing, as in the other layers. Flutter widget tests run in `flutter_tester`, which needs its own recording path | [dart](ecosystems/dart.md) |
+| PHP (test classes inside a Composer project, from per-test line coverage) | planned | 2 | The static unit is the whole Composer project, so narrowing has the most room. php-code-coverage (PHPUnit, Pest) records which tests executed each line in one run (Xdebug or PCOV); narrowed runs select classes with `--filter`. Guards as for the JVM and Ruby layers: autoload map and `composer.json` changes, class-level code (constants, properties, attributes), `include` of computed paths | [php](ecosystems/php.md) |
+| Swift (test classes or suites inside a SwiftPM test target, from LLVM coverage) | planned | 3 | `swift test --enable-code-coverage` merges every test into one profile and sets `LLVM_PROFILE_FILE` itself, so per-class records need one run per class (`--filter`), which multiplies recording time; coverage with `--parallel` is reported to break the profile merge on Linux (Swift 6.1). Needs guards for generics, `@inlinable` code and macros, whose expansion is not in the changed file | [swift](ecosystems/swift.md) |

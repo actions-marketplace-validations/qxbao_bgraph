@@ -17,7 +17,8 @@ external evaluation below got a fixture that fails before the fix.
 ### T1: FAIL_TO_PASS
 
 Real bug-fix tasks from SWE-bench-family datasets (SWE-bench Verified, SWE-bench Multilingual, Multi-SWE-bench,
-SWE-bench-Live MultiLang, SWE-Sharp-Bench, [Longtail-SWE](https://huggingface.co/datasets/nebius/Longtail-SWE)) and
+SWE-bench-Live MultiLang, SWE-Sharp-Bench, [Longtail-SWE](https://huggingface.co/datasets/nebius/Longtail-SWE),
+[SWE-rebench V2](https://huggingface.co/datasets/nebius/SWE-rebench-V2)) and
 [BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
 commit P, the fixed commit C (gold patch + test patch) and the list of tests that fail at P and pass at C (FAIL_TO_PASS).
 BugsPHP reconstructs P by restoring the buggy versions of the source files on the fixed tree. C is the recorded fixed
@@ -56,6 +57,7 @@ the real tools:
 | Go packages, imports and embeds | `go list -e -json -test ./...` |
 | PHP projects, autoload roots and runnable suites | `composer show --self`, `composer show --path`, PHPUnit and Pest test listing |
 | SwiftPM packages, test targets and source files | `swift package dump-package`, `swift package describe --type json` |
+| Dart test files | the suites `dart test` loads in a whole run (JSON reporter) |
 | JVM selection superset | Gradle/Maven incremental-build plugin (GIB) |
 | .NET selection superset | dotnet-affected |
 | Node selection superset | Vitest / Jest `--changed` |
@@ -98,6 +100,7 @@ suites run in a Linux arm64 container. Median selection is selected units / all 
 | PHP | 269 (dev 162, holdout 107) | 0 | 0 % | 1.000 | holdout 2.8 % |
 | Ruby | 117 (dev 61, holdout 56); all 836 fetched tasks: 0 violations | 0 | 2 % (holdout 4 %) | 1.000 | 2.6 % (holdout 5.6 %) |
 | Swift | 10 (holdout) | 0 | 40 % | 0.977 | 50 % over the 6 non-full tasks |
+| Dart / Flutter | 274 (dev 185, holdout 89) | 0 (31 oracle artefacts, hand-classified) | 6 % (holdout 3 %) | 0.850 (holdout 0.849) | 1.1 % (holdout 3.4 %) |
 
 Swift's holdout covers six Longtail-SWE repositories. Four tasks widened to the full suite because they changed a global
 input. In the dev set, 13 of 16 tasks could be evaluated. One upstream repository was unavailable, one task used
@@ -135,6 +138,18 @@ Notes per ecosystem:
   every computed require now also depends on the suffix union of its literal tail, so a wrong evaluation can no longer end in
   a missing target. Selectivity is about 1.0: each test helper loads the whole library, and computed requires (plugin
   loaders, `require name` helpers) fire in 113 of 117 tasks. Median selection time 0.6 s.
+- **Dart / Flutter** (Longtail-SWE and SWE-rebench V2, 291 tasks from 50 repositories, 275 after the 40-per-repository cap;
+  holdout 25 repositories). The locator mapped 17,091 of 17,161 failing-to-passing names to one test file. Each of the 31
+  violations was checked by computing the import closure of the missing test file at the fixed commit: none contains a
+  changed file. 23 come from harness commands that chain packages (`cd a && dart test && cd ../b && …`), so the later
+  packages never ran on the unfixed tree; 5 are tests that fail without a changed file in their closure (timing tests);
+  2 are names shared by several files where the file the test patch touches is selected; 1 regenerates code from a
+  generator before testing while the regenerated files sit in the test patch. Full widenings are CI files
+  (`global_input`), one submodule and three computed loads or unreferenced files outside every package. Selectivity is
+  low because most packages export their whole library through one file that tests import, and a `version` bump in
+  `pubspec.yaml` widens the package and its dependents. Median selection time 386 ms. During the evaluation, relative
+  imports under `lib/` were found to resolve against the library's `package:` URI (`..` stops at `lib/`); both readings
+  now count.
 
 ### T2 mutation summary
 
