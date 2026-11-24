@@ -330,8 +330,8 @@ func (c PHPDynConfig) withMutant(ctx context.Context, m T2Mutant, mutated []byte
 }
 
 // verdict runs the whole suite at M (the mutated file written into the clone) and reads the red test files.
-func (c PHPDynConfig) verdict(ctx context.Context, m T2Mutant, mutated []byte, baseRed map[string]bool) PHPDynOracle {
-	o := PHPDynOracle{Repo: c.Repo.Name, R: c.Repo.R, Mutant: m}
+func (c PHPDynConfig) verdict(ctx context.Context, m T2Mutant, mutated []byte, baseRed map[string]bool) (o PHPDynOracle) {
+	o = PHPDynOracle{Repo: c.Repo.Name, R: c.Repo.R, Mutant: m}
 	t0 := time.Now()
 	defer func() { o.Ms = time.Since(t0).Milliseconds() }()
 	err := c.withMutant(ctx, m, mutated, func() error {
