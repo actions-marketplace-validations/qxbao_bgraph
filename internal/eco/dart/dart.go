@@ -30,7 +30,7 @@
 //   - string literals that name a file or directory relative to the file, the package or the repository root
 //     (fixture_data, a directory as a <dir>/** pattern), package: URIs in literals, interpolated literals with a static
 //     directory prefix (pattern) or a static tail with a directory (a **/ pattern); a process launch depends on the
-//     package's bin/;
+//     bin/ of the package and of every in-repository package it depends on (dart run pkg:tool);
 //   - Isolate.spawnUri / loadUri with a literal URI: the file; a computed one is a dynamic_import at module tier scoped to the
 //     package; an uncertain scan is an uncertain_scan scoped to the repository.
 package dart
@@ -58,7 +58,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "dart-6"
+const AnalyzerVersion = "dart-7"
 
 // Eco is the Dart ecosystem.
 type Eco struct {

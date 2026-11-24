@@ -75,7 +75,8 @@ anything is selected or widened. Integration tests stay file units.
   (`'$root/fixtures/a.json'` → `**/fixtures/a.json`). A bare word, `./name` and paths that clean to `.` or `..` are not
   dependencies.
 - **Process launches.** A file that calls `Process.run`, `Process.runSync`, `Process.start` or `TestProcess.start`
-  depends on its package's `bin/`.
+  depends on the `bin/` of its package and of every package in the repository that its package depends on, directly or
+  transitively (`dart run tool:gen` runs an executable of a package in the resolution).
 - **Isolates.** `Isolate.spawnUri` (and `loadUri` of `dart:mirrors`) with a literal URI depends on the spawned file.
 
 ## Changes to manifests, configuration and lockfiles
@@ -150,8 +151,8 @@ whole-package unit ID such as `<dart-all-tests:packages/core>`. A target that ma
 - A missing generated file widens its importer to every change of the package until a `[[generated]]` entry describes
   it.
 - Paths built at run time by other means than a literal head, a literal tail or a `join(...)` call are not followed; a
-  file read that way usually widens through the `unreferenced_file` rule. A process launch is assumed to run its own
-  package's `bin/`; a program of another package started by name (`dart run other:tool`) needs a `[[rule]]`.
+  file read that way usually widens through the `unreferenced_file` rule. A process launch is assumed to run an
+  executable of its package or of a dependency; a program outside them started by a computed path needs a `[[rule]]`.
 - A literal is resolved against its own file, package and the repository root only.
 - A declared Flutter asset selects every test of its package and of the packages depending on it, whether or not a test
   loads it.

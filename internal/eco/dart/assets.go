@@ -94,3 +94,27 @@ func (b *builder) dependentsOf(dir string) []string {
 	}
 	return slices.Sorted(maps.Keys(set))
 }
+
+// dependenciesOf returns dir and every package of the tree it depends on, transitively (path dependencies, and every
+// directory of a dependency's name). An unreadable pubspec may depend on anything: every package.
+func (b *builder) dependenciesOf(dir string) []string {
+	set := map[string]bool{}
+	todo := []string{dir}
+	for len(todo) > 0 {
+		d := todo[len(todo)-1]
+		todo = todo[:len(todo)-1]
+		p := b.r.pkgs[d]
+		if set[d] || p == nil {
+			continue
+		}
+		set[d] = true
+		if p.raw == nil {
+			return slices.Sorted(maps.Keys(b.r.pkgs))
+		}
+		todo = append(todo, p.pathDeps...)
+		for _, n := range p.depNames {
+			todo = append(todo, b.r.byName[n]...)
+		}
+	}
+	return slices.Sorted(maps.Keys(set))
+}

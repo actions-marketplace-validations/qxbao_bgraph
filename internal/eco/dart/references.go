@@ -63,8 +63,12 @@ func (b *builder) references(f string, p *pkg) {
 			}
 		case model.ImportDartProcess:
 			if p != nil {
-				if bin := joinDir(p.dir, "bin"); b.t.IsDir(bin) {
-					b.edge(f, escapeGlob(bin)+"/**", model.EdgePattern, "process launch: the package's executables", im.Line)
+				// `dart run pkg:tool` runs an executable of any package in the resolution: the package's own and every
+				// in-repository package it depends on.
+				for _, d := range b.dependenciesOf(p.dir) {
+					if bin := joinDir(d, "bin"); b.t.IsDir(bin) {
+						b.edge(f, escapeGlob(bin)+"/**", model.EdgePattern, "process launch: executables of "+d, im.Line)
+					}
 				}
 			}
 		case model.ImportDartString:
