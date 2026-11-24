@@ -1,0 +1,528 @@
+{
+ "ecosystem": "dart",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "nebius/Longtail-SWE",
+   "url": "https://huggingface.co/datasets/nebius/Longtail-SWE",
+   "revision": "d208adff5a8d3697c83c91509052bae6ed54b986",
+   "notes": "hard and easy splits, language Dart"
+  },
+  {
+   "name": "nebius/SWE-rebench-V2",
+   "url": "https://huggingface.co/datasets/nebius/SWE-rebench-V2",
+   "revision": "d7608f017a29ab256400ad4b73d5248d97204966",
+   "notes": "train split, language dart; FAIL_TO_PASS recorded by the harness test command (task field test_cmd)"
+  }
+ ],
+ "repos": [
+  {
+   "name": "googleapis/google-cloud-dart",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "dart-lang/dartdoc",
+   "role": "holdout",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "VeryGoodOpenSource/dart_frog",
+   "role": "holdout",
+   "t1_tasks": 7,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "dart-lang/ffigen",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "firebase/firebase-admin-dart",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "openfoodfacts/openfoodfacts-dart",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "widgetbook/widgetbook",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "tsutsu3/pi-hole-client",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "lejard-h/chopper",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "dart-lang/pub-dev",
+   "role": "holdout",
+   "t1_tasks": 26,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "MindfulSoftwareLLC/dartastic_opentelemetry",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "google/json_serializable.dart",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "firebase/firebase-functions-dart",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/easy",
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "serverpod/serverpod",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "bdlukaa/fluent_ui",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "nyxx-discord/nyxx",
+   "role": "holdout",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "deveminsahin/starter_app",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "flutter/packages",
+   "role": "holdout",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "cbl-dart/cbl-dart",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "SchweizerischeBundesbahnen/design_system_flutter",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "dart-lang/native",
+   "role": "holdout",
+   "t1_tasks": 4,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy",
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "dart-lang/ai",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "nixrajput/get_time_ago",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "rrousselGit/riverpod",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "superlistapp/super_editor",
+   "role": "holdout",
+   "t1_tasks": 13,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "dart-lang/pana",
+   "role": "dev",
+   "t1_tasks": 5,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "fujidaiti/smooth_sheets",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "akvelon/flutter-code-editor",
+   "role": "dev",
+   "t1_tasks": 10,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "intel/rohd",
+   "role": "dev",
+   "t1_tasks": 40,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "atsign-foundation/noports",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy",
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "corbado/flutter-passkeys",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "serverpod/skills",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy",
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "felangel/bloc",
+   "role": "dev",
+   "t1_tasks": 10,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "epam-cross-platform-lab/swagger-dart-code-generator",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "flutter/genui",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "google/built_value.dart",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "cfug/dio",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "eseidel/space_gen",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy",
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "fleather-editor/fleather",
+   "role": "dev",
+   "t1_tasks": 34,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "nahpu/nahpu",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "leancodepl/flutter_corelibrary",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "leehack/mcp_dart",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "flutter/cocoon",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "Flutter-Bounty-Hunters/static_shock",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "rrousselGit/flutter_hooks",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "passsy/kt.dart",
+   "role": "dev",
+   "t1_tasks": 9,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "VeryGoodOpenSource/very_good_cli",
+   "role": "dev",
+   "t1_tasks": 24,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy",
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "imaNNeo/fl_chart",
+   "role": "dev",
+   "t1_tasks": 6,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "dart-lang/http",
+   "role": "dev",
+   "t1_tasks": 4,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "SWE-rebench-V2"
+   ]
+  },
+  {
+   "name": "werner-scholtz/kalender",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  }
+ ]
+}
