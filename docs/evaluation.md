@@ -147,7 +147,7 @@ Notes per ecosystem:
   generator before testing while the regenerated files sit in the test patch. Full widenings are CI files
   (`global_input`), one submodule and three computed loads or unreferenced files outside every package. Selectivity is
   low because most packages export their whole library through one file that tests import, and a `version` bump in
-  `pubspec.yaml` widens the package and its dependents. Median selection time 386 ms. During the evaluation, relative
+  `pubspec.yaml` widens the package and its dependents. Median selection time 645 ms. During the evaluation, relative
   imports under `lib/` were found to resolve against the library's `package:` URI (`..` stops at `lib/`); both readings
   now count.
 
