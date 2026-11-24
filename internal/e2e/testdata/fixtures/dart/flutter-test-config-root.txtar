@@ -1,0 +1,45 @@
+The package-level flutter_test_config.dart applies to every test of the package.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/test/flutter_test_config.dart --
+import 'dart:async';
+Future<void> testExecutable(FutureOr<void> Function() main) async => main();
+-- base/test/widgets/button_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => testWidgets('b', (t) async {});
+-- base/test/unit/logic_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('l', () {});
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/other/test/o_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('o', () {});
+-- head/test/flutter_test_config.dart --
+import 'dart:async';
+Future<void> testExecutable(FutureOr<void> Function() main) async { await main(); }
+-- want --
+scope graph
+select test/widgets/button_test.dart
+select test/unit/logic_test.dart
+noselect other/test/o_test.dart

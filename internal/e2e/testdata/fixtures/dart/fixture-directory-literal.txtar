@@ -1,0 +1,22 @@
+A literal naming a directory depends on every file below it, including a file added later.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/test/all_test.dart --
+import 'package:test/test.dart';
+import 'dart:io';
+void main() => test('p', () => Directory('test/fixtures/cases').listSync());
+-- base/test/fixtures/cases/a.json --
+{}
+-- base/test/logic_test.dart --
+import 'package:test/test.dart';
+void main() => test('l', () {});
+-- head/test/fixtures/cases/b.json --
+{}
+-- want --
+scope graph
+select test/all_test.dart
+noselect test/logic_test.dart

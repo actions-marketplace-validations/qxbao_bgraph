@@ -1,0 +1,46 @@
+An asset nothing references by literal falls to the general rules: the package's tests (unknown_file).
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  assets:
+    - assets/
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/app/lib/app.dart --
+int app() => 1;
+-- base/app/assets/data.json --
+{}
+-- base/app/test/app_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+import 'package:app/app.dart';
+void main() => test('a', () => app());
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/other/test/o_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('o', () {});
+-- head/app/assets/data.json --
+{"x": 1}
+-- want --
+scope module
+widen unknown_file
+select app/test/app_test.dart
+noselect other/test/o_test.dart

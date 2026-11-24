@@ -1,0 +1,21 @@
+A [[rule]] target that names no Dart unit is a configuration error: the selection is full.
+-- base/a/pubspec.yaml --
+name: a
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/a/test/x_test.dart --
+import 'package:test/test.dart';
+void main() => test('x', () {});
+-- base/proto/api.proto --
+syntax = "proto3";
+-- base/bgraph.toml --
+[[rule]]
+paths = ["proto/**"]
+affects = ["a/test/missing_test.dart"]
+-- head/proto/api.proto --
+syntax = "proto3"; // v2
+-- want --
+full
+widen user_rule

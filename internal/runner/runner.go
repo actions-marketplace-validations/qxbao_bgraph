@@ -14,6 +14,7 @@
 //   - go: units are package directories, one `go test ./<dir> ./<dir2>` per module (run in the module directory); see gotest.go.
 //   - rspec, rails, minitest, rake: Ruby test files, one command per (project, runner, Gemfile, -I directories); see ruby.go.
 //   - swift: `swift test` skips unselected test modules in each package; see swift.go.
+//   - dart, flutter: test files, one `dart test` / `flutter test` per package (integration tests separately); see dart.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -26,6 +27,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qxbao/bgraph/internal/eco/dart"
 	"github.com/qxbao/bgraph/internal/eco/php"
 	"github.com/qxbao/bgraph/internal/eco/swift"
 	"github.com/qxbao/bgraph/internal/model"
@@ -95,7 +97,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests, phpTests, swiftTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests, phpTests, swiftTests, dartTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -119,6 +121,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == swift.Runner {
 			swiftTests = append(swiftTests, t)
+			continue
+		}
+		if t.Runner == dart.RunnerDart || t.Runner == dart.RunnerFlutter {
+			dartTests = append(dartTests, t) // one command per package, integration tests apart (dart.go)
 			continue
 		}
 		if t.Runner == "rspec" || t.Runner == "rails" || t.Runner == "minitest" || t.Runner == "rake" {
@@ -224,6 +230,9 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	}
 	if len(swiftTests) > 0 {
 		plan.Commands = append(plan.Commands, swiftCommands(swiftTests, opt)...)
+	}
+	if len(dartTests) > 0 {
+		plan.Commands = append(plan.Commands, dartCommands(dartTests, opt)...)
 	}
 	return plan, nil
 }

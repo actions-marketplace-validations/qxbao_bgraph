@@ -1,0 +1,32 @@
+dart_test.yaml sets paths in a preset: the test file set is not literal, the package is one whole unit.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/dart_test.yaml --
+presets:
+  slow:
+    paths: [test/slow]
+-- base/lib/a.dart --
+int a() => 1;
+-- base/test/a_test.dart --
+import 'package:test/test.dart';
+import 'package:app/a.dart';
+void main() => test('a', () => a());
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/other/test/o_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/lib/a.dart --
+int a() => 2;
+-- want --
+select <dart-all-tests:.>
+noselect test/a_test.dart
+noselect other/test/o_test.dart

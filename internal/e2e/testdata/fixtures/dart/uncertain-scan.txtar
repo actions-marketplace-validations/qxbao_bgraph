@@ -1,0 +1,26 @@
+An unterminated string makes the scan uncertain: a change anywhere selects the file's dependents.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/broken.dart --
+const s = 'unterminated;
+-- base/lib/plain.dart --
+int plain() => 1;
+-- base/test/broken_test.dart --
+import 'package:test/test.dart';
+import 'package:app/broken.dart';
+void main() => test('b', () {});
+-- base/test/plain_test.dart --
+import 'package:test/test.dart';
+import 'package:app/plain.dart';
+void main() => test('p', () {});
+-- head/lib/plain.dart --
+int plain() => 2;
+-- want --
+widen uncertain_scan
+select test/broken_test.dart
+select test/plain_test.dart
+notfull

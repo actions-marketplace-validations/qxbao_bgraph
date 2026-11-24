@@ -1,0 +1,34 @@
+flutter_test_config.dart applies to every test below it: a change selects those tests only.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/lib/app.dart --
+int app() => 1;
+-- base/test/flutter_test_config.dart --
+import 'dart:async';
+Future<void> testExecutable(FutureOr<void> Function() main) async => main();
+-- base/test/widgets/flutter_test_config.dart --
+import 'dart:async';
+Future<void> testExecutable(FutureOr<void> Function() main) async => main();
+-- base/test/widgets/button_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => testWidgets('b', (t) async {});
+-- base/test/unit/logic_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('l', () {});
+-- head/test/widgets/flutter_test_config.dart --
+import 'dart:async';
+Future<void> testExecutable(FutureOr<void> Function() main) async { await main(); }
+-- want --
+scope graph
+select test/widgets/button_test.dart
+noselect test/unit/logic_test.dart

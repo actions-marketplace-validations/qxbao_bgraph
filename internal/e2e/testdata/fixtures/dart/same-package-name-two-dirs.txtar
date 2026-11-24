@@ -1,0 +1,41 @@
+Two directories declare the same package name: package:shared resolves to both (union).
+-- base/shared/pubspec.yaml --
+name: shared
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/shared/lib/x.dart --
+int x() => 1;
+-- base/legacy/shared/pubspec.yaml --
+name: shared
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/legacy/shared/lib/x.dart --
+int x() => 1;
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  shared: any
+dev_dependencies:
+  test: ^1.25.0
+-- base/app/lib/y.dart --
+int y() => 1;
+-- base/app/test/x_test.dart --
+import 'package:test/test.dart';
+import 'package:shared/x.dart';
+void main() => test('x', () => x());
+-- base/app/test/y_test.dart --
+import 'package:test/test.dart';
+import 'package:app/y.dart';
+void main() => test('y', () => y());
+-- head/legacy/shared/lib/x.dart --
+int x() => 2;
+-- want --
+scope graph
+select app/test/x_test.dart
+noselect app/test/y_test.dart

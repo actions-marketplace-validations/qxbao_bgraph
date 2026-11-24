@@ -61,6 +61,8 @@ var globalTable = []entry{
 	{"**/.ruby-version", "toolchain_pin"},
 	{"**/go.work", "toolchain_pin"},
 	{"**/go.work.sum", "toolchain_pin"},
+	{"**/.fvmrc", "toolchain_pin"},
+	{"**/.fvm/fvm_config.json", "toolchain_pin"},
 	// workspace definitions
 	{"**/pnpm-workspace.yaml", "workspace_def"},
 	{"**/lerna.json", "workspace_def"},

@@ -1,0 +1,44 @@
+A native-assets build hook (hook/build.dart) runs before the package's tests and its dependents' builds.
+-- base/native/pubspec.yaml --
+name: native
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/native/hook/build.dart --
+import 'package:native/src/config.dart';
+void main(List<String> args) => configure();
+-- base/native/lib/src/config.dart --
+void configure() {}
+-- base/native/lib/native.dart --
+int n() => 1;
+-- base/native/test/n_test.dart --
+import 'package:test/test.dart';
+import 'package:native/native.dart';
+void main() => test('n', () => n());
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  native:
+    path: ../native
+dev_dependencies:
+  test: ^1.25.0
+-- base/app/lib/app.dart --
+import 'package:native/native.dart';
+int app() => n();
+-- base/app/test/app_test.dart --
+import 'package:test/test.dart';
+import 'package:app/app.dart';
+void main() => test('a', () => app());
+-- base/app/test/own_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/native/lib/src/config.dart --
+void configure() { print(1); }
+-- want --
+scope graph
+select native/test/n_test.dart
+select app/test/app_test.dart
+noselect app/test/own_test.dart

@@ -1,0 +1,47 @@
+package: import between members of a pub workspace.
+-- base/pubspec.yaml --
+name: _workspace
+environment:
+  sdk: ^3.6.0
+workspace:
+  - pkgs/a
+  - pkgs/b
+-- base/pkgs/a/pubspec.yaml --
+name: a
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: any
+-- base/pkgs/a/lib/a.dart --
+int a() => 1;
+-- base/pkgs/a/test/a_test.dart --
+import 'package:test/test.dart';
+import 'package:a/a.dart';
+void main() => test('a', () => a());
+-- base/pkgs/b/pubspec.yaml --
+name: b
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dependencies:
+  a: any
+dev_dependencies:
+  test: any
+-- base/pkgs/b/lib/b.dart --
+import 'package:a/a.dart';
+int b() => a();
+-- base/pkgs/b/test/b_test.dart --
+import 'package:test/test.dart';
+import 'package:b/b.dart';
+void main() => test('b', () => b());
+-- base/pkgs/b/test/own_test.dart --
+import 'package:test/test.dart';
+void main() => test('own', () {});
+-- head/pkgs/a/lib/a.dart --
+int a() => 2;
+-- want --
+scope graph
+select pkgs/a/test/a_test.dart
+select pkgs/b/test/b_test.dart
+noselect pkgs/b/test/own_test.dart

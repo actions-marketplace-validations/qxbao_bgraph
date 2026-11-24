@@ -1,0 +1,24 @@
+An FVM pin (.fvmrc) changes the Flutter SDK for the whole repository: full.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/.fvmrc --
+{"flutter": "3.24.0"}
+-- base/test/a_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('a', () {});
+-- head/.fvmrc --
+{"flutter": "3.27.0"}
+-- want --
+full
+widen global_input
+select test/a_test.dart

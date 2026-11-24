@@ -1,0 +1,20 @@
+Changing a test file selects only that test.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/test/b_test.dart --
+import 'package:test/test.dart';
+void main() => test('b', () {});
+-- head/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () { expect(1, 1); });
+-- want --
+scope graph
+select test/a_test.dart
+noselect test/b_test.dart

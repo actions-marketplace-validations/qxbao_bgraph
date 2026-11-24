@@ -1,0 +1,22 @@
+A .dart file in a repository with no pubspec.yaml is left to the general rules (unknown file in the Node project).
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.ts --
+export const a = 1
+-- base/web/src/a.test.ts --
+import { a } from './a'
+-- base/api/package.json --
+{"name":"api","devDependencies":{"vitest":"^2.0.0"}}
+-- base/api/src/b.ts --
+export const b = 1
+-- base/api/src/b.test.ts --
+import { b } from './b'
+-- base/web/tool/gen.dart --
+void main() {}
+-- head/web/tool/gen.dart --
+void main() { print(1); }
+-- want --
+widen unknown_file
+select web/src/a.test.ts
+noselect api/src/b.test.ts
+notfull

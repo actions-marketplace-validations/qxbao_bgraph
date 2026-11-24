@@ -1,0 +1,50 @@
+A change under a Flutter app's android/ directory falls to the general rules (module widening of the
+nearest project); the integration tests that run the host app are also selected.
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/app/lib/main.dart --
+void main() {}
+-- base/app/test/widget_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+import 'package:app/main.dart';
+void main() => testWidgets('w', (t) async {});
+-- base/app/integration_test/app_test.dart --
+import 'package:integration_test/integration_test.dart';
+import 'package:app/main.dart' as app;
+void main() { IntegrationTestWidgetsFlutterBinding.ensureInitialized(); app.main(); }
+-- base/app/android/app/src/main/AndroidManifest.xml --
+<manifest/>
+-- base/app/android/app/src/main/kotlin/MainActivity.kt --
+class MainActivity
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/other/test/o_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('o', () {});
+-- head/app/android/app/src/main/kotlin/MainActivity.kt --
+class MainActivity { }
+-- want --
+select app/integration_test/app_test.dart
+select app/test/widget_test.dart
+noselect other/test/o_test.dart
+notfull
