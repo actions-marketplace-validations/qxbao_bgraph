@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/qxbao/bgraph/internal/model"
+	dartscan "github.com/qxbao/bgraph/internal/scan/dart"
 	goscan "github.com/qxbao/bgraph/internal/scan/golang"
 	jsscan "github.com/qxbao/bgraph/internal/scan/js"
 	phpscan "github.com/qxbao/bgraph/internal/scan/php"
@@ -31,7 +32,7 @@ import (
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5+rb-9+swift-6"
+const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5+rb-9+swift-6+dart-1"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
@@ -135,6 +136,8 @@ func lang(p string) string {
 		return "go"
 	case ".swift":
 		return "swift"
+	case ".dart":
+		return "dart"
 	case ".rb", ".rake", ".ru", ".gemspec":
 		return "rb"
 	}
@@ -220,6 +223,8 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 		r = phpscan.Scan(b)
 	case "swift":
 		r = swiftscan.Scan(b)
+	case "dart":
+		r = dartscan.Scan(b)
 	default:
 		r = jsscan.Scan(p, b)
 	}

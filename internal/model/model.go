@@ -141,6 +141,13 @@ const (
 	ImportRbBinPath     ImportKind = "rb_bin_path"     // Gem.bin_path("gem", "exe"): Spec the executable name
 	ImportRbFixturesAll ImportKind = "rb_fixtures_all" // fixtures :all (Rails)
 	ImportRbLoadPath    ImportKind = "rb_load_path"    // $LOAD_PATH / $: edit (recorded only)
+	// Dart (internal/scan/dart documents Spec, Suffix and Dynamic for each kind).
+	ImportDartImport  ImportKind = "dart_import"  // import directive (every URI of a conditional import)
+	ImportDartExport  ImportKind = "dart_export"  // export directive (every URI of a conditional export)
+	ImportDartPart    ImportKind = "dart_part"    // part directive; import augment (Suffix "augment")
+	ImportDartString  ImportKind = "dart_string"  // a string literal that may name a file or directory
+	ImportDartLoad    ImportKind = "dart_load"    // Isolate.spawnUri / loadUri: code loaded at run time
+	ImportDartProcess ImportKind = "dart_process" // Process.run / runSync / start, TestProcess.start
 )
 
 // ImportRef is a reference found in the source text.
