@@ -1228,37 +1228,41 @@ process of the tree. In each process it:
   a file without the `file://` wrapper (allowed only from the runner's own package).
 
 Attribution: paths are resolved to their real location (a package a Composer path repository installed as a symbolic
-link from the vendor directory is read from repository files, which are dependencies), then made repository-relative (outside the repository and inside a vendor directory, `.git` or
-`node_modules`: the environment's); a tracked file is a dependency; a path that does not exist is dropped (additions are
-refused); an untracked repository file is ignored when the run created it (its first event in the process is a write),
-otherwise the record is incomplete. Outside the repository, the collector reports the files a process wrote (content,
-not directories) and the files it read or included, outside its own temporary directory.
+link from the vendor directory is read from repository files, which are dependencies), then made repository-relative
+(outside the repository and inside a vendor directory, `.git` or `node_modules`: the environment's); a tracked file is a
+dependency; a path that does not exist is dropped (additions are refused); an untracked repository file is ignored when
+the run created it (its first event in the process is a write), otherwise the record is incomplete. Outside the
+repository, the collector reports the files a process wrote (content, not directories) and the files it read or
+included, outside its own temporary directory.
 
 The record is **incomplete** when: a process is started by anything other than the runner's own package (test code,
 libraries, `shell_exec` included); a process the runner started (PHPUnit's process isolation) wrote no output, or was
 not a direct child (a shell or wrapper in between), or the number of outputs differs from the launches; more than one
 process wrote output as the test process; the process forks, replaces itself, loads an extension with `dl` or calls FFI;
 another coverage user is active (`pcov.enabled`, coverage started before the collector, a monitored coverage, filter or
-monitor call by the tests); a file is read by `php_strip_whitespace`, `highlight_file` or `show_source`; the `file://` proxy was replaced or removed; the collector could not install itself; a process wrote no output
-(a crash, `exit` in a destructor); an untracked repository file that existed before the run was included, read or
-stat'ed; the process wrote a file outside the repository (or into a vendor directory) and its own temporary
-directory; it read or included a file outside the repository that another test file wrote during the same recording; it
-read or included a file of a vendor directory modified after that directory's `composer/installed.json` (a cache written
-there, outside Composer's own `composer/` metadata); the test file was not included (canary); the runner's summary is missing or reports no test; the run timed out.
+monitor call by the tests); a file is read by `php_strip_whitespace`, `highlight_file` or `show_source`; the `file://`
+proxy was replaced or removed; the collector could not install itself; a process wrote no output (a crash, `exit` in a
+destructor); an untracked repository file that existed before the run was included, read or stat'ed; the process wrote a
+file outside the repository (or into a vendor directory) and its own temporary directory; it read or included a file
+outside the repository that another test file wrote during the same recording; it read or included a file of a vendor
+directory modified after that directory's `composer/installed.json` (a cache written there, outside Composer's own
+`composer/` metadata); the test file was not included (canary); the runner's summary is missing or reports no test; the
+run timed out.
 
 ### 11.5 Environment fingerprint
 
 Per project unit: `sha256` of the collector ID; OS and architecture; the configured PHP's `PHP_VERSION`, `PHP_OS`,
-machine, loaded extensions and Zend extensions with their versions, Xdebug's version, and the ini values `zend.assertions`,
-`error_reporting`, `memory_limit`, `precision`, `serialize_precision`, `date.timezone`, `default_charset`,
-`opcache.enable_cli`, `auto_prepend_file`, `auto_append_file`, `include_path`, `short_open_tag`, `pcov.enabled` (probed
-once from an empty directory with Xdebug off, cached by executable path and modification time); the variables `PHPRC`,
-`PHP_INI_SCAN_DIR`, `APP_ENV`, `APP_DEBUG`, `COMPOSER_RUNTIME_ENV`, `COMPOSER_VENDOR_DIR` and every `SYMFONY_*`
-variable; and the installed dependency state of the unit's vendor directory **on disk**: `composer/installed.json` (required)
-and `installed.php` and Composer's autoload files. A package installed from a Composer path repository as a copy rather than
-a symbolic link (`"symlink": false`) has no fingerprint: its copy changes only when Composer mirrors it again. A unit whose runner is not installed in a vendor
-directory has no fingerprint and is not narrowed. The PHP that selects is also needed for the cross-check of
-[11.2](#112-guards); without one nothing is narrowed.
+machine, loaded extensions and Zend extensions with their versions, Xdebug's version, and the ini values
+`zend.assertions`, `error_reporting`, `memory_limit`, `precision`, `serialize_precision`, `date.timezone`,
+`default_charset`, `opcache.enable_cli`, `auto_prepend_file`, `auto_append_file`, `include_path`, `short_open_tag`,
+`pcov.enabled` (probed once from an empty directory with Xdebug off, cached by executable path and modification time);
+the variables `PHPRC`, `PHP_INI_SCAN_DIR`, `APP_ENV`, `APP_DEBUG`, `COMPOSER_RUNTIME_ENV`, `COMPOSER_VENDOR_DIR` and
+every `SYMFONY_*` variable; and the installed dependency state of the unit's vendor directory **on disk**:
+`composer/installed.json` (required) and `installed.php` and Composer's autoload files. A package installed from a
+Composer path repository as a copy rather than a symbolic link (`"symlink": false`) has no fingerprint: its copy changes
+only when Composer mirrors it again. A unit whose runner is not installed in a vendor directory has no fingerprint and
+is not narrowed. The PHP that selects is also needed for the cross-check of [11.2](#112-guards); without one nothing is
+narrowed.
 
 ### 11.6 Running a narrowed selection
 
