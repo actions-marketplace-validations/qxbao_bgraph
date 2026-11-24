@@ -39,24 +39,24 @@ foreach (array_slice($argv, 1) as $i => $f) {
         if ($j < $n && $t[$j]->text === '&') { $j = $next($j); }
         if ($j >= $n || !preg_match($id, $t[$j]->text)) { continue; }
         $p = $next($j);
-        if ($p >= $n || $t[$p]->text !== '(') { continue; }
+        if ($p >= $n || $t[$p]->id !== 40) { continue; }
         $d = 0;
         for (; $p < $n; $p++) {
-            if ($t[$p]->text === '(') { $d++; }
-            if ($t[$p]->text === ')') { $d--; if ($d === 0) { break; } }
+            if ($t[$p]->id === 40) { $d++; }
+            if ($t[$p]->id === 41) { $d--; if ($d === 0) { break; } }
         }
         $d = 0;
         for ($p++; $p < $n; $p++) {
-            $x = $t[$p]->text;
-            if ($x === '(') { $d++; } elseif ($x === ')') { $d--; }
-            if ($d === 0 && ($x === '{' || $x === ';')) { break; }
+            $x = $t[$p]->id;
+            if ($x === 40) { $d++; } elseif ($x === 41) { $d--; }
+            if ($d === 0 && ($x === 123 || $x === 59)) { break; }
         }
-        if ($p >= $n || $t[$p]->text === ';') { continue; }
+        if ($p >= $n || $t[$p]->id === 59) { continue; }
         $d = 0;
         for ($q = $p; $q < $n; $q++) {
             $x = $t[$q];
-            if ($x->text === '{' || $x->id === T_CURLY_OPEN || $x->id === T_DOLLAR_OPEN_CURLY_BRACES) { $d++; }
-            elseif ($x->text === '}') { $d--; if ($d === 0) { break; } }
+            if ($x->id === 123 || $x->id === T_CURLY_OPEN || $x->id === T_DOLLAR_OPEN_CURLY_BRACES) { $d++; }
+            elseif ($x->id === 125) { $d--; if ($d === 0) { break; } }
         }
         if ($q >= $n) { echo "ERR $i unbalanced braces\n"; continue 2; }
         $spans[] = $t[$k]->line . '-' . $t[$q]->line;

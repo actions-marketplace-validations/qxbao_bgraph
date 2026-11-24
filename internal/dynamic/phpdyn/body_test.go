@@ -181,6 +181,14 @@ namespace N {
 	}
 }
 
+func TestVariablesNamedLikeKeywords(t *testing.T) {
+	src := "<?php\n$class = 'A';\n$function = 1;\nfunction f($class)\n{\n    return $class::class . $function;\n}\n"
+	got, ok := Spans([]byte(src))
+	if !ok || len(got) != 1 || got[0] != (FuncSpan{4, 7}) {
+		t.Fatalf("%v %v", got, ok)
+	}
+}
+
 func TestSpans(t *testing.T) {
 	got, ok := Spans([]byte(loggerPHP))
 	if !ok {

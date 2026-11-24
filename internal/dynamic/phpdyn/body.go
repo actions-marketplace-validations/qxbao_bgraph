@@ -99,9 +99,9 @@ func parsePHP(src []byte) (*phpFile, string) {
 		}
 		return toks[sig[k]]
 	}
-	member := func(k int) bool { // the significant token k is a member name (after ->, ?->, ::)
+	member := func(k int) bool { // the significant token k is a member or variable name (after ->, ?->, ::, $)
 		p, q := at(k-1), at(k-2)
-		return isPunct(p, ">") && isPunct(q, "-") || isPunct(p, ":") && isPunct(q, ":")
+		return isPunct(p, ">") && isPunct(q, "-") || isPunct(p, ":") && isPunct(q, ":") || isPunct(p, "$")
 	}
 	// skipParens returns the significant index after the parenthesized group starting at k ("(" expected).
 	skipParens := func(k int) (int, bool) {
