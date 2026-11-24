@@ -744,6 +744,10 @@ func RunPHPDynT2(ctx context.Context, cfg PHPDynConfig, only map[string]bool) (r
 	if res.Baseline.Error != "" {
 		return fail("baseline: %s", res.Baseline.Error)
 	}
+	// The suite may leave files behind (Pest writes .phpunit.cache even with --do-not-cache-result): the recording starts clean.
+	if err := phpCheckout(ctx, cfg.Clone, r.R); err != nil {
+		return fail("checkout R after the baseline: %v", err)
+	}
 	baseRed := map[string]bool{}
 	for _, f := range res.Baseline.Red {
 		baseRed[f] = true
