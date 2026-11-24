@@ -38,11 +38,14 @@ type Changed struct {
 	Test    bool   // the file has the test role (no function-level refinement)
 }
 
-// docFile: a documentation or harmless file that no ecosystem gives a role, that nothing in the graph references and that no
-// bgraph.toml entry names (dynamic.docFile).
+// docFile: a modified documentation or harmless file that no bgraph.toml entry names, that no other ecosystem gives a role and
+// that the PHP analysis sees only as a project file (data) or not at all. The PHP analysis owns every file of a project (an
+// ownership edge and the data role), so the generic rule (no role, no graph edge) would never accept one; the collector
+// observes every read, include, stat and listing through the file:// proxy, so the file stays a changed file for the per-test
+// check instead, as in the JVM variant of the rule (docs/dynamic-layer.md §9.9, decision 3).
 func docFile(c dynamic.Change) bool {
-	return (classify.Doc(c.Path) || classify.Harmless(c.Path)) && !c.Referenced && !c.OtherRole && !c.Rule && !c.Declared &&
-		!c.Global && !c.Claimed && c.BaseRole == "" && c.HeadRole == ""
+	return (classify.Doc(c.Path) || classify.Harmless(c.Path)) && !c.OtherRole && !c.Rule && !c.Declared && !c.Global && !c.Claimed &&
+		(c.BaseRole == "" || c.BaseRole == model.RoleData) && (c.HeadRole == "" || c.HeadRole == model.RoleData)
 }
 
 func codeRole(r model.Role) bool { return r == model.RoleSource || r == model.RoleTest }

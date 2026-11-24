@@ -93,7 +93,7 @@ vendor/bin/phpunit --configuration phpunit.xml.dist tests/Monolog/Formatter/Line
 ```
 
 Requirements: PHPUnit 10 or later, or Pest 2 or later, a PHPUnit XML configuration, installed Composer dependencies, and
-Xdebug 3 in the PHP that records. Only modifications of existing PHP code files and unreferenced documentation files are
+Xdebug 3 in the PHP that records. Only modifications of existing PHP code files and documentation files are
 narrowed; Composer manifests and lockfiles, PHPUnit XML, `Pest.php`, data files and additions keep the whole project. A
 project whose selected test files are all removed stays in the selection with an empty `classes` list, and the run plan
 has no command for it.

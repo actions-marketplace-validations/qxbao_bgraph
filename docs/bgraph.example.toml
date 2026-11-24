@@ -220,7 +220,7 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 #                      selected Composer project to the test files whose recorded run (one process tree per test file,
 #                      docs/dynamic-layer.md §11) included, read, stat'ed or listed a changed file, or executed a changed
 #                      function when every change lies inside function bodies. PHPUnit >= 10 or Pest >= 2 with a PHPUnit
-#                      XML configuration; only modified PHP code files or unreferenced documentation files.
+#                      XML configuration; only modified PHP code files or documentation files.
 #   trust_native_env : native extension modules installed in the environment (not CPython's own) do not make a
 #                      record incomplete; their versions are part of the fingerprint. Default false. (Node: the
 #                      toolchain addons of docs/dynamic-layer.md §8.3 are accepted without it.)

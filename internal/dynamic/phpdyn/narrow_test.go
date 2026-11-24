@@ -162,9 +162,24 @@ func TestNarrowFileLevel(t *testing.T) {
 	}
 	// Documentation read by nobody: every test file is removed (the unit stays selected with no file to run).
 	head = with(map[string]string{"README.md": "# y\n"})
-	out, _ = run(t, base, head, records(base), selection("README.md"), dynamic.Change{Path: "README.md", Status: 'M', OldMode: "100644", NewMode: "100644"})
+	// The PHP analysis owns it (data role, an ownership edge): still a documentation file.
+	doc := dynamic.Change{Path: "README.md", Status: 'M', OldMode: "100644", NewMode: "100644", BaseRole: model.RoleData,
+		HeadRole: model.RoleData, Referenced: true}
+	out, _ = run(t, base, head, records(base), selection("README.md"), doc)
 	if !out.Tests[0].ClassFilter || len(out.Tests[0].Classes) != 0 || len(out.Narrowed) != 3 {
 		t.Fatalf("doc change: %+v", out.Tests[0])
+	}
+	// A test file that read it is kept.
+	recs := records(base)
+	recs[3].Deps["README.md"] = base.Key("README.md")
+	recs[3].Reads = append(recs[3].Reads, "README.md")
+	out, _ = run(t, base, head, recs, selection("README.md"), doc)
+	if got := kept(out); !slices.Equal(got, []string{"tests/PriceTest.php"}) {
+		t.Fatalf("doc read: kept %v", got)
+	}
+	doc.OtherRole = true
+	if _, why := Guard(selection("README.md"), []dynamic.Change{doc}); why == "" {
+		t.Fatal("documentation file with another ecosystem's role accepted")
 	}
 }
 
@@ -188,9 +203,7 @@ func TestNarrowFunctionLevelKeeps(t *testing.T) {
 		if len(r.LineCov) == 0 {
 			r.LineCov = nil
 		}
-		for _, p := range c.reads {
-			r.Reads = append(r.Reads, p)
-		}
+		r.Reads = append(r.Reads, c.reads...)
 		head := with(map[string]string{"src/Cart.php": c.head})
 		out, why := run(t, base, head, recs, selection("src/Cart.php"), change("src/Cart.php", model.RoleSource))
 		if why != "" {

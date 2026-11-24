@@ -1121,8 +1121,11 @@ the reason in the `dynamic` note of every PHP unit the layer would have consider
      at base and head. It is judged at **file level**: a test file is kept when its record lists it among the files its
      processes included, read, stat'ed or listed (any test file that included a changed test file is kept too, and the
      changed test file itself always runs);
-   - **documentation**: an unreferenced documentation file with no role, as in [2](#2-when-narrowing-is-allowed); a test
-     file whose record read it is kept.
+   - **documentation**: a documentation or license-style file, as in [2](#2-when-narrowing-is-allowed), except that the
+     PHP analysis may own it (the data role and an ownership edge, which every file of a project has) and graph edges do
+     not matter: the collector observes every read, include, stat and listing, as in the JVM variant
+     ([9.9](#99-decisions-and-implementation), decision 3). No other ecosystem may give it a role. A test file whose
+     record read it is kept.
 
    Anything else refuses: data and fixture files, templates without a PHP role, JSON and YAML, CI files, additions,
    deletions and renames.
