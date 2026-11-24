@@ -1,0 +1,28 @@
+An included independent CMake project exposes the registered test in each build root.
+-- base/outer/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(outer LANGUAGES C)
+enable_testing()
+add_executable(outer_test outer.c)
+add_subdirectory(child)
+add_test(NAME outer COMMAND outer_test)
+-- base/outer/outer.c --
+#include "child/detail.h"
+int main(void) { return VALUE == 1 ? 0 : 1; }
+-- base/outer/child/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(child LANGUAGES C)
+enable_testing()
+add_executable(inner_test inner.c)
+add_test(NAME inner COMMAND inner_test)
+-- base/outer/child/inner.c --
+int main(void) { return 0; }
+-- base/outer/child/detail.h --
+#define VALUE 1
+-- head/outer/child/inner.c --
+int main(void) { return 1; }
+-- want --
+select cpp:cmake:outer::test:inner
+select cpp:cmake:outer/child::test:inner
+noselect cpp:cmake:outer::test:outer
+notfull

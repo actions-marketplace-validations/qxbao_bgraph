@@ -1,0 +1,14 @@
+A native source outside discovered build roots still receives the usual fail-closed classification.
+-- base/library/meson.build --
+project('library', 'c')
+t = executable('check', 'test.c')
+test('check', t)
+-- base/library/test.c --
+int main(void) { return 0; }
+-- base/orphan.c --
+int value(void) { return 1; }
+-- head/orphan.c --
+int value(void) { return 2; }
+-- want --
+full
+widen unreferenced_file

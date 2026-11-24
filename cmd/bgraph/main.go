@@ -47,7 +47,7 @@ Usage:
   bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
   bgraph explain   [--root DIR] [--base REF] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env] <test|file>
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
-  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
+  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--build-dir DIR] [--build-config NAME] [--json] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
   bgraph index     [--root DIR]
   bgraph mcp       [--root DIR]        (MCP server on stdio)
   bgraph agent install   [--root DIR] [--target auto|claude|agents|claude,agents] [--skill] [--hook] [--mcp] [--json]
@@ -98,7 +98,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("bgraph "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
-	var base, head, failed, class, listDir, python, nodeExe, rubyExe string
+	var base, head, failed, class, listDir, buildDir, buildConfig, python, nodeExe, rubyExe string
 	var asJSON bool
 	var dyn dynamicFlag
 	var trust bool
@@ -123,6 +123,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case "command":
 		fs.StringVar(&base, "base", "", "base ref")
 		fs.StringVar(&listDir, "list-dir", "", "directory to write the list file to")
+		fs.StringVar(&buildDir, "build-dir", "", "configured CTest or Meson build directory (default: build relative to each project)")
+		fs.StringVar(&buildConfig, "build-config", "", "CMake build configuration for multi-config generators")
 		fs.BoolVar(&asJSON, "json", false, "in JSON")
 	}
 	if err := fs.Parse(rest); err != nil {
@@ -215,7 +217,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintln(stdout, l)
 		}
 	case "command":
-		plan, err := runner.Commands(sel, runner.Options{ListDir: listDir})
+		plan, err := runner.Commands(sel, runner.Options{ListDir: listDir, BuildDir: buildDir, BuildConfig: buildConfig})
 		if err != nil {
 			return fail(err)
 		}

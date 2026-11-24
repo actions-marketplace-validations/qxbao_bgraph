@@ -175,7 +175,7 @@ $ bgraph command --base origin/main
 # scope: graph
 # go: one `go test` per module, run in the module directory with package paths relative to it (a go.work above it still applies); go test has no argument file, so long lists are split into batches
 go test ./internal/store ./pkg/api
-cd tools && go test .
+(cd tools && go test .)
 ```
 
 - `.` is the module's root package; other packages are `./<rel>`.

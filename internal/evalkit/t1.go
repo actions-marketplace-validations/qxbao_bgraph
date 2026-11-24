@@ -65,6 +65,7 @@ type T1Result struct {
 	Go      *GoT1Info     `json:"go,omitempty"`        // Go oracle details (ecosystem go only)
 	Rb      *RbT1Info     `json:"ruby,omitempty"`      // Ruby oracle details (ecosystem ruby only)
 	RbW     *RbWide       `json:"ruby_wide,omitempty"` // why the Ruby selection is as big as it is (ecosystem ruby only)
+	CPP     *CPPT1Info    `json:"cpp,omitempty"`
 	Swift   *SwiftT1Info  `json:"swift,omitempty"`
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
@@ -396,7 +397,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	touched := map[string]bool{}
 	parts := strings.Split(ns, "\x00")
 	for i := 0; i+1 < len(parts); i += 2 {
-		if rr.cfg.Ecosystem == "php" || rr.cfg.Ecosystem == "swift" {
+		if rr.cfg.Ecosystem == "php" || rr.cfg.Ecosystem == "swift" || rr.cfg.Ecosystem == "cpp" {
 			touched[parts[i+1]] = true
 			continue
 		}
@@ -446,6 +447,15 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Required = req
 		if len(req) == 0 {
 			return skip("unmapped", nil)
+		}
+	} else if rr.cfg.Ecosystem == "cpp" {
+		req, res.CPP, err = cppRequired(ctx, dir, res.P, t.Repo, ids, touched, t.F2PKind)
+		res.Required = req
+		if err != nil {
+			return skip("cpp_oracle", err)
+		}
+		if len(req) == 0 || len(res.CPP.Unmapped) > 0 {
+			return skip("unmapped", fmt.Errorf("names %d, unmapped %d, unlinked n2p %d", len(ids), len(res.CPP.Unmapped), res.CPP.Untouched))
 		}
 	} else if rr.cfg.Ecosystem == "swift" {
 		req, res.Swift, err = swiftRequired(ctx, dir, res.P, ids, touched, t.F2PKind)
@@ -554,6 +564,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Missing = jvmMissing(req, su, res.JVM, sel.Changed)
 	} else if rr.cfg.Ecosystem == "dotnet" {
 		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
+	} else if rr.cfg.Ecosystem == "cpp" {
+		res.Missing = cppMissing(req, su, res.CPP)
 	} else if rr.cfg.Ecosystem == "swift" {
 		res.Missing = swiftMissing(req, su, res.Swift)
 	} else if rr.cfg.Ecosystem == "php" {
@@ -587,7 +599,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			rbDiagnose(res.Rb)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
-		} else if rr.cfg.Ecosystem != "rust" && rr.cfg.Ecosystem != "php" && rr.cfg.Ecosystem != "swift" {
+		} else if rr.cfg.Ecosystem != "rust" && rr.cfg.Ecosystem != "php" && rr.cfg.Ecosystem != "swift" && rr.cfg.Ecosystem != "cpp" {
 			res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
 		}
 	}

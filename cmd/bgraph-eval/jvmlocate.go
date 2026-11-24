@@ -144,7 +144,9 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 				os.MkdirAll(filepath.Dir(idx), 0o755)
 				dir := evalkit.RustRepoDir(*work, t.Repo)
 				var r locRow
-				if eco == "swift" {
+				if eco == "cpp" {
+					r = cppLocateRow(ctx, dir, idx, t)
+				} else if eco == "swift" {
 					names, err := evalkit.SwiftLocateTask(ctx, dir, idx, t)
 					ids, _ := evalkit.ParseF2P(t.F2P)
 					r = locRow{ID: t.InstanceID, Repo: t.Repo, Source: t.Source, Kind: t.F2PKind, F2P: len(ids)}
@@ -225,6 +227,30 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 		return os.WriteFile(*out, b, 0o644)
 	}
 	return nil
+}
+
+func cppLocateRow(ctx context.Context, dir, idx string, t evalkit.Task) locRow {
+	names, err := evalkit.CPPLocateTask(ctx, dir, idx, t)
+	ids, _ := evalkit.ParseF2P(t.F2P)
+	row := locRow{ID: t.InstanceID, Repo: t.Repo, Source: t.Source, Kind: t.F2PKind, F2P: len(ids)}
+	if err != nil {
+		row.Err = err.Error()
+		return row
+	}
+	for _, l := range names {
+		n := locName{Name: l.Name, Form: "cpp", Files: l.Files, InPatch: l.InPatch, Cat: "unique"}
+		for _, registration := range l.Registrations {
+			n.Dirs = append(n.Dirs, registration.File)
+		}
+		switch count := len(l.Files) + len(l.Registrations); {
+		case count == 0:
+			n.Cat = "notfound"
+		case count > 1:
+			n.Cat = "ambiguous"
+		}
+		row.Names = append(row.Names, n)
+	}
+	return row
 }
 
 type locAgg struct{ tasks, names, uniq, amb, nf, task, errs, scanned int }

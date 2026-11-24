@@ -1,0 +1,51 @@
+Unproved CMake inputs use one whole-project unit, including files outside its source root.
+-- base/native/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(sample LANGUAGES C)
+enable_testing()
+add_library(core STATIC core.c)
+add_library(helper STATIC helper.c)
+target_link_libraries(helper PUBLIC core)
+add_executable(unit_test unit.c)
+target_link_libraries(unit_test PRIVATE helper)
+add_executable(other_test other.c)
+add_test(NAME unit COMMAND unit_test)
+add_test(NAME other COMMAND other_test)
+include(${COMPUTED_INPUT})
+-- base/native/core.c --
+int core(void) { return 1; }
+-- base/native/helper.c --
+int core(void); int helper(void) { return core(); }
+-- base/native/unit.c --
+int helper(void); int main(void) { return helper() == 1 ? 0 : 1; }
+-- base/native/other.c --
+int main(void) { return 0; }
+-- base/native/common.h --
+#define COMMON 1
+-- base/native/fixtures/data.json --
+{"value": 1}
+-- base/web/package.json --
+{"name":"web","scripts":{"test":"vitest"}}
+-- base/web/vitest.config.js --
+export default {}
+-- base/web/a.js --
+export const a = 1
+-- base/web/a.test.js --
+import './a.js'
+-- base/other/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(other LANGUAGES C)
+enable_testing()
+add_executable(other tool.c)
+add_test(NAME tool COMMAND other)
+-- base/other/tool.c --
+int main(void) { return 0; }
+-- head/other/tool.c --
+int main(void) { return 1; }
+-- want --
+select cpp:cmake:native::all
+noselect cpp:cmake:native::test:unit
+widen dynamic_import
+select cpp:cmake:other::test:tool
+noselect web/a.test.js
+notfull

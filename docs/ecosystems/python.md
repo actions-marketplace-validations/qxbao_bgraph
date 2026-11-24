@@ -163,7 +163,7 @@ reason = "load() only imports the plugins/ modules"
 $ bgraph command --base origin/main
 # scope: graph
 python -m pytest --rootdir . -c pyproject.toml tests/test_api.py tests/unit/test_models.py
-cd services/billing && python -m pytest --rootdir . -c pytest.ini tests/test_invoice.py
+(cd services/billing && python -m pytest --rootdir . -c pytest.ini tests/test_invoice.py)
 ```
 
 See [CLI](../cli.md) for `--json` and `--list-dir`.

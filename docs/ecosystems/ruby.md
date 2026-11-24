@@ -165,7 +165,7 @@ $ bgraph command --base HEAD
 # scope: graph
 # ruby: the selected files of a project run in one process (per batch): global state leaking between files that are not selected together is not modeled
 bundle exec rspec spec/models/billing_spec.rb spec/models/user_spec.rb
-cd gems/api && bundle exec ruby -Ilib -Itest -e 'ARGV.each { |f| require File.expand_path(f) }' test/client_test.rb
+(cd gems/api && bundle exec ruby -Ilib -Itest -e 'ARGV.each { |f| require File.expand_path(f) }' test/client_test.rb)
 ```
 
 `billing_spec.rb` is selected although it never names `user.rb`: the `.rspec` `--require spec_helper` loads `lib/shop.rb`, which

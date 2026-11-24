@@ -595,6 +595,8 @@ func (r T2Repo) Baseline(ctx context.Context, cfg *T2Config, root string) (T2Bas
 // BuildOracle runs the mutations not yet in oracle.jsonl (sequential within a repo: the working tree holds only one mutation at a time).
 func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleStore, have map[string]T2Record) error {
 	switch r.Eco {
+	case "cpp":
+		return r.buildOracleCPP(ctx, cfg, store, have)
 	case "rust":
 		return r.buildOracleRust(ctx, cfg, store, have)
 	case "python":
@@ -826,7 +828,7 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 	case "ruby":
 		ck.Changed = sel.Changed
 		ck.Near = pyNear(sel, ck.Missed)
-	case "php", "swift":
+	case "php", "swift", "cpp":
 		ck.Changed = sel.Changed
 		return ck
 	}
@@ -955,7 +957,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" || r.Eco == "swift" {
+	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" || r.Eco == "swift" || r.Eco == "cpp" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`

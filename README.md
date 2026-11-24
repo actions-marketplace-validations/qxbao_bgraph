@@ -44,14 +44,14 @@ is a regression shipped to production. bgraph is built around that constraint:
 
 <table>
   <tr>
-    <td align="center" width="25%"><h3>1,777</h3>real bug-fix tasks replayed<br>across nine ecosystems</td>
-    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 562 mutation kills</td>
+    <td align="center" width="25%"><h3>1,863</h3>real bug-fix tasks replayed<br>across ten ecosystems</td>
+    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 573 mutation kills</td>
     <td align="center" width="25%"><h3>3–13%</h3>of the suite selected on<br>well-structured repositories</td>
     <td align="center" width="25%"><h3>&lt; 1 s</h3>typical selection time,<br>index cached between runs</td>
   </tr>
 </table>
 
-<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 25 open-source
+<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 28 open-source
 repositories, median selection on dayjs, hono and the Go holdout set. Method and every result:
 <a href="docs/evaluation.md">docs/evaluation.md</a>.</sub>
 
@@ -90,7 +90,7 @@ Turn a selection into commands your runner understands:
 ```console
 $ bgraph command --base origin/main
 # scope: graph
-cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
+(cd packages/core && npx vitest run src/a.test.ts src/b.test.ts)
 ```
 
 ## Benchmarks
@@ -138,6 +138,7 @@ and per-task causes: [docs/benchmarks.md](docs/benchmarks.md).
 | <img src="https://cdn.simpleicons.org/php" width="20" alt=""> | [**PHP**](docs/ecosystems/php.md) | Composer project | PHPUnit, Pest |
 | <img src="https://cdn.simpleicons.org/ruby" width="20" alt=""> | [**Ruby**](docs/ecosystems/ruby.md) | test file | RSpec, Minitest, Test::Unit, Rails test, Bundler |
 | <img src="https://cdn.simpleicons.org/swift" width="20" alt=""> | [**Swift**](docs/ecosystems/swift.md) | SwiftPM test target or package | `swift test`, XCTest, Swift Testing |
+| <img src="https://cdn.simpleicons.org/cplusplus" width="20" alt=""> | [**C / C++**](docs/ecosystems/cpp.md) | registered test or build project | CMake/CTest and Meson |
 
 Polyglot repositories work out of the box: every ecosystem selects independently, and a change in one does not select
 another's tests unless it is a shared input (CI definitions, toolchain pins).
@@ -148,7 +149,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 |---|---|
 | 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
 | 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
-| ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest, RSpec, Minitest, SwiftPM and more. [CLI](docs/cli.md#command) |
+| ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest, RSpec, Minitest, SwiftPM, CTest, Meson and more. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
 | ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files, for JVM and .NET test classes, and for Ruby test files by the methods they ran. [Dynamic layer](docs/dynamic-layer.md) |
 | 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |

@@ -109,6 +109,10 @@ func main() {
 		err = cmdJVMLocate(ctx, os.Args[2:], "dotnet")
 	case "swift-provider":
 		err = cmdSwiftProvider(ctx, os.Args[2:])
+	case "cpp-provider":
+		err = cmdCPPProvider(ctx, os.Args[2:])
+	case "cpp-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "cpp")
 	case "swift-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "swift")
 	case "go-provider":
@@ -173,7 +177,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
-	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby | swift; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
+	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby | swift | cpp; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
 	rulesDir := fs.String("rules-dir", "", "inject DIR/<owner>__<name>.toml as bgraph.toml into P and C of that repo's tasks (python [[dynamic]] declarations)")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
@@ -193,6 +197,9 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "ruby" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/ruby.json"
+	}
+	if *eco == "cpp" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/cpp.json"
 	}
 	if *eco == "swift" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/swift.json"
@@ -390,9 +397,9 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift | cpp")
 	fs.Parse(args)
-	if *eco == "php" || *eco == "swift" {
+	if *eco == "php" || *eco == "swift" || *eco == "cpp" {
 		outSet := false
 		fs.Visit(func(f *flag.Flag) { outSet = outSet || f.Name == "out" })
 		if !outSet {
@@ -448,6 +455,23 @@ func cmdManifest(args []string) error {
 		man = evalkit.BuildJVMDotnetManifest(*eco, t1, *metaPath, *maxPer)
 	} else if *eco == "ruby" {
 		man = evalkit.BuildRubyManifest(t1, *metaPath, *maxPer)
+	} else if *eco == "cpp" {
+		ds = []evalkit.DatasetInfo{
+			{Name: "SWE-bench/SWE-bench_Multilingual", Notes: "test split; CMake/CTest repositories"},
+			{Name: "ByteDance-Seed/Multi-SWE-bench", Notes: "selected CMake/CTest repositories and zstd; recorded f2p or patch-linked n2p"},
+			{Name: "SWE-bench-c/SWE-bench-c", Notes: "test split; zstd has both CMake/CTest and Meson projects"},
+		}
+		for i := range ds {
+			ds[i].URL = "https://huggingface.co/datasets/" + ds[i].Name
+			ds[i].Revision = metaString(*metaPath, "cpp_datasets", ds[i].Name)
+		}
+		for _, r := range t1 {
+			r.Kind = "library"
+			if strings.EqualFold(r.Name, "catchorg/Catch2") {
+				r.Kind = "framework"
+			}
+		}
+		man = evalkit.BuildCountManifest("cpp", t1, ds, *maxPer)
 	} else if *eco == "swift" {
 		ds = []evalkit.DatasetInfo{{Name: "nebius/Longtail-SWE", URL: "https://huggingface.co/datasets/nebius/Longtail-SWE", Notes: "hard and easy splits, Swift rows with recorded FAIL_TO_PASS results"}}
 		ds[0].Revision = metaString(*metaPath, "swift_datasets", ds[0].Name)
@@ -564,10 +588,10 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
 	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift (non-Node default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
-	budget := fs.Duration("budget", 0, "rust/python/swift: stop starting new mutants after this long (0 = no limit)")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift | cpp (non-Node default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
+	budget := fs.Duration("budget", 0, "rust/python/swift/cpp: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
-	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "php" || *eco == "ruby" || *eco == "swift" {
+	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "php" || *eco == "ruby" || *eco == "swift" || *eco == "cpp" {
 		dirSet, manSet := false, false
 		fs.Visit(func(f *flag.Flag) {
 			dirSet = dirSet || f.Name == "dir"
@@ -582,7 +606,7 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	} else if *eco != "node" {
 		return 2, fmt.Errorf("unknown --ecosystem %q", *eco)
 	}
-	if *reconf && (*eco == "php" || *eco == "swift") {
+	if *reconf && (*eco == "php" || *eco == "swift" || *eco == "cpp") {
 		return 2, fmt.Errorf("%s mutants are confirmed during --run-tests", *eco)
 	}
 	if *out == "" {
@@ -628,6 +652,16 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 		for _, repo := range qr.Repos {
 			if repo.Error != "" || repo.Errors > 0 || repo.Killed+repo.Survived == 0 {
 				return 2, fmt.Errorf("incomplete Swift T2 evaluation for %s (details in %s)", repo.Repo.Name, *out)
+			}
+		}
+	}
+	if *eco == "cpp" {
+		if len(qr.Repos) == 0 {
+			return 2, fmt.Errorf("no C/C++ repos selected")
+		}
+		for _, repo := range qr.Repos {
+			if repo.Error != "" || repo.Errors > 0 || repo.Killed+repo.Survived == 0 {
+				return 2, fmt.Errorf("incomplete C/C++ T2 evaluation for %s (details in %s)", repo.Repo.Name, *out)
 			}
 		}
 	}

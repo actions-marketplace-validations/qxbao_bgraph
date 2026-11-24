@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "notes": "C/C++ T2 uses Linux arm64 CTest and Meson. Build the local image with docker build -f evalkit/tools/cpp-toolchain.Dockerfile -t bgraph-cpp-eval:cmake3.31-meson1.8 evalkit/tools. Check out each repo at its pinned revision in the named directory under --dir. Incremental builds and test reports live in that work directory. The manifest samples six one-token mutations in non-test implementation source per repository.",
+  "repos": [
+    {
+      "name": "fmtlib/fmt",
+      "dir": "fmtlib__fmt",
+      "eco": "cpp",
+      "runner": "ctest",
+      "remote": "https://github.com/fmtlib/fmt.git",
+      "r": "87fbc6f7566e4d3266bd3a2cd69f6c90e1aefa5d",
+      "args": ["-DFMT_TEST=ON", "-DFMT_DOC=OFF", "-DFMT_WERROR=OFF", "-DCMAKE_BUILD_TYPE=Release"],
+      "include": ["src/"],
+      "mutants": 6,
+      "tries": 6,
+      "seed": "t2-cpp-v1"
+    },
+    {
+      "name": "catchorg/Catch2",
+      "dir": "catchorg__Catch2",
+      "eco": "cpp",
+      "runner": "ctest",
+      "remote": "https://github.com/catchorg/Catch2.git",
+      "r": "1faccd601d904a951142d8fba82914a8325b764e",
+      "args": ["-DBUILD_TESTING=ON", "-DCATCH_ENABLE_WERROR=OFF", "-DCMAKE_CXX_FLAGS=-DCATCH_CONFIG_NO_POSIX_SIGNALS", "-DCMAKE_BUILD_TYPE=Release"],
+      "include": ["include/internal/"],
+      "mutants": 6,
+      "tries": 6,
+      "seed": "t2-cpp-v1"
+    },
+    {
+      "name": "fribidi/fribidi",
+      "dir": "fribidi__fribidi",
+      "eco": "cpp",
+      "runner": "meson",
+      "remote": "https://github.com/fribidi/fribidi.git",
+      "r": "68162babff4f39c4e2dc164a5e825af93bda9983",
+      "args": ["--buildtype", "release", "-Ddocs=false"],
+      "include": ["lib/"],
+      "mutants": 6,
+      "tries": 6,
+      "seed": "t2-cpp-v1"
+    }
+  ]
+}

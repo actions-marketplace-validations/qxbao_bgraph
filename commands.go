@@ -16,7 +16,8 @@ type (
 	// caller's environment; ListFile, Batch/Batches and Note as documented in docs/cli.md (`command`).
 	Command = runner.Command
 	// CommandOptions configures Commands: ListDir (where list files are written; "" passes arguments directly),
-	// MaxArgChars (default 8000) and FullThreshold (0 = off; a selected/total unit ratio above it makes the plan full).
+	// MaxArgChars (default 8000), FullThreshold (0 = off; a selected/total unit ratio above it makes the plan full),
+	// and the native runner options BuildDir and BuildConfig.
 	CommandOptions = runner.Options
 )
 
@@ -62,8 +63,8 @@ const (
 	ReasonDynamicSkipped  = model.ReasonDynamicSkipped // warnings only
 )
 
-// ShellLine renders c as one POSIX shell line, as `bgraph command` prints it: Env as a prefix and "cd <project> &&" when the
-// project is not the repository root. Arguments are single-quoted when they contain anything but [A-Za-z0-9-_./:=@+,].
+// ShellLine renders c as one POSIX shell line to run from the repository root.
+// A subshell keeps project directory changes local to each command.
 func ShellLine(c Command) string {
 	q := make([]string, len(c.Argv))
 	for i, a := range c.Argv {
@@ -75,7 +76,7 @@ func ShellLine(c Command) string {
 		line = k + "=" + shellQuote(v) + " " + line
 	}
 	if c.Project != "." && c.Project != "" {
-		line = "cd " + shellQuote(c.Project) + " && " + line
+		line = "(cd " + shellQuote(c.Project) + " && " + line + ")"
 	}
 	return line
 }
@@ -86,5 +87,5 @@ func shellQuote(s string) string {
 	}) < 0 {
 		return s
 	}
-	return "'" + strings.ReplaceAll(s, "'", `'''`) + "'"
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

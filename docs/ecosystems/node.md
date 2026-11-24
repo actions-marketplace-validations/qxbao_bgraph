@@ -151,8 +151,8 @@ reason = "scripts/aliases.js maps @x/<pkg> to packages/<pkg>/src/index.ts"
 $ bgraph command --base origin/main
 # scope: graph
 # vitest: the argument is a substring of the path, so a.test.ts also matches aa.test.ts (over-selection, safe)
-cd packages/core && npx vitest run src/parse.test.ts test/format.test.ts
-cd packages/web && npx jest --runTestsByPath src/app.test.tsx
+(cd packages/core && npx vitest run src/parse.test.ts test/format.test.ts)
+(cd packages/web && npx jest --runTestsByPath src/app.test.tsx)
 ```
 
 See [CLI](../cli.md) for `--json` and `--list-dir`.

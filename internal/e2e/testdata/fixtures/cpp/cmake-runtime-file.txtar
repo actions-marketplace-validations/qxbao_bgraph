@@ -1,0 +1,30 @@
+A test using a native file API can depend on resources under a foreign project.
+-- base/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(runtime LANGUAGES C)
+enable_testing()
+add_executable(runtime_test runtime.c)
+add_executable(other_test other.c)
+add_test(NAME runtime COMMAND runtime_test)
+add_test(NAME other COMMAND other_test)
+-- base/runtime.c --
+#include <stdio.h>
+int main(void) { return fopen("../web/input.js", "r") == NULL; }
+-- base/other.c --
+int main(void) { return 0; }
+-- base/web/package.json --
+{"name":"web","scripts":{"test":"vitest"}}
+-- base/web/vitest.config.js --
+export default {}
+-- base/web/input.js --
+export const value = 1
+-- base/web/input.test.js --
+import './input.js'
+-- head/web/input.js --
+export const value = 2
+-- want --
+select cpp:cmake:.::test:runtime
+select web/input.test.js
+noselect cpp:cmake:.::test:other
+widen uncertain_scan
+notfull

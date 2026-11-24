@@ -76,6 +76,9 @@ See [PHP](ecosystems/php.md#addressing-units-in-bgraphtoml).
 For Swift, use a package or test target directory, or an exact ID such as `swift:packages/kit::test:KitTests`. An opaque package has
 an ID such as `swift:packages/kit::all`. See [Swift](ecosystems/swift.md#addressing-units-in-bgraphtoml).
 
+For C and C++, use a build project directory or an exact ID such as `cpp:cmake:library::test:parse`.
+See [C and C++](ecosystems/cpp.md#addressing-units-in-bgraphtoml).
+
 A target that matches no test unit of the current tree (a mistyped or stale directory, a package without tests, a glob
 that matches no unit's file) is a configuration error: when the rule matches a changed file, the selection is `full`
 (`user_rule`) and the detail names the target.
