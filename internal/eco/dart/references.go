@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/model"
@@ -121,11 +122,54 @@ func (b *builder) target(from, uri string) (cands []string, external bool, why s
 	if err != nil {
 		return nil, false, "malformed URI"
 	}
-	c, ok := resolveRel(path.Dir(from), u)
-	if !ok {
+	if c, ok := resolveRel(path.Dir(from), u); ok {
+		cands = append(cands, c)
+	}
+	// A library under lib/ is usually loaded by its package: URI, where Dart resolves ".." segments without leaving the
+	// package (package:p/a/b.dart + ../../x.dart is package:p/x.dart). Loaded by a file URI it resolves as a path: both count.
+	if c, ok := b.packageRelative(from, u); ok && !slices.Contains(cands, c) {
+		cands = append(cands, c)
+	}
+	if len(cands) == 0 {
 		return nil, false, "URI leaves the repository or is absolute"
 	}
-	return []string{c}, false, ""
+	return cands, false, ""
+}
+
+// packageRelative resolves relative URI u of a file under its package's lib/ directory the way Dart resolves it against the
+// file's package: URI: ".." never climbs above lib/. False when from is not under a lib/ directory or u is not relative.
+func (b *builder) packageRelative(from, u string) (string, bool) {
+	u = strings.ReplaceAll(u, "\\", "/")
+	if u == "" || path.IsAbs(u) || strings.Contains(u, ":") {
+		return "", false
+	}
+	p := b.r.nearest(path.Dir(from))
+	if p == nil {
+		return "", false
+	}
+	lib := joinDir(p.dir, "lib")
+	if !within(from, lib) || from == lib {
+		return "", false
+	}
+	var segs []string
+	if d := strings.TrimPrefix(path.Dir(from), lib); d != "" {
+		segs = strings.Split(strings.TrimPrefix(d, "/"), "/")
+	}
+	for _, s := range strings.Split(u, "/") {
+		switch s {
+		case "", ".":
+		case "..":
+			if len(segs) > 0 {
+				segs = segs[:len(segs)-1]
+			}
+		default:
+			segs = append(segs, s)
+		}
+	}
+	if len(segs) == 0 {
+		return "", false
+	}
+	return joinDir(lib, strings.Join(segs, "/")), true
 }
 
 // directive adds the edges of an import, export, part or literal load URI.

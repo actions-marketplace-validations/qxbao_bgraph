@@ -1,0 +1,31 @@
+A library under lib/ is loaded by its package: URI, where ".." never climbs above lib/: ../../shared/x.dart from
+lib/search/backend.dart is lib/shared/x.dart (Dart resolves package:app/search/ + ../../shared/x.dart to
+package:app/shared/x.dart). The edge exists and nothing widens.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/search/backend.dart --
+import '../../shared/x.dart';
+int search() => x();
+-- base/lib/shared/x.dart --
+int x() => 1;
+-- base/lib/other.dart --
+int other() => 1;
+-- base/test/search_test.dart --
+import 'package:test/test.dart';
+import 'package:app/search/backend.dart';
+void main() => test('s', () => search());
+-- base/test/other_test.dart --
+import 'package:test/test.dart';
+import 'package:app/other.dart';
+void main() => test('o', () => other());
+-- head/lib/shared/x.dart --
+int x() => 2;
+-- want --
+scope graph
+nowiden unknown_import
+select test/search_test.dart
+noselect test/other_test.dart
