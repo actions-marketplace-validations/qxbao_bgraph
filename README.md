@@ -5,7 +5,7 @@
 <h3 align="center">Your agent writes the code in minutes. Don't wait an hour for the tests.</h3>
 
 <p align="center">
-  <b>bgraph</b> runs only the tests a change can affect, across eight language ecosystems,<br>
+  <b>bgraph</b> runs only the tests a change can affect, across eleven language ecosystems,<br>
   and never silently skips one.
 </p>
 
@@ -51,7 +51,7 @@ is a regression shipped to production. bgraph is built around that constraint:
   </tr>
 </table>
 
-<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 28 open-source
+<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 31 open-source
 repositories, median selection on dayjs, hono and the Go holdout set. Method and every result:
 <a href="docs/evaluation.md">docs/evaluation.md</a>.</sub>
 
@@ -149,7 +149,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 | Feature | What it does |
 |---|---|
 | 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
-| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
+| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches; a `go.sum` change that only adds lines selects nothing. [Lockfiles](docs/lockfiles.md) |
 | ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest, RSpec, Minitest, SwiftPM, CTest, Meson, `dart test`, `flutter test` and more. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
 | ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files, for JVM and .NET test classes, and for Ruby and PHP test files by the methods and functions they ran. [Dynamic layer](docs/dynamic-layer.md) |
@@ -178,7 +178,7 @@ The script picks the build for your OS and CPU, checks it against the release's 
 
 `bgraph update` replaces the binary with the latest release (`--check` only reports, `--version` picks one).
 
-**From source** (Go 1.25 or later):
+**From source** (Go 1.25.1 or later):
 
 ```sh
 go install github.com/qxbao/bgraph/cmd/bgraph@latest
