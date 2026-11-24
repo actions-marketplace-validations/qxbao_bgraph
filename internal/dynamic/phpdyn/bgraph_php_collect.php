@@ -23,6 +23,27 @@ final class BgraphPhpCollect
     public static bool $proxy = false;
     /** @var list<string> */
     public static array $incomplete = [];
+    /** @var (callable(): void)|null */
+    public static $write = null;
+    public static bool $shutdown = false;
+    public static bool $written = false;
+
+    // ob is the collector's output handler: it passes output through and writes the collector's output on its final call.
+    public static function ob(string $buf, int $phase): string
+    {
+        if (($phase & PHP_OUTPUT_HANDLER_FINAL) && !self::$written && self::$write !== null) {
+            self::$written = true;
+            if (!self::$shutdown) {
+                self::incomplete('the tests ended the collector\'s output buffer (code after it, such as destructors, is not observed)');
+            }
+            try {
+                (self::$write)();
+            } catch (\Throwable $e) {
+                // No output: the record is incomplete.
+            }
+        }
+        return $buf;
+    }
 
     public static function incomplete(string $why): void
     {
@@ -580,8 +601,20 @@ final class BgraphPhpFileProxy
         $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
         @file_put_contents($out . '/' . getmypid() . '-' . bin2hex(random_bytes(6)) . '.json', $json === false ? '{}' : $json);
     };
-    // Shutdown functions run in registration order: registering again from inside one puts the writer last.
-    register_shutdown_function(static function () use ($write): void {
-        register_shutdown_function($write);
+    // The output is written by the final call of an output handler: PHP ends output buffering after the shutdown functions and
+    // after every object destructor, so whatever they include, read or execute is observed. Shutdown functions run in
+    // registration order: registering again from inside one marks the end of them (an earlier final call means the tests
+    // removed the buffer).
+    $c::$write = $write;
+    register_shutdown_function(static function () use ($c): void {
+        register_shutdown_function(static function () use ($c): void {
+            $c::$shutdown = true;
+        });
     });
+    if (!ob_start([BgraphPhpCollect::class, 'ob'], 1)) {
+        $c::incomplete('cannot install the collector\'s output buffer (code after the shutdown functions is not observed)');
+        register_shutdown_function(static function () use ($c): void {
+            register_shutdown_function(static fn () => $c::ob('', PHP_OUTPUT_HANDLER_FINAL));
+        });
+    }
 })();

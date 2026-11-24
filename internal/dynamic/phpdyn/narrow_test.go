@@ -297,7 +297,8 @@ func TestNarrowUnusableRecords(t *testing.T) {
 		"calls native code through FFI at x:1", "another coverage user: xdebug_start_code_coverage at x:1",
 		"the file:// stream wrapper proxy was replaced or removed during the run", "reads untracked file a.txt",
 		"canary: the test file was not included", "no tests ran", "timeout",
-		"reads a file without the stream wrapper (php_strip_whitespace) at x:1", "another coverage user: xdebug_set_filter at x:1"} {
+		"reads a file without the stream wrapper (php_strip_whitespace) at x:1", "another coverage user: xdebug_set_filter at x:1",
+		"the tests ended the collector's output buffer (code after it, such as destructors, is not observed)"} {
 		cartKept("incomplete: "+reason, edit(1, func(r *dynamic.Record) { r.Complete, r.Incomplete = false, reason }))
 	}
 	cartKept("failed", edit(1, func(r *dynamic.Record) { r.Pass = false }))

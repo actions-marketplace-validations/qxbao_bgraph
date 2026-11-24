@@ -1212,8 +1212,10 @@ repository files it was generated from. Child PHP processes inherit all of it, s
 process of the tree. In each process it:
 
 - restricts Xdebug's coverage filter to the repository without its Composer vendor directories and starts line coverage
-  (unused and dead code included) before anything else; at shutdown, as the last shutdown function, it writes the line
-  tables of repository files and `get_included_files()` to `$BGRAPH_PHP_OUT/<pid>-<random>.json`;
+  (unused and dead code included) before anything else, and opens an output buffer of its own; PHP ends output buffering
+  after the shutdown functions and after every object destructor, and the buffer's final call writes the line tables of
+  repository files and `get_included_files()` to `$BGRAPH_PHP_OUT/<pid>-<random>.json`, so code that destructors run at
+  shutdown is observed (when the tests end that buffer earlier, the record is incomplete);
 - replaces the `file://` stream wrapper by a proxy that logs every repository path opened (include, read, write), stat'ed
   or listed, then performs the operation with the built-in wrapper. Stats and listings made by the runner's own package
   (`vendor/phpunit/phpunit/`, `vendor/pestphp/pest/`) or by Composer's `ClassLoader.php` are not dependencies: they only
@@ -1281,7 +1283,8 @@ fail alone are never removed).
   cache, not the repository files it came from. Writes there during the recording make records incomplete.
 - Files PHP touches without the `file://` wrapper: `glob()`, `realpath()` and existence through the include path resolver
   only tell whether a path exists (changed only by additions and deletions, which are refused); native extensions reading
-  files themselves; destructors and shutdown functions registered after the collector's writer.
+  files themselves; a destructor or late shutdown function that ends the collector's output buffer (later code is not
+  observed).
 - Code that runs only through a test file's interaction with others in one process (global state, static caches) is
   not observed in the isolated recording, as for the static layer.
 - Xdebug's develop mode changes `var_dump` and error output: a test that depends on them may fail while recorded and is
