@@ -213,6 +213,7 @@ func Narrow(sel model.Selection, changes []Change, p Params) model.Selection {
 	if why := Guard(sel, changes, p.Eco); why != "" {
 		return Skip(sel, p.Eco, why)
 	}
+	always := AlwaysRun(sel)
 	out := sel
 	out.Tests = nil
 	out.Narrowed = slices.Clone(sel.Narrowed)
@@ -230,6 +231,8 @@ func Narrow(sel model.Selection, changes []Change, p Params) model.Selection {
 		switch {
 		case t.Whole:
 			keep = "whole-project unit: no per-unit record"
+		case AlwaysRunUnit(always, t.Unit):
+			keep = "always run (previously failed or new)"
 		case !ok && others > 0:
 			keep = fmt.Sprintf("no record for the current environment (%d for other environments)", others)
 		case !ok:
@@ -270,6 +273,31 @@ func Narrow(sel model.Selection, changes []Change, p Params) model.Selection {
 		out.IndexStats = st
 	}
 	return out
+}
+
+// AlwaysRun returns the always_run IDs of sel (previously failed units, new test files) as a set. A layer that narrows inside a
+// unit keeps the whole unit when its ID is there, and a sub-unit when "<unit>#<sub>" is there (bgraph --failed accepts the
+// sub-unit IDs that narrowed lists).
+func AlwaysRun(sel model.Selection) map[string]bool {
+	m := make(map[string]bool, len(sel.AlwaysRun))
+	for _, a := range sel.AlwaysRun {
+		m[a] = true
+	}
+	return m
+}
+
+// AlwaysRunUnit reports whether always names unit itself or one of its sub-units ("<unit>#<sub>"): a layer that removes whole
+// units keeps it then.
+func AlwaysRunUnit(always map[string]bool, unit string) bool {
+	if always[unit] {
+		return true
+	}
+	for a := range always {
+		if strings.HasPrefix(a, unit+"#") {
+			return true
+		}
+	}
+	return false
 }
 
 // Skip returns sel with a dynamic_skipped warning for eco.

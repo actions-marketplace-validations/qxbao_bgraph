@@ -118,6 +118,22 @@ func TestNarrowPositive(t *testing.T) {
 	}
 }
 
+// A widened unit named in always_run, as itself or by a sub-unit ID ("<unit>#<test>", from --failed), is kept (Python and Node
+// layers).
+func TestNarrowKeepsAlwaysRun(t *testing.T) {
+	for _, id := range []string{"tests/test_b.py", "tests/test_b.py#test_x"} {
+		sel, ch := fixture()
+		sel.AlwaysRun = []string{id}
+		out := Narrow(sel, ch, params(goodRecords()...))
+		if !slices.Contains(units(out), "tests/test_b.py") || len(out.Narrowed) != 0 {
+			t.Errorf("%s: tests %v narrowed %v", id, units(out), narrowed(out))
+		}
+	}
+	if AlwaysRunUnit(map[string]bool{"tests/test_bb.py#x": true}, "tests/test_b.py") {
+		t.Error("prefix of another unit matched")
+	}
+}
+
 // A precise unit is never removed, even with a record that says it does not load the changed file.
 func TestNarrowNeverRemovesPrecise(t *testing.T) {
 	sel, ch := fixture()
