@@ -159,26 +159,24 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 
 ## Install
 
-**Prebuilt binaries** for Linux, macOS and Windows (amd64 and arm64) are on the
-[releases page](https://github.com/qxbao/bgraph/releases/latest), with a `checksums.txt` (SHA-256) for each release.
-
 Linux and macOS:
 
 ```sh
-v=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/qxbao/bgraph/releases/latest | sed 's|.*/tag/v||')
-os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
-curl -fsSL "https://github.com/qxbao/bgraph/releases/download/v$v/bgraph_${v}_${os}_${arch}.tar.gz" | tar -xz bgraph
-sudo mv bgraph /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/qxbao/bgraph/main/scripts/install.sh | sh
 ```
 
-Windows (PowerShell; use `windows_arm64` on ARM):
+Windows (PowerShell):
 
 ```powershell
-$v = (Invoke-RestMethod https://api.github.com/repos/qxbao/bgraph/releases/latest).tag_name.TrimStart('v')
-Invoke-WebRequest "https://github.com/qxbao/bgraph/releases/download/v$v/bgraph_${v}_windows_amd64.zip" -OutFile bgraph.zip
-Expand-Archive bgraph.zip -DestinationPath "$env:LOCALAPPDATA\bgraph" -Force
-# then add $env:LOCALAPPDATA\bgraph to your PATH
+irm https://raw.githubusercontent.com/qxbao/bgraph/main/scripts/install.ps1 | iex
 ```
+
+The script picks the build for your OS and CPU, checks it against the release's `checksums.txt` (SHA-256), installs it
+(`~/.local/bin`, or `%LOCALAPPDATA%\Programs\bgraph` on Windows) and adds that directory to your `PATH`. Set
+`BGRAPH_VERSION` for a specific release, `BGRAPH_INSTALL_DIR` for another directory, `BGRAPH_NO_MODIFY_PATH=1` to leave
+`PATH` alone. The archives are also on the [releases page](https://github.com/qxbao/bgraph/releases/latest).
+
+`bgraph update` replaces the binary with the latest release (`--check` only reports, `--version` picks one).
 
 **From source** (Go 1.25 or later):
 

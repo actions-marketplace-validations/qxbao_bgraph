@@ -58,6 +58,7 @@ Usage:
   bgraph record    [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
   bgraph dynamic import [--root DIR] FILE
   bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--json]
+  bgraph update    [--check] [--version VERSION] [--force]
   bgraph doctor                (not implemented)
   bgraph version | --version | help
 `
@@ -86,6 +87,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runDynamic(rest, stdout, stderr)
 	case "agent":
 		return runAgent(rest, os.Stdin, stdout, stderr)
+	case "update":
+		return runUpdate(rest, stdout, stderr)
 	case "doctor":
 		fmt.Fprintf(stderr, "bgraph %s: not implemented (later phase)\n", cmd)
 		return 2

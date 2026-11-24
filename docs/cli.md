@@ -15,6 +15,7 @@ repository; default `.`).
 | [`dynamic import`, `dynamic status`](#dynamic) | manage dynamic-layer records |
 | [`mcp`](#mcp) | MCP server on stdio |
 | [`agent install`, `agent uninstall`, `agent hook`](#agent) | guidance for coding agents: instruction-file block, skill, hook |
+| [`update`](#update) | replace the binary with a newer release |
 | [`version`](#version), `help` | print the version or the usage |
 
 `bgraph doctor` is reserved: it prints "not implemented" and exits with code `2`.
@@ -345,6 +346,23 @@ the files and directories that end up empty, and leaves everything else alone.
 
 `hook` is the hook command of Claude Code and Codex: it reads the hook input on stdin and, after a Bash call that ran a whole test
 suite, prints a context note pointing at `bgraph command`, once per session. It always exits `0`.
+
+## `update`
+
+`bgraph update [--check] [--version VERSION] [--force]` replaces the running binary with the latest release (or
+`--version`, which may also downgrade). It downloads the archive for the current OS and CPU from GitHub releases,
+verifies it against the release's `checksums.txt` (SHA-256), and swaps the binary in place; a binary that is already
+current is left alone.
+
+| Flag | Meaning |
+|---|---|
+| `--check` | only print whether a newer release exists |
+| `--version VERSION` | install that release, e.g. `0.2.0` |
+| `--force` | install even when the version is the same, or the binary is a development build (`dev` or a Go pseudo-version) |
+
+The binary's directory must be writable (rerun with `sudo` if bgraph was installed into a system directory). On Windows
+the old binary is renamed to `bgraph.exe.old`, because a running executable cannot be overwritten; the next `update`
+removes it. A binary managed by a package manager is better updated through that package manager.
 
 ## `version`
 
