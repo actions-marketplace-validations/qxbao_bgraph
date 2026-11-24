@@ -1,4 +1,5 @@
-An asset nothing references by literal falls to the general rules: the package's tests (unknown_file).
+A declared asset that no literal names is still a dependency of every test of its package (Flutter bundles it); an
+undeclared data file falls to the general rules (unknown_file, the package).
 -- base/app/pubspec.yaml --
 name: app
 environment:
@@ -17,6 +18,8 @@ dev_dependencies:
 -- base/app/lib/app.dart --
 int app() => 1;
 -- base/app/assets/data.json --
+{}
+-- base/app/tool/notes.json --
 {}
 -- base/app/test/app_test.dart --
 import 'package:flutter_test/flutter_test.dart';
@@ -38,6 +41,8 @@ dev_dependencies:
 import 'package:flutter_test/flutter_test.dart';
 void main() => test('o', () {});
 -- head/app/assets/data.json --
+{"x": 1}
+-- head/app/tool/notes.json --
 {"x": 1}
 -- want --
 scope module

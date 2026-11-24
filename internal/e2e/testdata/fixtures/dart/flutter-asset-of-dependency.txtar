@@ -1,0 +1,60 @@
+Flutter bundles the declared assets of every dependency: a test of app loads other's asset by key
+(AssetImage('assets/logo.png', package: 'other')), which no literal path names. A change to the asset selects the tests
+of other and of every in-repo package depending on it, not an unrelated package.
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  assets:
+    - assets/
+  fonts:
+    - family: Brand
+      fonts:
+        - asset: fonts/brand.ttf
+-- base/other/assets/logo.png --
+png
+-- base/other/fonts/brand.ttf --
+ttf
+-- base/other/lib/other.dart --
+const logoKey = 'logo';
+-- base/other/test/other_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('o', () {});
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+  other:
+    path: ../other
+-- base/app/test/logo_test.dart --
+import 'package:flutter/widgets.dart';
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('l', () => AssetImage('assets/logo' '.png', package: 'other'));
+-- base/unrelated/pubspec.yaml --
+name: unrelated
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  assets:
+    - assets/
+-- base/unrelated/test/u_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('u', () {});
+-- head/other/assets/logo.png --
+png2
+-- head/other/fonts/brand.ttf --
+ttf2
+-- want --
+select app/test/logo_test.dart
+select other/test/other_test.dart
+noselect unrelated/test/u_test.dart

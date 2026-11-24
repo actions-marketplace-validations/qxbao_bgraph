@@ -24,6 +24,8 @@
 //     the importer's package and the target's package (detail generated_output for generated-looking names, unless a
 //     [[generated]] entry of bgraph.toml names its sources).
 //   - a test depends on every flutter_test_config.dart in its directory and the ancestors up to the package root;
+//   - the test files of a package and of every in-repository package depending on it depend on <dartassets:dir>, which
+//     depends on the paths the package's `flutter:` section names (assets, fonts, shaders): Flutter bundles them;
 //   - every .dart file of a package with a native-assets hook depends on hook/build.dart and hook/link.dart;
 //   - string literals that name a file or directory relative to the file, the package or the repository root
 //     (fixture_data, a directory as a <dir>/** pattern), package: URIs in literals, interpolated literals with a static
@@ -56,7 +58,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "dart-5"
+const AnalyzerVersion = "dart-6"
 
 // Eco is the Dart ecosystem.
 type Eco struct {
@@ -96,6 +98,7 @@ type builder struct {
 	seen  map[edgeKey]bool
 	useq  map[string]bool
 	hooks map[string][]string // package dir → its hook files
+	units map[string][]string // package dir → its file units
 }
 
 // Analyze analyzes tree t.
@@ -106,7 +109,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		return a, nil
 	}
 	a.Roles = map[string]model.Role{}
-	b := &builder{t: t, sc: sc, r: r, a: a, rules: e.rules, seen: map[edgeKey]bool{}, useq: map[string]bool{}, hooks: map[string][]string{}}
+	b := &builder{t: t, sc: sc, r: r, a: a, rules: e.rules, seen: map[edgeKey]bool{}, useq: map[string]bool{}, hooks: map[string][]string{}, units: map[string][]string{}}
 	dirs := slices.Sorted(maps.Keys(r.pkgs))
 	for _, d := range dirs {
 		a.Projects = append(a.Projects, eco.Project{Eco: Name, Dir: d, Name: r.pkgs[d].name})
@@ -142,6 +145,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 	for _, f := range stray {
 		b.references(f, nil)
 	}
+	b.assets()
 	slices.SortFunc(a.Edges, func(x, y model.Edge) int {
 		if c := strings.Compare(x.From, y.From); c != 0 {
 			return c
@@ -220,6 +224,7 @@ func (b *builder) pkg(p *pkg, files []string) {
 			}
 		}
 	}
+	b.units[p.dir] = units
 	if cfg.opaque != "" {
 		b.a.Tests = append(b.a.Tests, model.TestUnit{Eco: Name, ID: WholeUnitID(p.dir), Project: p.dir, Runner: runner, Whole: true})
 		b.a.Unresolved = append(b.a.Unresolved, model.Unresolved{File: joinDir(p.dir, "dart_test.yaml"), Spec: "paths", Class: model.UnresolvedUnknown,

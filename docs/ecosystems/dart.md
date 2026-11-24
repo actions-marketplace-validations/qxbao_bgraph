@@ -58,6 +58,10 @@ anything is selected or widened. Integration tests stay file units.
   repository declares are external (the lockfile and manifests cover them). `part of` adds nothing: the library already
   depends on its part.
 - **`flutter_test_config.dart`** in the test file's directory and in every ancestor directory up to the package root.
+- **Flutter assets.** Every path a package's `flutter:` section names (`assets`, `fonts`, `shaders`; a directory entry
+  stands for every file below it) is a dependency of the tests of that package and of every package in the repository
+  that depends on it, directly or transitively: Flutter bundles the assets of all dependencies, and a test loads them by
+  key (`AssetImage('logo.png', package: 'brand')`), not by a path a literal names.
 - **Native-assets hooks.** Every `.dart` file of a package with `hook/build.dart` or `hook/link.dart` depends on them, so
   a hook change reaches the package's tests and every test that imports the package.
 - **String literals that name files.** In every file (tests and the helpers they import), a literal that names an
@@ -140,17 +144,17 @@ whole-package unit ID such as `<dart-all-tests:packages/core>`. A target that ma
   workspace, because the workspace shares one resolution.
 - Library code that names its own configuration by a literal (a tool that reads `pubspec.yaml` or `dart_test.yaml` from
   the working directory) links that file to every test that imports the tool.
-- A file that nothing references by an import or a literal (an asset, an ARB file, a font, a native source) widens to
-  its package through the general `unreferenced_file` and `unknown_file` rules. Changes under a Flutter app's platform
-  directories follow the general rules too.
+- A file that nothing references by an import, a literal or the `flutter:` section (an ARB file, an undeclared data
+  file, a native source) widens to its package through the general `unreferenced_file` and `unknown_file` rules.
+  Changes under a Flutter app's platform directories follow the general rules too.
 - A missing generated file widens its importer to every change of the package until a `[[generated]]` entry describes
   it.
 - Paths built at run time by other means than a literal head, a literal tail or a `join(...)` call are not followed; a
   file read that way usually widens through the `unreferenced_file` rule. A process launch is assumed to run its own
   package's `bin/`; a program of another package started by name (`dart run other:tool`) needs a `[[rule]]`.
-- A literal is resolved against its own file, package and the repository root only. An asset of another package loaded
-  by its key (`AssetImage('assets/x.png', package: 'other')`) is not linked to the test that loads it; a change to it
-  widens to its own package only, so such assets need a `[[rule]]`.
+- A literal is resolved against its own file, package and the repository root only.
+- A declared Flutter asset selects every test of its package and of the packages depending on it, whether or not a test
+  loads it.
 - `flutter test` applies only the nearest `flutter_test_config.dart`; bgraph links every ancestor one.
 - Flutter `integration_test` commands need a device; their selection is still reported.
 
