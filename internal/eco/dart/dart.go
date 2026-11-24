@@ -56,7 +56,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "dart-1"
+const AnalyzerVersion = "dart-2"
 
 // Eco is the Dart ecosystem.
 type Eco struct {

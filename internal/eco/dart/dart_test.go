@@ -187,6 +187,7 @@ func TestLiterals(t *testing.T) {
   File('./tool');
   File('fixtures');
   File('../');
+  File('x/../..');
   File('$root/deep/z.json');
   Directory('test/data');
   Uri.parse('package:p/w.dart');

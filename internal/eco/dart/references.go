@@ -240,9 +240,10 @@ func (b *builder) literal(f string, p *pkg, s string, kind model.EdgeKind, line 
 	return found
 }
 
-// onlyDots: a path made of . and .. segments only (the working directory or one of its parents).
+// onlyDots: a path that names the working directory or one of its parents once cleaned ("..", "a/../..", "./"): as a
+// directory it would stand for a whole package or more, which a literal in code almost never means.
 func onlyDots(s string) bool {
-	for _, seg := range strings.Split(strings.Trim(s, "/"), "/") {
+	for _, seg := range strings.Split(path.Clean(strings.Trim(s, "/")), "/") {
 		if seg != "." && seg != ".." && seg != "" {
 			return false
 		}
