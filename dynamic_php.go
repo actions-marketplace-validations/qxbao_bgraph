@@ -250,6 +250,7 @@ func (ix *Index) recordPHP(ctx context.Context, opt RecordOptions, rf *rules.Fil
 			failed[f.Unit.ID] = append(failed[f.Unit.ID], f.File)
 		}
 	}
+	recs = phpdyn.SharedStateTaint(outs, recs)
 	for _, l := range lists {
 		r := phpdyn.ListRecordOf(l.lo, l.u, wt, ix.repo.Root, l.env, head, now, vendors, failed[l.u.ID])
 		if !r.Complete && l.lo.Err == "" {

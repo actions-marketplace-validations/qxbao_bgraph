@@ -123,6 +123,14 @@ type launch struct {
 }
 
 // event is what the file:// proxy saw for one path in one process.
+// outsideEvent is a file outside the repository (or in a vendor directory) and the process's own temporary directory that the
+// process wrote (W: content written) or read or included (R).
+type outsideEvent struct {
+	P string `json:"p"`
+	W bool   `json:"w"`
+	R bool   `json:"r"`
+}
+
 type event struct {
 	Kinds []string `json:"k"`
 	Pre   bool     `json:"pre"` // the path existed before this process wrote it
@@ -140,6 +148,7 @@ type procOut struct {
 	Coverage   map[string]string `json:"coverage"`
 	Events     map[string]event  `json:"events"`
 	Launches   []launch          `json:"launches"`
+	Outside    []outsideEvent    `json:"outside"`
 	Incomplete []string          `json:"incomplete"`
 }
 
@@ -177,19 +186,21 @@ type Path struct {
 
 // Outcome is what one isolated run of a test file produced (absolute paths with forward slashes).
 type Outcome struct {
-	Unit       string             // the sub-unit ID
-	File       string             // the test file (repo-relative)
-	Included   []string           // every included file
-	Lines      map[string]LineSet // included files with a line table in every process that included them
-	NoTable    map[string]bool    // included files without a line table in some process
-	Paths      map[string]Path    // file events of the proxy
-	Incomplete []string
-	Tests      int  // tests run, from the runner's summary (-1: no summary)
-	Exit       int  // exit code (-1: did not exit normally)
-	TimedOut   bool // the test file hit the timeout (its process tree was killed)
-	Err        string
-	Elapsed    time.Duration
-	Tail       string
+	Unit        string             // the sub-unit ID
+	File        string             // the test file (repo-relative)
+	Included    []string           // every included file
+	Lines       map[string]LineSet // included files with a line table in every process that included them
+	NoTable     map[string]bool    // included files without a line table in some process
+	Written     []string           // files whose content the processes wrote outside the repository (or in a vendor directory) and their own temporary directory
+	OutsideRead []string           // files read or included there
+	Paths       map[string]Path    // file events of the proxy
+	Incomplete  []string
+	Tests       int  // tests run, from the runner's summary (-1: no summary)
+	Exit        int  // exit code (-1: did not exit normally)
+	TimedOut    bool // the test file hit the timeout (its process tree was killed)
+	Err         string
+	Elapsed     time.Duration
+	Tail        string
 }
 
 // Collect runs every test file in its own process tree with the collector and returns the outcomes in order.
@@ -272,6 +283,8 @@ func unitEnv(opt RunOptions, iniDir, outDir string, u Unit) []string {
 	} else if opt.Probe.ScanDir != "" {
 		scan += string(os.PathListSeparator) + opt.Probe.ScanDir
 	}
+	// The test file's own ini directory (sys_temp_dir) comes last, so that a configured sys_temp_dir does not win.
+	scan += string(os.PathListSeparator) + filepath.Join(outDir, "ini")
 	abs := func(rel string) string { return filepath.Join(opt.Root, filepath.FromSlash(rel)) }
 	var vendors []string
 	for _, v := range opt.Vendors {
@@ -290,6 +303,12 @@ func unitEnv(opt RunOptions, iniDir, outDir string, u Unit) []string {
 		"BGRAPH_PHP_ROOT":   opt.Root,
 		"BGRAPH_PHP_VENDOR": strings.Join(vendors, string(os.PathListSeparator)),
 		"BGRAPH_PHP_RUNNER": strings.Join(runners, string(os.PathListSeparator)),
+		// A fresh temporary and cache directory per test file: state one test file leaves there (generated caches,
+		// compiled containers) must not be seen by another one while recording.
+		"TMPDIR":         filepath.Join(outDir, "tmp"),
+		"TEMP":           filepath.Join(outDir, "tmp"),
+		"TMP":            filepath.Join(outDir, "tmp"),
+		"XDG_CACHE_HOME": filepath.Join(outDir, "xdg-cache"),
 	}
 	var out []string
 	for _, kv := range base {
@@ -365,7 +384,14 @@ func runFile(ctx context.Context, opt RunOptions, iniDir, outDir string, f FileU
 		o.Err = err.Error()
 		return o
 	}
-	if err := os.MkdirAll(outDir, 0o755); err != nil {
+	for _, d := range []string{"tmp", "xdg-cache", "ini"} {
+		if err := os.MkdirAll(filepath.Join(outDir, d), 0o755); err != nil {
+			o.Err = err.Error()
+			return o
+		}
+	}
+	ini := fmt.Sprintf("sys_temp_dir=\"%s\"\n", filepath.Join(outDir, "tmp"))
+	if err := os.WriteFile(filepath.Join(outDir, "ini", "zz-bgraph-tmp.ini"), []byte(ini), 0o644); err != nil {
 		o.Err = err.Error()
 		return o
 	}
@@ -484,6 +510,14 @@ func merge(o *Outcome, outDir string, mainPid int) {
 	o.Paths = map[string]Path{}
 	for _, p := range procs {
 		o.Incomplete = append(o.Incomplete, p.Incomplete...)
+		for _, e := range p.Outside {
+			if e.W {
+				o.Written = append(o.Written, e.P)
+			}
+			if e.R {
+				o.OutsideRead = append(o.OutsideRead, e.P)
+			}
+		}
 		for _, f := range p.Included {
 			included[f] = true
 			tbl, ok := p.Coverage[f]

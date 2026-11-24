@@ -1205,8 +1205,11 @@ The PHP that records must load Xdebug 3 and have no `auto_prepend_file` (the col
 embedded in the binary, is written to a temporary directory with an ini file (`auto_prepend_file=<collector>`,
 `xdebug.mode=coverage,develop`); `PHP_INI_SCAN_DIR` is set to that directory followed by the user's value (or PHP's
 compiled scan directory), and `XDEBUG_MODE=coverage,develop`, `COLUMNS=120` and `LINES=50` are set (symfony/console
-otherwise starts `stty`). Child PHP processes inherit all of it, so the collector runs first in every PHP process of the
-tree. In each process it:
+otherwise starts `stty`). Each test file also gets an empty temporary directory of its own (`TMPDIR`, `TEMP`, `TMP`,
+`sys_temp_dir` through a second ini file, `XDG_CACHE_HOME`), removed afterwards, so that a cache one test file generates
+there (a compiled container, a kernel cache, a configuration cache) cannot stand in, for another test file, for the
+repository files it was generated from. Child PHP processes inherit all of it, so the collector runs first in every PHP
+process of the tree. In each process it:
 
 - restricts Xdebug's coverage filter to the repository without its Composer vendor directories and starts line coverage
   (unused and dead code included) before anything else; at shutdown, as the last shutdown function, it writes the line
@@ -1223,7 +1226,8 @@ tree. In each process it:
 Attribution: paths are made repository-relative (outside the repository and inside a vendor directory, `.git` or
 `node_modules`: the environment's); a tracked file is a dependency; a path that does not exist is dropped (additions are
 refused); an untracked repository file is ignored when the run created it (its first event in the process is a write),
-otherwise the record is incomplete.
+otherwise the record is incomplete. Outside the repository, the collector reports the files a process wrote (content,
+not directories) and the files it read or included, outside its own temporary directory.
 
 The record is **incomplete** when: a process is started by anything other than the runner's own package (test code,
 libraries, `shell_exec` included); a process the runner started (PHPUnit's process isolation) wrote no output, or was
@@ -1232,8 +1236,10 @@ process wrote output as the test process; the process forks, replaces itself, lo
 another coverage user is active (`pcov.enabled`, coverage started before the collector, a monitored coverage call by the
 tests); the `file://` proxy was replaced or removed; the collector could not install itself; a process wrote no output
 (a crash, `exit` in a destructor); an untracked repository file that existed before the run was included, read or
-stat'ed; the test file was
-not included (canary); the runner's summary is missing or reports no test; the run timed out.
+stat'ed; the process wrote a file outside the repository (or into a vendor directory) and its own temporary
+directory; it read or included a file outside the repository that another test file wrote during the same recording; it
+read or included a file of a vendor directory modified after that directory's `composer/installed.json` (a cache written
+there, outside Composer's own `composer/` metadata); the test file was not included (canary); the runner's summary is missing or reports no test; the run timed out.
 
 ### 11.5 Environment fingerprint
 
@@ -1266,6 +1272,9 @@ fail alone are never removed).
 
 ### 11.7 Residual risks (accepted)
 
+- A cache outside the repository, its vendor directories and the per-test-file temporary directory (under `HOME` but not
+  `XDG_CACHE_HOME`, for example) that an earlier run wrote and the recorded test file only reads: the record lists the
+  cache, not the repository files it came from. Writes there during the recording make records incomplete.
 - Files PHP touches without the `file://` wrapper: `glob()`, `realpath()` and existence through the include path resolver
   only tell whether a path exists (changed only by additions and deletions, which are refused); native extensions reading
   files themselves; destructors and shutdown functions registered after the collector's writer.

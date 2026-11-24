@@ -113,7 +113,13 @@ func RecordOf(o Outcome, f FileUnit, t tree.Tree, root, env, commit string, now 
 	}
 	r.Pass = o.Exit == 0 && !o.TimedOut && o.Err == "" && o.Tests > 0
 	why = append(why, o.Incomplete...)
+	if len(o.Written) > 0 {
+		why = append(why, SharedStateReason+filepath.ToSlash(o.Written[0]))
+	}
 	m := newMapper(root, t, vendors)
+	if p := m.vendorWritten(o.OutsideRead); p != "" {
+		why = append(why, "reads a file written into the vendor directory after composer install: "+p)
+	}
 	add := func(p string) {
 		if k := t.Key(p); k != "" {
 			r.Deps[p] = k
@@ -385,6 +391,76 @@ func RootFiles(t tree.Tree, roots []string) []string {
 		}
 	}
 	return out
+}
+
+// SharedStateReason prefixes the incomplete reason of a test file whose processes wrote a file outside the repository (or into
+// a vendor directory) and outside their own temporary directory: state another test file, or a later run, may see without
+// reading the repository files it came from.
+const SharedStateReason = "writes a file outside the repository and its temporary directory: "
+
+// vendorWritten returns the first of the files read or included that lies in a vendor directory (outside Composer's own
+// metadata, which the fingerprint covers) and was modified after that vendor directory's composer/installed.json: a cache a
+// test wrote there (in this recording or an earlier run) rather than an installed package file.
+func (m *mapper) vendorWritten(paths []string) string {
+	installed := map[string]time.Time{}
+	for _, abs := range paths {
+		rel := m.rel(abs)
+		if rel == "" {
+			continue
+		}
+		for _, v := range m.vendors {
+			in, ok := strings.CutPrefix(rel, v+"/")
+			if !ok || in == "autoload.php" || strings.HasPrefix(in, "composer/") || strings.HasPrefix(in, "bin/") {
+				continue
+			}
+			t, ok := installed[v]
+			if !ok {
+				st, err := os.Stat(filepath.Join(m.root, filepath.FromSlash(v), "composer", "installed.json"))
+				if err == nil {
+					t = st.ModTime()
+				}
+				installed[v] = t
+			}
+			st, err := os.Stat(filepath.FromSlash(abs))
+			if err != nil || t.IsZero() || st.ModTime().After(t.Add(time.Second)) {
+				return rel
+			}
+		}
+	}
+	return ""
+}
+
+// SharedStateTaint marks incomplete the file records whose processes read or included a file outside the repository that
+// another test file of the same recording wrote (docs/dynamic-layer.md §11.4). outs and recs are parallel (one record per
+// outcome).
+func SharedStateTaint(outs []Outcome, recs []dynamic.Record) []dynamic.Record {
+	writer := map[string]string{} // written path → test file
+	for _, o := range outs {
+		for _, p := range o.Written {
+			if writer[p] == "" {
+				writer[p] = o.Unit
+			}
+		}
+	}
+	if len(writer) == 0 {
+		return recs
+	}
+	for i, o := range outs {
+		if i >= len(recs) {
+			break
+		}
+		for _, p := range o.OutsideRead {
+			if w := writer[p]; w != "" && w != o.Unit {
+				why := "reads shared state another test file wrote: " + filepath.ToSlash(p) + " (" + w + ")"
+				if recs[i].Incomplete != "" {
+					why = recs[i].Incomplete + "; " + why
+				}
+				recs[i].Complete, recs[i].Incomplete = false, why
+				break
+			}
+		}
+	}
+	return recs
 }
 
 // RepoRel returns the repo-relative form of an absolute path PHP reported ("" when outside the repository).

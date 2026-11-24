@@ -126,14 +126,14 @@ final class BgraphPhpFileProxy
     }
 
     // log records an event on path p: kind is include, read, write, stat or list; ok tells whether the path existed.
-    private static function log(string $p, string $kind, bool $ok): void
+    private static function log(string $p, string $kind, bool $ok, bool $file = false): void
     {
         if ($p === '' || str_contains($p, "\0")) {
             return;
         }
         $a = self::abs($p);
         if (!isset(self::$seen[$a])) {
-            self::$seen[$a] = ['k' => [], 'pre' => false, 'w' => false];
+            self::$seen[$a] = ['k' => [], 'pre' => false, 'w' => false, 'wok' => false, 'wf' => false];
         }
         $e = &self::$seen[$a];
         if (!in_array($kind, $e['k'], true)) {
@@ -141,6 +141,8 @@ final class BgraphPhpFileProxy
         }
         if ($kind === 'write') {
             $e['w'] = true;
+            $e['wok'] = $e['wok'] || $ok; // for a write, ok tells whether it succeeded
+            $e['wf'] = $e['wf'] || $ok && $file; // a file's content was written (not a directory created or a file removed)
         } elseif ($ok && !$e['w']) {
             $e['pre'] = true; // it existed before this process wrote it
         }
@@ -180,7 +182,7 @@ final class BgraphPhpFileProxy
                 if (str_contains($mode, '+') && strpbrk($mode[0], 'rac') !== false) {
                     self::log($path, 'read', $ok);
                 }
-                self::log($path, 'write', $ok);
+                self::log($path, 'write', $ok, true);
             } else {
                 self::log($path, 'read', $ok);
             }
@@ -216,8 +218,7 @@ final class BgraphPhpFileProxy
 
     public function stream_metadata(string $p, int $o, mixed $v): bool
     {
-        self::log($p, 'write', true);
-        return (bool) self::call(static function () use ($p, $o, $v) {
+        $r = (bool) self::call(static function () use ($p, $o, $v) {
             switch ($o) {
                 case STREAM_META_TOUCH:
                     return is_array($v) && $v !== [] ? @touch($p, $v[0] ?? null, $v[1] ?? null) : @touch($p);
@@ -232,6 +233,8 @@ final class BgraphPhpFileProxy
             }
             return false;
         });
+        self::log($p, 'write', $r);
+        return $r;
     }
 
     /** @return array<int|string, int>|false */
@@ -260,19 +263,31 @@ final class BgraphPhpFileProxy
     public function dir_rewinddir(): bool { rewinddir($this->d); return true; }
     public function dir_closedir(): bool { closedir($this->d); return true; }
 
-    public function unlink(string $p): bool { self::log($p, 'write', true); return (bool) self::call(static fn () => @unlink($p)); }
+    public function unlink(string $p): bool
+    {
+        $r = (bool) self::call(static fn () => @unlink($p));
+        self::log($p, 'write', $r);
+        return $r;
+    }
     public function rename(string $a, string $b): bool
     {
-        self::log($a, 'write', true);
-        self::log($b, 'write', true);
-        return (bool) self::call(static fn () => @rename($a, $b));
+        $r = (bool) self::call(static fn () => @rename($a, $b));
+        self::log($a, 'write', $r);
+        self::log($b, 'write', $r, true);
+        return $r;
     }
     public function mkdir(string $p, int $m, int $o): bool
     {
-        self::log($p, 'write', true);
-        return (bool) self::call(static fn () => @mkdir($p, $m, (bool) ($o & STREAM_MKDIR_RECURSIVE)));
+        $r = (bool) self::call(static fn () => @mkdir($p, $m, (bool) ($o & STREAM_MKDIR_RECURSIVE)));
+        self::log($p, 'write', $r);
+        return $r;
     }
-    public function rmdir(string $p, int $o): bool { self::log($p, 'write', true); return (bool) self::call(static fn () => @rmdir($p)); }
+    public function rmdir(string $p, int $o): bool
+    {
+        $r = (bool) self::call(static fn () => @rmdir($p));
+        self::log($p, 'write', $r);
+        return $r;
+    }
 }
 
 (static function (): void {
@@ -464,9 +479,32 @@ final class BgraphPhpFileProxy
             }
         }
         $events = [];
+        $outside = [];
+        $own = $norm(rtrim($out, '/\\')) . '/'; // the output directory holds the process tree's own TMPDIR and caches
         foreach (BgraphPhpFileProxy::$seen as $p => $e) {
             if ($inRepo($p)) {
                 $events[$p] = $e;
+                continue;
+            }
+            // Outside the repository (or in a vendor directory) and outside the test file's own temporary directory: a file
+            // written there is state another test file, or a later run, may see without reading any repository file; bgraph
+            // checks the files read or included there against what other test files wrote and against composer install.
+            $k = $norm($p);
+            if (str_starts_with($k, $own) || str_starts_with($k, '/dev/')) {
+                continue;
+            }
+            $wf = $e['wf'] ?? false;
+            $r = in_array('read', $e['k'], true) || in_array('include', $e['k'], true);
+            if ($wf || $r) {
+                $outside[] = ['p' => $p, 'w' => $wf, 'r' => $r];
+            }
+        }
+        foreach (get_included_files() as $f) {
+            if ($f !== BgraphPhpCollect::$self && !$inRepo($f) && !isset(BgraphPhpFileProxy::$seen[$f])) {
+                $k = $norm($f);
+                if (!str_starts_with($k, $own)) {
+                    $outside[] = ['p' => $f, 'w' => false, 'r' => true];
+                }
             }
         }
         $included = [];
@@ -484,6 +522,7 @@ final class BgraphPhpFileProxy
             'included' => $included,
             'coverage' => $cov,
             'events' => $events,
+            'outside' => $outside,
             'launches' => $mon,
             'incomplete' => $c::$incomplete,
             'secs' => microtime(true) - $t0,

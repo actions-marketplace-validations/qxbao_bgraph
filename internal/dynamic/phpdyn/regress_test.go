@@ -2,12 +2,17 @@ package phpdyn
 
 import (
 	"context"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/qxbao/bgraph/internal/dynamic"
 	"github.com/qxbao/bgraph/internal/model"
+	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // Regression tests for misses found by review; each must keep the test file at risk.
@@ -39,6 +44,52 @@ func TestCrossCheckCompileDiagnostics(t *testing.T) {
 	fail := CrossCheck(context.Background(), php, []CheckFile{{Path: "U.php", Base: []byte(base), Head: []byte(head)}})
 	if fail["U.php"] == "" {
 		t.Skip("this PHP emits no deprecation for ${var} (before 8.2)")
+	}
+}
+
+// Shared state outside the repository (docs/dynamic-layer.md §11.4): a test file that writes a cache file outside the
+// repository and its own temporary directory has an incomplete record; a test file that read what another one wrote has one
+// too; and a file read from a vendor directory that changed after composer install (a cache written there) makes the record
+// incomplete.
+func TestSharedStateWrites(t *testing.T) {
+	root := t.TempDir()
+	tr := tree.NewMapTree(map[string]string{"tests/ATest.php": "<?php\n", "tests/BTest.php": "<?php\n", "tests/CTest.php": "<?php\n",
+		"src/config.php": "<?php\n"})
+	abs := func(p string) string { return filepath.ToSlash(filepath.Join(root, p)) }
+	cache := "/var/cache/app/config.php"
+	outs := []Outcome{
+		{Unit: ".::php#tests/ATest.php", File: "tests/ATest.php", Tests: 1, Included: []string{abs("tests/ATest.php")}, Written: []string{cache}, OutsideRead: []string{cache}},
+		{Unit: ".::php#tests/BTest.php", File: "tests/BTest.php", Tests: 1, Included: []string{abs("tests/BTest.php")}, OutsideRead: []string{cache}},
+		{Unit: ".::php#tests/CTest.php", File: "tests/CTest.php", Tests: 1, Included: []string{abs("tests/CTest.php")}},
+	}
+	var recs []dynamic.Record
+	for _, o := range outs {
+		recs = append(recs, RecordOf(o, FileUnit{Unit: Unit{ID: ".::php"}, File: o.File}, tr, root, "env", "c", time.Unix(0, 0), nil))
+	}
+	if recs[0].Complete || !recs[1].Complete || !recs[2].Complete {
+		t.Fatalf("before taint: %+v", recs)
+	}
+	recs = SharedStateTaint(outs, recs)
+	if recs[1].Complete || !strings.Contains(recs[1].Incomplete, "tests/ATest.php") || !recs[2].Complete {
+		t.Fatalf("taint: %+v", recs)
+	}
+	// A vendor file newer than composer/installed.json.
+	for _, p := range []string{"vendor/composer/installed.json", "vendor/acme/lib/Cache.php", "vendor/acme/lib/Old.php"} {
+		full := filepath.Join(root, filepath.FromSlash(p))
+		os.MkdirAll(filepath.Dir(full), 0o755)
+		os.WriteFile(full, []byte("x"), 0o644)
+	}
+	now := time.Now()
+	os.Chtimes(filepath.Join(root, "vendor/composer/installed.json"), now.Add(-time.Hour), now.Add(-time.Hour))
+	os.Chtimes(filepath.Join(root, "vendor/acme/lib/Old.php"), now.Add(-2*time.Hour), now.Add(-2*time.Hour))
+	o := outs[2]
+	o.OutsideRead = []string{abs("vendor/acme/lib/Old.php")}
+	if r := RecordOf(o, FileUnit{Unit: Unit{ID: ".::php"}, File: o.File}, tr, root, "env", "c", time.Unix(0, 0), []string{"vendor"}); !r.Complete {
+		t.Fatalf("installed vendor file: %s", r.Incomplete)
+	}
+	o.OutsideRead = append(o.OutsideRead, abs("vendor/acme/lib/Cache.php"))
+	if r := RecordOf(o, FileUnit{Unit: Unit{ID: ".::php"}, File: o.File}, tr, root, "env", "c", time.Unix(0, 0), []string{"vendor"}); r.Complete {
+		t.Fatal("vendor file written after install accepted")
 	}
 }
 
