@@ -67,8 +67,8 @@ type Config struct {
 
 // Dynamic is a [[dynamic]]: the user's description of what the dynamic imports (importlib.import_module(name), __import__(name),
 // non-literal sys.path edits...) of one file can load. Without it bgraph cannot know and treats any change in the project as a
-// possible target. Like [[config]] it narrows the selection on the user's word: a reason is required. Only the Python ecosystem
-// consumes it for now.
+// possible target. Like [[config]] it narrows the selection on the user's word: a reason is required. The Python and Ruby
+// ecosystems consume it (Ruby: computed require/load/autoload sites; sys_path_only does not apply).
 type Dynamic struct {
 	Index       int
 	File        string // repo-relative file containing the dynamic sites
@@ -96,7 +96,7 @@ type Options struct {
 }
 
 // DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic-layer.md).
-var DynamicEcosystems = []string{"python", "node", "jvm", "dotnet"}
+var DynamicEcosystems = []string{"python", "node", "jvm", "dotnet", "ruby"}
 
 // DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic-layer.md), off by default. It is a table of its own,
 // not [dynamic], because [[dynamic]] is already the array of dynamic-import declarations and TOML cannot hold both.
@@ -110,6 +110,9 @@ type DynamicLayer struct {
 	// Node: the node executable used by `bgraph record` and for the Node environment fingerprint (same rules as Python).
 	// Empty: "node".
 	Node string
+	// Ruby: the Ruby executable used by `bgraph record` and for the Ruby environment fingerprint (same rules as Python; its
+	// directory is put first on PATH for the recorded test processes). Empty: "ruby".
+	Ruby string
 	// TrustNativeEnv: native extension modules installed in the environment (not CPython's own) do not make a record
 	// incomplete; the environment fingerprint covers their versions.
 	TrustNativeEnv bool
@@ -183,6 +186,7 @@ type rawFile struct {
 		Ecosystems     []string `toml:"ecosystems"`
 		Python         string   `toml:"python"`
 		Node           string   `toml:"node"`
+		Ruby           string   `toml:"ruby"`
 		TrustNativeEnv bool     `toml:"trust_native_env"`
 	} `toml:"dynamic_layer"`
 	Lockfile struct {
@@ -416,7 +420,10 @@ func Parse(name string, data []byte) (*File, error) {
 	if strings.ContainsRune(dl.Node, 0) || dl.Node != strings.TrimSpace(dl.Node) {
 		return nil, fmt.Errorf("%s: dynamic_layer.node: invalid executable %q", name, dl.Node)
 	}
-	f.Dynamic.Python, f.Dynamic.Node, f.Dynamic.TrustNativeEnv = dl.Python, dl.Node, dl.TrustNativeEnv
+	if strings.ContainsRune(dl.Ruby, 0) || dl.Ruby != strings.TrimSpace(dl.Ruby) {
+		return nil, fmt.Errorf("%s: dynamic_layer.ruby: invalid executable %q", name, dl.Ruby)
+	}
+	f.Dynamic.Python, f.Dynamic.Node, f.Dynamic.Ruby, f.Dynamic.TrustNativeEnv = dl.Python, dl.Node, dl.Ruby, dl.TrustNativeEnv
 	switch lv := raw.Lockfile.Level; lv {
 	case "", LockL0, LockL1, LockL2:
 		f.Lockfile.Level = lv

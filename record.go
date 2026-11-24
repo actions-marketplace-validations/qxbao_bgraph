@@ -15,6 +15,7 @@ import (
 	"github.com/qxbao/bgraph/internal/dynamic/dotnetdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
+	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/eco/jvm"
 	"github.com/qxbao/bgraph/internal/eco/node"
@@ -31,7 +32,7 @@ type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
 type RecordOptions struct {
-	// Eco: the ecosystem to record ("python", "node", "jvm" or "dotnet"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
+	// Eco: the ecosystem to record ("python", "node", "jvm", "dotnet" or "ruby"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
 	// set, otherwise every ecosystem with a dynamic layer that has test units.
 	Eco        string
 	Units      string        // glob on unit IDs (test files); empty: every unit
@@ -240,6 +241,8 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 			recs, skipped, err = ix.recordJVM(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		case dotnetdyn.Eco:
 			recs, skipped, err = ix.recordDotnet(ctx, opt, an, wt, head, now, keep, &sum)
+		case rbdyn.Eco:
+			recs, skipped, err = ix.recordRuby(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		}
 		sum.Skipped = append(sum.Skipped, skipped...)
 		if err != nil {
@@ -396,7 +399,10 @@ func reasonKey(why string) string {
 		"unmapped repository class ", "repository class loaded before the agent: ", "maps repository file ", "starts a process: ",
 		"native library in the repository: ", "native library outside the JDK and the OS: ", "reads class file that no longer exists: ",
 		"reads an archive built in the repository: ", "reads build output that is not a copy of a tracked file: ", "build: ",
-		"forks ran classes the runner did not report: "} {
+		"forks ran classes the runner did not report: ", "loads untracked file ", "reads untracked file ",
+		"native extension in the repository: ", "starts a non-Ruby process: ", "starts a Ruby process that wrote no coverage: ",
+		"starts a Ruby process whose pid is unknown: ", "exec of a Ruby process that wrote no coverage: ", "the collector raised ",
+		"the tests called Coverage.", "unreadable collector output "} {
 		if strings.HasPrefix(why, pre) {
 			return strings.TrimSpace(pre)
 		}

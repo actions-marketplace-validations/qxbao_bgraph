@@ -1,0 +1,42 @@
+A Rails application (config/application.rb) depends on every application file: a model change selects every spec loading the app, not a plain Ruby spec.
+-- base/Gemfile --
+source "https://rubygems.org"
+gem "rails"
+gem "rspec-rails"
+-- base/bin/rails --
+#!/usr/bin/env ruby
+APP_PATH = File.expand_path("../config/application", __dir__)
+require_relative "../config/boot"
+require "rails/commands"
+-- base/config/boot.rb --
+require "bundler/setup"
+-- base/config/application.rb --
+require_relative "boot"
+require "rails/all"
+Bundler.require(*Rails.groups)
+module App
+  class Application < Rails::Application
+  end
+end
+-- base/config/environment.rb --
+require_relative "application"
+Rails.application.initialize!
+-- base/app/models/user.rb --
+class User < ApplicationRecord; end
+-- base/app/views/users/show.html.erb --
+<%= @user.name %>
+-- base/spec/rails_helper.rb --
+require_relative "../config/environment"
+require "rspec/rails"
+-- base/spec/spec_helper.rb --
+RSpec.configure { |c| }
+-- base/spec/models/user_spec.rb --
+require "rails_helper"
+-- base/spec/lib/pure_spec.rb --
+require "spec_helper"
+-- head/app/models/user.rb --
+class User < ApplicationRecord; validates :name; end
+-- want --
+notfull
+select spec/models/user_spec.rb
+noselect spec/lib/pure_spec.rb

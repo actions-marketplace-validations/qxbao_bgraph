@@ -1,0 +1,34 @@
+fastlane-style monorepo: a root Gemfile plus sub-gems. A sub-gem change selects the specs reaching it (in any sub-gem), a root Gemfile change every Ruby test.
+-- base/Gemfile --
+source "https://rubygems.org"
+gem "alpha", path: "alpha"
+gem "beta", path: "beta"
+-- base/alpha/alpha.gemspec --
+Gem::Specification.new { |s| s.name = "alpha" }
+-- base/alpha/lib/alpha.rb --
+require "alpha/core"
+-- base/alpha/lib/alpha/core.rb --
+module Alpha; end
+-- base/alpha/spec/alpha_spec.rb --
+require "alpha"
+-- base/beta/beta.gemspec --
+Gem::Specification.new { |s| s.name = "beta" }
+-- base/beta/lib/beta.rb --
+require "alpha"
+module Beta; end
+-- base/beta/spec/beta_spec.rb --
+require "beta"
+-- base/gamma/gamma.gemspec --
+Gem::Specification.new { |s| s.name = "gamma" }
+-- base/gamma/lib/gamma.rb --
+module Gamma; end
+-- base/gamma/spec/gamma_spec.rb --
+require "gamma"
+-- head/alpha/lib/alpha/core.rb --
+module Alpha; X = 1; end
+-- want --
+notfull
+scope graph
+select alpha/spec/alpha_spec.rb
+select beta/spec/beta_spec.rb
+noselect gamma/spec/gamma_spec.rb

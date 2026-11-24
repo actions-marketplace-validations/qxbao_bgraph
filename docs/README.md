@@ -7,7 +7,7 @@
 | [bgraph.example.toml](bgraph.example.toml) | An annotated example of every `bgraph.toml` key |
 | [CLI](cli.md) | Commands, flags, JSON output, exit codes, shadow audits, the MCP server |
 | [Lockfiles](lockfiles.md) | Lockfile levels L0 / L1 / L2, supported formats, fallbacks |
-| [Dynamic layer](dynamic-layer.md) | Optional narrowing with recorded test dependencies (Python and Node test files, JVM and .NET test classes) |
+| [Dynamic layer](dynamic-layer.md) | Optional narrowing with recorded test dependencies (Python and Node test files, JVM and .NET test classes, Ruby test files per method) |
 | [Roadmap](roadmap.md) | Ecosystems, runners, lockfiles and dynamic-layer work that may come next, with status and priority |
 | [Evaluation](evaluation.md) | How soundness is tested (fixtures, FAIL_TO_PASS, mutation, provider checks) and the results |
 | [Benchmarks](benchmarks.md) | Comparison with general code-graph tools (codegraph, GitNexus, graphify) |
@@ -26,4 +26,5 @@
 | .NET | MSBuild project | [ecosystems/dotnet.md](ecosystems/dotnet.md) |
 | Go | package | [ecosystems/go.md](ecosystems/go.md) |
 | PHP | Composer project | [ecosystems/php.md](ecosystems/php.md) |
+| Ruby | test file | [ecosystems/ruby.md](ecosystems/ruby.md) |
 | Swift | SwiftPM test target or package | [ecosystems/swift.md](ecosystems/swift.md) |

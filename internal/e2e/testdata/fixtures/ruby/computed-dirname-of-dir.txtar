@@ -1,0 +1,24 @@
+File.dirname(__dir__) is the parent of the file's directory.
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+end
+-- base/lib/foo.rb --
+require_relative "foo/bar"
+-- base/lib/foo/bar.rb --
+module Foo; end
+-- base/test/test_helper.rb --
+PD = File.dirname(__dir__)
+require File.join(PD, 'lib/foo')
+-- base/test/plain_test.rb --
+require "minitest/autorun"
+-- base/test/bar_test.rb --
+require_relative 'test_helper'
+-- head/lib/foo/bar.rb --
+module Foo; X = 1; end
+-- want --
+notfull
+nowiden dynamic_import
+select test/bar_test.rb
+noselect test/plain_test.rb

@@ -4,11 +4,12 @@
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
 //	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
-//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
+//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python|ruby] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-locate|dotnet-locate|go-locate|php-locate|swift-locate --tasks tasks-<eco>.jsonl --work DIR [--out locate.json] [--examples 3]   (locate FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-gib|jvm-provider --tasks tasks-jvm.jsonl --work DIR --out DIR   (JVM: superset check against gitflow-incremental-builder; Maven reactor and Gradle projects against bgraph units)
 //	bgraph-eval dotnet-affected|dotnet-provider --tasks tasks-dotnet.jsonl --work DIR --out DIR   (.NET: superset check against dotnet-affected; ProjectReference edges against msbuild)
+//	bgraph-eval rb-locate --tasks tasks-ruby.jsonl --work DIR [--out rb-locate.json] [--examples 3]   (locate Ruby FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
 //	bgraph-eval lockdiff --format pnpm|npm|cargo|uv|poetry|yarn|bun --repos a__b[:lockfile],... [--commits 25] [--out DIR] [--jobs 1] [--pnpm CMD]   (lockfile closures vs the package manager; gate L1)
@@ -81,6 +82,13 @@ func main() {
 			stop()
 			os.Exit(code)
 		}
+	case "rbdyn":
+		var code int
+		code, err = cmdRubyDyn(ctx, os.Args[2:])
+		if err == nil && code != 0 {
+			stop()
+			os.Exit(code)
+		}
 	case "cargometa":
 		err = cmdCargoMeta(ctx, os.Args[2:])
 	case "rust-locate":
@@ -107,6 +115,8 @@ func main() {
 		err = cmdGoProvider(ctx, os.Args[2:])
 	case "go-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "go")
+	case "rb-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "ruby")
 	case "php-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "php")
 	case "lockdiff":
@@ -163,7 +173,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
-	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | swift; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
+	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby | swift; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
 	rulesDir := fs.String("rules-dir", "", "inject DIR/<owner>__<name>.toml as bgraph.toml into P and C of that repo's tasks (python [[dynamic]] declarations)")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
@@ -180,6 +190,9 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "go" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/go.json"
+	}
+	if *eco == "ruby" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/ruby.json"
 	}
 	if *eco == "swift" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/swift.json"
@@ -241,6 +254,11 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "go" {
 		if werr := evalkit.WriteGoReport(*out, rs); werr != nil {
+			return werr
+		}
+	}
+	if *eco == "ruby" {
+		if werr := evalkit.WriteRubyReport(*out, rs); werr != nil {
 			return werr
 		}
 	}
@@ -372,7 +390,7 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | swift")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift")
 	fs.Parse(args)
 	if *eco == "php" || *eco == "swift" {
 		outSet := false
@@ -428,6 +446,8 @@ func cmdManifest(args []string) error {
 	var man evalkit.Manifest
 	if *eco == "jvm" || *eco == "dotnet" || *eco == "go" {
 		man = evalkit.BuildJVMDotnetManifest(*eco, t1, *metaPath, *maxPer)
+	} else if *eco == "ruby" {
+		man = evalkit.BuildRubyManifest(t1, *metaPath, *maxPer)
 	} else if *eco == "swift" {
 		ds = []evalkit.DatasetInfo{{Name: "nebius/Longtail-SWE", URL: "https://huggingface.co/datasets/nebius/Longtail-SWE", Notes: "hard and easy splits, Swift rows with recorded FAIL_TO_PASS results"}}
 		ds[0].Revision = metaString(*metaPath, "swift_datasets", ds[0].Name)
@@ -543,11 +563,11 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	run := fs.Bool("run-tests", false, "run tests to build/refresh the oracle (slow); default re-checks bgraph on the cached oracle")
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
-	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed Node killed mutants by re-running only the red files (2 runs)")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | swift (non-Node default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
+	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift (non-Node default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
 	budget := fs.Duration("budget", 0, "rust/python/swift: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
-	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "php" || *eco == "swift" {
+	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "php" || *eco == "ruby" || *eco == "swift" {
 		dirSet, manSet := false, false
 		fs.Visit(func(f *flag.Flag) {
 			dirSet = dirSet || f.Name == "dir"
@@ -593,6 +613,14 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	}
 	b, _ := os.ReadFile(filepath.Join(*out, "t2.md"))
 	fmt.Println(string(b))
+	if *eco == "ruby" {
+		// provider cross-check: the runner's test files (recorded by the baseline) against bgraph's units at R
+		md, err := evalkit.WriteRubyUnits(*out, evalkit.RubyUnitsCheck(ctx, evalkit.T2Config{Dir: *dir, Manifest: man, Repos: sel}))
+		if err != nil {
+			return 2, err
+		}
+		fmt.Println(md)
+	}
 	if *eco == "swift" {
 		if len(qr.Repos) == 0 {
 			return 2, fmt.Errorf("no Swift repos selected")

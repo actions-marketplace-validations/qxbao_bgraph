@@ -1,0 +1,35 @@
+A [[dynamic]] declaration replaces the repository-wide firing of the computed requires: an unrelated Ruby change no longer selects the loader's dependents.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new { |s| s.name = "foo" }
+-- base/lib/foo/plugins.rb --
+module Foo
+  def self.load_plugin(name)
+    require name
+  end
+  def self.load_other(path)
+    load path
+  end
+end
+-- base/lib/foo/plain.rb --
+P = 1
+-- base/plugins/a.rb --
+A = 1
+-- base/spec/plugins_spec.rb --
+require "foo/plugins"
+-- base/spec/plain_spec.rb --
+require "foo/plain"
+-- base/bgraph.toml --
+[[dynamic]]
+file = "lib/foo/plugins.rb"
+loads = ["plugins/**/*.rb"]
+reason = "plugins are only loaded from plugins/"
+-- head/lib/foo/plain.rb --
+P = 2
+-- want --
+notfull
+nowiden dynamic_import
+select spec/plain_spec.rb
+noselect spec/plugins_spec.rb

@@ -1,0 +1,27 @@
+A feature that matches no file is kept as a virtual node with a suffix pattern: a matching file added later selects the importer.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/lib/foo.rb --
+begin
+  require "foo/native_ext"
+rescue LoadError
+end
+-- base/spec/foo_spec.rb --
+require "foo"
+-- base/spec/plain_spec.rb --
+x = 1
+-- head/ext/out/foo/native_ext.rb --
+X = 1
+-- want --
+notfull
+select spec/foo_spec.rb
+noselect spec/plain_spec.rb

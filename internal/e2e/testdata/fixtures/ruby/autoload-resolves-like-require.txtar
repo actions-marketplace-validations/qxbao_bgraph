@@ -1,0 +1,31 @@
+autoload :Bar, "foo/bar" is a require: a change to the autoloaded file selects the specs reaching the autoload.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/lib/foo.rb --
+module Foo
+  autoload :Bar, "foo/bar"
+end
+-- base/lib/foo/bar.rb --
+module Foo; class Bar; end; end
+-- base/lib/baz.rb --
+module Baz; end
+-- base/spec/foo_spec.rb --
+require "foo"
+-- base/spec/baz_spec.rb --
+require "baz"
+-- head/lib/foo/bar.rb --
+module Foo; class Bar; X = 1; end; end
+-- want --
+notfull
+scope graph
+select spec/foo_spec.rb
+noselect spec/baz_spec.rb

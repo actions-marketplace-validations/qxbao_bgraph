@@ -339,6 +339,9 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		hit := ""
 		for _, c := range work {
 			if eco.Triggers(u, c.Path) {
+				if u.SkipTests && g.Role(c.Path) == model.RoleTest && !g.Referenced(c.Path) {
+					continue
+				}
 				hit = c.Path
 				break
 			}

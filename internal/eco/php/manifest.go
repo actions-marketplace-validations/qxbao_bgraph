@@ -34,29 +34,40 @@ func (m manifest) has(pkg string) bool { return m.Require[pkg] != nil || m.Requi
 
 func (m manifest) scriptSuite(config string, isOperand func(string) bool) (runner string, custom bool) {
 	for _, script := range m.Scripts {
-		for _, cmd := range script {
-			tokens := strings.FieldsFunc(cmd, func(r rune) bool {
-				return unicode.IsSpace(r) || strings.ContainsRune("&|;()", r)
-			})
-			for i, word := range tokens {
-				word = strings.Trim(word, "\"'")
-				word = path.Base(strings.ToLower(strings.ReplaceAll(word, "\\", "/")))
-				switch ext := path.Ext(word); ext {
-				case ".phar", ".bat", ".cmd":
-					word = strings.TrimSuffix(word, ext)
+		for _, line := range script {
+			// Arguments belong to one command; stop at && || ; | and subshells so
+			// "phpunit && phpstan analyse src" does not read "src" as a test operand.
+			for _, cmd := range strings.FieldsFunc(line, func(r rune) bool { return strings.ContainsRune("&|;()\n", r) }) {
+				tokens := strings.FieldsFunc(cmd, unicode.IsSpace)
+				r, c := commandSuite(tokens, config, isOperand)
+				if r != "" && runner != RunnerPest {
+					runner = r
 				}
-				switch word {
-				case RunnerPest, RunnerPHPUnit:
-					if runner != RunnerPest {
-						runner = word
-					}
-					custom = custom || config == "" || alternateSuite(tokens[i+1:], path.Base(config), isOperand)
-				}
+				custom = custom || c
 			}
 		}
 	}
 	if config == "" && len(m.Scripts["test"]) > 0 && (m.has("phpunit/phpunit") || m.has("pestphp/pest")) {
 		custom = true
+	}
+	return runner, custom
+}
+
+func commandSuite(tokens []string, config string, isOperand func(string) bool) (runner string, custom bool) {
+	for i, word := range tokens {
+		word = strings.Trim(word, "\"'")
+		word = path.Base(strings.ToLower(strings.ReplaceAll(word, "\\", "/")))
+		switch ext := path.Ext(word); ext {
+		case ".phar", ".bat", ".cmd":
+			word = strings.TrimSuffix(word, ext)
+		}
+		switch word {
+		case RunnerPest, RunnerPHPUnit:
+			if runner != RunnerPest {
+				runner = word
+			}
+			custom = custom || config == "" || alternateSuite(tokens[i+1:], path.Base(config), isOperand)
+		}
 	}
 	return runner, custom
 }

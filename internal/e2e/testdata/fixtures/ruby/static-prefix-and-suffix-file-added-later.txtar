@@ -1,0 +1,25 @@
+require "foo/#{name}/version": a matching file added later (nested any depth) selects the importer.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new { |s| s.name = "foo" }
+-- base/lib/foo/versions.rb --
+module Foo
+  def self.plugin_version(name)
+    require "foo/#{name}/version"
+  end
+end
+-- base/lib/foo/cops/thing.rb --
+T = 1
+-- base/spec/versions_spec.rb --
+require "foo/versions"
+-- base/spec/thing_spec.rb --
+require "foo/cops/thing"
+-- head/gems/plug/lib/foo/rspec/extra/version.rb --
+V = "1"
+-- want --
+notfull
+nowiden dynamic_import
+select spec/versions_spec.rb
+noselect spec/thing_spec.rb

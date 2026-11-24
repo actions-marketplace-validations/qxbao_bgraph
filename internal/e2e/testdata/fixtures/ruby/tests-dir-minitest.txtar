@@ -1,0 +1,18 @@
+Test files below a tests/ directory are units too.
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/lib/foo.rb --
+FOO = 1
+-- base/lib/bar.rb --
+BAR = 1
+-- base/tests/foo_test.rb --
+require "foo"
+-- base/tests/bar_test.rb --
+require "bar"
+-- head/lib/foo.rb --
+FOO = 2
+-- want --
+notfull
+scope graph
+select tests/foo_test.rb
+noselect tests/bar_test.rb

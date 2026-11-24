@@ -1,0 +1,24 @@
+Linter configuration at a project root selects nothing.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/.rubocop.yml --
+AllCops:
+  NewCops: enable
+-- base/spec/a_spec.rb --
+x = 1
+-- head/.rubocop.yml --
+AllCops:
+  NewCops: disable
+-- want --
+notfull
+scope none
+noselect spec/a_spec.rb

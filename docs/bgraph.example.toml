@@ -157,7 +157,7 @@ reason = "svelte_alias() follows the package exports; the projects only shard th
 #
 # A [[dynamic]] entry replaces that rule for the sites it names with edges from the file to the globs you say it can
 # load: a change to any file matching a glob (including files added later) reaches the file and its dependents, and
-# nothing else does. Currently only the Python ecosystem reads [[dynamic]]; other ecosystems ignore it.
+# nothing else does. The Python and Ruby ecosystems read [[dynamic]]; other ecosystems ignore it.
 #
 # If `file` does not exist, is not Python, or no dynamic site matches (a wrong `lines`), the entry is inert, the
 # default stays, and `bgraph unresolved` lists it as a stale declaration. `bgraph unresolved` also prints a snippet to

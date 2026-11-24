@@ -96,6 +96,7 @@ suites run in a Linux arm64 container. Median selection is selected units / all 
 | .NET | 248 (holdout 75) | 0 (6 oracle artefacts) | 5 % | 0.89 (holdout 0.80) | holdout 4.0 % |
 | Go | 243 (dev 169, holdout 74) | 0 (26 oracle artefacts, hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
 | PHP | 269 (dev 162, holdout 107) | 0 | 0 % | 1.000 | holdout 2.8 % |
+| Ruby | 117 (dev 61, holdout 56); all 836 fetched tasks: 0 violations | 0 | 2 % (holdout 4 %) | 1.000 | 2.6 % (holdout 5.6 %) |
 | Swift | 10 (holdout) | 0 | 40 % | 0.977 | 50 % over the 6 non-full tasks |
 
 Swift's holdout covers six Longtail-SWE repositories. Four tasks widened to the full suite because they changed a global
@@ -127,6 +128,13 @@ Notes per ecosystem:
 - **PHP** (BugsPHP, 15 repositories). The raw set contained 513 tasks and the oracle located all 1,636 failing-to-passing
   test names. The capped benchmark evaluated every task without a full fallback. Project-level selectivity varied with the
   repository layout. The median selected fraction on the Symfony holdout was 0.430 across 40 tasks.
+- **Ruby** (SWE-bench Multilingual + Multi-SWE-RL Ruby, 7 repositories; holdout rubocop, jekyll, faker; 2 holdout tasks have
+  no oracle: their FAIL_TO_PASS names lie only in files the test patch does not touch). The only full widenings are CI files
+  (`global_input`). The first run found 390 real misses on asciidoctor, all from two path-evaluation bugs in how its test
+  helper computes the library path (`File.dirname File.dirname(__FILE__)`, `ENV["X"] || (File.join …)`); besides the fixes,
+  every computed require now also depends on the suffix union of its literal tail, so a wrong evaluation can no longer end in
+  a missing target. Selectivity is about 1.0: each test helper loads the whole library, and computed requires (plugin
+  loaders, `require name` helpers) fire in 113 of 117 tasks. Median selection time 0.6 s.
 
 ### T2 mutation summary
 
@@ -139,6 +147,7 @@ Notes per ecosystem:
 | .NET | Polly, RestSharp | 40 | 0 | 0.239 / 0.923 |
 | Go | hcl, prometheus/common, connect-go | 60 | 0 | 0.389 / 0.100 / 0.200 |
 | PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
+| Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
 | Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
@@ -164,6 +173,7 @@ same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.s
 | .NET | `ProjectReference`: 55 repositories / 151 commits, 9,086 edges outside dotnet/runtime, 0 missing; dotnet/runtime: 0 missing (377 edges, 278 of them covered by an unresolved-construct widening). dotnet-affected: 217 tasks without a real violation; 1 divergence by design (it counts a Markdown file under a docs-site project) |
 | Go | 25 repositories, 50 base commits, 656 modules, 7,234 packages with tests: every package with tests is a unit; 87,926 in-repo import edges and 6,602 embedded files covered. 107 extra units (packages excluded by build constraints on the host OS): over-selection only |
 | PHP | 15 revisions across 3 repositories matched the project and a source file in a PSR-4 root reported by Composer. The generated commands ran all three native suites. In a native two-project fixture, changing a Composer path dependency selected its one consumer. |
+| Ruby | rack, dry-types, rake: the test files the runners collect (`RSpec.configuration.files_to_run`, the `Rake::TestTask` file list) are exactly bgraph's units (121 of 121, none missing, none extra) |
 | Swift | On both macOS and Linux arm64 with Swift 6.2.1, 210 package instances parsed statically matched native test metadata, including 65 test targets and 687 source paths. Another 36 instances were covered by whole-package units. Five were unavailable for comparison. |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
@@ -174,14 +184,14 @@ overall (0.100 on hono), median 239 ms per commit (p95 1.0 s).
 
 ### Dynamic layer
 
-| | Python | Node | JVM (class layer) |
-|---|---|---|---|
-| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi |
-| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) |
-| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) |
-| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) |
-| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** |
-| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – |
+| | Python | Node | JVM (class layer) | Ruby (method layer) |
+|---|---|---|---|---|
+| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) |
+| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository |
+| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) |
+| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 |
+| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** |
+| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – |
 
 Findings:
 
@@ -191,6 +201,10 @@ Findings:
 - On Windows, `trust_native_env = true` is needed for Python: pytest's terminal setup loads a system library through
   ctypes, so with the strict default no record is complete.
 - The JVM constant guard passes 94 % (gson) and 90 % (moshi) of code-only commits.
+- The Ruby body guard (with the compile check) accepts 33–87 % of the commits that change only `.rb` files over 500
+  first-parent commits of six repositories; nearly every refusal is class- or module-level code. Ruby narrows precise
+  units: on rack, dry-types and rake every test file reaches every library file statically, and with the method records
+  a median of 0.12–0.19 of the test files remains on the mutants.
 
 These checks are not a release gate: the dynamic layer stays off by default.
 

@@ -1,0 +1,26 @@
+require "foo/#{name}/version": the importer depends on every foo/<anything>/version.rb, not on the rest of foo/.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new { |s| s.name = "foo" }
+-- base/lib/foo/versions.rb --
+module Foo
+  def self.plugin_version(name)
+    require "foo/#{name}/version"
+  end
+end
+-- base/lib/foo/cops/thing.rb --
+T = 1
+-- base/spec/versions_spec.rb --
+require "foo/versions"
+-- base/spec/thing_spec.rb --
+require "foo/cops/thing"
+-- head/lib/foo/cops/thing.rb --
+T = 2
+-- want --
+notfull
+scope graph
+nowiden dynamic_import
+select spec/thing_spec.rb
+noselect spec/versions_spec.rb

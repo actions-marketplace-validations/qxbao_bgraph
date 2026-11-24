@@ -87,6 +87,13 @@ Decide and fix before any code:
     made a JVM task full).
   - A sub-tree holding another ecosystem's manifest and no file of this language is not owned by this ecosystem (a
     `web/` frontend under a root `go.mod` must not select every Go package).
+  - A path the analysis evaluates (`File.join(File.dirname(__FILE__), "..", "lib")`, `os.path.join(...)`) must never end in
+    "a confident target that does not exist, reported only": an evaluator bug then becomes a silent miss (Ruby: 390 T1 misses
+    on asciidoctor from one `File.dirname` bug). Also depend on what the syntax alone guarantees (Ruby: the suffix union of
+    the literal tail), and make an unclassifiable call site dynamic; assert "every load-like call yields an edge or an
+    unresolved" in tests and in the fuzzer.
+  - Test files are loaded by the runner, not by computed loads: a dynamic site need not fire on a change to a test file no
+    real reference reaches (`Unresolved.SkipTests`); an uncertain scan still must (it may have hidden a literal reference).
   - Tests that build or run the repository's own programs (`go build ./cmd/x`, `exec.Command("../bin/x")`, import paths
     or relative paths in string literals, testscripts) depend on the built program's whole closure, not only its files.
     A program built before the tests (by a Makefile) and run by a relative path that is not in the tree is matched by
@@ -191,6 +198,10 @@ anything there on your own; at each phase close ask the user whether to keep or 
    mutants; cache the oracle so `bgraph-eval t2 --ecosystem <lang>` re-checks bgraph alone. Drop repos whose suite
    cannot run on the host (symlink privilege, toolchain too old) and say why. Pick repos with at least 5 test units;
    T2 is the check most likely to find a real miss (Go: a `TestMain` building a command by import path).
+   Where one load error aborts the whole run (RSpec, Minitest), run each test file in its own process for per-file
+   verdicts, and take the runner's own file list (`RSpec.configuration.files_to_run`, `Rake::TestTask#file_list`) as the
+   provider check of the unit set. A per-mutant run of minutes (rake: 80 s) caps the repo's mutant count: decide the cap
+   with the user up front.
 9. **Regression of existing ecosystems**: Node quick suite (`bgraph-eval quick ...`, ~1 min) after every change; full
    Node T1 (~16 min) after any general-rule or selector change.
 

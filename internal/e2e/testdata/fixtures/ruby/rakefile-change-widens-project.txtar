@@ -1,0 +1,23 @@
+A Rakefile change is a test configuration change at its project (nested Ruby projects included: a root Rakefile often runs them).
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/Rakefile --
+task default: :test
+-- base/test/a_test.rb --
+x = 1
+-- base/sub/Gemfile --
+source "https://rubygems.org"
+-- base/sub/test/b_test.rb --
+y = 1
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^1.0.0"}}
+-- base/web/src/a.test.ts --
+import { expect } from "vitest"
+-- head/Rakefile --
+task default: [:test, :lint]
+-- want --
+notfull
+widen test_config_changed
+select test/a_test.rb
+select sub/test/b_test.rb
+noselect web/src/a.test.ts

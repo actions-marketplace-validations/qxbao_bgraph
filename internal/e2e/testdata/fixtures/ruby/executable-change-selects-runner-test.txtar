@@ -1,0 +1,27 @@
+A change to an executable named by a spec selects that spec.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/exe/foo --
+#!/usr/bin/env ruby
+puts 1
+-- base/spec/cli_spec.rb --
+OUT = `exe/foo`
+-- base/spec/other_spec.rb --
+x = 1
+-- head/exe/foo --
+#!/usr/bin/env ruby
+puts 2
+-- want --
+notfull
+scope graph
+select spec/cli_spec.rb
+noselect spec/other_spec.rb

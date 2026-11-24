@@ -63,16 +63,18 @@ sys_path_only = true
 reason = "r"
 
 [dynamic_layer]
-ecosystems = ["python", "python", "node"]
+ecosystems = ["python", "python", "node", "ruby"]
 python = ".venv/Scripts/python.exe"
 node = "tools/node.exe"
+ruby = "C:/Ruby34/bin/ruby.exe"
 trust_native_env = true
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := f.Dynamic; len(d.Ecosystems) != 2 || d.Ecosystems[0] != "python" || d.Ecosystems[1] != "node" || d.Python != ".venv/Scripts/python.exe" ||
-		d.Node != "tools/node.exe" || !d.TrustNativeEnv || len(f.Dynamics) != 1 {
+	if d := f.Dynamic; len(d.Ecosystems) != 3 || d.Ecosystems[0] != "python" || d.Ecosystems[1] != "node" || d.Ecosystems[2] != "ruby" ||
+		d.Python != ".venv/Scripts/python.exe" || d.Node != "tools/node.exe" || d.Ruby != "C:/Ruby34/bin/ruby.exe" || !d.TrustNativeEnv ||
+		len(f.Dynamics) != 1 {
 		t.Fatalf("%+v", f)
 	}
 	f, err = Parse("x", nil)
@@ -83,6 +85,7 @@ trust_native_env = true
 		"[dynamic_layer]\necosystems = [\"rust\"]": "rust",
 		"[dynamic_layer]\nnode = \"node \"":        "node",
 		"[dynamic_layer]\nbogus = 1":               "bogus",
+		"[dynamic_layer]\nruby = \"ruby \"":        "ruby",
 		"[dynamic_layer]\npython = \" python\"":    "python",
 	} {
 		if _, err := Parse("x", []byte(src)); err == nil || !strings.Contains(err.Error(), want) {

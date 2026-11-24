@@ -48,6 +48,13 @@ type Record struct {
 	// of the instrumented lines (docs/dynamic-layer.md §9.9): a changed member none of whose lines is instrumented is invisible to
 	// the records, and the guard refuses narrowing.
 	Lines map[string]string `json:"lines,omitempty"`
+	// Methods: Ruby records list, per repository file the unit loaded with Ruby's Coverage running, every method defined by
+	// `def` as "<def line>-<end line>:<calls>" entries joined by commas (docs/dynamic-layer.md §10.3). A loaded file without an
+	// entry has no method table (loaded before the collector started): no change to it can be judged.
+	Methods map[string]string `json:"methods,omitempty"`
+	// Reads: Ruby records list the dependencies the unit read as data (or found by listing a directory), as opposed to loading
+	// them as code: any change to them keeps the unit.
+	Reads []string `json:"reads,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.
@@ -68,6 +75,16 @@ func (r Record) valid() error {
 		}
 		if oid == "" {
 			return fmt.Errorf("dep %q has no blob OID", p)
+		}
+	}
+	for p := range r.Methods {
+		if !cleanRel(p) {
+			return fmt.Errorf("method table of %q: not a clean repo-relative path", p)
+		}
+	}
+	for _, p := range r.Reads {
+		if !cleanRel(p) {
+			return fmt.Errorf("read %q is not a clean repo-relative path", p)
 		}
 	}
 	return nil

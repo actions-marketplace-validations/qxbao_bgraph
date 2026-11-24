@@ -21,7 +21,7 @@ const (
 	RunnerPest    = "pest"
 
 	// AnalyzerVersion invalidates snapshots when PHP analysis changes.
-	AnalyzerVersion = "php-7"
+	AnalyzerVersion = "php-8"
 )
 
 func UnitID(dir string) string { return path.Clean(dir) + "::php" }
@@ -161,7 +161,7 @@ func (*Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.Anal
 	for _, d := range dirs {
 		p := b.projects[d]
 		u := model.TestUnit{Eco: Name, ID: UnitID(d), Dir: d, Project: d,
-			Files: []string{virtual(d)}, Runner: p.runner, Config: p.config, BinDir: p.binDir}
+			Files: []string{virtual(d)}, Runner: p.runner, Config: p.config, BinDir: b.runnerBinDir(p)}
 		if p.customSuite {
 			// Composer controls the arguments and layout of this suite.
 			u.Files = nil
@@ -181,7 +181,8 @@ func (*Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.Anal
 
 func (b *analysis) loadProject(d string) *project {
 	p := &project{dir: d, runner: RunnerPHPUnit, vendorDir: path.Join(d, "vendor")}
-	for _, n := range []string{"phpunit.xml", "phpunit.xml.dist", "phpunit.dist.xml"} {
+	// PHPUnit 9.3+ default configuration lookup order.
+	for _, n := range []string{"phpunit.xml", "phpunit.dist.xml", "phpunit.xml.dist"} {
 		if f := path.Join(d, n); b.t.Has(f) {
 			p.config = f
 			break
@@ -234,6 +235,22 @@ func (b *analysis) loadProject(d string) *project {
 		}
 	}
 	return p
+}
+
+// runnerBinDir returns where the runner of p is installed. A PHPUnit config
+// without its own composer.json (dev/tests/unit/phpunit.xml.dist) runs with
+// the binaries of the enclosing Composer project, not a global PATH lookup.
+func (b *analysis) runnerBinDir(p *project) string {
+	for q := p; q != nil; {
+		if q.binDir != "" {
+			return q.binDir
+		}
+		if q.dir == "." {
+			break
+		}
+		q = b.owner(path.Dir(q.dir))
+	}
+	return ""
 }
 
 func (b *analysis) owner(d string) *project {
@@ -340,9 +357,10 @@ func (b *analysis) testOperands(p *project) []string {
 	return slices.Compact(out)
 }
 
+// testFile matches PHPUnit's default, case-sensitive "Test.php" suffix, so
+// sources such as Latest.php or Contest.php are not test operands.
 func testFile(f string) bool {
-	n := strings.ToLower(path.Base(f))
-	return strings.HasSuffix(n, "test.php") || strings.HasSuffix(n, ".phpt")
+	return strings.HasSuffix(path.Base(f), "Test.php") || strings.HasSuffix(strings.ToLower(f), ".phpt")
 }
 
 func testConfig(n string) bool {

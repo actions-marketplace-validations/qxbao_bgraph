@@ -1,0 +1,31 @@
+A data file nothing names (read through a computed path) widens to its project: never silently skipped.
+-- base/Gemfile --
+source "https://rubygems.org"
+gemspec
+-- base/foo.gemspec --
+Gem::Specification.new do |s|
+  s.name = "foo"
+  s.version = "1.0"
+  s.summary = "Foo"
+  s.files = Dir["lib/**/*.rb"]
+  s.add_development_dependency "rspec"
+end
+-- base/spec/parser_spec.rb --
+def fixture(name) = File.read(File.join(FIXTURES, name + ".json"))
+-- base/spec/other_spec.rb --
+x = 1
+-- base/sub/sub.gemspec --
+Gem::Specification.new { |s| s.name = "sub" }
+-- base/sub/spec/sub_spec.rb --
+y = 1
+-- base/spec/fixtures/input.json --
+{}
+-- head/spec/fixtures/input.json --
+{"a": 1}
+-- want --
+notfull
+widen unreferenced_file
+select spec/parser_spec.rb
+select spec/other_spec.rb
+# the general rule widens to the whole project directory, nested projects included
+select sub/spec/sub_spec.rb

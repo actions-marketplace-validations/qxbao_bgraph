@@ -1,0 +1,22 @@
+A computed Rake test pattern makes the project's whole suite one unit, selected on any change.
+-- base/Gemfile --
+source "https://rubygems.org"
+-- base/Rakefile --
+require "rake/testtask"
+TESTS = Dir["**/*_check.rb"].reject { |f| f.include?("slow") }
+Rake::TestTask.new do |t|
+  t.test_files = TESTS
+end
+-- base/lib/thing.rb --
+T = 1
+-- base/test/thing_test.rb --
+require_relative "../lib/thing"
+-- base/test/other_test.rb --
+x = 1
+-- head/lib/thing.rb --
+T = 2
+-- want --
+notfull
+select <rb-all-tests:.>
+select test/thing_test.rb
+noselect test/other_test.rb
