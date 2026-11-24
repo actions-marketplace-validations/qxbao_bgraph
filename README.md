@@ -45,13 +45,13 @@ is a regression shipped to production. bgraph is built around that constraint:
 <table>
   <tr>
     <td align="center" width="25%"><h3>1,863</h3>real bug-fix tasks replayed<br>across ten ecosystems</td>
-    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 571 mutation kills</td>
+    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 573 mutation kills</td>
     <td align="center" width="25%"><h3>3–13%</h3>of the suite selected on<br>well-structured repositories</td>
     <td align="center" width="25%"><h3>&lt; 1 s</h3>typical selection time,<br>index cached between runs</td>
   </tr>
 </table>
 
-<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 27 open-source
+<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 28 open-source
 repositories, median selection on dayjs, hono and the Go holdout set. Method and every result:
 <a href="docs/evaluation.md">docs/evaluation.md</a>.</sub>
 
@@ -90,7 +90,7 @@ Turn a selection into commands your runner understands:
 ```console
 $ bgraph command --base origin/main
 # scope: graph
-cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
+(cd packages/core && npx vitest run src/a.test.ts src/b.test.ts)
 ```
 
 ## Benchmarks

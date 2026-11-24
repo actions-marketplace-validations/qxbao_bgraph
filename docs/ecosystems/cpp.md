@@ -74,9 +74,9 @@ A change to the shared library of each project in a two-project fixture produces
 
 ```sh
 # scope: graph
-cd cmake && cmake --build build
-cd cmake && ctest --test-dir build --output-on-failure --no-tests=error -R '^(core\.check)$'
-cd meson && meson test -C build --print-errorlogs core.check
+(cd cmake && cmake --build build)
+(cd cmake && ctest --test-dir build --output-on-failure --no-tests=error -R '^(core\.check)$')
+(cd meson && meson test -C build --print-errorlogs core.check)
 ```
 
 ## Addressing units in bgraph.toml

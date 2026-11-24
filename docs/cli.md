@@ -127,7 +127,8 @@ bgraph command [--root DIR] [--base REF] [--list-dir DIR] [--build-dir DIR] [--b
 ```
 
 Turns the selection into runner commands. Text output starts with `# scope: <scope>` and `# <note>` lines, then one
-shell line per command (`cd <project> && ...` when the project is not the root, environment variables as a prefix).
+shell line per command. A command for a nested project runs in a subshell, so every line starts from the repository
+root. Any environment variables appear before the executable.
 
 | Flag | Meaning |
 |---|---|
@@ -155,7 +156,7 @@ The per-runner command shapes are in the [ecosystem pages](README.md#ecosystems)
 $ bgraph command --base origin/main
 # scope: graph
 # vitest: the argument is a substring of the path, so a.test.ts also matches aa.test.ts (over-selection, safe)
-cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
+(cd packages/core && npx vitest run src/a.test.ts src/b.test.ts)
 ```
 
 ## `explain`

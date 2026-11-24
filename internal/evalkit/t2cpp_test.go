@@ -22,6 +22,25 @@ func TestCppCTestReportsNativeTimeout(t *testing.T) {
 	}
 }
 
+func TestCppMesonReports(t *testing.T) {
+	data := []byte("{\"name\":\"one\",\"result\":\"OK\"}\n" +
+		"{\"name\":\"two\",\"result\":\"FAIL\"}\n" +
+		"{\"name\":\"three\",\"result\":\"TIMEOUT\"}\n" +
+		"{\"name\":\"four\",\"result\":\"EXPECTEDFAIL\"}\n")
+	tests, err := parseCppMeson(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, expected := range map[string]string{"one": "passed", "two": "failed", "three": "timeout", "four": "passed"} {
+		if actual := tests["cpp:meson:.::test:"+name]; actual != expected {
+			t.Errorf("%s: got %q, want %q", name, actual, expected)
+		}
+	}
+	if _, err := parseCppMeson(append(data, data...)); err == nil {
+		t.Fatal("accepted duplicate Meson reports")
+	}
+}
+
 func TestCppWholeCoverageUsesBuildRootAndBackend(t *testing.T) {
 	sel := model.Selection{Tests: []model.SelectedTest{
 		{Unit: "cpp:cmake:lib::all", Whole: true},

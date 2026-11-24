@@ -155,7 +155,7 @@ Notes per ecosystem:
 | PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
 | Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
 | Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
-| C and C++ | fmt, Catch2 (CTest) | 9 | 0 | 0.750 / 1.000 |
+| C and C++ | fmt, Catch2 (CTest), FriBidi (Meson) | 11 | 0 | 0.750 / 1.000 / 1.000 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -171,8 +171,9 @@ the whole indexed suite. A separate native fixture verified that the generated c
 and still runs tests declared in a linked library. Linux CI repeats this check for XCTest and Swift Testing using the
 same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.sh)
 
-The C and C++ T2 run used two whole-suite CTest baselines per repository. One fmt mutant was excluded because a
-CTest case timed out. A separate CMake and Meson fixture verified both generated commands against native failures.
+The C and C++ T2 run used two whole-suite baselines per repository. One fmt mutant was excluded because a CTest
+case timed out. Linux CI includes a fixture that verifies both generated commands against native failures and
+checks that the independent tests do not run. [Runner smoke test](../evalkit/repro/cpp-runner.sh)
 
 ### Native-tool and provider checks
 

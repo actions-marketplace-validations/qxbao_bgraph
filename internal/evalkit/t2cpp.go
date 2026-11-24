@@ -1,6 +1,8 @@
 package evalkit
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"encoding/xml"
@@ -64,7 +66,7 @@ func (r T2Repo) cppMutants(ctx context.Context, root string) ([]T2Mutant, error)
 }
 
 type cppNative struct {
-	root, cache, reports string
+	root, cache, reports, runner string
 }
 
 func (n cppNative) run(ctx context.Context, label, tool string, args ...string) (bool, error) {
@@ -88,29 +90,78 @@ func (n cppNative) run(ctx context.Context, label, tool string, args ...string) 
 
 func (n cppNative) suite(ctx context.Context, label string) (map[string]string, time.Duration, bool, error) {
 	file := label + ".xml"
+	report := filepath.Join(n.reports, file)
+	tool := "ctest"
+	args := []string{"--test-dir", "/out/build", "--parallel", "4", "--timeout", "90",
+		"--output-on-failure", "--output-junit", "/out/" + filepath.Base(n.reports) + "/" + file}
+	parse := parseCppCTest
+	if n.runner == cpp.MesonRunner {
+		tool = "meson"
+		args = []string{"test", "-C", "/out/build", "--no-rebuild", "--num-processes", "4",
+			"--print-errorlogs", "--logbase", filepath.Base(n.reports) + "-" + label}
+		report = filepath.Join(n.cache, "build", "meson-logs", args[len(args)-1]+".json")
+		parse = parseCppMeson
+	}
 	t0 := time.Now()
-	timeout, runErr := n.run(ctx, label, "ctest", "--test-dir", "/out/build", "--parallel", "4",
-		"--timeout", "90", "--output-on-failure", "--output-junit", "/out/"+filepath.Base(n.reports)+"/"+file)
+	timeout, runErr := n.run(ctx, label, tool, args...)
 	elapsed := time.Since(t0)
 	if timeout || ctx.Err() != nil {
 		return nil, elapsed, timeout, runErr
 	}
-	data, err := os.ReadFile(filepath.Join(n.reports, file))
+	data, err := os.ReadFile(report)
 	if err != nil {
-		return nil, elapsed, false, fmt.Errorf("missing CTest JUnit report (%v): %w", runErr, err)
+		return nil, elapsed, false, fmt.Errorf("missing %s report (%v): %w", tool, runErr, err)
 	}
-	tests, err := parseCppCTest(data)
+	tests, err := parse(data)
 	if err != nil {
 		return nil, elapsed, false, err
 	}
 	outcomes := slices.Collect(maps.Values(tests))
 	if slices.Contains(outcomes, "timeout") {
-		return nil, elapsed, true, fmt.Errorf("CTest test timed out (see %s)", filepath.Join(n.reports, file))
+		return nil, elapsed, true, fmt.Errorf("%s test timed out (see %s)", tool, report)
 	}
 	if runErr != nil && !slices.Contains(outcomes, "failed") {
-		return nil, elapsed, false, fmt.Errorf("CTest failed without a red unit: %w", runErr)
+		return nil, elapsed, false, fmt.Errorf("%s failed without a red unit: %w", tool, runErr)
 	}
 	return tests, elapsed, false, nil
+}
+
+func parseCppMeson(data []byte) (map[string]string, error) {
+	tests := map[string]string{}
+	scanner := bufio.NewScanner(bytes.NewReader(data))
+	scanner.Buffer(make([]byte, 64<<10), 16<<20)
+	for scanner.Scan() {
+		var row struct {
+			Name   string `json:"name"`
+			Result string `json:"result"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &row); err != nil {
+			return nil, err
+		}
+		id := cpp.UnitID(cpp.Meson, ".", row.Name)
+		if row.Name == "" || tests[id] != "" {
+			return nil, fmt.Errorf("empty or duplicate Meson unit %q", row.Name)
+		}
+		switch row.Result {
+		case "OK", "EXPECTEDFAIL":
+			tests[id] = "passed"
+		case "FAIL", "UNEXPECTEDPASS":
+			tests[id] = "failed"
+		case "SKIP", "IGNORED":
+			tests[id] = "skipped"
+		case "TIMEOUT":
+			tests[id] = "timeout"
+		default:
+			return nil, fmt.Errorf("unusable Meson result %q for %s", row.Result, id)
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if len(tests) == 0 {
+		return nil, fmt.Errorf("empty Meson census")
+	}
+	return tests, nil
 }
 
 func parseCppCTest(data []byte) (map[string]string, error) {
@@ -188,7 +239,7 @@ func (r T2Repo) cppBaseline(ctx context.Context, cfg *T2Config, native cppNative
 		}
 	}
 	if baseline.Files-len(baseline.Flaky)-len(baseline.Failing) < 5 {
-		return baseline, fmt.Errorf("%s: fewer than five consistently passing CTest units", r.Name)
+		return baseline, fmt.Errorf("%s: fewer than five consistently passing test units", r.Name)
 	}
 	return baseline, writeCppJSON(file, baseline)
 }
@@ -202,7 +253,7 @@ func writeCppJSON(file string, value any) error {
 }
 
 func (r T2Repo) buildOracleCPP(ctx context.Context, cfg *T2Config, store *OracleStore, have map[string]T2Record) error {
-	if r.Runner != "ctest" {
+	if r.Runner != cpp.CTestRunner && r.Runner != cpp.MesonRunner {
 		return fmt.Errorf("unsupported C++ T2 runner %q", r.Runner)
 	}
 	workDir, err := filepath.Abs(cfg.Dir)
@@ -221,9 +272,19 @@ func (r T2Repo) buildOracleCPP(ctx context.Context, cfg *T2Config, store *Oracle
 	if err != nil {
 		return err
 	}
-	native := cppNative{root: root, cache: cache, reports: reports}
-	configure := append([]string{"-S", "/src", "-B", "/out/build", "-G", "Ninja"}, r.Args...)
-	if to, err := native.run(ctx, "configure", "cmake", configure...); to || err != nil {
+	native := cppNative{root: root, cache: cache, reports: reports, runner: r.Runner}
+	tool := "cmake"
+	configure := []string{"-S", "/src", "-B", "/out/build", "-G", "Ninja"}
+	if r.Runner == cpp.MesonRunner {
+		tool = "meson"
+		configure = []string{"setup", "/out/build", "/src", "--wrap-mode=nodownload"}
+		if _, err := os.Stat(filepath.Join(cache, "build", "meson-private", "coredata.dat")); err == nil {
+			configure = append(configure, "--reconfigure")
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+	}
+	if to, err := native.run(ctx, "configure", tool, append(configure, r.Args...)...); to || err != nil {
 		return fmt.Errorf("%s configure failed (timeout=%v): %v; see %s", r.Name, to, err, reports)
 	}
 	if to, err := native.build(ctx, "build-R"); to || err != nil {
@@ -275,6 +336,9 @@ func (r T2Repo) buildOracleCPP(ctx context.Context, cfg *T2Config, store *Oracle
 }
 
 func (n cppNative) build(ctx context.Context, label string) (bool, error) {
+	if n.runner == cpp.MesonRunner {
+		return n.run(ctx, label, "meson", "compile", "-C", "/out/build", "-j", "4")
+	}
 	return n.run(ctx, label, "cmake", "--build", "/out/build", "--parallel", "4")
 }
 
@@ -312,12 +376,12 @@ func (n cppNative) mutant(ctx context.Context, edited []byte, baseline T2Baselin
 	if timeout || runErr != nil {
 		rec.Status, rec.Detail = "error", fmt.Sprint(runErr)
 		if timeout {
-			rec.Status, rec.Detail = "timeout", "CTest suite timed out"
+			rec.Status, rec.Detail = "timeout", fmt.Sprint(runErr)
 		}
 		return ctx.Err()
 	}
 	if !slices.Equal(slices.Sorted(maps.Keys(first)), baseline.Known) {
-		rec.Status, rec.Detail = "error", "CTest census changed"
+		rec.Status, rec.Detail = "error", "native test census changed"
 		return nil
 	}
 	rec.TestFiles, rec.Status = len(first), "survived"
@@ -338,12 +402,12 @@ func (n cppNative) mutant(ctx context.Context, edited []byte, baseline T2Baselin
 	if timeout || runErr != nil {
 		rec.Status, rec.Detail = "error", fmt.Sprint(runErr)
 		if timeout {
-			rec.Status, rec.Detail = "timeout", "CTest confirmation timed out"
+			rec.Status, rec.Detail = "timeout", fmt.Sprint(runErr)
 		}
 		return ctx.Err()
 	}
 	if !slices.Equal(slices.Sorted(maps.Keys(second)), baseline.Known) {
-		rec.Status, rec.Detail = "error", "CTest census changed on confirmation"
+		rec.Status, rec.Detail = "error", "native test census changed on confirmation"
 		return nil
 	}
 	rec.Confirmed = true
