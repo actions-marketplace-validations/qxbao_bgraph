@@ -211,6 +211,13 @@ func TestNarrowKeeps(t *testing.T) {
 		out, _ := run(t, headCart, recs, "env", s, cartChange)
 		expect(t, out, []string{"test/cart_test.rb", "test/price_test.rb"}, []string{"test/count_test.rb"})
 	})
+	t.Run("always run sub-unit", func(t *testing.T) {
+		// A failed sub-unit ID of a test file (--failed "<file>#<test>") keeps the test file.
+		s := sel("lib/cart.rb")
+		s.AlwaysRun = []string{"test/price_test.rb#test_fmt"}
+		out, _ := run(t, headCart, recs, "env", s, cartChange)
+		expect(t, out, []string{"test/cart_test.rb", "test/price_test.rb"}, []string{"test/count_test.rb"})
+	})
 	t.Run("whole unit", func(t *testing.T) {
 		s := sel("lib/cart.rb")
 		s.Tests[2].Whole = true
