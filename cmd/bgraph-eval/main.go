@@ -83,10 +83,13 @@ func main() {
 			stop()
 			os.Exit(code)
 		}
-	case "rbdyn", "phpdyn":
+	case "rbdyn", "phpdyn", "godyn":
 		cmd := cmdRubyDyn
 		if os.Args[1] == "phpdyn" {
 			cmd = cmdPHPDyn
+		}
+		if os.Args[1] == "godyn" {
+			cmd = cmdGoDyn
 		}
 		var code int
 		code, err = cmd(ctx, os.Args[2:])

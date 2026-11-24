@@ -279,6 +279,45 @@ func (g *Graph) Walk(seeds []Seed) Reach {
 	return r
 }
 
+// WalkTainted walks backwards from seeds like Walk and returns the files reached through at least one edge that plain rejects
+// (a path from a seed whose every edge is plain does not count). Dynamic layers use it to find the units the static graph
+// reaches through an edge their records cannot judge (a fixture read, a program a test builds).
+func (g *Graph) WalkTainted(seeds []string, plain func(model.Edge) bool) map[string]bool {
+	type state struct {
+		p       string
+		tainted bool
+	}
+	seen := map[state]bool{}
+	var queue []state
+	push := func(s state) {
+		if !seen[s] {
+			seen[s] = true
+			queue = append(queue, s)
+		}
+	}
+	for _, s := range seeds {
+		push(state{s, false})
+	}
+	out := map[string]bool{}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if cur.tainted {
+			out[cur.p] = true
+		}
+		for _, e := range g.rev[cur.p] {
+			push(state{e.From, cur.tainted || !plain(e)})
+		}
+		g.candidates(cur.p, func(pe patternEdge) bool {
+			if pe.edge.From != cur.p && pe.pat.Match(cur.p) {
+				push(state{pe.edge.From, cur.tainted || !plain(pe.edge)})
+			}
+			return true
+		})
+	}
+	return out
+}
+
 // Chain returns the reason chain from p back to the seed: "p ← a (import) ← b (changed)".
 func (r Reach) Chain(p string) []string {
 	var out []string

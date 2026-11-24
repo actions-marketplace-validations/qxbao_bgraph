@@ -65,4 +65,36 @@ func TestWidenedTag(t *testing.T) {
 	if c.Path != "pkg/a.py" || c.Roles[python.Name] != [2]model.Role{model.RoleSource, model.RoleSource} || c.Global || c.Rule || len(c.Claimed) > 0 || !c.Dependents {
 		t.Errorf("change info: %+v", c)
 	}
+	if res.Graph == nil || len(res.ChangedSeeds) != 1 || res.ChangedSeeds[0] != "pkg/a.py" {
+		t.Errorf("graph %v, changed seeds %v", res.Graph != nil, res.ChangedSeeds)
+	}
+}
+
+// ChangedSeeds holds the paths the precise walk starts from, including the paths that read a changed file through a link.
+func TestChangedSeedsAliases(t *testing.T) {
+	files := map[string]string{
+		"pyproject.toml":      "[project]\nname = \"x\"\nversion = \"1\"\n",
+		"pkg/__init__.py":     "",
+		"pkg/a.py":            "X = 1\n",
+		"tests/test_alias.py": "import alias.a\n",
+	}
+	links := map[string]string{"alias": "pkg"}
+	head := map[string]string{}
+	for k, v := range files {
+		head[k] = v
+	}
+	head["pkg/a.py"] = "X = 2\n"
+	res := selector.Run(context.Background(), selector.Input{
+		Base: "b", Head: "h", BaseTree: tree.NewMapTreeLinks(files, links), HeadTree: tree.NewMapTreeLinks(head, links),
+		Changed: []selector.Changed{{Path: "pkg/a.py", Status: 'M', OldMode: "100644", NewMode: "100644"}},
+		Ecos:    []eco.Ecosystem{python.New(nil)},
+		Scanner: scancache.New(),
+	})
+	seeds := map[string]bool{}
+	for _, s := range res.ChangedSeeds {
+		seeds[s] = true
+	}
+	if !seeds["pkg/a.py"] || !seeds["alias/a.py"] {
+		t.Errorf("changed seeds %v (tests %+v)", res.ChangedSeeds, res.Selection.Tests)
+	}
 }

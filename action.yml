@@ -1,5 +1,5 @@
 name: bgraph affected tests
-description: "Run only the tests your change can affect, in 6 languages. Fail-closed: when unsure, it runs more."
+description: "Run only the tests your change can affect, in 11 language ecosystems. Fail-closed: when unsure, it runs more."
 author: qxbao
 branding:
   icon: filter

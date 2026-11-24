@@ -13,6 +13,7 @@ import (
 
 	"github.com/qxbao/bgraph/internal/dynamic"
 	"github.com/qxbao/bgraph/internal/dynamic/dotnetdyn"
+	"github.com/qxbao/bgraph/internal/dynamic/godyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/phpdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
@@ -33,7 +34,7 @@ type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
 type RecordOptions struct {
-	// Eco: the ecosystem to record ("python", "node", "jvm", "dotnet", "ruby" or "php"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
+	// Eco: the ecosystem to record ("python", "node", "jvm", "dotnet", "ruby", "php" or "go"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
 	// set, otherwise every ecosystem with a dynamic layer that has test units.
 	Eco        string
 	Units      string        // glob on unit IDs (test files); empty: every unit
@@ -246,6 +247,8 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 			recs, skipped, err = ix.recordRuby(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		case phpdyn.Eco:
 			recs, skipped, err = ix.recordPHP(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		case godyn.Eco:
+			recs, skipped, err = ix.recordGo(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		}
 		sum.Skipped = append(sum.Skipped, skipped...)
 		if err != nil {
@@ -410,7 +413,11 @@ func reasonKey(why string) string {
 		"loads a PHP extension (dl) at ", "calls native code through FFI at ", "the runner started ",
 		"lists a test file that is not tracked: ", "lists a test file outside the configured test directories: ", "test file ",
 		"listing the test files: ", "malformed line table for ", "cannot install the collector's output buffer", "reads a file without the stream wrapper (", "writes a file outside the repository and its temporary directory: ",
-		"reads a file written into the vendor directory after composer install: ", "reads shared state another test file wrote: "} {
+		"reads a file written into the vendor directory after composer install: ", "reads shared state another test file wrote: ",
+		"starts a process the collector does not observe (", "a covered file maps to no tracked repository file: ",
+		"compiles untracked repository file ", "a covered file is not among the compiled files: ", "go tool covdata textfmt: ",
+		"builds module ", "builds with a go.work outside the repository: ", "go list: ", "go test -c: ", "-test.list: ",
+		"malformed coverage profile line "} {
 		if strings.HasPrefix(why, pre) {
 			return strings.TrimSpace(pre)
 		}
@@ -551,6 +558,8 @@ func (ix *Index) DynamicStatusOf(ctx context.Context, eco string) (DynamicStatus
 		switch {
 		case eco == jvm.Name || eco == dotnetdyn.Eco:
 			files = nil // class and class-list records: the class's file is among its dependencies, not named by the unit
+		case eco == godyn.Eco:
+			files = nil // function-list and function records: the canary is checked when recording
 		case eco == phpdyn.Eco:
 			files = nil // file-list record
 			if _, f, ok := strings.Cut(r.Unit, "#"); ok {

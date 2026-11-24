@@ -220,14 +220,14 @@ overall (0.100 on hono), median 239 ms per commit (p95 1.0 s).
 
 ### Dynamic layer
 
-| | Python | Node | JVM (class layer) | Ruby (method layer) | PHP (file and function layer) |
-|---|---|---|---|---|---|
-| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) | monolog, php-option, collection, pest-plugin-arch (+ dbal in replay; Carbon, PHP-Parser, composer for the guard rate) |
-| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository | 93 of 98 (monolog), 11 of 12, 5 of 5, 20 of 49 (pest-plugin-arch: fixtures listed as test files); 94.6 % and 99.2 % in replay |
-| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) | **0** (112 narrowed mutants of 113) |
-| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 | 1.000 → 0.071 (monolog), 0.200, 0.167, 0.918 (pest-plugin-arch) |
-| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** | 165 / 19,865 test files / **0** |
-| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – | 0 failures |
+| | Python | Node | JVM (class layer) | Ruby (method layer) | PHP (file and function layer) | Go (function layer) |
+|---|---|---|---|---|---|---|
+| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) | monolog, php-option, collection, pest-plugin-arch (+ dbal in replay; Carbon, PHP-Parser, composer for the guard rate) | hcl, prometheus/common, connect-go (+ chi, afero for the guard rate) |
+| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository | 93 of 98 (monolog), 11 of 12, 5 of 5, 20 of 49 (pest-plugin-arch: fixtures listed as test files); 94.6 % and 99.2 % in replay | 186 of 187 (hcl), 220 of 221, 241 of 249 (the rest start a process); 99.3 % in replay |
+| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) | **0** (112 narrowed mutants of 113) | **0** (48 narrowed mutants of 60) |
+| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 | 1.000 → 0.071 (monolog), 0.200, 0.167, 0.918 (pest-plugin-arch) | test functions run: 1,073 → 629 (hcl), 1,508 → 284, 2,304 → 2,205 |
+| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** | 165 / 19,865 test files / **0** | 133 / 2,985 test functions / **0** |
+| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – | 0 failures | 0 failures (249 commits) |
 
 Findings:
 
@@ -244,6 +244,10 @@ Findings:
 - The PHP guard accepts 43–68 % of 500 first-parent commits on five repositories (monolog, dbal, Carbon,
   PHP-Parser, composer); refusals are CI files, file additions, manifests and non-PHP data files. A PHP static unit is the
   whole Composer project, so the layer removes most test files: a median of 0.07–0.10 remains on replayed commits.
+- The Go guard accepts 18–27 % of the commits that change Go code over 500 first-parent commits of five repositories
+  (hcl, prometheus/common, connect-go, chi, afero); a third to a half of all commits are full selections. Where it
+  accepts, the layer runs 21–42 % fewer test functions on replayed commits, but only 0.5–13 % fewer over the whole
+  history, below the default-on gate.
 
 These checks are not a release gate: the dynamic layer stays off by default.
 

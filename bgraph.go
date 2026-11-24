@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/qxbao/bgraph/internal/dynamic/godyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
 	"github.com/qxbao/bgraph/internal/dynamic/phpdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
@@ -63,6 +64,8 @@ type Options struct {
 	Ruby string
 	// PHP: PHP executable of the dynamic layer (docs/dynamic-layer.md §11), overriding bgraph.toml [dynamic_layer] php.
 	PHP string
+	// Go: go command of the dynamic layer, overriding bgraph.toml [dynamic_layer] go.
+	Go string
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
@@ -80,6 +83,8 @@ type Index struct {
 	rubyProbes rbdyn.ProbeCache
 	// phpProbes caches the PHP executable's probe (docs/dynamic-layer.md §11.5).
 	phpProbes phpdyn.ProbeCache
+	// goProbes caches the go command's probe (go env).
+	goProbes godyn.ProbeCache
 }
 
 // Open opens the repo containing root.

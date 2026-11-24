@@ -57,6 +57,8 @@ var sourceFile = map[string]func(p string) bool{
 	"ruby": func(p string) bool { return path.Ext(p) == ".rb" },
 	// php: the per-test-file layer inside a Composer project (docs/dynamic-layer.md §11, package phpdyn), like jvm.
 	"php": php.DynamicSource,
+	// go: the per-test-function layer inside Go packages (package godyn) has its own guards and narrowing, like jvm.
+	"go": func(p string) bool { return path.Ext(p) == ".go" },
 }
 
 // Supported reports whether eco has a dynamic layer.

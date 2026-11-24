@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/qxbao/bgraph/internal/audit"
 	"github.com/qxbao/bgraph/internal/eco"
@@ -140,10 +141,25 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 				switch len(units) {
 				case 1:
 					ft.Unit = units[0].ID
-					if !slices.ContainsFunc(sel.Tests, func(t SelectedTest) bool { return t.Unit == units[0].ID }) &&
-						!slices.ContainsFunc(units[0].Files, covered) {
+					i := slices.IndexFunc(sel.Tests, func(t SelectedTest) bool { return t.Unit == units[0].ID })
+					switch {
+					case i < 0 && !slices.ContainsFunc(units[0].Files, covered):
 						ft.Reason = why
 						rep.Missed = append(rep.Missed, ft)
+					case i >= 0 && sel.Tests[i].ClassFilter && f.Test != "" && f.Test != "(package failed)":
+						// A package-level failure (build, vet, TestMain, init) is not a removed function: the narrowed
+						// package still builds and runs TestMain.
+						// The Go layer runs only the kept top-level test functions of a narrowed package.
+						top, _, _ := strings.Cut(f.Test, "/")
+						if !slices.Contains(sel.Tests[i].Classes, top) {
+							ft.Reason = "selected package, but its test function " + top + " was removed by the dynamic layer"
+							for _, n := range sel.Narrowed {
+								if n.Unit == units[0].ID+"#"+top {
+									ft.Reason += ": " + n.Reason
+								}
+							}
+							rep.Missed = append(rep.Missed, ft)
+						}
 					}
 				case 0:
 					ft.Reason = "no Go test package with import path " + f.Package

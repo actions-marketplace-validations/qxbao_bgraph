@@ -28,7 +28,7 @@ commit as the feature:
 | Rust | Cargo target | Cargo.lock | – | [rust](ecosystems/rust.md) |
 | JVM (Maven, Gradle) | module / project | – | test classes | [jvm](ecosystems/jvm.md) |
 | .NET (VSTest, Microsoft.Testing.Platform) | MSBuild project | – | test classes | [dotnet](ecosystems/dotnet.md) |
-| Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
+| Go | package | go.sum (lines only added) | test functions, per changed function | [go](ecosystems/go.md) |
 | PHP | Composer project | – | test files, per changed function | [php](ecosystems/php.md) |
 | Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | test files, per changed method | [ruby](ecosystems/ruby.md) |
 | Swift (SwiftPM) | test target or package | – | – | [swift](ecosystems/swift.md) |
@@ -90,7 +90,9 @@ commit as the feature:
 | .NET class layer on Linux and macOS (recorded runs) | planned | 2 | Implemented and evaluated on Windows; dynamic instrumentation exists on x64 only | [dynamic layer §9.11](dynamic-layer.md#911-net) |
 | .NET: map generated sources to their partial type instead of the whole project | planned | 2 | Repositories with their own source generator narrow little today | [dynamic layer §9.11](dynamic-layer.md#911-net) |
 | .NET: build-time IL diff to relax the body guard (constants, signatures, added members) | planned | 3 | The body guard passes 17–45 % of code-only commits on the evaluated repositories | [dynamic layer §9.11](dynamic-layer.md#911-net) |
-| Go | planned | 3 | Package granularity is already fine; a test-function layer would need coverage per test | |
+| Go (top-level test functions inside a package, per changed function, from Go coverage per test function) | done (unreleased) | 1 | 0 misses on 133 replayed commits of hcl and prometheus/common, 0 violations on 60 mutants; the accepted commits run 21–42 % fewer test functions, but the guard accepts only 18–27 % of the commits that change Go code (full selections, declarations outside function bodies, `go.mod` updates), so the whole history runs 0.5–13 % fewer. Off by default | [dynamic layer §12](dynamic-layer.md#12-go-per-test-function-narrowing) |
+| Go layer: judge declaration changes (constants, signatures, package variables) | planned | 3 | Declarations outside function bodies are the main refusal on connect-go; a type-checked diff of what changed could keep only the functions that use it | [dynamic layer §12](dynamic-layer.md#12-go-per-test-function-narrowing) |
+| Go layer: subtests | planned | 3 | Repositories whose tests are a few large functions with subtests (connect-go) narrow little; per-subtest records would need `-run` patterns with `/` | [dynamic layer §12](dynamic-layer.md#12-go-per-test-function-narrowing) |
 | Ruby (test files, per changed method, from `Coverage` per test file) | done (unreleased) | 1 | Static selection is about 1.0 on the evaluated repositories (test helpers load the whole library); the method layer removes test files that ran none of the changed methods. Off by default | [dynamic layer §10](dynamic-layer.md#10-ruby-per-method-narrowing) |
 | Rust | planned | 3 | Same question at the Cargo-target level | |
 | Dart / Flutter (test files, from per-suite VM coverage) | planned | 2 | The Dart VM feasibility check deferred implementation. In 474 path-eligible historical pairs, widened units accounted for at most 1.3% of static Dart test selections. Coverage confirmed per-suite attribution and missed a source file a failing test read as text. Revisit with runtime dependency tracing and compiler validation. Flutter widget tests need a separate recording path | [Dart feasibility](evaluation.md#dart-dynamic-layer-feasibility) |

@@ -80,3 +80,42 @@ func TestGoCommandsBatched(t *testing.T) {
 		t.Errorf("%d packages in the batches, want 600", n)
 	}
 }
+
+// A unit narrowed by the Go layer runs its kept functions with -run (none: compile and vet only); one whose filter does not fit
+// on a command line runs whole with the others.
+func TestGoCommandsFiltered(t *testing.T) {
+	kept := goUnit(".", "a")
+	kept.ClassFilter, kept.Classes = true, []string{"TestA", "ExampleB"}
+	none := goUnit(".", "b")
+	none.ClassFilter = true
+	var long []string
+	for i := 0; i < 2000; i++ {
+		long = append(long, fmt.Sprintf("TestLongName%04d", i))
+	}
+	huge := goUnit(".", "c")
+	huge.ClassFilter, huge.Classes = true, long
+	s := model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{kept, none, huge, goUnit(".", "d"), goUnit("tools", "tools/x")}}
+	p, err := Commands(s, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got [][]string
+	for _, c := range p.Commands {
+		got = append(got, append([]string{c.Project}, c.Argv...))
+	}
+	want := [][]string{
+		{".", "go", "test", "./c", "./d"},
+		{".", "go", "test", "-run", "^(TestA|ExampleB)$", "./a"},
+		{".", "go", "test", "-run", "^$", "./b"},
+		{"tools", "go", "test", "./x"},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v\nwant %v", got, want)
+	}
+	if !strings.Contains(strings.Join(p.Notes, "\n"), "do not fit on one command line") {
+		t.Errorf("notes %v", p.Notes)
+	}
+	if !strings.Contains(p.Commands[2].Note, "compiled and vetted") {
+		t.Errorf("note %q", p.Commands[2].Note)
+	}
+}
