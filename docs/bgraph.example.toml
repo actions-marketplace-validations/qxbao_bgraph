@@ -221,6 +221,11 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 #                      docs/dynamic-layer.md §11) included, read, stat'ed or listed a changed file, or executed a changed
 #                      function when every change lies inside function bodies. PHPUnit >= 10 or Pest >= 2 with a PHPUnit
 #                      XML configuration; only modified PHP code files or documentation files.
+#   go               : go command for `bgraph record --eco go` and the Go fingerprint ("go" on PATH by default). The "go"
+#                      ecosystem narrows a selected package to the top-level test functions whose recorded run (one
+#                      process per function with Go coverage, docs/dynamic-layer.md §12) executed a changed function;
+#                      the package is still built (`-run '^$'` when none is kept). Only when every changed file is a
+#                      modified .go file whose changes lie inside function bodies, a test file or a documentation file.
 #   trust_native_env : native extension modules installed in the environment (not CPython's own) do not make a
 #                      record incomplete; their versions are part of the fingerprint. Default false. (Node: the
 #                      toolchain addons of docs/dynamic-layer.md §8.3 are accepted without it.)
@@ -234,6 +239,7 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # python = ".venv/bin/python"
 # node = "node"
 # php = "php"
+# go = "go"
 # trust_native_env = false
 
 # ---------------------------------------------------------------------------------------------------------------------

@@ -13,6 +13,7 @@ what it may remove, when it refuses, what a record is, and what each collector o
 | .NET | test classes inside a selected test project (VSTest or Microsoft.Testing.Platform) | code coverage (Microsoft.CodeCoverage), one fresh test host per class | implemented ([9.11](#911-net)) |
 | Ruby | selected test files (precise ones too), per changed method | Ruby's `Coverage` in methods mode, preloaded through `RUBYOPT` in every Ruby process of one test file | implemented ([10](#10-ruby-per-method-narrowing)) |
 | PHP | test files inside a selected Composer / PHPUnit project, per changed file or changed function | Xdebug line coverage, a `file://` stream wrapper proxy and a function monitor, prepended through `PHP_INI_SCAN_DIR` in every PHP process of one test file | implemented ([11](#11-php-per-test-file-narrowing)) |
+| Go | top-level test functions inside a selected package, per changed function | Go coverage (`-cover`, atomic counters) of the repository's packages, one fresh process per test function, process starts counted | implemented ([12](#12-go-per-test-function-narrowing)) |
 
 Section numbers are stable: code comments refer to them.
 
@@ -31,6 +32,7 @@ Section numbers are stable: code comments refer to them.
   - [9.11 .NET](#911-net)
 - [10. Ruby: per-method narrowing](#10-ruby-per-method-narrowing)
 - [11. PHP: per-test-file narrowing](#11-php-per-test-file-narrowing)
+- [12. Go: per-test-function narrowing](#12-go-per-test-function-narrowing)
 
 ## Goal and non-goal
 
@@ -41,19 +43,20 @@ net: a unit the static graph reaches through ordinary edges is never removed.
 Selected = S_precise ∪ { t ∈ S_widened \ S_precise : not (record(t) usable AND Dep(t) ∩ Changed = ∅) }
 ```
 
-(The JVM and .NET class layers, the Ruby method layer and the PHP test-file layer are the exceptions: they narrow precise
-units, see [9.1](#91-what-is-narrowed), [10.1](#101-what-is-narrowed) and [11.1](#111-what-is-narrowed).)
+(The JVM and .NET class layers, the Ruby method layer, the PHP test-file layer and the Go test-function layer are the
+exceptions: they narrow precise units, see [9.1](#91-what-is-narrowed), [10.1](#101-what-is-narrowed), [11.1](#111-what-is-narrowed)
+and [12.1](#121-what-is-narrowed).)
 
 Enabling it:
 
 ```toml
 [dynamic_layer]
-ecosystems = ["python"]          # "python", "node", "jvm", "dotnet", "ruby", "php"
+ecosystems = ["python"]          # "python", "node", "jvm", "dotnet", "ruby", "php", "go"
 ```
 
 `--dynamic` turns the layer on for every supported ecosystem for one run; `--dynamic=false` turns it off even when
 `bgraph.toml` enables it. Library callers use `Change.Dynamic` (`DynamicOn` / `DynamicOff` / default) and
-`Options.Python`, `Options.Node`, `Options.Ruby`, `Options.PHP`, `Options.TrustNativeEnv`. See [Configuration](configuration.md#dynamic_layer).
+`Options.Python`, `Options.Node`, `Options.Ruby`, `Options.PHP`, `Options.Go`, `Options.TrustNativeEnv`. See [Configuration](configuration.md#dynamic_layer).
 
 The layer has passed mutation and replay checks (see [7](#7-evaluation) and [Evaluation](evaluation.md#dynamic-layer))
 but not a release gate: enable it per ecosystem after evaluating it on your repository, for example with
@@ -1342,3 +1345,219 @@ removed test file run at the commit:
 
 Incomplete records are test files that start processes (Git and Mercurial processors, `exec`) or write outside the
 repository. Recording costs about 1.1× (monolog) to 2.5× (dbal) running the test files alone without the collector.
+
+## 12. Go: per-test-function narrowing
+
+The static Go unit is the package ([Go](ecosystems/go.md)), and its import graph is exact, so the static layer never
+selects a package that does not compile a changed file. Precision is lost in two other places: a package that imports a
+changed package but never runs the changed function (every package of hcl imports `hclsyntax`), and the test functions
+of a selected package that never run it. The Go layer removes both with one record kind, Go coverage per top-level test
+function. Go's `-cover` rewrites the source before compiling, so cross-package inlining cannot hide a callee; methods
+called through interfaces, generic instantiations, closures and `init` functions are counted.
+
+**Compilation is never narrowed.** A narrowed package still runs `go test`: with a `-run` filter of the kept functions,
+or `-run '^$'` (build, the vet checks `go test` runs, `TestMain` and `init`, no test) when none is kept. A head that does
+not type-check fails wherever it would have, so the guards need no type checker.
+
+### 12.1 What is narrowed
+
+A sub-unit is a top-level test function as `-test.list '.*'` prints it: `Test*`, `Example*` and `Fuzz*` (its seed corpus;
+benchmarks do not run under `go test`). ID `go:<dir>#<Name>`, for example `go:hclsyntax#TestParseConfig`. Subtests are
+not split.
+
+A selected Go unit (not a whole-suite unit) with a usable package list record (12.3) runs only its kept functions. A
+test function is removed if and only if:
+
+- its package is not previously failed or `always_run`, not a `[[rule]]` target, has no changed test file, and was not
+  reached by a static edge the records cannot judge (below);
+- it has a usable function record (complete, passed, current environment and collector, every dependency's blob
+  unchanged at the base, the same package file sets at the base);
+- for every changed file, its record does not keep it (12.2, rule 4).
+
+The package stays in `tests` with `class_filter` and the kept names in `classes`; removed functions are listed in
+`narrowed` as `go:<dir>#<Name>`. A `full` selection is never narrowed.
+
+A package is kept whole (no filter) when:
+
+- one of its `_test.go` files changed: coverage does not instrument test files, so a changed helper cannot be judged;
+- the static selection reached it through an edge other than an import, the structural edges of the Go analysis
+  (package file, the test binary compiling its package, module and module-level files), a package a test may build or a
+  program it may run (a real build or run starts a process, which makes the record incomplete): fixture data,
+  `//go:embed`, directory patterns, cgo, edges of other ecosystems. These are the cases where a test reads a changed
+  file as data;
+- one of its test files, at base or head, may read the package's own Go sources: it imports `go/parser`, `go/ast`,
+  `go/doc`, `go/build`, `go/format`, `go/types`, `golang.org/x/tools/go/packages` or `golang.org/x/tools/go/analysis…`,
+  or `go/token` with `go/printer`, or has a string literal `.`, `./`, a `*.go` glob without a slash, or the name of a `.go`
+  file of its own directory; or it does not parse.
+
+### 12.2 Guards
+
+Per selection; a refusal keeps the static selection, with a `dynamic_skipped` warning and the reason in the `dynamic`
+note of every Go unit the layer would have considered.
+
+1. The selection is not `full` and has no widening at all (a manifest, lockfile, `go.work`, vendor or global change
+   widens, and a widened selection is never narrowed).
+2. Every changed file has status `M` with an unchanged regular-file mode, is not a symbolic link nor read through one,
+   is not in the global table, not claimed by an ecosystem, and not named by a `[[config]]`, `[[dynamic]]` or `[[rule]]`.
+3. Each changed file is then one of:
+   - **Go source**: a `.go` file with the source role at base and head, not under `testdata/`, `vendor/` or a directory
+     starting with `.` or `_`, passing the body guard (4);
+   - **Go test file**: a `_test.go` file with the test role at base and head; its package is kept whole;
+   - **documentation**: as in [2](#2-when-narrowing-is-allowed); a function whose record depends on it (an embedded
+     file) is kept.
+
+   Anything else refuses: assembly, C and header files, `.syso`, data and testdata files, Go files under `testdata`
+   (programs a test builds), additions, deletions and renames.
+4. **Body guard** (`go/parser` at base and head; a parse error refuses). It refuses a cgo file (`import "C"`), a
+   generated file (`// Code generated … DO NOT EDIT.`), a `//line` directive anywhere in the file, and a change to the
+   text before the package clause other than plain comments: its directive lines (`//go:build`, `//go:generate`…) must be
+   identical, and a header with a `+build` line or a block comment must be identical byte for byte (the blank line that
+   ends `+build` constraints matters). The **skeleton** of a file is its token sequence with every function body replaced
+   by a placeholder and plain comments dropped, directive comments (`//go:`, `//line`, `//export`, `// +build`,
+   `//extern`, `//sys`) kept; skeletons must be identical. Bodies are paired in order (same receiver type and name); each
+   pair whose tokens differ is a **changed function**, identified by its base span (the line of `func` to the line of its
+   closing brace). Consequently:
+   - accepted: changes inside a function or method body (closures, local types and constants included), `init` bodies,
+     and comments anywhere;
+   - refused: signatures, receivers, type parameters, constants, variables and their initializers (closures in
+     package-level variables included), types and struct tags, imports, and every directive (`//go:embed`,
+     `//go:linkname`, `//go:noinline`…).
+
+   Per test function, for a changed Go source file `c`, the function is kept when:
+   1. its record compiled `c` but has no coverage table for it (a build constraint excluded it, or a `//line` name);
+   2. a changed function's base span contains a line it executed;
+   3. a changed function's span contains no instrumentable line in its table (the change cannot be judged);
+   4. **line shift**: some hunk of `c` (comment and blank-line hunks included) has a different number of base and head
+      lines, and it executed a line of `c` at or after the first such hunk (`runtime.Caller`, panics and log lines with
+      file positions would differ). An approximate diff (edit distance over 1,000) counts as a shift from its first line.
+
+   A changed file the record lists only as data (not compiled into its binary) never keeps a function through coverage.
+
+### 12.3 Records
+
+Collector ID `go-cover-2`. Two record kinds, in `<state dir>/dynamic/go.jsonl`:
+
+- **Package list** (`go:<dir>`): `classes` = the names `-test.list '.*'` prints; deps = every tracked file under the
+  package directory, recursively. Usable when its deps are unchanged at the base and the base has exactly the same set of
+  `_test.go` files in that directory (an added test file can add a function). An empty list (only `TestMain`, nothing
+  runnable on this platform) is never narrowed.
+- **Function** (`go:<dir>#<Name>`): deps = every tracked file compiled into the test binary (the in-repository packages of
+  `go list -deps -test`), every tracked file under the package directory, the targets of the unit's non-import static
+  edges, and the module's `go.mod`, `go.sum`, the `go.work` in effect and `vendor/modules.txt`, with their blob OIDs;
+  files that are not compiled into the binary are also listed in `reads`. `dirs` lists the repository package
+  directories of the build closure: a non-test `.go` file at the base in one of them that the record does not list makes
+  the record unusable (a new file can add an `init`, a method satisfying an interface, a package variable). `line_cov`
+  (as PHP, [11.3](#113-records)): per compiled `.go` file with coverage blocks, the executed and the instrumentable but
+  not executed line ranges.
+
+Store, import, export and `bgraph dynamic status` are as for the other layers.
+
+### 12.4 Collector
+
+`bgraph record --eco go [--units GLOB] [--jobs N] [--timeout D] [--go EXE]` builds, per package unit, one test binary
+from the module directory:
+
+```text
+go test -c -cover -covermode=atomic -coverpkg=<the repository's packages of the module and of its go.work>,os,syscall -o <tmp> <package>
+```
+
+then runs each listed function in a process of its own, from the package directory as `go test` does:
+`<binary> -test.run '^<Name>$' -test.count=1 -test.v -test.gocoverdir=<dir> -test.timeout=<timeout>`, with `GOCOVERDIR`
+set and `GOROOT/bin` first on `PATH`, and converts the counters with `go tool covdata textfmt`. The process tree is
+killed on timeout. `--jobs` defaults to half the CPUs. `GOFLAGS` applies to the build (set build tags there); `-cover`,
+`-covermode` or `-coverpkg` in `GOFLAGS` or `--build-args` refuse the recording. Records made with `--build-args` are
+not used at selection time, which does not know them.
+
+**Processes.** Every instrumented process (the test binary re-executed as a helper process, a common Go pattern) writes
+its own counter file into `GOCOVERDIR`. `os` and `syscall` are instrumented so that the atomic counter of the first block
+of `syscall.StartProcess` (Windows) or `syscall.forkExec` (Unix) counts every process the test started, through
+`os/exec`, `os.StartProcess` or `syscall.ForkExec`. More processes started than instrumented counter files (beyond the
+test's own) makes the record incomplete: the test ran a program coverage does not see (`go build`, `go run`, a shell, a
+tool).
+
+A record is **incomplete** when: a process was not observed; the test was skipped (`t.Skip` during recording proves
+nothing about the run that matters); the test did not run, timed out or crashed without a counter file; the counters
+cannot be converted; a covered file maps to no tracked repository file, or is not among the compiled files (except names
+given by `//line` directives in a binary that contains them); a dependency cannot be hashed; the build depends on a
+module or `go.work` outside the repository and the module cache; the package's own test files are not among the
+dependencies (canary). A function that fails alone gets `pass = false` and is never removed. A package whose test binary
+does not build gets no record (a warning).
+
+### 12.5 Environment fingerprint
+
+`sha256` of: the collector ID; `go env` of the configured Go (`[dynamic_layer] go`, `--go`, `Options.Go`, default `go`
+on PATH; cached by executable path and modification time): `GOVERSION`, `GOOS`, `GOARCH` and its level variables
+(`GOAMD64`, `GOARM64`…), `CGO_ENABLED`, `GOEXPERIMENT`, `GOFLAGS`, `GOFIPS140`, `GOROOT`, and with cgo `CC`, `CXX`,
+`CGO_*FLAGS` and `PKG_CONFIG`; and the variables `GOFLAGS`, `GOEXPERIMENT`, `GODEBUG`, `CGO_ENABLED`, `GOOS`, `GOARCH`,
+`GOWORK`, `GO111MODULE`, `GOTOOLCHAIN`, `GOFIPS140`. At record time the recording's own environment is used, the same one
+the build and the tests get. Module dependencies are in each record's deps (`go.mod`, `go.sum`), and changes to them are
+refused anyway.
+
+### 12.6 Running a narrowed selection
+
+`bgraph command` runs each narrowed package in a `go test` command of its own, from its module directory:
+`go test -run '^(TestA|TestB)$' ./<dir>`, or `-run '^$'` when no function is kept. Unfiltered packages keep the batched
+command. A filter that would exceed the command-line limit runs the package whole. `bgraph audit` does not count a
+package-level failure (`(package failed)`: build, vet, `TestMain`, `init`) of a narrowed package as a removed test.
+
+### 12.7 Residual risks (accepted)
+
+- Process starts that bypass `syscall` (cgo `system()`, `golang.org/x/sys/windows.CreateProcess`, a raw clone), and
+  programs that run without a process start: a test talking to a daemon over a socket (testcontainers, the Docker
+  daemon) runs code coverage never sees.
+- Data reads through computed paths (`os.ReadFile(filepath.Join(root, …))`, walking the repository) that neither the
+  graph nor the own-sources check sees.
+- `runtime.FuncForPC(…).FileLine` and other source positions of functions the test never calls: the line-shift rule
+  looks at executed lines only.
+- The recording runs with `-test.v`, so `testing.Verbose()` is true while recording and false in a plain `go test`.
+- Records are per function in a fresh process: a removed function whose outcome depends on global state that a kept
+  function leaves behind in a whole-package run is not seen (as in every layer).
+
+### 12.8 Evaluation
+
+Windows 11, the Go each repository requires (1.25.1, 1.26.0, 1.26.8) with `GOTOOLCHAIN=local` at record and select time;
+`bgraph-eval godyn t2|guard|replay`. The oracle is `go test -json` of the whole package, never the collector.
+
+**Hybrid mutation**: records made once at R, every killed mutant selected statically and with the layer on. A violation
+is a red package missing, or a red top-level test of a kept package not kept.
+
+| | hcl | prometheus/common | connect-go |
+|---|---|---|---|
+| Packages / test functions | 18 / 169 | 10 / 211 | 10 / 239 |
+| Complete records / recorded | 186 / 187 | 220 / 221 | 241 / 249 |
+| Recording / whole suite (warm build cache) | 17 s / 3.9 s | 14 s / 5.9 s | 84 s / 51 s |
+| Killed mutants / narrowed / refused / every function kept | 20 / 16 / 1 / 3 | 20 / 17 / 0 / 3 | 20 / 15 / 0 / 5 |
+| **Violations** | **0** | **0** | **0** |
+| Test functions run, static → hybrid (sum) | 1,073 → 629 (−42 %) | 1,508 → 284 (−82 %) | 2,304 → 2,205 (−5 %) |
+
+connect-go's tests are a few large functions with subtests that almost all run the changed code, and the tests of
+`cmd/connect-go-v2-migrate` read their own sources (kept whole).
+
+**Guard over 500 first-parent commits** (no records; afero has 345):
+
+| | hcl | prometheus/common | connect-go | chi | afero |
+|---|---|---|---|---|---|
+| Full selection / nothing selected / refused / accepted | 165 / 151 / 106 / 78 | 95 / 25 / 323 / 57 | 74 / 74 / 257 / 95 | 246 / 86 / 94 / 74 | 196 / 42 / 67 / 39 |
+| Accepted / commits that change a `.go` file | 27 % | 23 % | 26 % | 20 % | 18 % |
+
+Full selections (a CI file or `.go-version` changed with the code) are a third to a half of all commits. Most refusals
+are declarations outside function bodies and, on prometheus/common, `go.mod` / `go.sum` updates. This run predates the
+relaxation of the header check to directive lines, which refused 2–9 more commits per repository (copyright and package
+documentation edits).
+
+**Replay** of the 150 most recent first-parent commits plus every other accepted commit of the last 500, with fresh
+records at the parent of each accepted commit and every removed function run at the commit:
+
+| | hcl | prometheus/common |
+|---|---|---|
+| Accepted and replayed with records | 78 | 55 |
+| Removed functions run at the commit / **misses** | 2,588 / **0** | 397 / **0** |
+| Hybrid differing from static where nothing is narrowed | 0 | 0 |
+| Complete records | 99.5 % | 99.0 % |
+| Test functions run, accepted commits | −41.5 % | −20.8 % |
+| Test functions run, the 150-commit window | −13.4 % | −0.5 % |
+
+On hcl, 45 removed functions of one commit had no verdict: that commit does not compile, which the compile-only run of
+the narrowed packages reports. Two prometheus/common parents could not be checked out on a case-insensitive file system.
+The layer narrows strongly where the guard accepts, but the guard accepts too few commits for the default-on gate
+(≥ 15 % fewer tests over all replayed commits); it stays off by default.

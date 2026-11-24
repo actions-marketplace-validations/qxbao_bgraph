@@ -53,6 +53,7 @@ An uncertain selection is not an error: it is reported as a widening and the exi
 | `--node EXE` | node executable (overrides `[dynamic_layer] node`) |
 | `--ruby EXE` | Ruby executable (overrides `[dynamic_layer] ruby`) |
 | `--php EXE` | PHP executable (overrides `[dynamic_layer] php`) |
+| `--go EXE` | go command (overrides `[dynamic_layer] go`) |
 | `--trust-native-env` | as `[dynamic_layer] trust_native_env = true` |
 
 Without `--dynamic`, `bgraph.toml` decides.
@@ -66,7 +67,7 @@ bgraph affected [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...
 | Flag | Meaning |
 |---|---|
 | `--json` | print the [selection as JSON](#json-output) |
-| `--failed ID,...` | test unit IDs that failed in the previous run; they are always selected if they still exist. A sub-unit ID `<unit>#<sub>` as listed under `narrowed` (PHP: `<dir>::php#<test file>`) selects its unit, and the dynamic layer keeps that sub-unit (a test class for JVM and .NET, a test file for PHP; a Python, Node or Ruby test file for any `<file>#<test>`) |
+| `--failed ID,...` | test unit IDs that failed in the previous run; they are always selected if they still exist. A sub-unit ID `<unit>#<sub>` as listed under `narrowed` (PHP: `<dir>::php#<test file>`, Go: `go:<dir>#<TestName>`) selects its unit, and the dynamic layer keeps that sub-unit (a test class for JVM and .NET, a test file for PHP, a top-level test function for Go; a Python, Node or Ruby test file for any `<file>#<test>`) |
 
 Text output lists the scope, the base, the number of changed files, each widening (reason, path, tier, scope, detail
 and suggestion), warnings, the selected tests with their first reason, and the units removed by the dynamic layer.
@@ -238,8 +239,8 @@ default branch, see [`ci/record-github-actions.yml`](ci/record-github-actions.ym
 ## `record`
 
 ```text
-bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
-              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE]
+bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
+              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE]
               [--trust-native-env] [--json] [--quiet]
 ```
 
@@ -248,8 +249,8 @@ Runs test units with a dependency collector and stores the records of the [dynam
 | Flag | Default | Meaning |
 |---|---|---|
 | `--eco` | `[dynamic_layer] ecosystems`, else every ecosystem with test units | record one ecosystem |
-| `--units GLOB` | all | only units matching the glob (PHP: the project unit `<dir>::php` or its test files `<dir>::php#<file>`) |
-| `--jobs N` | Python, Ruby and PHP: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
+| `--units GLOB` | all | only units matching the glob (PHP: the project unit `<dir>::php` or its test files `<dir>::php#<file>`; Go: the package `go:<dir>` or its functions `go:<dir>#<Name>`) |
+| `--jobs N` | Python, Ruby, PHP and Go: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
 | `--timeout D` | `10m` | per unit (per build for JVM, per test host for .NET); a unit that times out gets an incomplete record |
 | `--allow-dirty` | off | record a working tree that differs from `HEAD` |
 | `--out FILE` | the state directory | write the records to a JSONL file instead (import elsewhere with `bgraph dynamic import`) |
@@ -267,6 +268,10 @@ alone as the runner adapter does, with the collector prepended through an ini fi
 `coverage,develop` mode; the `--php` executable must load Xdebug 3 and have no `auto_prepend_file`, see
 [dynamic layer §11.4](dynamic-layer.md#114-collector).
 
+Go (`--eco go`) builds one coverage-instrumented test binary per package and runs each top-level test function alone,
+from the package directory, with `GOCOVERDIR` set; `GOFLAGS` applies to the build (set build tags there: records made
+with `--build-args` are not used at selection time), see [dynamic layer §12.4](dynamic-layer.md#124-collector).
+
 The summary lists the commit, units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
 toolchain addons accepted (Node) and the incomplete reasons. Exit code `0` even when some units failed or are incomplete.
 
@@ -279,13 +284,13 @@ cache, restore the newest records on pull requests.
 
 ```text
 bgraph dynamic import [--root DIR] FILE
-bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--json]
+bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env] [--json]
 ```
 
 - `import` merges a records file (from `record --out`) into the store, for example records made by CI on the main branch.
 - `status` reports, per ecosystem, the store, the number of records and recorded units, records of the current
   environment, records usable at `HEAD` (and why the others are not) and the incomplete reasons. Without `--eco` it
-  reports Python, Node, Ruby and PHP when they have records or test units; with `--json`, an object for `--eco`, else an array.
+  reports Python, Node, Ruby, PHP and Go when they have records or test units; with `--json`, an object for `--eco`, else an array.
 
 ## `mcp`
 
