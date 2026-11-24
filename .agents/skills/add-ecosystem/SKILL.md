@@ -224,23 +224,11 @@ against a small program that opens a fresh `Index` and calls `Select` N times on
 binaries, and count git processes with `GIT_TRACE`: on Windows a spawned git costs tens of milliseconds and is usually
 the real cost (a `git cat-file` per run to read symlink targets was the "20 % slower select" of the symlink change).
 
-### Dynamic layer for a new ecosystem (lessons from the JVM and .NET class layers)
+### Dynamic layer
 
-- **Prefer the runtime's own coverage over custom tracing** when it exists and needs no extra package (.NET:
-  Microsoft.CodeCoverage via `--collect "Code Coverage"`, Cobertura parsed in Go). Line coverage survives JIT inlining and
-  avoids shipping a helper; an EventPipe + PDB prototype was 4.5× slower to record and polluted by test discovery.
-- **Measure the record before trusting it**: compare per-class dependency counts against a spike. A median four times higher
-  than expected was the test framework running other classes' data in discovery (xUnit pre-enumerated theories).
-- **Kill the whole process tree on timeout** (`cmd.Cancel` with `taskkill /T` on Windows, `WaitDelay`): test runners start
-  hosts that inherit the output pipes, and `Wait` otherwise blocks forever on a hung host.
-- **Repository build tweaks leak into recording**: a repo-enabled coverage tool that rewrites assemblies on disk
-  (coverlet.msbuild) must be switched off for parallel recording runs.
-- **Multi-target projects**: record every framework, union the dependencies, and only over the frameworks where the class
-  exists (its full-suite run per framework says so); a framework that cannot run makes the class list untrustworthy.
-- **Path maps are shared**: deterministic builds of third-party packages also report `/_/...` paths; only map them into the
-  repository when the tree has the file (or it is generated under one of its projects).
-- **Evaluate with the T2 oracle of the phase** (killed mutants, class verdicts from the runner's reports), plus the guard
-  over 500 first-parent commits; record the guard's refusals by category.
+A dynamic layer (recorded dependencies that narrow the static selection) is a separate phase with its own skill,
+`add-dynamic-layer`: start it only after the static layer has met its bar, and only when the worth-it check there says
+there is room to narrow. Note the static median selection and full rate in the phase report; they are its first input.
 
 ## 4. Closing the phase
 
