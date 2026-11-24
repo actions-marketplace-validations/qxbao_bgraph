@@ -30,7 +30,7 @@ import (
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-4+swift-5"
+const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-4+swift-6"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {

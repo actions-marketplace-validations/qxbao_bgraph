@@ -41,9 +41,7 @@ func Scan(src []byte) model.ScanResult {
 			case literalArgument(ts[arg:]):
 				literals[arg] = true
 			default:
-				if !literalFileURL(ts[arg:]) && !bundleResource(ts[arg:]) {
-					fileUnknown = true
-				}
+				fileUnknown = fileUnknown || (!literalFileURL(ts[arg:]) && !bundleResource(ts[arg:]))
 			}
 		}
 	}
@@ -107,7 +105,15 @@ func fileAPI(ts []Token, i int) bool {
 		switch name {
 		case "contentsOf":
 			return fileContentsInitializer(ts[:i])
-		case "fileURLWithPath", "contentsOfFile", "contentsAtPath", "atPath",
+		case "at":
+			if i < 2 || !tokenIs(ts[i-1], Punctuation, "(") {
+				return false
+			}
+			switch ts[i-2].Text {
+			case "contentsOfDirectory", "enumerator", "removeItem", "createDirectory", "trashItem":
+				return true
+			}
+		case "fileURLWithPath", "filePath", "contentsOfFile", "contentsAtPath", "atPath",
 			"ofItemAtPath", "destinationOfSymbolicLinkAtPath", "forReadingFrom", "forWritingTo", "fromPath", "toPath":
 			return true
 		}
@@ -125,8 +131,9 @@ func fileContentsInitializer(prefix []Token) bool {
 		return false
 	}
 	n := len(prefix) - 2
-	if n >= 2 && prefix[n].Text == "init" && prefix[n-1].Text == "." {
-		n -= 2
+	if n >= 1 && prefix[n].Text == "init" && prefix[n-1].Text == "." {
+		// A contextually typed .init(contentsOf:) can be a Foundation file read.
+		return true
 	}
 	switch prefix[n].Text {
 	case "Data", "NSData", "String", "NSString", "NSDictionary", "NSArray", "NSAttributedString":
@@ -136,17 +143,48 @@ func fileContentsInitializer(prefix []Token) bool {
 }
 
 func literalArgument(ts []Token) bool {
-	return len(ts) > 1 && ts[0].Kind == String && (ts[1].Text == "," || ts[1].Text == ")")
+	return len(ts) > 1 && ts[0].Kind == String && operandEnd(ts[1:])
 }
 
 func literalFileURL(ts []Token) bool {
-	return len(ts) > 4 && tokenIs(ts[0], Word, "URL") && tokenIs(ts[1], Punctuation, "(") &&
-		tokenIs(ts[2], Word, "fileURLWithPath") && tokenIs(ts[3], Punctuation, ":") && literalArgument(ts[4:])
+	return len(ts) > 5 && tokenIs(ts[0], Word, "URL") && tokenIs(ts[1], Punctuation, "(") &&
+		tokenIs(ts[2], Word, "fileURLWithPath") && tokenIs(ts[3], Punctuation, ":") &&
+		ts[4].Kind == String && tokenIs(ts[5], Punctuation, ")") && operandEnd(ts[6:])
 }
 
 func bundleResource(ts []Token) bool {
-	return len(ts) > 2 && tokenIs(ts[0], Word, "Bundle") && tokenIs(ts[1], Punctuation, ".") &&
-		tokenIs(ts[2], Word, "module")
+	// A direct lookup for a literal basename stays inside the resource bundle.
+	// A URL derived from that lookup may walk outside it.
+	if len(ts) < 15 || !matchesTokens(ts, "Bundle", ".", "module", ".", "url", "(", "forResource", ":") ||
+		!simpleResourceName(ts[8]) || !matchesTokens(ts[9:], ",", "withExtension", ":") ||
+		(!simpleResourceName(ts[12]) && !tokenIs(ts[12], Word, "nil")) || !tokenIs(ts[13], Punctuation, ")") {
+		return false
+	}
+	end := ts[14:]
+	if len(end) > 0 && tokenIs(end[0], Punctuation, "!") {
+		end = end[1:]
+	}
+	return operandEnd(end)
+}
+
+func matchesTokens(ts []Token, parts ...string) bool {
+	if len(ts) < len(parts) {
+		return false
+	}
+	for i, part := range parts {
+		if ts[i].Kind > Punctuation || ts[i].Text != part {
+			return false
+		}
+	}
+	return true
+}
+
+func simpleResourceName(t Token) bool {
+	return t.Kind == String && t.Text != "." && t.Text != ".." && !strings.ContainsAny(t.Text, "/\\")
+}
+
+func operandEnd(ts []Token) bool {
+	return len(ts) > 0 && (tokenIs(ts[0], Punctuation, ",") || tokenIs(ts[0], Punctuation, ")"))
 }
 
 func processAPI(word string) bool {

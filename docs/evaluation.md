@@ -152,7 +152,8 @@ Swift's three XCTest suites ran in Linux arm64 with Swift 6.2.1. The evaluation 
 run-loop stall in Docker Desktop, applied to both baselines and all mutant runs. Swift Collections used its release
 suite, which excludes 24 debug-only cases. Four mutants failed to compile and were excluded. The pinned runs selected
 the whole indexed suite. A separate native fixture verified that the generated command skips the unaffected target
-and still runs tests declared in a linked library.
+and still runs tests declared in a linked library. Linux CI repeats this check for XCTest and Swift Testing using the
+same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.sh)
 
 ### Native-tool and provider checks
 

@@ -1,0 +1,32 @@
+A contextually typed Foundation initializer can read a computed path in a sibling project.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.testTarget(name: "CoreSuite"), .testTarget(name: "OtherSuite")])
+-- base/Tests/CoreSuite/Tests.swift --
+import Foundation
+import XCTest
+final class ReaderTests: XCTestCase {
+    func testData() throws {
+        let url = URL(string: ProcessInfo.processInfo.environment["FIXTURE_URL"]!)!
+        let data: Data = try .init(contentsOf: url)
+        XCTAssertFalse(data.isEmpty)
+    }
+}
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/check.test.ts --
+import { value } from './value'
+void value
+-- base/web/src/value.ts --
+export const value = 1
+-- head/web/src/value.ts --
+export const value = 2
+-- want --
+select web/src/check.test.ts
+select swift:.::test:CoreSuite
+noselect swift:.::test:OtherSuite
+widen dynamic_import
+notfull

@@ -40,3 +40,35 @@ func TestScopedSwiftImports(t *testing.T) {
 		t.Fatalf("source imports: %+v", result)
 	}
 }
+
+func TestComputedFoundationFileOperands(t *testing.T) {
+	for _, code := range []string{
+		`let data: Data = try .init(contentsOf: file)`,
+		`let data = try Data(contentsOf: URL(fileURLWithPath: "data").appending(path: name))`,
+		`let data = try Data(contentsOf: Bundle.module.resourceURL!.deletingLastPathComponent().appending(path: name))`,
+		`let data = try Data(contentsOf: Bundle.module.url(forResource: "base", withExtension: nil)!.appending(path: name))`,
+		`let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)`,
+	} {
+		found := false
+		for _, ref := range Scan([]byte(code)).Imports {
+			found = found || (ref.Kind == model.ImportRead && ref.Dynamic && ref.Spec == "")
+		}
+		if !found {
+			t.Errorf("computed file operand was not reported in %s", code)
+		}
+	}
+}
+
+func TestDirectFoundationFileOperandsStayPrecise(t *testing.T) {
+	for _, code := range []string{
+		`let data = try Data(contentsOf: URL(fileURLWithPath: "./data.bin"))`,
+		`let data = try Data(contentsOf: Bundle.module.url(forResource: "base", withExtension: "txt")!)`,
+		`values.append(contentsOf: others)`,
+	} {
+		for _, ref := range Scan([]byte(code)).Imports {
+			if ref.Kind == model.ImportRead && ref.Dynamic {
+				t.Errorf("direct operand widened in %s: %+v", code, ref)
+			}
+		}
+	}
+}

@@ -18,7 +18,7 @@ import (
 
 const (
 	Runner          = "swift"
-	AnalyzerVersion = "swift-6"
+	AnalyzerVersion = "swift-7"
 )
 
 type Eco struct{}

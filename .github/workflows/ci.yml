@@ -97,6 +97,12 @@ jobs:
           go build -trimpath -ldflags "-X main.version=0.0.0-ci" -o "$RUNNER_TEMP/bgraph-bin/$exe" ./cmd/bgraph
           echo "binary=$RUNNER_TEMP/bgraph-bin/$exe" >> "$GITHUB_OUTPUT"
 
+      - name: Run generated SwiftPM command
+        if: runner.os == 'Linux'
+        env:
+          BGRAPH_BINARY: ${{ steps.build.outputs.binary }}
+        run: bash evalkit/repro/swift-runner.sh "$BGRAPH_BINARY"
+
       # A fixture repository whose last commit changes package a only: the selection is `go test ./a`.
       - name: Create fixture repository
         id: fixture
