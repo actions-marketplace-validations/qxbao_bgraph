@@ -1220,8 +1220,10 @@ process of the tree. In each process it:
   decide which files exist, which additions, deletions and renames change, and those are refused. Reads of the runner's
   configuration files are dependencies. At shutdown a probe checks that the proxy is still the `file://` wrapper;
 - monitors, with Xdebug's function monitor, `proc_open`, `exec`, `shell_exec`, `system`, `passthru`, `popen`, `mail`,
-  `pcntl_fork`, `pcntl_exec`, `dl`, `FFI::cdef`, `FFI::load`, `FFI::scope`, `xdebug_start_code_coverage`,
-  `xdebug_stop_code_coverage` and the `pcov` functions.
+  `pcntl_fork`, `pcntl_exec`, `dl`, `FFI::cdef`, `FFI::load`, `FFI::scope`; `xdebug_start_code_coverage`,
+  `xdebug_stop_code_coverage`, `xdebug_set_filter`, `xdebug_start_function_monitor`, `xdebug_stop_function_monitor` and
+  the `pcov` functions (another coverage user); and `php_strip_whitespace`, `highlight_file` and `show_source`, which read
+  a file without the `file://` wrapper (allowed only from the runner's own package).
 
 Attribution: paths are made repository-relative (outside the repository and inside a vendor directory, `.git` or
 `node_modules`: the environment's); a tracked file is a dependency; a path that does not exist is dropped (additions are
@@ -1233,8 +1235,8 @@ The record is **incomplete** when: a process is started by anything other than t
 libraries, `shell_exec` included); a process the runner started (PHPUnit's process isolation) wrote no output, or was
 not a direct child (a shell or wrapper in between), or the number of outputs differs from the launches; more than one
 process wrote output as the test process; the process forks, replaces itself, loads an extension with `dl` or calls FFI;
-another coverage user is active (`pcov.enabled`, coverage started before the collector, a monitored coverage call by the
-tests); the `file://` proxy was replaced or removed; the collector could not install itself; a process wrote no output
+another coverage user is active (`pcov.enabled`, coverage started before the collector, a monitored coverage, filter or
+monitor call by the tests); a file is read by `php_strip_whitespace`, `highlight_file` or `show_source`; the `file://` proxy was replaced or removed; the collector could not install itself; a process wrote no output
 (a crash, `exit` in a destructor); an untracked repository file that existed before the run was included, read or
 stat'ed; the process wrote a file outside the repository (or into a vendor directory) and its own temporary
 directory; it read or included a file outside the repository that another test file wrote during the same recording; it

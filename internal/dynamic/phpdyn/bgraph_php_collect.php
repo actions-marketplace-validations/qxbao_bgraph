@@ -380,7 +380,8 @@ final class BgraphPhpFileProxy
         xdebug_start_function_monitor([
             'proc_open', 'exec', 'shell_exec', 'system', 'passthru', 'popen', 'mail', 'mb_send_mail',
             'pcntl_fork', 'pcntl_rfork', 'pcntl_forkx', 'pcntl_exec', 'dl', 'FFI::cdef', 'FFI::load', 'FFI::scope',
-            'xdebug_start_code_coverage', 'xdebug_stop_code_coverage',
+            'xdebug_start_code_coverage', 'xdebug_stop_code_coverage', 'xdebug_set_filter', 'xdebug_start_function_monitor',
+            'xdebug_stop_function_monitor', 'php_strip_whitespace', 'highlight_file', 'show_source',
             'pcov\start', 'pcov\stop', 'pcov\clear',
         ]);
         $c::$covering = true;
@@ -442,10 +443,25 @@ final class BgraphPhpFileProxy
                 switch ($fn) {
                     case 'xdebug_start_code_coverage':
                     case 'xdebug_stop_code_coverage':
+                    case 'xdebug_set_filter':
+                    case 'xdebug_start_function_monitor':
+                    case 'xdebug_stop_function_monitor':
                     case 'pcov\\start':
                     case 'pcov\\stop':
                     case 'pcov\\clear':
                         $c::incomplete('another coverage user: ' . $fn . ' at ' . $where);
+                        break;
+                    case 'php_strip_whitespace':
+                    case 'highlight_file':
+                    case 'show_source':
+                        // These read a file without the file:// wrapper.
+                        $byRunner = false;
+                        foreach ($runners as $r) {
+                            $byRunner = $byRunner || str_starts_with($norm($f), $r);
+                        }
+                        if (!$byRunner) {
+                            $c::incomplete('reads a file without the stream wrapper (' . $fn . ') at ' . $where);
+                        }
                         break;
                     case 'pcntl_fork':
                     case 'pcntl_rfork':

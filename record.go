@@ -409,7 +409,7 @@ func reasonKey(why string) string {
 		"starts a process (", "another coverage user: ", "forks the process (", "replaces the process (pcntl_exec) at ",
 		"loads a PHP extension (dl) at ", "calls native code through FFI at ", "the runner started ",
 		"lists a test file that is not tracked: ", "lists a test file outside the configured test directories: ", "test file ",
-		"listing the test files: ", "malformed line table for ", "writes a file outside the repository and its temporary directory: ",
+		"listing the test files: ", "malformed line table for ", "reads a file without the stream wrapper (", "writes a file outside the repository and its temporary directory: ",
 		"reads a file written into the vendor directory after composer install: ", "reads shared state another test file wrote: "} {
 		if strings.HasPrefix(why, pre) {
 			return strings.TrimSpace(pre)
