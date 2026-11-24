@@ -32,6 +32,7 @@ commit as the feature:
 | PHP | Composer project | – | – | [php](ecosystems/php.md) |
 | Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | test files, per changed method | [ruby](ecosystems/ruby.md) |
 | Swift (SwiftPM) | test target or package | – | – | [swift](ecosystems/swift.md) |
+| C and C++ (CMake/CTest, Meson) | registered test or build project | – | – | [C and C++](ecosystems/cpp.md) |
 
 ## New ecosystems
 
@@ -44,7 +45,7 @@ commit as the feature:
 | Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
 | Swift (SwiftPM, `swift test`, `Package.resolved`) | done (unreleased) | 2 | SwiftPM test targets, package fallback for computed manifests, L0 lockfiles | [swift](ecosystems/swift.md) |
 | Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | planned | 2 | Static imports; package granularity; Flutter golden files are test data | |
-| C / C++ (CMake + CTest, Meson) | planned | 3 | Include paths and macros come from the build system: likely target granularity from the build graph, with heavy widening | |
+| C / C++ (CMake + CTest, Meson) | done (unreleased) | 3 | Literal test registrations and build graphs narrow by test name. Computed build logic selects the entire project. | [C and C++](ecosystems/cpp.md) |
 
 ## Build systems and runners inside existing ecosystems
 
@@ -61,6 +62,7 @@ commit as the feature:
 | TUnit (Microsoft.Testing.Platform) | .NET | planned | 3 | Needs `--treenode-filter` in the recorder and the runner; TUnit projects run whole under the class layer today | |
 | Composer scripts and custom PHPUnit/Pest invocations | PHP | planned | 3 | Resolve project-defined launchers, configuration paths and additional suite flags | [php](ecosystems/php.md) |
 | Xcode project and workspace schemes | Swift | planned | 3 | Discover targets and test plans from Xcode projects and map changes to `xcodebuild test` commands | [swift](ecosystems/swift.md) |
+| Native build graph metadata | C and C++ | planned | 3 | Use CMake File API and Meson introspection to narrow configured builds with generated or computed tests, with freshness and configuration checks | [C and C++](ecosystems/cpp.md) |
 
 ## Lockfiles
 
@@ -73,6 +75,7 @@ commit as the feature:
 | Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
 | `composer.lock` to L1 | planned | 3 | L0 today. Compare local and transitive dependency resolution against Composer first. | [lockfiles](lockfiles.md) |
 | `Package.resolved` to L1 | planned | 3 | L0 today. Compare SwiftPM's resolved package dependencies before narrowing. | [lockfiles](lockfiles.md) |
+| `conan.lock` to L1 | planned | 3 | L0 today. Compare Conan's resolved dependency graph under supported build profiles. | [lockfiles](lockfiles.md) |
 
 ## Dynamic layer
 

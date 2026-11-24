@@ -1,0 +1,34 @@
+A test using a native process API can depend on a different project's executable.
+-- base/app/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+enable_testing()
+add_executable(driver driver.c)
+add_executable(other other.c)
+add_test(NAME driver COMMAND driver)
+add_test(NAME other COMMAND other)
+-- base/app/driver.c --
+#include <stdlib.h>
+int main(void) { return system("../../helper/build/tool"); }
+-- base/app/other.c --
+int main(void) { return 0; }
+-- base/helper/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(helper LANGUAGES C)
+enable_testing()
+add_library(shared STATIC shared.c)
+add_executable(tool tool.c)
+target_link_libraries(tool PRIVATE shared)
+add_test(NAME helper COMMAND tool)
+-- base/helper/tool.c --
+int shared(void);
+int main(void) { return shared() != 1; }
+-- base/helper/shared.c --
+int shared(void) { return 1; }
+-- head/helper/shared.c --
+int shared(void) { return 2; }
+-- want --
+select cpp:cmake:app::test:driver
+select cpp:cmake:helper::test:helper
+noselect cpp:cmake:app::test:other
+widen uncertain_scan
+notfull

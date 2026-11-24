@@ -20,6 +20,9 @@ import (
 )
 
 func (r T2Repo) coversRed(sel model.Selection, red string) bool {
+	if r.Eco == "cpp" {
+		return cppCoversRed(sel, red)
+	}
 	if r.Eco != "swift" {
 		return selCovers(sel, red)
 	}

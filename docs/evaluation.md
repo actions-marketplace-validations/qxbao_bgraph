@@ -56,6 +56,7 @@ the real tools:
 | Go packages, imports and embeds | `go list -e -json -test ./...` |
 | PHP projects, autoload roots and runnable suites | `composer show --self`, `composer show --path`, PHPUnit and Pest test listing |
 | SwiftPM packages, test targets and source files | `swift package dump-package`, `swift package describe --type json` |
+| CMake and Meson test registration and target sources | CTest JSON, CMake File API, `meson introspect --tests --targets` |
 | JVM selection superset | Gradle/Maven incremental-build plugin (GIB) |
 | .NET selection superset | dotnet-affected |
 | Node selection superset | Vitest / Jest `--changed` |
@@ -98,10 +99,15 @@ suites run in a Linux arm64 container. Median selection is selected units / all 
 | PHP | 269 (dev 162, holdout 107) | 0 | 0 % | 1.000 | holdout 2.8 % |
 | Ruby | 117 (dev 61, holdout 56); all 836 fetched tasks: 0 violations | 0 | 2 % (holdout 4 %) | 1.000 | 2.6 % (holdout 5.6 %) |
 | Swift | 10 (holdout) | 0 | 40 % | 0.977 | 50 % over the 6 non-full tasks |
+| C and C++ | 86 (holdout) | 0 | 15 % | 1.000 | 4.1 % over the 73 non-full tasks |
 
 Swift's holdout covers six Longtail-SWE repositories. Four tasks widened to the full suite because they changed a global
 input. In the dev set, 13 of 16 tasks could be evaluated. One upstream repository was unavailable, one task used
 generated tests, and one generated a SwiftPM wrapper around an Xcode project outside the committed tree.
+
+The C and C++ holdout evaluated 86 of 100 task rows from pinned SWE-bench datasets. Thirteen widened to full on
+global inputs and 14 had no usable mapping. The dev set evaluated 46 of 53 rows with zero violations. Some zstd
+requirements use the CTest or Meson registration for the same executable or script as a proxy for a benchmark command.
 
 Notes per ecosystem:
 
@@ -149,6 +155,7 @@ Notes per ecosystem:
 | PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
 | Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
 | Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
+| C and C++ | fmt, Catch2 (CTest) | 9 | 0 | 0.750 / 1.000 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -164,6 +171,9 @@ the whole indexed suite. A separate native fixture verified that the generated c
 and still runs tests declared in a linked library. Linux CI repeats this check for XCTest and Swift Testing using the
 same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.sh)
 
+The C and C++ T2 run used two whole-suite CTest baselines per repository. One fmt mutant was excluded because a
+CTest case timed out. A separate CMake and Meson fixture verified both generated commands against native failures.
+
 ### Native-tool and provider checks
 
 | Ecosystem | Result |
@@ -175,6 +185,7 @@ same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.s
 | PHP | 15 revisions across 3 repositories matched the project and a source file in a PSR-4 root reported by Composer. The generated commands ran all three native suites. In a native two-project fixture, changing a Composer path dependency selected its one consumer. |
 | Ruby | rack, dry-types, rake: the test files the runners collect (`RSpec.configuration.files_to_run`, the `Rake::TestTask` file list) are exactly bgraph's units (121 of 121, none missing, none extra) |
 | Swift | On both macOS and Linux arm64 with Swift 6.2.1, 210 package instances parsed statically matched native test metadata, including 65 test targets and 687 source paths. Another 36 instances were covered by whole-package units. Five were unavailable for comparison. |
+| C and C++ | Linux arm64 configured 37 project instances at 26 revisions. The 29 nonempty suites (22 CTest, 7 Meson) were covered by whole-project units at the correct build roots. Eight registered no tests. Separate literal fixtures matched both named tests and both direct source links for each backend. |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay

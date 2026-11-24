@@ -20,6 +20,10 @@ func T2Markdown(q T2Result) string {
 		return r.Repo.Eco == "swift" && (r.Error != "" || r.Errors > 0 || r.Killed+r.Survived == 0)
 	}) {
 		verdict = "INCOMPLETE (missing Swift T2 evidence)"
+	} else if slices.ContainsFunc(q.Repos, func(r T2RepoResult) bool {
+		return r.Repo.Eco == "cpp" && (r.Error != "" || r.Errors > 0 || r.Killed+r.Survived == 0)
+	}) {
+		verdict = "INCOMPLETE (missing C/C++ T2 evidence)"
 	}
 	mode := "re-check on cached oracle"
 	if q.RunTests {

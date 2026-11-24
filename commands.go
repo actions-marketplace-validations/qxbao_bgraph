@@ -16,7 +16,8 @@ type (
 	// caller's environment; ListFile, Batch/Batches and Note as documented in docs/cli.md (`command`).
 	Command = runner.Command
 	// CommandOptions configures Commands: ListDir (where list files are written; "" passes arguments directly),
-	// MaxArgChars (default 8000) and FullThreshold (0 = off; a selected/total unit ratio above it makes the plan full).
+	// MaxArgChars (default 8000), FullThreshold (0 = off; a selected/total unit ratio above it makes the plan full),
+	// and the native runner options BuildDir and BuildConfig.
 	CommandOptions = runner.Options
 )
 

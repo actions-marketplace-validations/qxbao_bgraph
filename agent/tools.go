@@ -144,6 +144,8 @@ type TestCommandsInput struct {
 	PreviouslyFailed []string `json:"previously_failed,omitempty" jsonschema:"ids of test units that failed in the previous run; they are always re-selected"`
 	Limit            int      `json:"limit,omitempty" jsonschema:"cap for the widening/warnings lists (default 200, max 5000); commands are never truncated"`
 	Dynamic          *bool    `json:"dynamic,omitempty" jsonschema:"narrow widened tests with recorded dependencies (true) or never (false); default: bgraph.toml [dynamic_layer]"`
+	BuildDir         string   `json:"build_dir,omitempty" jsonschema:"configured CTest or Meson build directory, relative to each project or absolute; default build"`
+	BuildConfig      string   `json:"build_config,omitempty" jsonschema:"CMake build configuration for multi-config generators"`
 }
 
 // CommandLine is one command of a run plan, with the shell line to run it from the repository root.
@@ -178,7 +180,7 @@ func (t *Tools) TestCommands(ctx context.Context, in TestCommandsInput) (TestCom
 	if err != nil {
 		return TestCommandsOutput{}, err
 	}
-	plan, err := bgraph.Commands(sel, bgraph.CommandOptions{})
+	plan, err := bgraph.Commands(sel, bgraph.CommandOptions{BuildDir: in.BuildDir, BuildConfig: in.BuildConfig})
 	if err != nil {
 		return TestCommandsOutput{}, err
 	}

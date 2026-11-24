@@ -96,7 +96,7 @@ A selected test:
 |---|---|
 | `unit` | unit ID (a test file, `crate::target`, `maven:<dir>`, `go:<dir>`...; see the [ecosystem pages](README.md#ecosystems)) |
 | `project` | the directory the runner runs from |
-| `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`, `phpunit`, `pest`, `swift` |
+| `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`, `phpunit`, `pest`, `swift`, `ctest`, `meson` |
 | `files` | the unit's files (a virtual node for build-level units) |
 | `reasons` | reason chains, each step joined by ` ; `, e.g. `src/a.test.ts --import-> src/util.ts ; src/util.ts (changed)` |
 | `whole` | run the project's whole test suite (the test file set is unknown) |
@@ -123,7 +123,7 @@ A widening:
 ## `command`
 
 ```text
-bgraph command [--root DIR] [--base REF] [--list-dir DIR] [--json] [dynamic flags]
+bgraph command [--root DIR] [--base REF] [--list-dir DIR] [--build-dir DIR] [--build-config NAME] [--json] [dynamic flags]
 ```
 
 Turns the selection into runner commands. Text output starts with `# scope: <scope>` and `# <note>` lines, then one
@@ -132,6 +132,8 @@ shell line per command (`cd <project> && ...` when the project is not the root, 
 | Flag | Meaning |
 |---|---|
 | `--list-dir DIR` | write list files there (Playwright `--test-list`, pytest `@argfile`, Gradle init scripts for class filters) instead of long argument lists |
+| `--build-dir DIR` | configured CTest or Meson build directory, relative to each project or absolute |
+| `--build-config NAME` | configuration for CMake multi-config builds, such as `Debug` or `Release` |
 | `--json` | print the plan as JSON |
 
 JSON plan: `scope`, `commands` (each with `runner`, `project` (working directory), `argv`, optional `env`, `list_file`,

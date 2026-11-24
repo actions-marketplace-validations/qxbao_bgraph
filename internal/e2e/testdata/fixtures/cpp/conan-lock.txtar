@@ -1,0 +1,23 @@
+A Conan lockfile applies to the native build and its selected backend only.
+-- base/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(native LANGUAGES C)
+enable_testing()
+add_executable(t test.c)
+add_test(NAME check COMMAND t)
+-- base/test.c --
+int main(void) { return 0; }
+-- base/conan.lock --
+{"version":"0.5","requires":["dep/1.0"]}
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"1.6.0"}}
+-- base/web/main.test.js --
+import { test } from 'vitest'
+test('web', () => {})
+-- head/conan.lock --
+{"version":"0.5","requires":["dep/2.0"]}
+-- want --
+select cpp:cmake:.::test:check
+noselect web/main.test.js
+widen lock_changed
+scope module

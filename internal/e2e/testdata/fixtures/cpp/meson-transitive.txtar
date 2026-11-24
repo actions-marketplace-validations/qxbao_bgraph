@@ -1,0 +1,26 @@
+Meson test names follow literal subdirectories and target links.
+-- base/meson.build --
+project('sample', 'c')
+core = static_library('core', 'core.c')
+files_for_helper = files('helper.c')
+helper = static_library('helper', files_for_helper, link_with: core)
+subdir('tests')
+-- base/tests/meson.build --
+alpha = executable('test-alpha', ['alpha.c'], link_with: [helper])
+beta = executable('test-beta', 'beta.c')
+test('alpha-registration', alpha)
+test('beta-registration', beta)
+-- base/core.c --
+int core(void) { return 1; }
+-- base/helper.c --
+int core(void); int helper(void) { return core(); }
+-- base/tests/alpha.c --
+int helper(void); int main(void) { return helper() == 1 ? 0 : 1; }
+-- base/tests/beta.c --
+int main(void) { return 0; }
+-- head/core.c --
+int core(void) { return 2; }
+-- want --
+select cpp:meson:.::test:alpha-registration
+noselect cpp:meson:.::test:beta-registration
+notfull

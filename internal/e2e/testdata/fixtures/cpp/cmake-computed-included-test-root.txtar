@@ -1,0 +1,20 @@
+A conditional subdirectory with a nested project declaration belongs to the parent CTest build.
+-- base/outer/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(outer LANGUAGES C)
+enable_testing()
+if((BUILD_TESTING AND ENABLE_CHECKS) OR FORCE_CHECKS)
+    add_subdirectory(child)
+endif()
+-- base/outer/child/CMakeLists.txt --
+project(child LANGUAGES C)
+add_executable(inner_test inner.c)
+add_test(NAME inner COMMAND inner_test)
+-- base/outer/child/inner.c --
+int main(void) { return 0; }
+-- head/outer/child/inner.c --
+int main(void) { return 1; }
+-- want --
+select cpp:cmake:outer::all
+noselect cpp:cmake:outer/child::all
+scope graph

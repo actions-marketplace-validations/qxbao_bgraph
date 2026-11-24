@@ -19,6 +19,7 @@ import (
 	"sync"
 
 	"github.com/qxbao/bgraph/internal/model"
+	cppscan "github.com/qxbao/bgraph/internal/scan/cpp"
 	goscan "github.com/qxbao/bgraph/internal/scan/golang"
 	jsscan "github.com/qxbao/bgraph/internal/scan/js"
 	phpscan "github.com/qxbao/bgraph/internal/scan/php"
@@ -31,7 +32,7 @@ import (
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5+rb-9+swift-6"
+const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5+rb-9+swift-6+cpp-2"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
@@ -119,6 +120,9 @@ func (c *Cache) warn(format string, a ...any) {
 
 // lang picks the scanner by file extension.
 func lang(p string) string {
+	if cppscan.Native(p) {
+		return "cpp"
+	}
 	if phpscan.Source(p) {
 		return "php"
 	}
@@ -206,6 +210,8 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 	}
 	var r model.ScanResult
 	switch l {
+	case "cpp":
+		r = cppscan.Source(b)
 	case "sfc":
 		r = sfcscan.Scan(p, b)
 	case "rs":
