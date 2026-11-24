@@ -118,6 +118,22 @@ func TestNarrowPositive(t *testing.T) {
 	}
 }
 
+// A widened unit named in always_run, as itself or by a sub-unit ID ("<unit>#<test>", from --failed), is kept (Python and Node
+// layers).
+func TestNarrowKeepsAlwaysRun(t *testing.T) {
+	for _, id := range []string{"tests/test_b.py", "tests/test_b.py#test_x"} {
+		sel, ch := fixture()
+		sel.AlwaysRun = []string{id}
+		out := Narrow(sel, ch, params(goodRecords()...))
+		if !slices.Contains(units(out), "tests/test_b.py") || len(out.Narrowed) != 0 {
+			t.Errorf("%s: tests %v narrowed %v", id, units(out), narrowed(out))
+		}
+	}
+	if AlwaysRunUnit(map[string]bool{"tests/test_bb.py#x": true}, "tests/test_b.py") {
+		t.Error("prefix of another unit matched")
+	}
+}
+
 // A precise unit is never removed, even with a record that says it does not load the changed file.
 func TestNarrowNeverRemovesPrecise(t *testing.T) {
 	sel, ch := fixture()
@@ -556,5 +572,26 @@ func TestRecordFormatCompat(t *testing.T) {
 	bad := strings.Replace(string(b), `"data/x.yml"]`, `"../x"]`, 1)
 	if recs, warn := Parse("bad", []byte(bad)); len(recs) != 0 || len(warn) == 0 {
 		t.Fatalf("unclean read path accepted: %v", recs)
+	}
+	// PHP fields: the runner of a file-list record and line tables of a file record.
+	p := Record{Eco: "php", Unit: ".::php#tests/ATest.php", Collector: "php-xdebug-1", Env: "e", Complete: true, Pass: true, Recorded: t0,
+		Deps: map[string]string{"tests/ATest.php": "1", "src/A.php": "2"}, LineCov: map[string]string{"src/A.php": "3-5,9|6-8", "tests/ATest.php": "|"},
+		Runner: "phpunit@11.5.0"}
+	b, err = Encode([]Record{p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	back, warn = Parse("php", b)
+	if len(warn) > 0 || len(back) != 1 || back[0].LineCov["src/A.php"] != "3-5,9|6-8" || back[0].Runner != "phpunit@11.5.0" {
+		t.Fatalf("php round trip: %+v %v", back, warn)
+	}
+	if strings.Contains(old, "line_cov") || strings.Contains(old, "runner") {
+		t.Fatal("old line has php fields")
+	}
+	for _, bad := range []string{strings.Replace(string(b), `3-5,9|6-8`, `3-5,x`, 1), strings.Replace(string(b), `"src/A.php":"3`, `"../A.php":"3`, 1),
+		strings.Replace(string(b), `phpunit@11.5.0`, `phpunit 11`, 1)} {
+		if recs, warn := Parse("bad", []byte(bad)); len(recs) != 0 || len(warn) == 0 {
+			t.Errorf("malformed php record accepted: %s", bad)
+		}
 	}
 }

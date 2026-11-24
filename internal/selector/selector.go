@@ -452,8 +452,11 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	}
 	// Previously failed tests.
 	for _, id := range in.PreviouslyFailed {
+		// A sub-unit ID ("<unit>#<test file or class>", as the dynamic layer lists narrowed sub-units) selects its unit; the
+		// sub-unit ID itself goes to AlwaysRun so that the dynamic layer keeps that sub-unit.
+		uid, _, sub := strings.Cut(id, "#")
 		for _, u := range units {
-			if u.ID == id {
+			if u.ID == id || sub && u.ID == uid {
 				choose(u, "previously_failed", true)
 				s.sel.AlwaysRun = append(s.sel.AlwaysRun, id)
 			}

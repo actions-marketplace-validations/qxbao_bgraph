@@ -191,6 +191,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 	for _, c := range sel.Changed {
 		changed[c] = true
 	}
+	always := dynamic.AlwaysRun(sel)
 	out := sel
 	out.Tests = slices.Clone(sel.Tests)
 	out.Narrowed = slices.Clone(sel.Narrowed)
@@ -200,6 +201,10 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 			continue
 		}
 		keep := func(why string) { out.Tests[i].Dynamic = "class layer kept the whole unit: " + why }
+		if always[t.Unit] {
+			keep("always run (previously failed)")
+			continue
+		}
 		cl, ok := byUnit[t.Unit]
 		if !ok {
 			keep("no class-list record for the current environment")
@@ -245,7 +250,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 		var removed []model.NarrowedTest
 		for _, c := range cl.Classes {
 			r, ok := byUnit[t.Unit+"#"+c]
-			if !ok {
+			if !ok || always[t.Unit+"#"+c] { // always: the class failed in the previous run
 				run[c] = true
 				continue
 			}

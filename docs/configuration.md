@@ -38,7 +38,7 @@ there). Review narrowing entries like code, and re-check them when what they des
 | [`[[generated]]`](#generated) | narrowing | Node, Dart | git-ignored build outputs that code imports |
 | [`[[config]]`](#config) | narrowing | Node | runner-config keys computed in code |
 | [`[[dynamic]]`](#dynamic) | narrowing | Python, Ruby | what dynamic imports of a file can load |
-| [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET, Ruby | enable the record-based dynamic layer |
+| [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET, Ruby, PHP | enable the record-based dynamic layer |
 | [`[lockfile]`](#lockfile) | narrowing at `L2` | Node, Rust, Python | lockfile comparison level |
 | [`[options]`](#options) | – | selector | thresholds |
 
@@ -203,20 +203,21 @@ reason = "require \"mytool/plugins/#{name}\" only loads the bundled plugins"
 
 ## `[dynamic_layer]`
 
-Enables the [dynamic layer](dynamic-layer.md): recorded test dependencies narrow widened selections (and, for JVM, .NET
-and Ruby, precise ones: see [9](dynamic-layer.md#9-jvm-and-net-per-test-class-narrowing) and
-[10](dynamic-layer.md#10-ruby-per-method-narrowing)). Off by default. It
+Enables the [dynamic layer](dynamic-layer.md): recorded test dependencies narrow widened selections (and, for JVM, .NET,
+Ruby and PHP, precise ones: see [9](dynamic-layer.md#9-jvm-and-net-per-test-class-narrowing),
+[10](dynamic-layer.md#10-ruby-per-method-narrowing) and [11](dynamic-layer.md#11-php-per-test-file-narrowing)). Off by default. It
 is a table of its own (not `[dynamic]`) because `[[dynamic]]` is the array of dynamic-import declarations.
 
 | Key | Default | Value |
 |---|---|---|
-| `ecosystems` | `[]` (off) | ecosystems to narrow: `"python"`, `"node"`, `"jvm"`, `"dotnet"`, `"ruby"` |
+| `ecosystems` | `[]` (off) | ecosystems to narrow: `"python"`, `"node"`, `"jvm"`, `"dotnet"`, `"ruby"`, `"php"` |
 | `python` | `"python"` on PATH | interpreter for `bgraph record` and the Python environment fingerprint; a path with a separator is relative to the repository root |
 | `node` | `"node"` on PATH | node executable for `bgraph record` and the Node fingerprint (same rules) |
 | `ruby` | `"ruby"` on PATH | Ruby executable for `bgraph record`, the Ruby fingerprint and the parse check of changed files (same rules); its directory is put first on `PATH` for the recorded test processes |
+| `php` | `"php"` on PATH | PHP executable for `bgraph record` (it must load Xdebug 3), the PHP fingerprint and the tokenizer cross-check of the function-level refinement (same rules) |
 | `trust_native_env` | `false` | native extension modules of the environment do not make a record incomplete; their versions are in the fingerprint. Records made under the other setting are not used. |
 
-The CLI overrides these with `--dynamic` / `--dynamic=false`, `--python`, `--node`, `--ruby` and `--trust-native-env`.
+The CLI overrides these with `--dynamic` / `--dynamic=false`, `--python`, `--node`, `--ruby`, `--php` and `--trust-native-env`.
 
 ```toml
 [dynamic_layer]
