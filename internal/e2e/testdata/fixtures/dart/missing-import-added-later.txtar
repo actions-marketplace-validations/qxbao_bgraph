@@ -1,0 +1,35 @@
+An import whose target is missing in the base is caught when the file is added.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/a.dart --
+import 'b.dart';
+int a() => 1;
+-- base/lib/c.dart --
+int c() => 1;
+-- base/test/a_test.dart --
+import 'package:test/test.dart';
+import 'package:app/a.dart';
+void main() => test('a', () => a());
+-- base/test/c_test.dart --
+import 'package:test/test.dart';
+import 'package:app/c.dart';
+void main() => test('c', () => c());
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/other/test/o_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/lib/b.dart --
+int b() => 1;
+-- want --
+select test/a_test.dart
+noselect other/test/o_test.dart
+notfull

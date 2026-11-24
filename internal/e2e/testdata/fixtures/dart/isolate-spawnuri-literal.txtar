@@ -1,0 +1,26 @@
+Isolate.spawnUri with a literal URI is an edge to the spawned file.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/test/spawn_test.dart --
+import 'package:test/test.dart';
+import 'dart:isolate';
+void main() => test('s', () => Isolate.spawnUri(Uri.parse('worker.dart'), [], null));
+-- base/test/worker.dart --
+import 'package:app/w.dart';
+void main() => w();
+-- base/lib/w.dart --
+void w() {}
+-- base/test/plain_test.dart --
+import 'package:test/test.dart';
+void main() => test('p', () {});
+-- head/lib/w.dart --
+void w() { print(1); }
+-- want --
+scope graph
+nowiden dynamic_import
+select test/spawn_test.dart
+noselect test/plain_test.dart

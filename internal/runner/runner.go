@@ -15,6 +15,7 @@
 //   - rspec, rails, minitest, rake: Ruby test files, one command per (project, runner, Gemfile, -I directories); see ruby.go.
 //   - swift: `swift test` skips unselected test modules in each package; see swift.go.
 //   - ctest, meson: test names in a configured build directory; see cpp.go.
+//   - dart, flutter: test files, one `dart test` / `flutter test` per package (integration tests separately); see dart.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -28,6 +29,7 @@ import (
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/eco/cpp"
+	"github.com/qxbao/bgraph/internal/eco/dart"
 	"github.com/qxbao/bgraph/internal/eco/php"
 	"github.com/qxbao/bgraph/internal/eco/swift"
 	"github.com/qxbao/bgraph/internal/model"
@@ -99,7 +101,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests, phpTests, swiftTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests, phpTests, swiftTests, dartTests []model.SelectedTest
 	var cppTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
@@ -128,6 +130,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == cpp.CTestRunner || t.Runner == cpp.MesonRunner {
 			cppTests = append(cppTests, t)
+			continue
+		}
+		if t.Runner == dart.RunnerDart || t.Runner == dart.RunnerFlutter {
+			dartTests = append(dartTests, t) // one command per package, integration tests apart (dart.go)
 			continue
 		}
 		if t.Runner == "rspec" || t.Runner == "rails" || t.Runner == "minitest" || t.Runner == "rake" {
@@ -240,6 +246,9 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 			return Plan{}, err
 		}
 		plan.Commands = append(plan.Commands, cmds...)
+	}
+	if len(dartTests) > 0 {
+		plan.Commands = append(plan.Commands, dartCommands(dartTests, opt)...)
 	}
 	return plan, nil
 }

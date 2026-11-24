@@ -1,0 +1,30 @@
+A part file changes: the library that includes it, and the tests importing that library, are affected.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/model.dart --
+part 'src/model_part.dart';
+class Model { int get v => partValue(); }
+-- base/lib/src/model_part.dart --
+part of '../model.dart';
+int partValue() => 1;
+-- base/lib/other.dart --
+int other() => 1;
+-- base/test/model_test.dart --
+import 'package:test/test.dart';
+import 'package:app/model.dart';
+void main() => test('m', () => Model().v);
+-- base/test/other_test.dart --
+import 'package:test/test.dart';
+import 'package:app/other.dart';
+void main() => test('o', () => other());
+-- head/lib/src/model_part.dart --
+part of '../model.dart';
+int partValue() => 2;
+-- want --
+scope graph
+select test/model_test.dart
+noselect test/other_test.dart

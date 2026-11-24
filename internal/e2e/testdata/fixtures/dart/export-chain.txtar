@@ -1,0 +1,30 @@
+An export chain: lib/api.dart exports src/a.dart, which exports src/b.dart.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/api.dart --
+export 'src/a.dart' show A, B;
+-- base/lib/src/a.dart --
+export 'b.dart';
+class A {}
+-- base/lib/src/b.dart --
+class B {}
+-- base/lib/c.dart --
+class C {}
+-- base/test/api_test.dart --
+import 'package:test/test.dart';
+import 'package:app/api.dart';
+void main() => test('b', () => B());
+-- base/test/c_test.dart --
+import 'package:test/test.dart';
+import 'package:app/c.dart';
+void main() => test('c', () => C());
+-- head/lib/src/b.dart --
+class B { int x = 1; }
+-- want --
+scope graph
+select test/api_test.dart
+noselect test/c_test.dart

@@ -1,0 +1,39 @@
+Only description/repository/topics and formatting change in pubspec.yaml: no widening (the lib change
+selects its test).
+-- base/pubspec.yaml --
+name: app
+description: An app.
+version: 1.0.0
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/a.dart --
+int a() => 1;
+-- base/lib/b.dart --
+int b() => 1;
+-- base/test/a_test.dart --
+import 'package:test/test.dart';
+import 'package:app/a.dart';
+void main() => test('a', () => a());
+-- base/test/b_test.dart --
+import 'package:test/test.dart';
+import 'package:app/b.dart';
+void main() => test('b', () => b());
+-- head/pubspec.yaml --
+# reformatted
+name: app
+description: The app.
+version: 1.0.0
+repository: https://example.com/app
+topics: [x]
+environment: {sdk: ^3.5.0}
+dev_dependencies:
+  test: ^1.25.0
+-- head/lib/a.dart --
+int a() => 2;
+-- want --
+scope graph
+nowiden manifest_changed
+select test/a_test.dart
+noselect test/b_test.dart

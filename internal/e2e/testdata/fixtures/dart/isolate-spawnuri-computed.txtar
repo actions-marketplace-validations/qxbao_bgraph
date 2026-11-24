@@ -1,0 +1,40 @@
+Isolate.spawnUri with a computed URI: a Dart change in the package selects the importers of the spawning file
+(dynamic_import), not another package's tests.
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/app/lib/runner.dart --
+import 'dart:isolate';
+Future<void> spawn(String script) => Isolate.spawnUri(Uri.file(script), [], null);
+-- base/app/lib/plain.dart --
+int plain() => 1;
+-- base/app/bin/worker.dart --
+void main() {}
+-- base/app/test/runner_test.dart --
+import 'package:test/test.dart';
+import 'package:app/runner.dart';
+void main() => test('r', () => spawn(script));
+final script = ['bin', 'worker'].join('/');
+-- base/app/test/plain_test.dart --
+import 'package:test/test.dart';
+import 'package:app/plain.dart';
+void main() => test('p', () => plain());
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/other/test/o_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/app/bin/worker.dart --
+void main() { print(1); }
+-- want --
+widen dynamic_import
+select app/test/runner_test.dart
+noselect other/test/o_test.dart
+notfull

@@ -88,6 +88,24 @@ func rbLocName(l evalkit.RbTestLoc) locName {
 	return n
 }
 
+// dartLocName: Dart units are test files (unit ID = repo-relative path). Hooks ((setUpAll)/(tearDownAll) without a path) have no
+// file and count as "task"; names located only outside a test file count as notfound.
+func dartLocName(l evalkit.DartTestLoc) locName {
+	n := locName{Name: l.Name, Form: l.Form, Files: l.Files, InPatch: l.InPatch, Units: l.Files, PatchUnits: l.PatchFiles,
+		Via: l.Via, Helpers: l.Helpers, NotUnit: l.NotUnit}
+	switch {
+	case l.Hook:
+		n.Cat = "task"
+	case l.NotFound || l.NotUnit:
+		n.Cat = "notfound"
+	case l.Ambiguous:
+		n.Cat = "ambiguous"
+	default:
+		n.Cat = "unique"
+	}
+	return n
+}
+
 func dotnetLocName(l evalkit.DotnetTestLoc) locName {
 	n := locName{Name: l.Name, Form: l.Form, Class: l.Class, Files: l.Files, Scanned: l.Scanned, InPatch: l.InPatch}
 	switch {
@@ -170,6 +188,12 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
 					for _, l := range x.Locs {
 						r.Names = append(r.Names, rbLocName(l))
+					}
+				} else if eco == "dart" {
+					x := evalkit.DartLocateTask(ctx, dir, idx, t)
+					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
+					for _, l := range x.Locs {
+						r.Names = append(r.Names, dartLocName(l))
 					}
 				} else if eco == "php" {
 					names, e := evalkit.PHPLocateTask(ctx, dir, idx, t)

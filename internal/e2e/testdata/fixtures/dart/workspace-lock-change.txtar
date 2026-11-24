@@ -1,0 +1,55 @@
+A workspace's pubspec.lock resolves every member: all members are widened, not a package outside the workspace.
+-- base/pubspec.yaml --
+name: _ws
+environment:
+  sdk: ^3.6.0
+workspace:
+  - packages/a
+  - packages/b
+-- base/pubspec.lock --
+packages: {}
+sdks:
+  dart: ">=3.6.0 <4.0.0"
+-- base/packages/a/pubspec.yaml --
+name: a
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: any
+-- base/packages/a/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/packages/b/pubspec.yaml --
+name: b
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: any
+-- base/packages/b/test/b_test.dart --
+import 'package:test/test.dart';
+void main() => test('b', () {});
+-- base/packages/c/pubspec.yaml --
+name: c
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/packages/c/pubspec.lock --
+packages: {}
+-- base/packages/c/test/c_test.dart --
+import 'package:test/test.dart';
+void main() => test('c', () {});
+-- head/pubspec.lock --
+packages:
+  test:
+    version: "1.25.8"
+sdks:
+  dart: ">=3.6.0 <4.0.0"
+-- want --
+scope module
+widen lock_changed
+select packages/a/test/a_test.dart
+select packages/b/test/b_test.dart
+noselect packages/c/test/c_test.dart

@@ -1,0 +1,52 @@
+A member's dependency change re-solves the shared resolution: every member is widened.
+-- base/pubspec.yaml --
+name: _ws
+environment:
+  sdk: ^3.6.0
+workspace:
+  - packages/a
+  - packages/b
+-- base/packages/a/pubspec.yaml --
+name: a
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: any
+-- base/packages/a/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/packages/b/pubspec.yaml --
+name: b
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: any
+-- base/packages/b/test/b_test.dart --
+import 'package:test/test.dart';
+void main() => test('b', () {});
+-- base/packages/c/pubspec.yaml --
+name: c
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/packages/c/test/c_test.dart --
+import 'package:test/test.dart';
+void main() => test('c', () {});
+-- head/packages/a/pubspec.yaml --
+name: a
+resolution: workspace
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: any
+dependencies:
+  collection: ^1.19.0
+-- want --
+scope module
+widen manifest_changed
+select packages/a/test/a_test.dart
+select packages/b/test/b_test.dart
+noselect packages/c/test/c_test.dart

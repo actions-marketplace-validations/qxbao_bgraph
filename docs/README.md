@@ -30,3 +30,4 @@
 | Ruby | test file | [ecosystems/ruby.md](ecosystems/ruby.md) |
 | Swift | SwiftPM test target or package | [ecosystems/swift.md](ecosystems/swift.md) |
 | C and C++ | registered test or build project | [ecosystems/cpp.md](ecosystems/cpp.md) |
+| Dart / Flutter | test file | [ecosystems/dart.md](ecosystems/dart.md) |

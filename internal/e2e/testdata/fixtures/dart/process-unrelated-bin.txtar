@@ -1,0 +1,26 @@
+A process launch does not depend on the executables of a package outside its dependencies.
+-- base/unrelated/pubspec.yaml --
+name: unrelated
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/unrelated/bin/x.dart --
+void main() => print('x');
+-- base/unrelated/test/x_test.dart --
+import 'package:test/test.dart';
+void main() => test('x', () {});
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/app/test/gen_test.dart --
+import 'dart:io';
+import 'package:test/test.dart';
+void main() => test('g', () => Process.run('dart', ['--version']));
+-- head/unrelated/bin/x.dart --
+void main() => print('x2');
+-- want --
+noselect app/test/gen_test.dart

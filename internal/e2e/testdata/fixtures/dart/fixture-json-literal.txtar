@@ -1,0 +1,24 @@
+File('test/fixtures/user.json') is relative to the package root (the test working directory).
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/test/parse_test.dart --
+import 'package:test/test.dart';
+import 'dart:io';
+void main() => test('p', () => File('test/fixtures/user.json').readAsStringSync());
+-- base/test/fixtures/user.json --
+{"name": "a"}
+-- base/test/fixtures/other.json --
+{}
+-- base/test/logic_test.dart --
+import 'package:test/test.dart';
+void main() => test('l', () {});
+-- head/test/fixtures/user.json --
+{"name": "b"}
+-- want --
+scope graph
+select test/parse_test.dart
+noselect test/logic_test.dart

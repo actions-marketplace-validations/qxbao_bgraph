@@ -14,6 +14,7 @@ import (
 	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/eco"
 	"github.com/qxbao/bgraph/internal/eco/cpp"
+	"github.com/qxbao/bgraph/internal/eco/dart"
 	"github.com/qxbao/bgraph/internal/eco/dotnet"
 	"github.com/qxbao/bgraph/internal/eco/golang"
 	"github.com/qxbao/bgraph/internal/eco/jvm"
@@ -206,7 +207,7 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 
 // Ecosystems are the supported ecosystems.
 func Ecosystems(rf *rules.File) []eco.Ecosystem {
-	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf), jvm.New(rf), golang.New(rf), php.New(rf), ruby.New(rf), swift.New(), cpp.New()}
+	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf), jvm.New(rf), golang.New(rf), php.New(rf), ruby.New(rf), swift.New(), cpp.New(), dart.New(rf)}
 }
 
 func loadRules(t tree.Tree) (*rules.File, error) {

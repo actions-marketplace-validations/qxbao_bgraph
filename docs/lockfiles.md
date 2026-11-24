@@ -34,6 +34,7 @@ ecosystem's tests.
 | `composer.lock` | PHP | L0 | exact Composer project and its in-repo dependents |
 | `Package.resolved` | Swift | L0 | exact SwiftPM package and its in-repository consumers |
 | `conan.lock` | C and C++ | L0 | enclosing native build projects and native projects below the lockfile's directory |
+| `pubspec.lock` | Dart | L0 | the package; at a pub workspace root, every member |
 
 Lockfiles not listed here are not claimed by any ecosystem and fall under the general rules. JVM builds have no
 lockfile handling: `gradle.lockfile` and `gradle/verification-metadata.xml` are ordinary files of the project that owns

@@ -1,0 +1,35 @@
+`dart run tool:gen` runs an executable of a package in the resolution: a test that launches a process depends on the
+bin/ of every in-repo package its package depends on, not on an unrelated package's bin/.
+-- base/tool/pubspec.yaml --
+name: tool
+environment:
+  sdk: ^3.5.0
+-- base/tool/bin/gen.dart --
+void main() => print('gen');
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+  tool:
+    path: ../tool
+-- base/app/test/gen_test.dart --
+import 'dart:io';
+import 'package:test/test.dart';
+void main() => test('g', () => Process.run('dart', ['run', 'tool:gen']));
+-- base/app/test/plain_test.dart --
+import 'package:test/test.dart';
+void main() => test('p', () {});
+-- base/unrelated/pubspec.yaml --
+name: unrelated
+environment:
+  sdk: ^3.5.0
+-- base/unrelated/bin/x.dart --
+void main() => print('x');
+-- head/tool/bin/gen.dart --
+void main() => print('gen2');
+-- want --
+scope graph
+select app/test/gen_test.dart
+noselect app/test/plain_test.dart

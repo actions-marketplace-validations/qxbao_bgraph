@@ -67,6 +67,8 @@ type T1Result struct {
 	RbW     *RbWide       `json:"ruby_wide,omitempty"` // why the Ruby selection is as big as it is (ecosystem ruby only)
 	CPP     *CPPT1Info    `json:"cpp,omitempty"`
 	Swift   *SwiftT1Info  `json:"swift,omitempty"`
+	Dart    *DartT1Info   `json:"dart,omitempty"`          // Dart oracle details (ecosystem dart only)
+	DartW   *RbWide       `json:"dart_wide,omitempty"`     // why the Dart selection is as big as it is (ecosystem dart only)
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
 	Kind    string        `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
@@ -324,6 +326,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		}
 		ib = newIndexBuilder(rr.mirror, filepath.Join(idir, tag+".index"), t.BaseCommit)
 		ib.allowPromisedBlobs = rr.cfg.Ecosystem == "php"
+		ib.ignoreWhitespace = rr.cfg.Ecosystem == "dart"
 		defer ib.Close()
 	} else {
 		wt = filepath.Join(rr.cfg.Work, "wt", tag)
@@ -397,7 +400,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	touched := map[string]bool{}
 	parts := strings.Split(ns, "\x00")
 	for i := 0; i+1 < len(parts); i += 2 {
-		if rr.cfg.Ecosystem == "php" || rr.cfg.Ecosystem == "swift" || rr.cfg.Ecosystem == "cpp" {
+		if rr.cfg.Ecosystem == "php" || rr.cfg.Ecosystem == "swift" || rr.cfg.Ecosystem == "cpp" || rr.cfg.Ecosystem == "dart" {
 			touched[parts[i+1]] = true
 			continue
 		}
@@ -497,6 +500,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("no_oracle", errors.New(rbInfoDetail(info)))
 		}
+	} else if rr.cfg.Ecosystem == "dart" {
+		dreq, info, err := dartRequired(ctx, dir, res.P, ids, patchFiles(t.TestPatch), t.F2PKind, t.TestCmd)
+		res.Dart = info
+		if err != nil {
+			return skip("dart_oracle", err)
+		}
+		req = dreq
+		res.Required = req
+		if len(req) == 0 {
+			return skip("no_oracle", errors.New(rbInfoDetail(info)))
+		}
 	} else if rr.cfg.Ecosystem == "python" {
 		preq, info, err := pyRequired(ctx, dir, res.P, ids, t.Repo)
 		res.Py = info
@@ -575,6 +589,9 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 	} else if rr.cfg.Ecosystem == "ruby" {
 		res.Missing = rbMissing(req, su, res.Rb, sel.Changed)
 		res.RbW = rbSelStats(sel)
+	} else if rr.cfg.Ecosystem == "dart" {
+		res.Missing = dartMissing(req, su, res.Dart, sel.Changed)
+		res.DartW = rbSelStats(sel)
 	} else if rr.cfg.Ecosystem == "python" {
 		res.Missing = pyMissing(req, su, res.Py, sel.Changed)
 		res.PyW = pySelStats(sel)
@@ -597,6 +614,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			goDiagnose(res.Go)
 		} else if rr.cfg.Ecosystem == "ruby" {
 			rbDiagnose(res.Rb)
+		} else if rr.cfg.Ecosystem == "dart" {
+			dartDiagnose(res.Dart)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
 		} else if rr.cfg.Ecosystem != "rust" && rr.cfg.Ecosystem != "php" && rr.cfg.Ecosystem != "swift" && rr.cfg.Ecosystem != "cpp" {

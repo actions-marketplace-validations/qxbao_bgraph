@@ -30,6 +30,8 @@ var kinds = []model.ImportKind{
 	model.ImportRbPushDir, model.ImportRbRails, model.ImportRbTestPattern, model.ImportRbTestTask, model.ImportRbRubyOpt,
 	model.ImportRbTestLib, model.ImportRbGem, model.ImportRbGemspec, model.ImportRbBundler, model.ImportRbBinPath,
 	model.ImportRbFixturesAll, model.ImportRbLoadPath,
+	model.ImportDartImport, model.ImportDartExport, model.ImportDartPart, model.ImportDartString, model.ImportDartLoad,
+	model.ImportDartProcess,
 }
 
 var kindIdx = func() map[model.ImportKind]byte {

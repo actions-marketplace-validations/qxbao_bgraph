@@ -1,0 +1,34 @@
+A [[generated]] entry names what a missing generated part is built from: only those files select the importer.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/user.dart --
+part 'user.g.dart';
+class User {}
+-- base/lib/plain.dart --
+int plain() => 1;
+-- base/lib/schema/user.json --
+{}
+-- base/test/user_test.dart --
+import 'package:test/test.dart';
+import 'package:app/user.dart';
+void main() => test('u', () => User());
+-- base/test/plain_test.dart --
+import 'package:test/test.dart';
+import 'package:app/plain.dart';
+void main() => test('p', () => plain());
+-- base/bgraph.toml --
+[[generated]]
+outputs = ["lib/**/*.g.dart"]
+sources = ["lib/schema/**"]
+owner = "."
+-- head/lib/plain.dart --
+int plain() => 2;
+-- want --
+scope graph
+nowiden unknown_import
+select test/plain_test.dart
+noselect test/user_test.dart

@@ -1,0 +1,31 @@
+A relative import chain: test -> lib/a.dart -> src/b.dart -> src/c.dart.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/a.dart --
+import 'src/b.dart';
+int a() => b();
+-- base/lib/src/b.dart --
+import 'c.dart';
+int b() => c();
+-- base/lib/src/c.dart --
+int c() => 1;
+-- base/lib/other.dart --
+int other() => 2;
+-- base/test/a_test.dart --
+import 'package:test/test.dart';
+import '../lib/a.dart';
+void main() => test('a', () => a());
+-- base/test/other_test.dart --
+import 'package:test/test.dart';
+import 'package:app/other.dart';
+void main() => test('o', () => other());
+-- head/lib/src/c.dart --
+int c() => 3;
+-- want --
+scope graph
+select test/a_test.dart
+noselect test/other_test.dart

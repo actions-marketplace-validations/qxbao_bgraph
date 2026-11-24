@@ -17,7 +17,8 @@ external evaluation below got a fixture that fails before the fix.
 ### T1: FAIL_TO_PASS
 
 Real bug-fix tasks from SWE-bench-family datasets (SWE-bench Verified, SWE-bench Multilingual, Multi-SWE-bench,
-SWE-bench-Live MultiLang, SWE-Sharp-Bench, [Longtail-SWE](https://huggingface.co/datasets/nebius/Longtail-SWE)) and
+SWE-bench-Live MultiLang, SWE-Sharp-Bench, [Longtail-SWE](https://huggingface.co/datasets/nebius/Longtail-SWE),
+[SWE-rebench V2](https://huggingface.co/datasets/nebius/SWE-rebench-V2)) and
 [BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
 commit P, the fixed commit C (gold patch + test patch) and the list of tests that fail at P and pass at C (FAIL_TO_PASS).
 BugsPHP reconstructs P by restoring the buggy versions of the source files on the fixed tree. C is the recorded fixed
@@ -57,6 +58,7 @@ the real tools:
 | PHP projects, autoload roots and runnable suites | `composer show --self`, `composer show --path`, PHPUnit and Pest test listing |
 | SwiftPM packages, test targets and source files | `swift package dump-package`, `swift package describe --type json` |
 | CMake and Meson test registration and target sources | CTest JSON, CMake File API, `meson introspect --tests --targets` |
+| Dart test files | the suites `dart test` loads in a whole run (JSON reporter) |
 | JVM selection superset | Gradle/Maven incremental-build plugin (GIB) |
 | .NET selection superset | dotnet-affected |
 | Node selection superset | Vitest / Jest `--changed` |
@@ -100,6 +102,7 @@ suites run in a Linux arm64 container. Median selection is selected units / all 
 | Ruby | 117 (dev 61, holdout 56); all 836 fetched tasks: 0 violations | 0 | 2 % (holdout 4 %) | 1.000 | 2.6 % (holdout 5.6 %) |
 | Swift | 10 (holdout) | 0 | 40 % | 0.977 | 50 % over the 6 non-full tasks |
 | C and C++ | 86 (holdout) | 0 | 15 % | 1.000 | 4.1 % over the 73 non-full tasks |
+| Dart / Flutter | 274 (dev 185, holdout 89) | 0 (31 oracle artefacts, hand-classified) | 6 % (holdout 3 %) | 0.850 (holdout 0.849) | 1.1 % (holdout 3.4 %) |
 
 Swift's holdout covers six Longtail-SWE repositories. Four tasks widened to the full suite because they changed a global
 input. In the dev set, 13 of 16 tasks could be evaluated. One upstream repository was unavailable, one task used
@@ -141,6 +144,18 @@ Notes per ecosystem:
   every computed require now also depends on the suffix union of its literal tail, so a wrong evaluation can no longer end in
   a missing target. Selectivity is about 1.0: each test helper loads the whole library, and computed requires (plugin
   loaders, `require name` helpers) fire in 113 of 117 tasks. Median selection time 0.6 s.
+- **Dart / Flutter** (Longtail-SWE and SWE-rebench V2, 291 tasks from 50 repositories, 275 after the 40-per-repository cap;
+  holdout 25 repositories). The locator mapped 17,091 of 17,161 failing-to-passing names to one test file. Each of the 31
+  violations was checked by computing the import closure of the missing test file at the fixed commit: none contains a
+  changed file. 23 come from harness commands that chain packages (`cd a && dart test && cd ../b && …`), so the later
+  packages never ran on the unfixed tree; 5 are tests that fail without a changed file in their closure (timing tests);
+  2 are names shared by several files where the file the test patch touches is selected; 1 regenerates code from a
+  generator before testing while the regenerated files sit in the test patch. Full widenings are CI files
+  (`global_input`), one submodule and three computed loads or unreferenced files outside every package. Selectivity is
+  low because most packages export their whole library through one file that tests import, and a `version` bump in
+  `pubspec.yaml` widens the package and its dependents. Median selection time 645 ms. During the evaluation, relative
+  imports under `lib/` were found to resolve against the library's `package:` URI (`..` stops at `lib/`); both readings
+  now count.
 
 ### T2 mutation summary
 
@@ -156,6 +171,7 @@ Notes per ecosystem:
 | Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
 | Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
 | C and C++ | fmt, Catch2 (CTest), FriBidi (Meson) | 11 | 0 | 0.750 / 1.000 / 1.000 |
+| Dart | petitparser, dart-lang/core (characters, fixnum, os_detect, platform), melos (pub workspace) | 74 | 0 | 1.000 / 0.028 / 0.871 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -175,6 +191,13 @@ The C and C++ T2 run used two whole-suite baselines per repository. One fmt muta
 case timed out. Linux CI includes a fixture that verifies both generated commands against native failures and
 checks that the independent tests do not run. [Runner smoke test](../evalkit/repro/cpp-runner.sh)
 
+Dart's suites ran in the `dart:stable` image (Dart 3.14.1, pinned by digest) with `dart test --reporter json`, giving a
+verdict per test file. 8 mutants did not compile and were excluded. In melos, 39 tests that shell out to pub and git
+already fail at R and were excluded one by one. In the melos workspace, mutants of `conventional_commit` selected the melos
+tests that import it through the workspace, and every red unit among them. Packages that `package:test` itself depends
+on (args, path, collection) were left out: inside such a package, pub resolves the test runner's own dependency to the
+mutated copy, so a mutant breaks `dart test` itself.
+
 ### Native-tool and provider checks
 
 | Ecosystem | Result |
@@ -187,6 +210,7 @@ checks that the independent tests do not run. [Runner smoke test](../evalkit/rep
 | Ruby | rack, dry-types, rake: the test files the runners collect (`RSpec.configuration.files_to_run`, the `Rake::TestTask` file list) are exactly bgraph's units (121 of 121, none missing, none extra) |
 | Swift | On both macOS and Linux arm64 with Swift 6.2.1, 210 package instances parsed statically matched native test metadata, including 65 test targets and 687 source paths. Another 36 instances were covered by whole-package units. Five were unavailable for comparison. |
 | C and C++ | Linux arm64 configured 37 project instances at 26 revisions. The 29 nonempty suites (22 CTest, 7 Meson) were covered by whole-project units at the correct build roots. Eight registered no tests. Separate literal fixtures matched both named tests and both direct source links for each backend. |
+| Dart | 3 repositories, 7 packages: the test files `dart test` loads in a whole run are exactly bgraph's units (66 of 66, none missing, none extra); a `@TestOn('browser')` file skipped on the VM is the one explained extra seen in a probe |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay

@@ -1,0 +1,50 @@
+build.yaml configures code generation: the package and its dependents are widened.
+-- base/gen/pubspec.yaml --
+name: gen
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/gen/build.yaml --
+builders:
+  g:
+    import: package:gen/builder.dart
+    builder_factories: [g]
+    build_extensions: {.dart: [.g.dart]}
+    auto_apply: dependents
+-- base/gen/test/gen_test.dart --
+import 'package:test/test.dart';
+void main() => test('g', () {});
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  gen:
+    path: ../gen
+  test: any
+-- base/app/test/app_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/util/pubspec.yaml --
+name: util
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/util/test/util_test.dart --
+import 'package:test/test.dart';
+void main() => test('u', () {});
+-- head/gen/build.yaml --
+builders:
+  g:
+    import: package:gen/builder.dart
+    builder_factories: [g]
+    build_extensions: {.dart: [.g.dart]}
+    auto_apply: all_packages
+-- want --
+scope module
+widen test_config_changed
+select gen/test/gen_test.dart
+select app/test/app_test.dart
+noselect util/test/util_test.dart

@@ -35,7 +35,7 @@ there). Review narrowing entries like code, and re-check them when what they des
 | Table | Kind | Read by | Purpose |
 |---|---|---|---|
 | [`[[rule]]`](#rule) | widening (`"none"`: narrowing) | all ecosystems | a dependency no import expresses |
-| [`[[generated]]`](#generated) | narrowing | Node | git-ignored build outputs that code imports |
+| [`[[generated]]`](#generated) | narrowing | Node, Dart | git-ignored build outputs that code imports |
 | [`[[config]]`](#config) | narrowing | Node | runner-config keys computed in code |
 | [`[[dynamic]]`](#dynamic) | narrowing | Python, Ruby | what dynamic imports of a file can load |
 | [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET, Ruby | enable the record-based dynamic layer |
@@ -79,6 +79,9 @@ an ID such as `swift:packages/kit::all`. See [Swift](ecosystems/swift.md#address
 For C and C++, use a build project directory or an exact ID such as `cpp:cmake:library::test:parse`.
 See [C and C++](ecosystems/cpp.md#addressing-units-in-bgraphtoml).
 
+For Dart, use a test file, a glob over test files, a package directory, or a whole-package ID such as
+`<dart-all-tests:packages/core>`. See [Dart](ecosystems/dart.md#addressing-units-in-bgraphtoml).
+
 A target that matches no test unit of the current tree (a mistyped or stale directory, a package without tests, a glob
 that matches no unit's file) is a configuration error: when the rule matches a changed file, the selection is `full`
 (`user_rule`) and the detail names the target.
@@ -98,8 +101,8 @@ reason = "not read by any build or test"
 
 ## `[[generated]]`
 
-Build outputs that git ignores but code imports (for example tests importing `"../dist/index.js"`, or a workspace
-package whose `exports` point to `dist/`). Without an entry, such an import is an unresolved import scoped to the package
+Build outputs that git ignores but code imports (for example tests importing `"../dist/index.js"`, a workspace
+package whose `exports` point to `dist/`, or a Dart `part 'user.g.dart'` written by build_runner). Without an entry, such an import is an unresolved import scoped to the package
 that builds it (`unknown_import`, detail `generated_output`): any change in that package selects the importer. An entry
 names the files the output is built from, so only changes to those select the importing tests.
 

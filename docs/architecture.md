@@ -234,7 +234,7 @@ Files in the global widening table affect every test and widen to `full` (`globa
 | `container` | `**/Dockerfile*`, `**/*.dockerfile`, `**/.dockerignore`, `**/docker-compose*.y*ml`, `**/compose*.y*ml` |
 | `build_script` | `**/Makefile`, `**/GNUmakefile`, `**/*.mk`, `**/justfile`, `**/Justfile`, `**/.justfile`, `**/Taskfile.y*ml` |
 | `env` | `**/.env`, `**/.env.*`, `**/.envrc` |
-| `toolchain_pin` | `**/.nvmrc`, `**/.node-version`, `**/.python-version`, `**/rust-toolchain`, `**/rust-toolchain.toml`, `**/global.json`, `**/.tool-versions`, `**/mise.toml`, `**/.mise.toml`, `**/.sdkmanrc`, `**/.java-version`, `**/.ruby-version`, `**/go.work`, `**/go.work.sum` |
+| `toolchain_pin` | `**/.nvmrc`, `**/.node-version`, `**/.python-version`, `**/rust-toolchain`, `**/rust-toolchain.toml`, `**/global.json`, `**/.tool-versions`, `**/mise.toml`, `**/.mise.toml`, `**/.sdkmanrc`, `**/.java-version`, `**/.ruby-version`, `**/go.work`, `**/go.work.sum`, `**/.fvmrc`, `**/.fvm/fvm_config.json` |
 | `workspace_def` | `**/pnpm-workspace.yaml`, `**/lerna.json`, `**/nx.json`, `**/turbo.json`, `rush.json`, `.gitmodules` |
 | `git_attributes` | `**/.gitattributes` |
 | `package_manager_config` | `**/.npmrc`, `**/.yarnrc`, `**/.yarnrc.yml`, `**/.pnpmfile.cjs`, `**/bunfig.toml`, `**/.yarn/**` |

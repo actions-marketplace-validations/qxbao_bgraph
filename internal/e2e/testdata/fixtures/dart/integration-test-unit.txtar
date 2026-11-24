@@ -1,0 +1,34 @@
+integration_test/*_test.dart files of a Flutter package are units (run by a separate flutter test command).
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/lib/main.dart --
+import 'screens/home.dart';
+void main() => home();
+-- base/lib/screens/home.dart --
+void home() {}
+-- base/lib/util.dart --
+int util() => 1;
+-- base/integration_test/app_test.dart --
+import 'package:integration_test/integration_test.dart';
+import 'package:app/main.dart' as app;
+void main() { app.main(); }
+-- base/test/util_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+import 'package:app/util.dart';
+void main() => test('u', () => util());
+-- head/lib/screens/home.dart --
+void home() { print(1); }
+-- want --
+scope graph
+select integration_test/app_test.dart
+noselect test/util_test.dart
