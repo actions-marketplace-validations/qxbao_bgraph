@@ -33,7 +33,7 @@ func Scan(src []byte) model.ScanResult {
 			if name := importedModule(ts[i+2:]); name != "" {
 				out.Imports = append(out.Imports, model.ImportRef{Kind: model.ImportStatic, Spec: name})
 			}
-		case processAPI(t.Text):
+		case processAPI(ts, i):
 			process = true
 		case i+2 < len(ts) && fileAPI(ts, i):
 			arg := i + 2
@@ -187,10 +187,15 @@ func operandEnd(ts []Token) bool {
 	return len(ts) > 0 && (tokenIs(ts[0], Punctuation, ",") || tokenIs(ts[0], Punctuation, ")"))
 }
 
-func processAPI(word string) bool {
-	switch word {
-	case "Process", "Subprocess", "NSTask", "posix_spawn", "posix_spawnp", "execve", "execvp", "execv", "system", "popen", "launchPath", "executableURL":
+func processAPI(ts []Token, i int) bool {
+	switch ts[i].Text {
+	case "Process", "Subprocess", "NSTask", "launchPath", "executableURL":
 		return true
+	case "posix_spawn", "posix_spawnp", "execve", "execvp", "execv", "system", "popen":
+		// C functions count only as a direct call. A member such as
+		// `.system(size:)` in SwiftUI shares the name but launches nothing.
+		return i+1 < len(ts) && tokenIs(ts[i+1], Punctuation, "(") &&
+			(i == 0 || !tokenIs(ts[i-1], Punctuation, "."))
 	}
 	return false
 }
