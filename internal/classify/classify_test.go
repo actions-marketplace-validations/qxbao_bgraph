@@ -50,6 +50,8 @@ func TestGlobal(t *testing.T) {
 		"mise.toml":                        "toolchain_pin",
 		".mise.toml":                       "toolchain_pin",
 		".sdkmanrc":                        "toolchain_pin",
+		"app/.fvmrc":                       "toolchain_pin",
+		".fvm/fvm_config.json":             "toolchain_pin",
 		".java-version":                    "toolchain_pin",
 		".ruby-version":                    "toolchain_pin",
 		"go.work":                          "toolchain_pin",
