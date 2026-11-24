@@ -36,7 +36,7 @@ func GoDynT2Markdown(rs []GoDynT2Result) string {
 	b.WriteString("Packages: selected Go package units (hybrid: those that still run a test function + compile-only ones). Tests: top-level " +
 		"test functions that run (static: every function of a selected package). Violations: an oracle-red package missing, or a red " +
 		"top-level test (whole-package rerun on the mutated tree) of a selected package filtered out.\n\n")
-	b.WriteString("| repo | R | go | packages / tests at R | plain suite s (warm) | records complete / units | record s | killed | narrowed | refused | kept all | errors | median packages static → hybrid (run + compile-only) | median tests static → hybrid | Σ tests static → hybrid | violations | red pkgs not reproduced |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| repo | R | go | packages / tests at R | plain suite s (warm) | records complete / recorded (functions + package lists) | record s | killed | narrowed | refused | kept all | errors | median packages static → hybrid (run + compile-only) | median tests static → hybrid | Σ tests static → hybrid | violations | red pkgs not reproduced |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	var details strings.Builder
 	for _, r := range rs {
 		narrowed, refused, keptAll, errs, viol, notRep := 0, 0, 0, 0, 0, 0
@@ -69,7 +69,7 @@ func GoDynT2Markdown(rs []GoDynT2Result) string {
 		}
 		rec := "-"
 		if s := r.Record.Summary; s != nil {
-			rec = fmt.Sprintf("%d / %d", s.Complete, s.Units)
+			rec = fmt.Sprintf("%d / %d", s.Complete, s.Recorded)
 		} else if r.Record.Reused {
 			rec = fmt.Sprintf("reused (%d usable of %d)", r.Status.Usable, r.Status.Records)
 		}
@@ -89,8 +89,8 @@ func GoDynT2Markdown(rs []GoDynT2Result) string {
 			fmt.Fprintf(&details, "Error: %s\n\n", r.Error)
 		}
 		if s := r.Record.Summary; s != nil {
-			fmt.Fprintf(&details, "Record: %d records (packages and functions), %d complete and passed, %d incomplete, %d failed, %s (plain suite %v ms); incomplete reasons: %s; warnings: %s\n\n",
-				s.Units, s.Complete, s.Incomplete, s.Failed, time.Duration(r.Record.Ms)*time.Millisecond, r.PlainMs, rbHist(s.Reasons), goEsc(strings.Join(s.Warnings, "; ")))
+			fmt.Fprintf(&details, "Record: %d records (test functions and package lists), %d complete and passed, %d incomplete, %d failed, %s (plain suite %v ms); incomplete reasons: %s; warnings: %s\n\n",
+				s.Recorded, s.Complete, s.Incomplete, s.Failed, time.Duration(r.Record.Ms)*time.Millisecond, r.PlainMs, rbHist(s.Reasons), goEsc(strings.Join(s.Warnings, "; ")))
 		}
 		if len(r.PlainFail) > 0 {
 			var pf []string
@@ -110,6 +110,9 @@ func GoDynT2Markdown(rs []GoDynT2Result) string {
 			sort.Strings(fns)
 			if len(m.NotReproduced) > 0 {
 				fns = append(fns, "not reproduced: "+strings.Join(m.NotReproduced, ","))
+			}
+			if len(m.Unattributed) > 0 {
+				fns = append(fns, "UNATTRIBUTED and filtered: "+strings.Join(m.Unattributed, ","))
 			}
 			fmt.Fprintf(&details, "| %s | %s:%d | %s | %s | %s | %d / %d | %d + %d / %d | %d | %s | %s |\n", m.ID, m.File, m.Line, m.Op, strings.Join(m.Red, " "),
 				goEsc(firstN(strings.Join(fns, " "), 300)), m.Static.Packages, m.Static.Tests, m.Hybrid.RunPackages, m.Hybrid.CompileOnly, m.Hybrid.Tests,
@@ -203,7 +206,7 @@ func GoReplayMarkdown(repo string, rs []GoReplayCommit) string {
 				sumHA += c.Hybrid.Tests
 			}
 			if s := c.Record.Summary; s != nil {
-				recUnits += s.Units
+				recUnits += s.Recorded
 				recComplete += s.Complete
 				recMs = append(recMs, int(c.Record.Ms))
 				for k, n := range s.Reasons {
@@ -227,7 +230,7 @@ func GoReplayMarkdown(repo string, rs []GoReplayCommit) string {
 	for _, c := range rs {
 		rec := "-"
 		if s := c.Record.Summary; s != nil {
-			rec = fmt.Sprintf("%d / %d, %d", s.Complete, s.Units, c.Record.Ms/1000)
+			rec = fmt.Sprintf("%d / %d, %d", s.Complete, s.Recorded, c.Record.Ms/1000)
 		}
 		note := c.SameAs
 		if c.Stage != "accepted" {

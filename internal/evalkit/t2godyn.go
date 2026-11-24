@@ -199,6 +199,9 @@ func goTestRun(ctx context.Context, gl *goLayout, units []string, runRe string, 
 		if perr := gl.foldTestJSON(so, res); perr != nil {
 			return res, time.Since(t0), perr
 		}
+		if err != nil && len(res) == n && strings.Contains(tl, "matched no packages") {
+			continue // a module without packages under this build context (connect-go's internal/conformance)
+		}
 		if err != nil && len(res) == n {
 			return res, time.Since(t0), fmt.Errorf("module %s: %v: %s", md, err, firstN(strings.TrimSpace(tl+" "+so), 600))
 		}
@@ -231,6 +234,10 @@ func (gl *goLayout) foldTestJSON(out string, res map[string]*goPkgRun) error {
 		if ev.Test != "" {
 			if !strings.Contains(ev.Test, "/") {
 				switch ev.Action {
+				case "run":
+					if p.Tests[ev.Test] == "" {
+						p.Tests[ev.Test] = "run"
+					}
 				case "pass", "fail", "skip":
 					p.Tests[ev.Test] = ev.Action
 				}
@@ -246,6 +253,28 @@ func (gl *goLayout) foldTestJSON(out string, res map[string]*goPkgRun) error {
 			p.Status = "fail"
 			if ev.FailedBuild != "" {
 				p.Build = ev.FailedBuild
+			}
+		}
+	}
+	return nil
+}
+
+// goResolveUnfinished gives a verdict to every top-level test that started and never ended (the binary exited while it ran or
+// was paused: os.Exit, log.Fatal, a fatal runtime error, a panic in a parallel sibling): it is run alone, and fails when it fails
+// or ends without a verdict again.
+func goResolveUnfinished(ctx context.Context, gl *goLayout, res map[string]*goPkgRun) error {
+	for u, p := range res {
+		for n, a := range p.Tests {
+			if a != "run" {
+				continue
+			}
+			one, _, err := goTestRun(ctx, gl, []string{u}, "^"+regexp.QuoteMeta(n)+"$", 10*time.Minute)
+			if err != nil {
+				return err
+			}
+			p.Tests[n] = "fail"
+			if q := one[u]; q != nil && (q.Tests[n] == "pass" || q.Tests[n] == "skip") {
+				p.Tests[n] = q.Tests[n] + " (alone; unfinished in the package run)"
 			}
 		}
 	}
@@ -403,6 +432,8 @@ func goKeptClass(note string) string {
 			return "whole: a test file of the package changed"
 		case strings.HasPrefix(why, "the static graph reaches it"):
 			return "whole: fixture/embed/cgo edge"
+		case strings.HasPrefix(why, "its tests may read the package's Go sources"):
+			return "whole: tests may read the package's Go sources"
 		case strings.HasPrefix(why, "function list not usable"):
 			return "whole: function list not usable"
 		}
@@ -498,9 +529,12 @@ type GoDynMutant struct {
 	RedFns map[string][]string `json:"red_fns,omitempty"` // red unit -> failing top-level tests in the whole-package rerun
 	// NotReproduced: oracle-red units that passed in the rerun (kept as package-level red, with no function verdicts).
 	NotReproduced []string `json:"not_reproduced,omitempty"`
-	Static        GoSel    `json:"static"`
-	Hybrid        GoSel    `json:"hybrid"`
-	Error         string   `json:"error,omitempty"`
+	// Unattributed: red units without any failing top-level test (build failure, TestMain, a failure after the last test) that
+	// the hybrid selection filters: not a violation by definition, checked by hand.
+	Unattributed []string `json:"unattributed,omitempty"`
+	Static       GoSel    `json:"static"`
+	Hybrid       GoSel    `json:"hybrid"`
+	Error        string   `json:"error,omitempty"`
 }
 
 // GoDynT2Result is the hybrid pass over one repo.
@@ -666,6 +700,11 @@ func RunGoDynT2(ctx context.Context, cfg GoDynConfig, only map[string]bool) GoDy
 				}
 				if err == nil {
 					m.Static, m.Hybrid = goSummarize(st, counts, o.Red, m.RedFns), goSummarize(hy, counts, o.Red, m.RedFns)
+					for _, u := range o.Red {
+						if _, ok := m.Hybrid.Filter[u]; ok && len(m.RedFns[u]) == 0 && !slicesContains(m.NotReproduced, u) {
+							m.Unattributed = append(m.Unattributed, u)
+						}
+					}
 				}
 			}
 			if err != nil {
@@ -674,7 +713,8 @@ func RunGoDynT2(ctx context.Context, cfg GoDynConfig, only map[string]bool) GoDy
 		}
 		cfg.logf("%s %s:%d %s: red %v fns %v; static %d pkgs/%d tests, hybrid %d run+%d compile-only pkgs/%d tests (removed %d)%s%s", m.ID, m.File,
 			m.Line, m.Op, m.Red, m.RedFns, m.Static.Packages, m.Static.Tests, m.Hybrid.RunPackages, m.Hybrid.CompileOnly, m.Hybrid.Tests,
-			len(m.Hybrid.Removed), map[bool]string{true: " VIOLATION " + strings.Join(m.Hybrid.Missed, ","), false: ""}[len(m.Hybrid.Missed) > 0],
+			len(m.Hybrid.Removed), map[bool]string{true: " VIOLATION " + strings.Join(m.Hybrid.Missed, ","), false: ""}[len(m.Hybrid.Missed) > 0]+
+				map[bool]string{true: " UNATTRIBUTED " + strings.Join(m.Unattributed, ","), false: ""}[len(m.Unattributed) > 0],
 			map[bool]string{true: "; skipped: " + m.Hybrid.Skip, false: ""}[m.Hybrid.Skip != ""]+m.Error)
 		res.Mutants = append(res.Mutants, m)
 	}
@@ -708,6 +748,9 @@ func (cfg GoDynConfig) fnVerdict(ctx context.Context, gl *goLayout, idx string, 
 		return v
 	}
 	run, _, err := goTestRun(ctx, gl, o.Red, "", 20*time.Minute)
+	if err == nil {
+		err = goResolveUnfinished(ctx, gl, run)
+	}
 	if err != nil {
 		v.Error = err.Error()
 		return v
@@ -1028,6 +1071,9 @@ func (cfg GoDynConfig) replayOne(ctx context.Context, gix *bgraph.Index, c strin
 			return nil, err
 		}
 		res, _, err := goTestRun(ctx, gl, units, "", 30*time.Minute)
+		if err == nil {
+			err = goResolveUnfinished(ctx, gl, res)
+		}
 		return res, err
 	}
 	atC, err := run(c, units)
