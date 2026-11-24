@@ -286,6 +286,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 		return p.Base.Key(f)
 	}}
 	byUnit := Latest(p.Records, p.Env)
+	always := dynamic.AlwaysRun(sel)
 	changed := map[string]bool{}
 	for _, c := range sel.Changed {
 		changed[c] = true
@@ -299,6 +300,10 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 			continue
 		}
 		keep := func(why string) { out.Tests[i].Dynamic = "class layer kept the whole unit: " + why }
+		if always[t.Unit] {
+			keep("always run (previously failed)")
+			continue
+		}
 		cl, ok := byUnit[t.Unit]
 		if !ok {
 			keep("no class-list record for the current environment")
@@ -363,7 +368,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 					break
 				}
 			}
-			if hit || run[c] {
+			if hit || run[c] || always[t.Unit+"#"+c] { // always: the class failed in the previous run
 				run[c] = true
 				continue
 			}

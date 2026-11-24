@@ -96,7 +96,7 @@ type Options struct {
 }
 
 // DynamicEcosystems are the ecosystems with a dynamic layer (docs/dynamic-layer.md).
-var DynamicEcosystems = []string{"python", "node", "jvm", "dotnet", "ruby"}
+var DynamicEcosystems = []string{"python", "node", "jvm", "dotnet", "ruby", "php"}
 
 // DynamicLayer is the [dynamic_layer] table: the dynamic layer (docs/dynamic-layer.md), off by default. It is a table of its own,
 // not [dynamic], because [[dynamic]] is already the array of dynamic-import declarations and TOML cannot hold both.
@@ -113,6 +113,9 @@ type DynamicLayer struct {
 	// Ruby: the Ruby executable used by `bgraph record` and for the Ruby environment fingerprint (same rules as Python; its
 	// directory is put first on PATH for the recorded test processes). Empty: "ruby".
 	Ruby string
+	// PHP: the PHP executable used by `bgraph record` (it must load Xdebug 3) and, at selection time, for the PHP environment
+	// fingerprint and the tokenizer cross-check of the function-level refinement (same rules as Python). Empty: "php".
+	PHP string
 	// TrustNativeEnv: native extension modules installed in the environment (not CPython's own) do not make a record
 	// incomplete; the environment fingerprint covers their versions.
 	TrustNativeEnv bool
@@ -187,6 +190,7 @@ type rawFile struct {
 		Python         string   `toml:"python"`
 		Node           string   `toml:"node"`
 		Ruby           string   `toml:"ruby"`
+		PHP            string   `toml:"php"`
 		TrustNativeEnv bool     `toml:"trust_native_env"`
 	} `toml:"dynamic_layer"`
 	Lockfile struct {
@@ -423,7 +427,11 @@ func Parse(name string, data []byte) (*File, error) {
 	if strings.ContainsRune(dl.Ruby, 0) || dl.Ruby != strings.TrimSpace(dl.Ruby) {
 		return nil, fmt.Errorf("%s: dynamic_layer.ruby: invalid executable %q", name, dl.Ruby)
 	}
-	f.Dynamic.Python, f.Dynamic.Node, f.Dynamic.Ruby, f.Dynamic.TrustNativeEnv = dl.Python, dl.Node, dl.Ruby, dl.TrustNativeEnv
+	if strings.ContainsRune(dl.PHP, 0) || dl.PHP != strings.TrimSpace(dl.PHP) {
+		return nil, fmt.Errorf("%s: dynamic_layer.php: invalid executable %q", name, dl.PHP)
+	}
+	f.Dynamic.Python, f.Dynamic.Node, f.Dynamic.Ruby, f.Dynamic.PHP, f.Dynamic.TrustNativeEnv = dl.Python, dl.Node, dl.Ruby, dl.PHP,
+		dl.TrustNativeEnv
 	switch lv := raw.Lockfile.Level; lv {
 	case "", LockL0, LockL1, LockL2:
 		f.Lockfile.Level = lv

@@ -215,6 +215,12 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 #   python           : interpreter for `bgraph record` and the environment fingerprint ("python" on PATH by default;
 #                      a path with a separator is relative to the repo root, e.g. ".venv/Scripts/python.exe").
 #   node             : node executable for `bgraph record` and the Node fingerprint ("node" on PATH by default).
+#   php              : PHP executable for `bgraph record --eco php` (it must load Xdebug 3), the PHP fingerprint and the
+#                      tokenizer cross-check of changed files ("php" on PATH by default). The "php" ecosystem narrows a
+#                      selected Composer project to the test files whose recorded run (one process tree per test file,
+#                      docs/dynamic-layer.md §11) included, read, stat'ed or listed a changed file, or executed a changed
+#                      function when every change lies inside function bodies. PHPUnit >= 10 or Pest >= 2 with a PHPUnit
+#                      XML configuration; only modified PHP code files or documentation files.
 #   trust_native_env : native extension modules installed in the environment (not CPython's own) do not make a
 #                      record incomplete; their versions are part of the fingerprint. Default false. (Node: the
 #                      toolchain addons of docs/dynamic-layer.md §8.3 are accepted without it.)
@@ -227,6 +233,7 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # ecosystems = ["python"]
 # python = ".venv/bin/python"
 # node = "node"
+# php = "php"
 # trust_native_env = false
 
 # ---------------------------------------------------------------------------------------------------------------------

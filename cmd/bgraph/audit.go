@@ -66,6 +66,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	python := fs.String("python", "", "interpreter of the dynamic layer (overrides bgraph.toml [dynamic_layer] python)")
 	nodeExe := fs.String("node", "", "node executable of the dynamic layer (overrides bgraph.toml [dynamic_layer] node)")
 	rubyExe := fs.String("ruby", "", "ruby executable of the dynamic layer (overrides bgraph.toml [dynamic_layer] ruby)")
+	phpExe := fs.String("php", "", "php executable of the dynamic layer (overrides bgraph.toml [dynamic_layer] php)")
 	trust := fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -104,7 +105,7 @@ func runAudit(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, Node: *nodeExe, Ruby: *rubyExe, TrustNativeEnv: *trust})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, Node: *nodeExe, Ruby: *rubyExe, PHP: *phpExe, TrustNativeEnv: *trust})
 	if err != nil {
 		return fail(err)
 	}

@@ -2,10 +2,45 @@ package runner
 
 import (
 	"reflect"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/qxbao/bgraph/internal/model"
 )
+
+func TestPHPClassFilter(t *testing.T) {
+	withGOOS(t, "linux")
+	s := model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{
+		{Unit: ".::php", Project: ".", Runner: "phpunit", Config: "phpunit.xml.dist", BinDir: "vendor/bin", ClassFilter: true,
+			Classes: []string{"tests/ATest.php", "-odd/BTest.php"}},
+		{Unit: "none::php", Project: "none", Runner: "pest", Config: "none/phpunit.xml", BinDir: "none/vendor/bin", ClassFilter: true},
+		{Unit: "pest::php", Project: "pest", Runner: "pest", Config: "pest/phpunit.xml", BinDir: "pest/vendor/bin", ClassFilter: true,
+			RunnerPaths: []string{"pest/test"}, Classes: []string{"pest/test/ATest.php"}},
+	}}
+	p, err := Commands(s, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Command{
+		{Runner: "phpunit", Project: ".", Argv: []string{"vendor/bin/phpunit", "--configuration", "phpunit.xml.dist", "tests/ATest.php", "./-odd/BTest.php"},
+			Note: "PHP layer: 2 test files"},
+		{Runner: "pest", Project: "pest", Argv: []string{"vendor/bin/pest", "--configuration", "phpunit.xml", "--test-directory=test", "test/ATest.php"},
+			Note: "PHP layer: 1 test files"},
+	}
+	if !reflect.DeepEqual(p.Commands, want) {
+		t.Fatalf("got %+v", p.Commands)
+	}
+	if !slices.ContainsFunc(p.Notes, func(n string) bool { return strings.Contains(n, "no test file of none::php") }) {
+		t.Fatalf("notes %v", p.Notes)
+	}
+	// Too long for one command line: the unit runs whole, with a note.
+	p, err = Commands(s, Options{MaxArgChars: 70})
+	if err != nil || len(p.Commands) != 2 || len(p.Commands[0].Argv) != 3 ||
+		!slices.ContainsFunc(p.Notes, func(n string) bool { return strings.Contains(n, "do not fit") }) {
+		t.Fatalf("long: %+v %v", p, err)
+	}
+}
 
 func TestPHPCommands(t *testing.T) {
 	withGOOS(t, "linux")

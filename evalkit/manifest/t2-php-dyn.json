@@ -1,0 +1,59 @@
+{
+ "version": 1,
+ "ts": "",
+ "notes": "PHP dynamic layer (docs/dynamic-layer.md section 11): the PHP T2 repos (the cached PHP T2 oracle's killed mutants) plus monolog with mutants generated here. Each checkout is a copy of the PHP T2 checkout or of the evaluation clone with its Composer install (vendor/). The per-file oracle is the JUnit report of the whole suite at M, minus the files red at R.",
+ "repos": [
+  {
+   "name": "schmittjoh/php-option",
+   "dir": "php-option",
+   "eco": "php",
+   "remote": "https://github.com/schmittjoh/php-option.git",
+   "r": "638a154f8d4ee6a5cfa96d6a34dfbe0cffa9566d",
+   "runner": "phpunit",
+   "bin": "vendor/bin/phpunit",
+   "include": ["src/**/*.php"],
+   "mutants": 12,
+   "tries": 60,
+   "seed": "t2-php-v1"
+  },
+  {
+   "name": "ramsey/collection",
+   "dir": "collection",
+   "eco": "php",
+   "remote": "https://github.com/ramsey/collection.git",
+   "r": "344572933ad0181accbf4ba763e85a0306a8c5e2",
+   "runner": "phpunit",
+   "bin": "vendor/bin/phpunit",
+   "include": ["src/**/*.php"],
+   "mutants": 12,
+   "tries": 60,
+   "seed": "t2-php-v1"
+  },
+  {
+   "name": "pestphp/pest-plugin-arch",
+   "dir": "pest-plugin-arch",
+   "eco": "php",
+   "remote": "https://github.com/pestphp/pest-plugin-arch.git",
+   "r": "1cc6b4efa92be695848f49a2dca381aca06f6144",
+   "runner": "pest",
+   "bin": "vendor/bin/pest",
+   "include": ["src/**/*.php"],
+   "mutants": 12,
+   "tries": 60,
+   "seed": "t2-php-v1"
+  },
+  {
+   "name": "Seldaek/monolog",
+   "dir": "monolog",
+   "eco": "php",
+   "remote": "https://github.com/Seldaek/monolog.git",
+   "r": "6d4cf3a1199b8fa9e38fdb540569579354242fc7",
+   "runner": "phpunit",
+   "bin": "vendor/bin/phpunit",
+   "include": ["src/**/*.php"],
+   "mutants": 80,
+   "tries": 260,
+   "seed": "t2-phpdyn-v1"
+  }
+ ]
+}

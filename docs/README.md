@@ -8,7 +8,7 @@
 | [CLI](cli.md) | Commands, flags, JSON output, exit codes, shadow audits, the MCP server |
 | [Coding agents](agents.md) | Making agents run the affected tests: `bgraph agent install`, the MCP tools, the hook, the Go API for agent hosts |
 | [Lockfiles](lockfiles.md) | Lockfile levels L0 / L1 / L2, supported formats, fallbacks |
-| [Dynamic layer](dynamic-layer.md) | Optional narrowing with recorded test dependencies (Python and Node test files, JVM and .NET test classes, Ruby test files per method) |
+| [Dynamic layer](dynamic-layer.md) | Optional narrowing with recorded test dependencies (Python and Node test files, JVM and .NET test classes, Ruby test files per method, PHP test files per function) |
 | [Roadmap](roadmap.md) | Ecosystems, runners, lockfiles and dynamic-layer work that may come next, with status and priority |
 | [Evaluation](evaluation.md) | How soundness is tested (fixtures, FAIL_TO_PASS, mutation, provider checks) and the results |
 | [Benchmarks](benchmarks.md) | Comparison with general code-graph tools (codegraph, GitNexus, graphify) |

@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
+	"github.com/qxbao/bgraph/internal/dynamic/phpdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/eco"
@@ -60,6 +61,8 @@ type Options struct {
 	Node string
 	// Ruby: Ruby executable of the dynamic layer (docs/dynamic-layer.md §10), overriding bgraph.toml [dynamic_layer] ruby.
 	Ruby string
+	// PHP: PHP executable of the dynamic layer (docs/dynamic-layer.md §11), overriding bgraph.toml [dynamic_layer] php.
+	PHP string
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
@@ -75,6 +78,8 @@ type Index struct {
 	nodeProbes nodedyn.ProbeCache
 	// rubyProbes caches the Ruby executable's description (docs/dynamic-layer.md §10.5).
 	rubyProbes rbdyn.ProbeCache
+	// phpProbes caches the PHP executable's probe (docs/dynamic-layer.md §11.5).
+	phpProbes phpdyn.ProbeCache
 }
 
 // Open opens the repo containing root.

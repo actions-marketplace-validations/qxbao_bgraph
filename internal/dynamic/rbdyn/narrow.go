@@ -220,10 +220,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 	for _, c := range sel.Changed {
 		changed[c] = true
 	}
-	always := map[string]bool{}
-	for _, a := range sel.AlwaysRun {
-		always[a] = true
-	}
+	always := dynamic.AlwaysRun(sel)
 	var methods []string
 	for _, c := range p.Changed {
 		for _, s := range c.Members {
@@ -250,7 +247,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 			keep = "whole-project unit: no per-file record"
 		case slices.ContainsFunc(files, func(f string) bool { return changed[f] }):
 			keep = "the test file itself changed"
-		case always[t.Unit]:
+		case dynamic.AlwaysRunUnit(always, t.Unit):
 			keep = "always run (previously failed or new)"
 		case !ok:
 			keep = "no record for the current environment"
