@@ -164,6 +164,7 @@ Notes per ecosystem:
 | PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
 | Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
 | Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
+| Dart | petitparser, dart-lang/core (characters, fixnum, os_detect, platform), melos (pub workspace) | 74 | 0 | 1.000 / 0.028 / 0.871 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -179,6 +180,13 @@ the whole indexed suite. A separate native fixture verified that the generated c
 and still runs tests declared in a linked library. Linux CI repeats this check for XCTest and Swift Testing using the
 same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.sh)
 
+Dart's suites ran in the `dart:stable` image (Dart 3.14.1, pinned by digest) with `dart test --reporter json`, giving a
+verdict per test file. 8 mutants did not compile and were excluded. In melos, 39 tests that shell out to pub and git
+already fail at R and were excluded one by one. In the melos workspace, mutants of `conventional_commit` selected the melos
+tests that import it through the workspace, and every red unit among them. Packages that `package:test` itself depends
+on (args, path, collection) were left out: inside such a package, pub resolves the test runner's own dependency to the
+mutated copy, so a mutant breaks `dart test` itself.
+
 ### Native-tool and provider checks
 
 | Ecosystem | Result |
@@ -190,6 +198,7 @@ same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.s
 | PHP | 15 revisions across 3 repositories matched the project and a source file in a PSR-4 root reported by Composer. The generated commands ran all three native suites. In a native two-project fixture, changing a Composer path dependency selected its one consumer. |
 | Ruby | rack, dry-types, rake: the test files the runners collect (`RSpec.configuration.files_to_run`, the `Rake::TestTask` file list) are exactly bgraph's units (121 of 121, none missing, none extra) |
 | Swift | On both macOS and Linux arm64 with Swift 6.2.1, 210 package instances parsed statically matched native test metadata, including 65 test targets and 687 source paths. Another 36 instances were covered by whole-package units. Five were unavailable for comparison. |
+| Dart | 3 repositories, 7 packages: the test files `dart test` loads in a whole run are exactly bgraph's units (66 of 66, none missing, none extra); a `@TestOn('browser')` file skipped on the VM is the one explained extra seen in a probe |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay

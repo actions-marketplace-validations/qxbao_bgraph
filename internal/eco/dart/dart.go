@@ -26,6 +26,8 @@
 //   - a test depends on every flutter_test_config.dart in its directory and the ancestors up to the package root;
 //   - the test files of a package and of every in-repository package depending on it depend on <dartassets:dir>, which
 //     depends on the paths the package's `flutter:` section names (assets, fonts, shaders): Flutter bundles them;
+//   - when a package of the tree is one the test runners load themselves (path, args, collection...: runnerDeps), the tests
+//     of every package that may resolve it locally depend on <dartrunner:dir>, which depends on its lib/;
 //   - every .dart file of a package with a native-assets hook depends on hook/build.dart and hook/link.dart;
 //   - string literals that name a file or directory relative to the file, the package or the repository root
 //     (fixture_data, a directory as a <dir>/** pattern), package: URIs in literals, interpolated literals with a static
@@ -58,7 +60,7 @@ const (
 )
 
 // AnalyzerVersion: bump whenever the analysis rules change to invalidate stored analysis snapshots.
-const AnalyzerVersion = "dart-7"
+const AnalyzerVersion = "dart-8"
 
 // Eco is the Dart ecosystem.
 type Eco struct {
@@ -146,6 +148,7 @@ func (e *Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.An
 		b.references(f, nil)
 	}
 	b.assets()
+	b.runnerPackages()
 	slices.SortFunc(a.Edges, func(x, y model.Edge) int {
 		if c := strings.Compare(x.From, y.From); c != 0 {
 			return c

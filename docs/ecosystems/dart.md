@@ -62,6 +62,10 @@ anything is selected or widened. Integration tests stay file units.
   stands for every file below it) is a dependency of the tests of that package and of every package in the repository
   that depends on it, directly or transitively: Flutter bundles the assets of all dependencies, and a test loads them by
   key (`AssetImage('logo.png', package: 'brand')`), not by a path a literal names.
+- **The test runner's own dependencies.** When the repository holds a package that `package:test` or `flutter_test`
+  loads (`path`, `args`, `collection`...), pub resolves the runner's copy to the local one: a change to its `lib/` changes
+  `dart test` itself, so every test that may resolve the local copy depends on it (its package, its dependents and their
+  workspaces).
 - **Native-assets hooks.** Every `.dart` file of a package with `hook/build.dart` or `hook/link.dart` depends on them, so
   a hook change reaches the package's tests and every test that imports the package.
 - **String literals that name files.** In every file (tests and the helpers they import), a literal that names an
@@ -157,6 +161,10 @@ whole-package unit ID such as `<dart-all-tests:packages/core>`. A target that ma
 - A declared Flutter asset selects every test of its package and of the packages depending on it, whether or not a test
   loads it.
 - `flutter test` applies only the nearest `flutter_test_config.dart`; bgraph links every ancestor one.
+- A package of the repository that the test runners load themselves (one of the dependencies of `package:test` or
+  `flutter_test`, such as `path`, `args` or `collection`) is a dependency of every test that may resolve the local copy:
+  the tests of the package, of its dependents and of every package sharing a workspace with them, even tests that never
+  import it. The list of runner dependencies is fixed in bgraph and follows the runners' current versions.
 - Flutter `integration_test` commands need a device; their selection is still reported.
 
 ## See also
