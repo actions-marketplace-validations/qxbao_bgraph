@@ -17,7 +17,8 @@ external evaluation below got a fixture that fails before the fix.
 ### T1: FAIL_TO_PASS
 
 Real bug-fix tasks from SWE-bench-family datasets (SWE-bench Verified, SWE-bench Multilingual, Multi-SWE-bench,
-SWE-bench-Live MultiLang, SWE-Sharp-Bench) and [BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
+SWE-bench-Live MultiLang, SWE-Sharp-Bench, [Longtail-SWE](https://huggingface.co/datasets/nebius/Longtail-SWE)) and
+[BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
 commit P, the fixed commit C (gold patch + test patch) and the list of tests that fail at P and pass at C (FAIL_TO_PASS).
 BugsPHP reconstructs P by restoring the buggy versions of the source files on the fixed tree. C is the recorded fixed
 tree. The oracle takes PHPUnit tests recorded as failing or erroring at P and passing at C.
@@ -54,6 +55,7 @@ the real tools:
 | .NET project references | `dotnet msbuild -getItem:ProjectReference` |
 | Go packages, imports and embeds | `go list -e -json -test ./...` |
 | PHP projects, autoload roots and runnable suites | `composer show --self`, `composer show --path`, PHPUnit and Pest test listing |
+| SwiftPM packages, test targets and source files | `swift package dump-package`, `swift package describe --type json` |
 | JVM selection superset | Gradle/Maven incremental-build plugin (GIB) |
 | .NET selection superset | dotnet-affected |
 | Node selection superset | Vitest / Jest `--changed` |
@@ -94,6 +96,11 @@ suites run in a Linux arm64 container. Median selection is selected units / all 
 | .NET | 248 (holdout 75) | 0 (6 oracle artefacts) | 5 % | 0.89 (holdout 0.80) | holdout 4.0 % |
 | Go | 243 (dev 169, holdout 74) | 0 (26 oracle artefacts, hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
 | PHP | 269 (dev 162, holdout 107) | 0 | 0 % | 1.000 | holdout 2.8 % |
+| Swift | 10 (holdout) | 0 | 40 % | 0.977 | 50 % over the 6 non-full tasks |
+
+Swift's holdout covers six Longtail-SWE repositories. Four tasks widened to the full suite because they changed a global
+input. In the dev set, 13 of 16 tasks could be evaluated. One upstream repository was unavailable, one task used
+generated tests, and one generated a SwiftPM wrapper around an Xcode project outside the committed tree.
 
 Notes per ecosystem:
 
@@ -132,6 +139,7 @@ Notes per ecosystem:
 | .NET | Polly, RestSharp | 40 | 0 | 0.239 / 0.923 |
 | Go | hcl, prometheus/common, connect-go | 60 | 0 | 0.389 / 0.100 / 0.200 |
 | PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
+| Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -139,6 +147,12 @@ in-repository import paths now depend on that package.
 
 The three PHP repositories have one runnable project each. The native Composer path-dependency fixture adds a second
 suite to check that an unrelated PHP project stays unselected when the shared package breaks its consumer.
+
+Swift's three XCTest suites ran in Linux arm64 with Swift 6.2.1. The evaluation used a local workaround for a Foundation
+run-loop stall in Docker Desktop, applied to both baselines and all mutant runs. Swift Collections used its release
+suite, which excludes 24 debug-only cases. Four mutants failed to compile and were excluded. The pinned runs selected
+the whole indexed suite. A separate native fixture verified that the generated command skips the unaffected target
+and still runs tests declared in a linked library.
 
 ### Native-tool and provider checks
 
@@ -149,6 +163,7 @@ suite to check that an unrelated PHP project stays unselected when the shared pa
 | .NET | `ProjectReference`: 55 repositories / 151 commits, 9,086 edges outside dotnet/runtime, 0 missing; dotnet/runtime: 0 missing (377 edges, 278 of them covered by an unresolved-construct widening). dotnet-affected: 217 tasks without a real violation; 1 divergence by design (it counts a Markdown file under a docs-site project) |
 | Go | 25 repositories, 50 base commits, 656 modules, 7,234 packages with tests: every package with tests is a unit; 87,926 in-repo import edges and 6,602 embedded files covered. 107 extra units (packages excluded by build constraints on the host OS): over-selection only |
 | PHP | 15 revisions across 3 repositories matched the project and a source file in a PSR-4 root reported by Composer. The generated commands ran all three native suites. In a native two-project fixture, changing a Composer path dependency selected its one consumer. |
+| Swift | On both macOS and Linux arm64 with Swift 6.2.1, 210 package instances parsed statically matched native test metadata, including 65 test targets and 687 source paths. Another 36 instances were covered by whole-package units. Five were unavailable for comparison. |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay

@@ -1,0 +1,197 @@
+{
+ "ecosystem": "swift",
+ "version": 1,
+ "split_rule": "sort repos (lowercased) by ascending sha256(name); walk that order and mark repos holdout until holdout holds \u003e=30% of the T1 tasks and at least 3 repos, the rest dev",
+ "t1_cap_per_repo": 40,
+ "datasets": [
+  {
+   "name": "nebius/Longtail-SWE",
+   "url": "https://huggingface.co/datasets/nebius/Longtail-SWE",
+   "revision": "d208adff5a8d3697c83c91509052bae6ed54b986",
+   "notes": "hard and easy splits, Swift rows with recorded FAIL_TO_PASS results"
+  }
+ ],
+ "repos": [
+  {
+   "name": "awslabs/swift-aws-lambda-runtime",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "googleapis/google-cloud-swift",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "openclaw/imsg",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "Cocoanetics/SwiftMCP",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "hiero-ledger/hiero-sdk-swift",
+   "role": "holdout",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "corveil/crow",
+   "role": "holdout",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy",
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "dodobrands/Peekie",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "fetch-rewards/swift-mocking",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "apple/swift-log",
+   "role": "dev",
+   "t1_tasks": 2,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "steipete/CodexBar",
+   "role": "dev",
+   "t1_tasks": 3,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "hylo-lang/hylo-new",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "vapor/async-kit",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "bretth18/seeleseek",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "swiftlang/swift-java",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "swiftwasm/JavaScriptKit",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "library",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "VernissageApp/VernissageServer",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/easy"
+   ]
+  },
+  {
+   "name": "umputun/agterm",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "application",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  },
+  {
+   "name": "phranck/TUIkit",
+   "role": "dev",
+   "t1_tasks": 1,
+   "replay": false,
+   "kind": "framework",
+   "sources": [
+    "Longtail-SWE/hard"
+   ]
+  }
+ ]
+}

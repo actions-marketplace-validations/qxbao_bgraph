@@ -35,6 +35,7 @@
 #             Go: a module directory selects every package of the module; a package directory (e.g. "internal/api")
 #             selects that package and the packages below it; a glob over .go files selects no Go unit.
 #             PHP: use a project directory or an exact ID such as "services/api::php" (".::php" at the root).
+#             Swift uses a package or test target directory, or an ID such as "swift:packages/kit::test:KitTests".
 #             A target that matches no test unit is a configuration error: the selection becomes full (user_rule).
 #   reason  : free text, shown in explanations. Strongly recommended; nothing checks it.
 # ---------------------------------------------------------------------------------------------------------------------

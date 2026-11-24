@@ -1,0 +1,16 @@
+A standalone Swift file in a Node repository stays with the general ownership rules.
+-- base/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/src/check.test.ts --
+import { value } from './value'
+void value
+-- base/src/value.ts --
+export const value = 1
+-- base/tools/helper.swift --
+func one() {}
+-- head/tools/helper.swift --
+func two() {}
+-- want --
+select src/check.test.ts
+widen unknown_file
+scope module

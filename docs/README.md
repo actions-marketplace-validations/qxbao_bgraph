@@ -26,3 +26,4 @@
 | .NET | MSBuild project | [ecosystems/dotnet.md](ecosystems/dotnet.md) |
 | Go | package | [ecosystems/go.md](ecosystems/go.md) |
 | PHP | Composer project | [ecosystems/php.md](ecosystems/php.md) |
+| Swift | SwiftPM test target or package | [ecosystems/swift.md](ecosystems/swift.md) |

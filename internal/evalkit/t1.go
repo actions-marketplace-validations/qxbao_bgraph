@@ -57,12 +57,13 @@ type T1Result struct {
 	// FixtureReqs: requirements handled by the fixture rule (see CheckRequired), with the satisfying unit.
 	FixtureReqs []FixtureReq `json:"fixture_reqs,omitempty"`
 
-	Rust    *RustT1Info   `json:"rust,omitempty"`          // Rust oracle details (ecosystem rust only)
-	Py      *PyT1Info     `json:"python,omitempty"`        // Python oracle details (ecosystem python only)
-	JVM     *JVMT1Info    `json:"jvm,omitempty"`           // JVM oracle details (ecosystem jvm only)
-	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"`        // .NET oracle details (ecosystem dotnet only)
-	PHP     *PHPT1Info    `json:"php,omitempty"`           // PHP oracle details (ecosystem php only)
-	Go      *GoT1Info     `json:"go,omitempty"`            // Go oracle details (ecosystem go only)
+	Rust    *RustT1Info   `json:"rust,omitempty"`   // Rust oracle details (ecosystem rust only)
+	Py      *PyT1Info     `json:"python,omitempty"` // Python oracle details (ecosystem python only)
+	JVM     *JVMT1Info    `json:"jvm,omitempty"`    // JVM oracle details (ecosystem jvm only)
+	Dotnet  *DotnetT1Info `json:"dotnet,omitempty"` // .NET oracle details (ecosystem dotnet only)
+	PHP     *PHPT1Info    `json:"php,omitempty"`    // PHP oracle details (ecosystem php only)
+	Go      *GoT1Info     `json:"go,omitempty"`     // Go oracle details (ecosystem go only)
+	Swift   *SwiftT1Info  `json:"swift,omitempty"`
 	PyW     *PyWide       `json:"py_wide,omitempty"`       // why the Python selection is as big as it is (ecosystem python only)
 	Overlay string        `json:"rules_overlay,omitempty"` // rules file injected as bgraph.toml (RulesDir), when one applied
 	Kind    string        `json:"kind,omitempty"`          // manifest repo kind (library | framework | application), when the manifest has one
@@ -390,11 +391,11 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		return skip("apply", err)
 	}
 	files := map[string]string{}
-	phpTouched := map[string]bool{}
+	touched := map[string]bool{}
 	parts := strings.Split(ns, "\x00")
 	for i := 0; i+1 < len(parts); i += 2 {
-		if rr.cfg.Ecosystem == "php" {
-			phpTouched[parts[i+1]] = true
+		if rr.cfg.Ecosystem == "php" || rr.cfg.Ecosystem == "swift" {
+			touched[parts[i+1]] = true
 			continue
 		}
 		if parts[i] == "D" {
@@ -444,8 +445,17 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		if len(req) == 0 {
 			return skip("unmapped", nil)
 		}
+	} else if rr.cfg.Ecosystem == "swift" {
+		req, res.Swift, err = swiftRequired(ctx, dir, res.P, ids, touched, t.F2PKind)
+		res.Required = req
+		if err != nil {
+			return skip("swift_oracle", err)
+		}
+		if len(req) == 0 || len(res.Swift.NotFound) > 0 || len(res.Swift.NoOwner) > 0 {
+			return skip("unmapped", fmt.Errorf("names %d, not found %d, ownerless files %d, command results %d", len(ids), len(res.Swift.NotFound), len(res.Swift.NoOwner), res.Swift.CommandResults))
+		}
 	} else if rr.cfg.Ecosystem == "php" {
-		req, res.PHP, err = phpRequired(ctx, dir, res.P, ids, phpTouched, t.F2PKind)
+		req, res.PHP, err = phpRequired(ctx, dir, res.P, ids, touched, t.F2PKind)
 		res.Required = req
 		if err != nil {
 			return skip("php_oracle", err)
@@ -531,6 +541,8 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 		res.Missing = jvmMissing(req, su, res.JVM, sel.Changed)
 	} else if rr.cfg.Ecosystem == "dotnet" {
 		res.Missing = dotnetMissing(req, su, res.Dotnet, sel.Changed)
+	} else if rr.cfg.Ecosystem == "swift" {
+		res.Missing = swiftMissing(req, su, res.Swift)
 	} else if rr.cfg.Ecosystem == "php" {
 		res.Missing = phpMissing(req, su, res.PHP)
 	} else if rr.cfg.Ecosystem == "go" {
@@ -557,7 +569,7 @@ func (rr *repoRunner) runMode(ctx context.Context, t Task, useWT bool) (res T1Re
 			goDiagnose(res.Go)
 		} else if rr.cfg.Ecosystem == "python" {
 			pyDiagnose(ctx, dir, res.P, res.Py)
-		} else if rr.cfg.Ecosystem != "rust" && rr.cfg.Ecosystem != "php" {
+		} else if rr.cfg.Ecosystem != "rust" && rr.cfg.Ecosystem != "php" && rr.cfg.Ecosystem != "swift" {
 			res.Diag = diagnose(ctx, ix.Root(), res.P, res.Missing, sel.Changed)
 		}
 	}

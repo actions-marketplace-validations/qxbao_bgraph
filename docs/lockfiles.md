@@ -31,6 +31,7 @@ ecosystem's tests.
 | `go.sum` | Go | L1 (lines only added) / L0 | lines only added change no build: nothing widens; a removed or changed line widens the module (and the other members of its `go.work`); `vendor/` changes widen their module too |
 | `packages.lock.json` | .NET | L0 | scope: the lockfile's directory |
 | `composer.lock` | PHP | L0 | exact Composer project and its in-repo dependents |
+| `Package.resolved` | Swift | L0 | exact SwiftPM package and its in-repository consumers |
 
 Lockfiles not listed here are not claimed by any ecosystem and fall under the general rules. JVM builds have no
 lockfile handling: `gradle.lockfile` and `gradle/verification-metadata.xml` are ordinary files of the project that owns

@@ -1,0 +1,39 @@
+Computed manifests expose a whole-package unit and conservatively reach local dependents.
+-- base/App/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "App", dependencies: [.package(path: "../Layer")], targets: [.testTarget(name: "Suite", dependencies: [.product(name: "Layer", package: "Layer")])])
+-- base/App/Tests/Suite/Test.swift --
+import XCTest
+-- base/Layer/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = makePackage()
+-- base/Layer/Sources/Layer/Layer.swift --
+import Leaf
+-- base/Layer/Tests/Suite/Test.swift --
+import XCTest
+-- base/Layer/Leaf/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Leaf", products: [.library(name: "Leaf", targets: ["Leaf"])], targets: [.target(name: "Leaf"), .testTarget(name: "LeafChecks", dependencies: ["Leaf"])])
+-- base/Layer/Leaf/Sources/Leaf/Leaf.swift --
+public func value() -> Int { 1 }
+-- base/Layer/Leaf/Tests/LeafChecks/Test.swift --
+import XCTest
+-- base/Spare/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Spare", targets: [.testTarget(name: "Suite")])
+-- base/Spare/Tests/Suite/Test.swift --
+import XCTest
+-- head/Layer/Leaf/Sources/Leaf/Leaf.swift --
+public func value() -> Int { 2 }
+-- want --
+select swift:Layer::all
+select swift:App::test:Suite
+select swift:Layer/Leaf::test:LeafChecks
+noselect swift:Spare::test:Suite
+widen dynamic_import
+warn config_is_code
+notfull

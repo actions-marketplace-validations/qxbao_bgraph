@@ -1,0 +1,28 @@
+A package helper that may run a local executable depends on the tool’s full target closure.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.target(name: "Core"), .target(name: "Other"), .testTarget(name: "CoreSuite", dependencies: ["Core"]), .testTarget(name: "OtherSuite", dependencies: ["Other"])])
+-- base/Sources/Core/Logic.swift --
+import Foundation
+func run() { let p = Process(); p.launchPath = "../Tool/bin/cli" }
+-- base/Sources/Other/Other.swift --
+public func other() -> Int { 1 }
+-- base/Tests/CoreSuite/Tests.swift --
+import XCTest
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/Tool/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Tool", products: [.executable(name: "cli", targets: ["CLI"])], targets: [.executableTarget(name: "CLI", dependencies: ["Helper"]), .target(name: "Helper")])
+-- base/Tool/Sources/CLI/main.swift --
+import Helper
+-- base/Tool/Sources/Helper/Helper.swift --
+public func value() -> Int { 1 }
+-- head/Tool/Sources/Helper/Helper.swift --
+public func value() -> Int { 2 }
+-- want --
+select swift:.::test:CoreSuite
+noselect swift:.::test:OtherSuite
+notfull

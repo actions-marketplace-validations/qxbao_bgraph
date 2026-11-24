@@ -12,6 +12,7 @@
 //   - dotnet: units are MSBuild projects, one `dotnet test <project>` each; see dotnet.go.
 //   - maven, gradle: units are modules/projects built by the build tool; see maven.go and gradle.go.
 //   - go: units are package directories, one `go test ./<dir> ./<dir2>` per module (run in the module directory); see gotest.go.
+//   - swift: `swift test` skips unselected test modules in each package; see swift.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -25,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/eco/php"
+	"github.com/qxbao/bgraph/internal/eco/swift"
 	"github.com/qxbao/bgraph/internal/model"
 )
 
@@ -92,7 +94,7 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, phpTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, phpTests, swiftTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -112,6 +114,10 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == "go" {
 			goTests = append(goTests, t) // units are package directories: dedicated adapter (gotest.go)
+			continue
+		}
+		if t.Runner == swift.Runner {
+			swiftTests = append(swiftTests, t)
 			continue
 		}
 		if t.Runner == "pytest" || t.Runner == "django" {
@@ -205,6 +211,9 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 			return full("PHP project does not have a representable runner command: run the full suite")
 		}
 		plan.Commands = append(plan.Commands, cmds...)
+	}
+	if len(swiftTests) > 0 {
+		plan.Commands = append(plan.Commands, swiftCommands(swiftTests, opt)...)
 	}
 	return plan, nil
 }

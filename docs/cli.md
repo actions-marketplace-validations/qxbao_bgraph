@@ -100,6 +100,7 @@ A selected test:
 | `whole` | run the project's whole test suite (the test file set is unknown) |
 | `dir` | the directory the unit's tests live in, when the unit is narrower than its project (Go: the package directory) |
 | `package`, `config` | ecosystem-specific runner addressing details (for example the Cargo package for `-p`, the Go import path, the pytest config file or Django driver; see the ecosystem pages) |
+| `test_modules` | declared SwiftPM test modules used to build the package's `swift test --skip` argument |
 | `widened` | selected only because of a widening; only such units can be removed by the dynamic layer |
 | `dynamic` | why the dynamic layer kept the unit |
 | `class_filter`, `classes` | the JVM class layer narrowed the unit: only these test classes run (the module is still built) |

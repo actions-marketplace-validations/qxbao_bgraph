@@ -389,7 +389,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		st, ok := chosen[u.ID]
 		if !ok {
 			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package,
-				Config: u.Config, Dir: u.Dir, BinDir: u.BinDir, RunnerPaths: u.RunnerPaths}
+				Config: u.Config, Dir: u.Dir, BinDir: u.BinDir, RunnerPaths: u.RunnerPaths, TestModules: u.TestModules}
 			chosen[u.ID] = st
 			res.UnitEco[u.ID] = u.Eco
 		}

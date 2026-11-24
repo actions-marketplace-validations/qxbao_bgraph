@@ -1,0 +1,42 @@
+{
+ "version": 1,
+ "notes": "SwiftPM T2 with Swift 6.2.1. Use a local Swift toolchain with XCTest or set BGRAPH_SWIFT_IMAGE=swift@sha256:0e4716bd34384d22963a63afbdbc93be3129dfd0753185aa1ded27755abdcae8 (Linux arm64). The pinned suites use XCTest. Two full-suite baselines establish the portable test census and baseline failures, then run the whole XCTest suite for every mutant and confirm red targets in a second whole-suite run. Tries is the fixed number of sampled one-token operator mutations per repository. The builds reuse a separate scratch directory for each repository. The generated manifests and raw suite reports live beside the cached oracle. Swift Numerics provides a two-target, statically enumerable control alongside two five-or-more-target opaque packages.",
+ "repos": [
+  {
+   "name": "apple/swift-argument-parser",
+   "dir": "repos/apple__swift-argument-parser",
+   "remote": "https://github.com/apple/swift-argument-parser.git",
+   "r": "41982a3656a71c768319979febd796c6fd111d5c",
+   "eco": "swift",
+   "args": ["--jobs", "4", "--num-workers", "8"],
+   "include": ["Sources/ArgumentParser/", "Sources/ArgumentParserToolInfo/"],
+   "env": ["SWIFT_BACKTRACE=enable=no"],
+   "tries": 8,
+   "seed": "v1"
+  },
+  {
+   "name": "apple/swift-collections",
+   "dir": "repos/apple__swift-collections",
+   "remote": "https://github.com/apple/swift-collections.git",
+   "r": "671108c96644956dddcd89dd59c203dcdb36cec7",
+   "eco": "swift",
+   "args": ["--configuration", "release", "--jobs", "4", "--num-workers", "8"],
+   "exclude": ["Sources/_CollectionsTestSupport/"],
+   "env": ["SWIFT_BACKTRACE=enable=no"],
+   "tries": 8,
+   "seed": "v1"
+  },
+  {
+   "name": "apple/swift-numerics",
+   "dir": "repos/apple__swift-numerics-1.0.2",
+   "remote": "https://github.com/apple/swift-numerics.git",
+   "r": "0a5bc04095a675662cf24757cc0640aa2204253b",
+   "eco": "swift",
+   "args": ["--enable-test-discovery", "--jobs", "4", "--num-workers", "1"],
+   "include": ["Sources/ComplexModule/", "Sources/RealModule/"],
+   "env": ["SWIFT_BACKTRACE=enable=no"],
+   "tries": 10,
+   "seed": "v1"
+  }
+ ]
+}

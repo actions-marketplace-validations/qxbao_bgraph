@@ -1,0 +1,27 @@
+A source under a literal custom test path belongs to the test target.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.testTarget(name: "CoreSuite", path: "Checks", sources: ["Selected"], exclude: ["Selected/NotBuilt.swift"], resources: [.process("Data")]), .testTarget(name: "OtherSuite")])
+-- base/Tools/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Tools", targets: [.testTarget(name: "Suite")])
+-- base/Tools/Tests/Suite/Test.swift --
+import XCTest
+-- base/Checks/Selected/Cases.swift --
+import XCTest
+-- base/Checks/Selected/NotBuilt.swift --
+let value = 1
+-- base/Checks/Data/README.md --
+this is a runtime resource
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- head/Checks/Selected/Cases.swift --
+import XCTest
+// Updated
+-- want --
+select swift:.::test:CoreSuite
+noselect swift:.::test:OtherSuite
+noselect swift:Tools::test:Suite
+notfull

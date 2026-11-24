@@ -1,0 +1,19 @@
+A nonexistent Swift target in a rule widens the selection to full.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Rules", targets: [.testTarget(name: "AlphaTests")])
+-- base/Tests/AlphaTests/Tests.swift --
+import XCTest
+-- base/bgraph.toml --
+[[rule]]
+paths = [".gitignore"]
+affects = ["swift:.::test:MissingTests"]
+-- base/.gitignore --
+.build/
+-- head/.gitignore --
+.build/
+.swiftpm/
+-- want --
+widen user_rule
+full
