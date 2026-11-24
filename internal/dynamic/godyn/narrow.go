@@ -151,9 +151,9 @@ func Refine(changed []Changed, base, head tree.Tree) ([]Changed, string) {
 }
 
 // PlainEdge reports whether a graph edge is one the records judge: an import, or a structural edge of the Go analysis (a file of
-// a package, a package's test binary compiling the package, a module node). Every other edge (fixture data, //go:embed, cgo,
-// directory patterns, packages a test may build or programs it may run, any edge of another ecosystem) means a test may read a
-// changed file as data or build and run a program from it, which coverage does not see.
+// a package, a package's test binary compiling the package, a module node), or a package a test may build or a program it may
+// run (process starts make the record incomplete). Every other edge (fixture data, //go:embed, cgo, directory patterns, any edge
+// of another ecosystem) means a test may read a changed file as data, which coverage does not see.
 func PlainEdge(e model.Edge) bool {
 	switch e.Kind {
 	case model.EdgeImport:
@@ -163,7 +163,11 @@ func PlainEdge(e model.Edge) bool {
 		case "package file", "go test compiles the package", "module-level file":
 			return true
 		}
-		return strings.HasPrefix(e.Spec, "module ")
+		// A test that really builds or runs a program starts a process, which the collector counts: such a record is
+		// incomplete and keeps the test, so these edges (usually string literals that look like import paths) are judged
+		// by the records too.
+		return strings.HasPrefix(e.Spec, "module ") || strings.HasPrefix(e.Spec, "test may build package ") ||
+			strings.HasPrefix(e.Spec, "test builds packages ") || strings.HasPrefix(e.Spec, "may run the program built from ")
 	}
 	return false
 }
