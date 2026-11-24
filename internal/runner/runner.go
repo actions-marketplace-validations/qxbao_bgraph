@@ -231,11 +231,12 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		plan.Notes = append(plan.Notes, notes...)
 	}
 	if len(phpTests) > 0 {
-		cmds, ok := phpCommands(phpTests, opt)
+		cmds, notes, ok := phpCommands(phpTests, opt)
 		if !ok {
 			return full("PHP project does not have a representable runner command: run the full suite")
 		}
 		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
 	}
 	if len(swiftTests) > 0 {
 		plan.Commands = append(plan.Commands, swiftCommands(swiftTests, opt)...)

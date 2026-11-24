@@ -394,3 +394,7 @@ func localPath(dir, raw string) (string, bool) {
 	p := path.Join(dir, raw)
 	return p, repoPath(p)
 }
+
+// DynamicSource reports whether p is a PHP code file for the dynamic layer (docs/dynamic-layer.md §11.2): a file the
+// interpreter can include, by the scanner's extensions. Its role in the analysis still decides whether a change to it is code.
+func DynamicSource(p string) bool { return phpscan.Source(p) }

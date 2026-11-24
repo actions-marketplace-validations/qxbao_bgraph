@@ -9,6 +9,7 @@ import (
 	"github.com/qxbao/bgraph/internal/classify"
 	"github.com/qxbao/bgraph/internal/eco/jvm"
 	"github.com/qxbao/bgraph/internal/eco/node"
+	"github.com/qxbao/bgraph/internal/eco/php"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/rules"
 )
@@ -54,6 +55,8 @@ var sourceFile = map[string]func(p string) bool{
 	"dotnet": func(p string) bool { return strings.EqualFold(path.Ext(p), ".cs") },
 	// ruby: the per-method layer (docs/dynamic-layer.md §10, package rbdyn) has its own guards and narrowing, like jvm.
 	"ruby": func(p string) bool { return path.Ext(p) == ".rb" },
+	// php: the per-test-file layer inside a Composer project (docs/dynamic-layer.md §11, package phpdyn), like jvm.
+	"php": php.DynamicSource,
 }
 
 // Supported reports whether eco has a dynamic layer.
