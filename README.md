@@ -17,7 +17,7 @@
   <a href="https://pkg.go.dev/github.com/qxbao/bgraph"><img src="https://img.shields.io/badge/API%20docs-pkg.go.dev-14B8A6?style=flat&labelColor=0F172A" alt="API docs on pkg.go.dev"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-F59E0B?style=flat&labelColor=0F172A" alt="License: Apache-2.0"></a>
   <br>
-  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go%20%C2%B7%20Ruby%20%C2%B7%20PHP%20%C2%B7%20Swift%20%C2%B7%20Dart-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go, Ruby, PHP, Swift, Dart"></a>
+  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go%20%C2%B7%20Ruby%20%C2%B7%20PHP%20%C2%B7%20Swift%20%C2%B7%20C%2FC%2B%2B%20%C2%B7%20Dart-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go, Ruby, PHP, Swift, C/C++, Dart"></a>
   <a href="#built-for-coding-agents"><img src="https://img.shields.io/badge/MCP-server%20included-white?style=flat&labelColor=0F172A" alt="MCP server included"></a>
   <a href="#github-action"><img src="https://img.shields.io/badge/GitHub%20Action-qxbao%2Fbgraph%40v0-white?style=flat&labelColor=0F172A&logo=githubactions&logoColor=white" alt="GitHub Action: qxbao/bgraph@v0"></a>
   <img src="https://img.shields.io/badge/tested%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-white?style=flat&labelColor=0F172A" alt="Tested on Linux, macOS and Windows">
