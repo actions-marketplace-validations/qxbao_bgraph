@@ -1,0 +1,29 @@
+SwiftPM automatically processes localized resources under a target root.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", defaultLocalization: "en", targets: [
+    .target(name: "Library", sources: ["BundleText.swift"]),
+    .testTarget(name: "LibraryTests", dependencies: ["Library"]),
+])
+-- base/Sources/Library/BundleText.swift --
+import Foundation
+public func title() -> String {
+    Bundle.module.localizedString(forKey: "title", value: nil, table: nil)
+}
+-- base/Sources/Library/sub/package.json --
+{"name":"embedded-tool","devDependencies":{"vitest":"^2.0.0"}}
+-- base/Sources/Library/sub/check.test.ts --
+import { expect, test } from 'vitest'
+test('tool', () => expect(true).toBe(true))
+-- base/Sources/Library/sub/en.lproj/Localizable.strings --
+"title" = "Before";
+-- base/Tests/LibraryTests/Tests.swift --
+import Library
+import XCTest
+-- head/Sources/Library/sub/en.lproj/Localizable.strings --
+"title" = "After";
+-- want --
+select swift:.::test:LibraryTests
+noselect Sources/Library/sub/check.test.ts
+scope graph

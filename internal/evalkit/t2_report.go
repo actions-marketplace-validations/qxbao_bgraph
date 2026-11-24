@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 )
@@ -15,6 +16,10 @@ func T2Markdown(q T2Result) string {
 	verdict := "PASS (0 T2 violations)"
 	if q.Violations > 0 {
 		verdict = fmt.Sprintf("FAIL: %d T2 violations", q.Violations)
+	} else if slices.ContainsFunc(q.Repos, func(r T2RepoResult) bool {
+		return r.Repo.Eco == "swift" && (r.Error != "" || r.Errors > 0 || r.Killed+r.Survived == 0)
+	}) {
+		verdict = "INCOMPLETE (missing Swift T2 evidence)"
 	}
 	mode := "re-check on cached oracle"
 	if q.RunTests {
@@ -63,6 +68,7 @@ func T2Markdown(q T2Result) string {
 	rustReport(&b, q)
 	pythonReport(&b, q)
 	goReport(&b, q)
+	swiftReport(&b, q)
 	b.WriteString("\n## native⊄ bgraph\n\n")
 	n = 0
 	for _, r := range q.Repos {
@@ -179,5 +185,26 @@ func pythonReport(b *strings.Builder, q T2Result) {
 		}
 		fmt.Fprintf(b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d | %d | %d | %d | %d | %d |\n", r.Repo.Name, r.Repo.R, r.Generated, r.NoCompile, r.Killed+r.Survived+r.Timeout,
 			r.Killed, r.Survived, r.Timeout, r.Errors, partial, r.Full, len(r.Violations), r.MedBgraph, dyn, inflated, r.Baseline.Files, len(r.Baseline.Failing), len(r.Baseline.Flaky), suite)
+	}
+}
+
+func swiftReport(b *strings.Builder, q T2Result) {
+	header := false
+	for _, r := range q.Repos {
+		if r.Repo.Eco != "swift" {
+			continue
+		}
+		if !header {
+			b.WriteString("\n## Swift XCTest mutants\n\n| repo | baseline tests | baseline modules | planned | killed | survived | compile failures | timeouts | errors | selected < all | median selected/units | violations |\n|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+			header = true
+		}
+		partial := 0
+		for _, c := range r.Checks {
+			if c.Err == "" && !c.Full() && c.Selected < c.Units {
+				partial++
+			}
+		}
+		fmt.Fprintf(b, "| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d |\n",
+			r.Repo.Name, r.Baseline.Tests, r.Baseline.Files, r.Generated, r.Killed, r.Survived, r.NoCompile, r.Timeout, r.Errors, partial, r.MedBgraph, len(r.Violations))
 	}
 }

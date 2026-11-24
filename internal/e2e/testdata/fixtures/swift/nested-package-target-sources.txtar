@@ -1,0 +1,36 @@
+A default target root can contain sources from a nested SwiftPM package.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [
+    .target(name: "Core", exclude: ["Nested/Package.swift", "Nested/Tests"]),
+    .testTarget(name: "CoreTests", dependencies: ["Core"]),
+    .testTarget(name: "OtherTests"),
+])
+-- base/Tests/CoreTests/Tests.swift --
+import XCTest
+import Core
+final class CoreTests: XCTestCase {
+    func testValue() { XCTAssertEqual(value(), 1) }
+}
+-- base/Tests/OtherTests/Tests.swift --
+import XCTest
+-- base/Sources/Core/Nested/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Nested", targets: [
+    .target(name: "Nested"),
+    .testTarget(name: "NestedTests", dependencies: ["Nested"]),
+])
+-- base/Sources/Core/Nested/Sources/Nested/Value.swift --
+public func value() -> Int { 1 }
+-- base/Sources/Core/Nested/Tests/NestedTests/Tests.swift --
+import XCTest
+import Nested
+-- head/Sources/Core/Nested/Sources/Nested/Value.swift --
+public func value() -> Int { 2 }
+-- want --
+select swift:.::test:CoreTests
+select swift:Sources/Core/Nested::test:NestedTests
+noselect swift:.::test:OtherTests
+scope graph

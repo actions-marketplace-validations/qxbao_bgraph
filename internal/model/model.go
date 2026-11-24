@@ -308,6 +308,9 @@ type TestUnit struct {
 	// test operands for PHP. Their paths are relative to the repository.
 	BinDir      string   `json:"bin_dir,omitempty"`
 	RunnerPaths []string `json:"runner_paths,omitempty"`
+	// TestModules lists every declared test module in the unit's SwiftPM package.
+	// The runner can exclude unselected modules while keeping other discovered tests.
+	TestModules []string `json:"test_modules,omitempty"`
 	// Dir is the directory the unit's tests live in, set when Files holds only a virtual node and the unit may be narrower than its
 	// project (a Go package inside a module): a [[rule]] directory target matches it like a file of the unit.
 	Dir string `json:"dir,omitempty"`
@@ -325,7 +328,8 @@ type SelectedTest struct {
 	Config      string   `json:"config,omitempty"`  // see TestUnit.Config
 	BinDir      string   `json:"bin_dir,omitempty"`
 	RunnerPaths []string `json:"runner_paths,omitempty"`
-	Dir         string   `json:"dir,omitempty"` // see TestUnit.Dir (Go: the package directory)
+	TestModules []string `json:"test_modules,omitempty"` // see TestUnit.TestModules
+	Dir         string   `json:"dir,omitempty"`          // see TestUnit.Dir (Go: the package directory)
 	// Widened: the unit is selected only because of a widening (unresolved import seed, module/package scope widening, "whole
 	// project" unit), not by the backward walk from the changed files, a [[rule]] target, previously_failed or as a new test
 	// (docs/dynamic-layer.md §1). Only widened units can be removed by the dynamic layer.

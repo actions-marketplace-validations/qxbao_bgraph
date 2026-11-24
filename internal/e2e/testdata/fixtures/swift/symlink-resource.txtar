@@ -1,0 +1,30 @@
+Swift package resources follow directory links through the tree layer.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.testTarget(name: "CoreSuite", path: "Checks", sources: ["Selected"], exclude: ["Selected/NotBuilt.swift"], resources: [.process("Data")]), .testTarget(name: "OtherSuite")])
+-- base/Tools/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Tools", targets: [.testTarget(name: "Suite")])
+-- base/Tools/Tests/Suite/Test.swift --
+import XCTest
+-- base/Checks/Selected/Cases.swift --
+import XCTest
+-- base/Checks/Selected/NotBuilt.swift --
+let value = 1
+-- base/Checks/Data/README.md --
+this is a runtime resource
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/Outside/fixtures/record.md --
+old test data
+-- link:head/Checks/Data --
+../Outside/fixtures
+-- head/Outside/fixtures/record.md --
+new test data
+-- want --
+select swift:.::test:CoreSuite
+select swift:.::test:OtherSuite
+noselect swift:Tools::test:Suite
+notfull

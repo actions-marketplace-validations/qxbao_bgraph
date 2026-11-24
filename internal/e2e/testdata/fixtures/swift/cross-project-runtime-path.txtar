@@ -1,0 +1,28 @@
+A Swift helper can load runtime data from a Node subtree without claiming that subtree.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.target(name: "Core"), .target(name: "Other"), .testTarget(name: "CoreSuite", dependencies: ["Core"]), .testTarget(name: "OtherSuite", dependencies: ["Other"])])
+-- base/Sources/Core/Logic.swift --
+import Foundation
+func readFile() throws -> Data { try Data(contentsOf: URL(fileURLWithPath: "./web/src/value.ts")) }
+-- base/Sources/Other/Other.swift --
+public func other() -> Int { 1 }
+-- base/Tests/CoreSuite/Tests.swift --
+import XCTest
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/check.test.ts --
+import { value } from './value'
+void value
+-- base/web/src/value.ts --
+export const value = 1
+-- head/web/src/value.ts --
+export const value = 2
+-- want --
+select web/src/check.test.ts
+select swift:.::test:CoreSuite
+noselect swift:.::test:OtherSuite
+notfull

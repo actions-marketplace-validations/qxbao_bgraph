@@ -1,0 +1,32 @@
+A toolchain-specific manifest makes target discovery opaque.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.target(name: "Core"), .target(name: "Other"), .testTarget(name: "CoreSuite", dependencies: ["Core"]), .testTarget(name: "OtherSuite", dependencies: ["Other"])])
+-- base/Sources/Core/Logic.swift --
+public func value() -> Int { 1 }
+-- base/Sources/Other/Other.swift --
+public func other() -> Int { 1 }
+-- base/Tests/CoreSuite/Tests.swift --
+import XCTest
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/Tools/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Tools", targets: [.testTarget(name: "Suite")])
+-- base/Tools/Tests/Suite/Test.swift --
+import XCTest
+-- base/Package@swift-6.0.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.testTarget(name: "VariantTests")])
+-- head/Sources/Core/Logic.swift --
+public func value() -> Int { 2 }
+-- want --
+select swift:.::all
+noselect swift:.::test:CoreSuite
+noselect swift:Tools::test:Suite
+widen dynamic_import
+warn config_is_code
+notfull

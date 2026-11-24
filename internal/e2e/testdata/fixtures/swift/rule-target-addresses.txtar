@@ -1,0 +1,27 @@
+Swift test targets accept package-relative directory and exact unit addressing.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Rules", targets: [
+    .testTarget(name: "AlphaTests"), .testTarget(name: "BetaTests"), .testTarget(name: "OtherTests"),
+])
+-- base/Tests/AlphaTests/Tests.swift --
+import XCTest
+-- base/Tests/BetaTests/Tests.swift --
+import XCTest
+-- base/Tests/OtherTests/Tests.swift --
+import XCTest
+-- base/bgraph.toml --
+[[rule]]
+paths = [".gitignore"]
+affects = ["swift:.::test:AlphaTests", "Tests/BetaTests"]
+-- base/.gitignore --
+.build/
+-- head/.gitignore --
+.build/
+.swiftpm/
+-- want --
+select swift:.::test:AlphaTests
+select swift:.::test:BetaTests
+noselect swift:.::test:OtherTests
+notfull

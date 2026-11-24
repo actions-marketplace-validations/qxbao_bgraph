@@ -1,0 +1,28 @@
+A Node manifest does not hide C sources SwiftPM compiles under a default target root.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [
+    .target(name: "CLib", publicHeadersPath: "impl/include"),
+    .testTarget(name: "CTests", dependencies: ["CLib"]),
+])
+-- base/Sources/CLib/impl/package.json --
+{"name":"embedded-tool","devDependencies":{"vitest":"^2.0.0"}}
+-- base/Sources/CLib/impl/check.test.ts --
+import { expect, test } from 'vitest'
+test('tool', () => expect(true).toBe(true))
+-- base/Sources/CLib/impl/include/library.h --
+int value(void);
+-- base/Sources/CLib/impl/value.c --
+#include "library.h"
+int value(void) { return 1; }
+-- base/Tests/CTests/Tests.swift --
+import CLib
+import XCTest
+-- head/Sources/CLib/impl/value.c --
+#include "library.h"
+int value(void) { return 2; }
+-- want --
+select swift:.::test:CTests
+noselect Sources/CLib/impl/check.test.ts
+scope graph

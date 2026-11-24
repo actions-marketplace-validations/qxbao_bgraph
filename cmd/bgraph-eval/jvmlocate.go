@@ -144,7 +144,26 @@ func cmdJVMLocate(ctx context.Context, args []string, eco string) error {
 				os.MkdirAll(filepath.Dir(idx), 0o755)
 				dir := evalkit.RustRepoDir(*work, t.Repo)
 				var r locRow
-				if eco == "ruby" {
+				if eco == "swift" {
+					names, err := evalkit.SwiftLocateTask(ctx, dir, idx, t)
+					ids, _ := evalkit.ParseF2P(t.F2P)
+					r = locRow{ID: t.InstanceID, Repo: t.Repo, Source: t.Source, Kind: t.F2PKind, F2P: len(ids)}
+					if err != nil {
+						r.Err = err.Error()
+					}
+					for _, l := range names {
+						cat := "unique"
+						switch {
+						case l.Form == "command":
+							cat = "task"
+						case len(l.Files) == 0:
+							cat = "notfound"
+						case len(l.Files) > 1:
+							cat = "ambiguous"
+						}
+						r.Names = append(r.Names, locName{Name: l.Name, Form: l.Form, Files: l.Files, Cat: cat, InPatch: l.InPatch})
+					}
+				} else if eco == "ruby" {
 					x := evalkit.RbLocateTask(ctx, dir, idx, t)
 					r = locRow{ID: x.ID, Repo: x.Repo, Source: x.Source, Kind: x.Kind, F2P: x.F2P, Err: x.Err}
 					for _, l := range x.Locs {

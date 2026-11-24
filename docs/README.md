@@ -28,3 +28,4 @@
 | Go | package | [ecosystems/go.md](ecosystems/go.md) |
 | PHP | Composer project | [ecosystems/php.md](ecosystems/php.md) |
 | Ruby | test file | [ecosystems/ruby.md](ecosystems/ruby.md) |
+| Swift | SwiftPM test target or package | [ecosystems/swift.md](ecosystems/swift.md) |

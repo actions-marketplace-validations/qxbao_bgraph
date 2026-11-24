@@ -605,6 +605,8 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		return r.buildOracleGo(ctx, cfg, store, have)
 	case "ruby":
 		return r.buildOracleRuby(ctx, cfg, store, have)
+	case "swift":
+		return r.buildOracleSwift(ctx, cfg, store, have)
 	case "php":
 		return r.buildOraclePHP(ctx, cfg, store, have)
 	}
@@ -795,7 +797,7 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 		return ck
 	}
 	for _, f := range rec.Red {
-		if !selCovers(sel, f) {
+		if !r.coversRed(sel, f) {
 			ck.Missed = append(ck.Missed, f)
 		}
 	}
@@ -824,7 +826,7 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 	case "ruby":
 		ck.Changed = sel.Changed
 		ck.Near = pyNear(sel, ck.Missed)
-	case "php":
+	case "php", "swift":
 		ck.Changed = sel.Changed
 		return ck
 	}
@@ -953,7 +955,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" {
+	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" || r.Eco == "swift" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`
@@ -961,6 +963,13 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 			if json.Unmarshal(b, &c) == nil {
 				rr.Generated = len(c.Mutants)
 			}
+		}
+	}
+	if r.Eco == "swift" {
+		recs, err = r.swiftCachedMutants(cfg, recs)
+		if err != nil {
+			rr.Error = err.Error()
+			return
 		}
 	}
 	var bg, nv []float64

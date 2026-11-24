@@ -1,0 +1,20 @@
+A known file API reading the current directory can observe sibling target files.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.target(name: "Core"), .target(name: "Other"), .testTarget(name: "CoreSuite", dependencies: ["Core"]), .testTarget(name: "OtherSuite", dependencies: ["Other"])])
+-- base/Sources/Core/Logic.swift --
+public func value() -> Int { 1 }
+-- base/Sources/Other/Other.swift --
+public func other() -> Int { 1 }
+-- base/Tests/CoreSuite/Tests.swift --
+import XCTest
+-- base/Tests/OtherSuite/Tests.swift --
+import Foundation
+let files = FileManager.default.enumerator(atPath: ".")
+-- head/Sources/Core/Logic.swift --
+public func value() -> Int { 2 }
+-- want --
+select swift:.::test:CoreSuite
+select swift:.::test:OtherSuite
+notfull

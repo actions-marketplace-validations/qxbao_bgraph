@@ -21,6 +21,7 @@ import (
 	"github.com/qxbao/bgraph/internal/eco/python"
 	"github.com/qxbao/bgraph/internal/eco/ruby"
 	"github.com/qxbao/bgraph/internal/eco/rust"
+	"github.com/qxbao/bgraph/internal/eco/swift"
 	"github.com/qxbao/bgraph/internal/gitx"
 	"github.com/qxbao/bgraph/internal/glob"
 	"github.com/qxbao/bgraph/internal/model"
@@ -204,7 +205,7 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 
 // Ecosystems are the supported ecosystems.
 func Ecosystems(rf *rules.File) []eco.Ecosystem {
-	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf), jvm.New(rf), golang.New(rf), php.New(rf), ruby.New(rf)}
+	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf), jvm.New(rf), golang.New(rf), php.New(rf), ruby.New(rf), swift.New()}
 }
 
 func loadRules(t tree.Tree) (*rules.File, error) {

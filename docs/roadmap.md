@@ -31,6 +31,7 @@ commit as the feature:
 | Go | package | go.sum (lines only added) | – | [go](ecosystems/go.md) |
 | PHP | Composer project | – | – | [php](ecosystems/php.md) |
 | Ruby (RSpec, Minitest, Test::Unit, Rails) | test file | – | test files, per changed method | [ruby](ecosystems/ruby.md) |
+| Swift (SwiftPM) | test target or package | – | – | [swift](ecosystems/swift.md) |
 
 ## New ecosystems
 
@@ -41,7 +42,7 @@ commit as the feature:
 | Ruby: Cucumber features | planned | 3 | `.feature` files are not units; a change to one widens its project | |
 | PHP (PHPUnit, Pest; Composer, `composer.lock`) | done (unreleased) | 1 | Project ownership, Composer autoload roots, and static and computed includes | [php](ecosystems/php.md) |
 | Deno (`deno test`, `deno.json`, `deno.lock`) | planned | 2 | Reuses the Node scanner; adds URL, `jsr:` and `npm:` specifiers and import maps | |
-| Swift (SwiftPM, `swift test`, `Package.resolved`) | planned | 2 | Module granularity like Cargo targets | |
+| Swift (SwiftPM, `swift test`, `Package.resolved`) | done (unreleased) | 2 | SwiftPM test targets, package fallback for computed manifests, L0 lockfiles | [swift](ecosystems/swift.md) |
 | Dart / Flutter (`dart test`, `flutter test`, `pubspec.lock`) | planned | 2 | Static imports; package granularity; Flutter golden files are test data | |
 | C / C++ (CMake + CTest, Meson) | planned | 3 | Include paths and macros come from the build system: likely target granularity from the build graph, with heavy widening | |
 
@@ -59,6 +60,7 @@ commit as the feature:
 | pytest-django | Python | planned | 2 | Settings and the app registry are loaded by name at run time | |
 | TUnit (Microsoft.Testing.Platform) | .NET | planned | 3 | Needs `--treenode-filter` in the recorder and the runner; TUnit projects run whole under the class layer today | |
 | Composer scripts and custom PHPUnit/Pest invocations | PHP | planned | 3 | Resolve project-defined launchers, configuration paths and additional suite flags | [php](ecosystems/php.md) |
+| Xcode project and workspace schemes | Swift | planned | 3 | Discover targets and test plans from Xcode projects and map changes to `xcodebuild test` commands | [swift](ecosystems/swift.md) |
 
 ## Lockfiles
 
@@ -70,6 +72,7 @@ commit as the feature:
 | `Gemfile.lock` / `gems.locked` (Ruby) to L1 | planned | 2 | L0 today; the `GEM` and `PATH` specs give a dependency graph per gem, to be gated by the differential check against Bundler | [lockfiles](lockfiles.md) |
 | Maven / Gradle dependency locking to L1 | planned | 3 | | [lockfiles](lockfiles.md) |
 | `composer.lock` to L1 | planned | 3 | L0 today. Compare local and transitive dependency resolution against Composer first. | [lockfiles](lockfiles.md) |
+| `Package.resolved` to L1 | planned | 3 | L0 today. Compare SwiftPM's resolved package dependencies before narrowing. | [lockfiles](lockfiles.md) |
 
 ## Dynamic layer
 
