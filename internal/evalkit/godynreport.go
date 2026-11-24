@@ -137,22 +137,38 @@ func goVersionOf(exe string) string {
 func GoGuardMarkdown(rs []GoGuardResult) string {
 	var b strings.Builder
 	b.WriteString("# Go layer: guard over first-parent commits (real guard, no records)\n\n")
-	b.WriteString("Inactive: no narrowable Go package selected (the layer does not run: documentation-only changes, or nothing selected). " +
-		"Accepted: every guard passes (selection guard and body guard) and the layer stops at \"no records\". Code commits = examined − inactive.\n\n")
-	b.WriteString("| repo | head | commits | inactive | refused | accepted | of which Go sources / test files only / docs only | accepted / code commits |\n|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("Full: the static selection is full (a CI or global file changed), never narrowed. Nothing selected: no narrowable Go " +
+		"package selected (documentation-only changes, a main package without tests...). Accepted: every guard passes (selection guard " +
+		"and body guard) and the layer stops at \"no records\". Code commits: commits changing a .go file. Non-trivial: examined − nothing selected.\n\n")
+	b.WriteString("| repo | head | commits | code commits | full | nothing selected | refused | accepted | of which Go sources / test files only / docs only | accepted / code commits | accepted / non-trivial |\n|---|---|---|---|---|---|---|---|---|---|---|\n")
 	var details strings.Builder
 	for _, r := range rs {
 		cnt, buckets, reasons := map[string]int{}, map[string]int{}, map[string]int{}
+		code, full, none := 0, 0, 0
 		for _, c := range r.Commits {
 			cnt[c.Stage]++
-			buckets[GoGuardBucket(c)]++
+			bk := GoGuardBucket(c)
+			buckets[bk]++
+			switch {
+			case bk == "inactive: full selection, no Go package" || bk == "refused: full selection":
+				full++
+			case c.Stage == "inactive":
+				none++
+			}
 			if c.Stage == "refused" || c.Stage == "error" {
 				reasons[RbReasonClass(c.Reason)]++
 			}
+			for _, f := range c.Files {
+				if strings.HasSuffix(f, ".go") {
+					code++
+					break
+				}
+			}
 		}
-		code := len(r.Commits) - cnt["inactive"]
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d / %d / %d | %s |\n", r.Repo, rbShort(r.Head), r.Examined, cnt["inactive"], cnt["refused"]+cnt["error"],
-			cnt["accepted"], buckets["accepted: Go sources"], buckets["accepted: test files only"], buckets["accepted: documentation only"], goPct(cnt["accepted"], code))
+		refused := len(r.Commits) - cnt["accepted"] - full - none
+		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d / %d / %d | %s | %s |\n", r.Repo, rbShort(r.Head), r.Examined, code, full, none, refused,
+			cnt["accepted"], buckets["accepted: Go sources"], buckets["accepted: test files only"], buckets["accepted: documentation only"],
+			goPct(cnt["accepted"], code), goPct(cnt["accepted"], len(r.Commits)-none))
 		fmt.Fprintf(&details, "\n## %s\n\nBuckets: %s\n\nRefusal reasons (classes): %s\n", r.Repo, rbHist(buckets), rbHist(reasons))
 	}
 	return b.String() + details.String()

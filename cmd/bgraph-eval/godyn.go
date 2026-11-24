@@ -41,6 +41,7 @@ func cmdGoDyn(ctx context.Context, args []string) (int, error) {
 	commits := fs.Int("commits", 500, "guard: first-parent commits per repo; replay: the recent window")
 	from := fs.String("from", "", "replay: guard.json for --more (default <out>/guard.json)")
 	more := fs.Int("more", 0, "replay: also replay up to N guard-accepted commits of guard.json older than the window")
+	render := fs.Bool("render", false, "guard: only render <out>/guard.md from <out>/guard.json")
 	out := fs.String("out", filepath.Join(evalkit.EvalDir(), "t2", "go-dyn", "out"), "report directory")
 	fs.Parse(args[1:])
 	if sub == "replay" && !flagSet(fs, "commits") {
@@ -130,6 +131,19 @@ func cmdGoDyn(ctx context.Context, args []string) (int, error) {
 		}
 	case "guard":
 		var all []evalkit.GoGuardResult
+		if *render {
+			b, err := os.ReadFile(filepath.Join(*out, "guard.json"))
+			if err != nil {
+				return 2, err
+			}
+			if err := json.Unmarshal(b, &all); err != nil {
+				return 2, err
+			}
+			md := evalkit.GoGuardMarkdown(all)
+			os.WriteFile(filepath.Join(*out, "guard.md"), []byte(md), 0o644)
+			fmt.Print(md)
+			return 0, nil
+		}
 		run := func(name, clone, rev string) error {
 			res, err := evalkit.RunGoGuardRate(ctx, name, clone, filepath.Join(*work, "guard-state", filepath.Base(clone)), rev, *commits, lg)
 			if err != nil {
