@@ -487,6 +487,14 @@ func (r T2Repo) buildOracleDart(ctx context.Context, cfg *T2Config, store *Oracl
 		if err := r.dartMutantVerdict(ctx, c, root, timeout, logDir, baseline, excluded, edited, &rec); err != nil {
 			return err
 		}
+		// A test may write into the checkout (a mutated `melos init` targets the working directory): restore tracked files and
+		// remove new untracked ones (ignored files such as .dart_tool/ stay), and record the run as an error.
+		if dirty, err := r.dartRestoreTree(ctx, root); err != nil {
+			return err
+		} else if dirty != "" {
+			rec.Status, rec.Red, rec.RedUnconfirmed = "error", nil, nil
+			rec.Detail = "the mutant's tests wrote into the checkout (restored): " + dirty
+		}
 		if err := store.Append(rec); err != nil {
 			return err
 		}
@@ -564,6 +572,25 @@ func (r T2Repo) dartMutantVerdict(ctx context.Context, c *dartContainer, root st
 		rec.Status = "killed"
 	}
 	return nil
+}
+
+// dartRestoreTree checks the checkout after a mutant run (the mutated file is already restored). It returns the
+// porcelain status when tests changed it, after restoring tracked files and removing untracked, non-ignored files.
+func (r T2Repo) dartRestoreTree(ctx context.Context, root string) (string, error) {
+	st, err := git(ctx, root, "status", "--porcelain")
+	if err != nil || strings.TrimSpace(st) == "" {
+		return "", err
+	}
+	if _, err := git(ctx, root, "checkout", "-q", "--", "."); err != nil {
+		return "", err
+	}
+	if _, err := git(ctx, root, "clean", "-q", "-f", "-d"); err != nil {
+		return "", err
+	}
+	if after, err := git(ctx, root, "status", "--porcelain"); err != nil || strings.TrimSpace(after) != "" {
+		return "", fmt.Errorf("could not restore %s: %v %s", root, err, after)
+	}
+	return lastBytes(strings.TrimSpace(st), 300), nil
 }
 
 // dartMissingSuites returns the baseline suites absent from a run.
