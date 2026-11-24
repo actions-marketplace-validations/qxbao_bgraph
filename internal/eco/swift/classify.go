@@ -15,7 +15,9 @@ func (*Eco) ClassifyChange(f string, base, head tree.Tree, a *eco.Analysis) ([]m
 	lock := path.Base(f) == "Package.resolved"
 	if !manifestFile && !lock && !possibleConfig(f) {
 		if path.Ext(f) == ".swift" && a != nil && len(a.Projects) > 0 {
-			if _, ok := eco.NearestProject(a.Projects, dir); !ok {
+			// A source of a package deleted or moved by the change exists only
+			// in the base tree; the base package still owns it.
+			if _, ok := eco.NearestProject(a.Projects, dir); !ok && nearest(loadProjects(base), dir) == nil {
 				return []model.Widening{{Path: f, Tier: model.TierFull, Reason: model.ReasonUnreferenced,
 					Detail: "Swift source is outside every Swift package"}}, true
 			}

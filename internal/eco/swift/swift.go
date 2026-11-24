@@ -204,6 +204,9 @@ type builder struct {
 	files    map[string][]string
 	foreign  map[string]bool
 	dirFold  map[string][]string
+	// reported holds the target inputs already recorded as unresolved, so a
+	// declaration resolved against several candidate roots is reported once.
+	reported map[string]bool
 }
 
 func (*Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.Analysis, error) {
@@ -213,7 +216,7 @@ func (*Eco) Analyze(ctx context.Context, t tree.Tree, sc eco.Scanner) (*eco.Anal
 		return a, nil
 	}
 	a.Roles = map[string]model.Role{}
-	b := builder{t: t, sc: sc, packages: ps, a: a, files: map[string][]string{}, foreign: map[string]bool{}, dirFold: map[string][]string{}}
+	b := builder{t: t, sc: sc, packages: ps, a: a, files: map[string][]string{}, foreign: map[string]bool{}, dirFold: map[string][]string{}, reported: map[string]bool{}}
 	b.groupFiles()
 	dirs := make([]string, 0, len(ps))
 	for d := range ps {
@@ -546,7 +549,8 @@ func (b *builder) paths(node, base string, rels []string) []string {
 	for _, rel := range rels {
 		if f, ok := resolvePath(base, rel); ok {
 			out = append(out, f)
-		} else {
+		} else if key := node + "\n" + rel; !b.reported[key] {
+			b.reported[key] = true
 			b.unresolved(node, rel, ".", model.UnresolvedUnknown, "Swift target input is outside the Git tree")
 		}
 	}
@@ -608,7 +612,9 @@ func implicitResource(f, root string) bool {
 }
 
 func swiftSpecial(f, dir string) bool {
-	if path.Base(f) == "Package.resolved" {
+	// Only the package's own lockfile is special. Any other Package.resolved
+	// (a test fixture, for instance) is ordinary package data.
+	if path.Base(f) == "Package.resolved" && packageLock(f, dir) {
 		return true
 	}
 	prefix := path.Join(dir, ".swiftpm")

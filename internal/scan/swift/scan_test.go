@@ -72,3 +72,21 @@ func TestDirectFoundationFileOperandsStayPrecise(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessCallsNeedDirectCall(t *testing.T) {
+	for code, want := range map[string]bool{
+		`Text("a.b").font(.system(size: 12))`: false,
+		`let system = "x/y"`:                  false,
+		`let rc = system("tool/run.sh")`:      true,
+		`let f = popen("ls", "r")`:            true,
+		`let p = Process()`:                   true,
+	} {
+		got := false
+		for _, ref := range Scan([]byte(code)).Imports {
+			got = got || ref.Suffix == "process"
+		}
+		if got != want {
+			t.Errorf("process launch in %s = %v, want %v", code, got, want)
+		}
+	}
+}

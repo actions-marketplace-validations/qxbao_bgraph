@@ -122,3 +122,67 @@ let package = Package(name: "Demo", products: [.executable(name: "tool-alias", t
 		t.Fatalf("got subprocess edges %+v, want one", refs)
 	}
 }
+
+func TestResolvedFixtureIsPackageData(t *testing.T) {
+	files := map[string]string{
+		"Package.swift":                          tools + "import PackageDescription\nlet package = Package(name: \"Demo\", targets: [.target(name: \"Lib\"), .testTarget(name: \"Checks\")])",
+		"Package.resolved":                       "{}",
+		"Sources/Lib/a.swift":                    "struct A {}",
+		"Tests/Checks/Fixtures/Package.resolved": "{}",
+		"Tests/Checks/a.swift":                   "import XCTest",
+	}
+	a, err := New().Analyze(context.Background(), tree.NewMapTree(files), scancache.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.Roles["Package.resolved"] != model.RoleLock || a.Roles["Tests/Checks/Fixtures/Package.resolved"] != model.RoleData {
+		t.Fatalf("roles: %v", a.Roles)
+	}
+	if _, ok := graph.Build(a).Walk([]graph.Seed{{Path: "Tests/Checks/Fixtures/Package.resolved"}})[UnitNode(".", "Checks")]; !ok {
+		t.Fatal("fixture Package.resolved does not reach the test target")
+	}
+}
+
+func TestDeletedNestedPackageIsNotAnOrphan(t *testing.T) {
+	manifest := func(name string) string {
+		return tools + "import PackageDescription\nlet package = Package(name: \"" + name + "\", targets: [.target(name: \"" + name + "\")])"
+	}
+	base := tree.NewMapTree(map[string]string{
+		"Kit/Package.swift": manifest("Kit"), "Kit/Sources/Kit/a.swift": "struct A {}",
+		"Legacy/Package.swift": manifest("Legacy"), "Legacy/Sources/Legacy/b.swift": "struct B {}",
+	})
+	head := tree.NewMapTree(map[string]string{
+		"Kit/Package.swift": manifest("Kit"), "Kit/Sources/Kit/a.swift": "struct A {}",
+		"Stray/c.swift": "struct C {}",
+	})
+	a, err := New().Analyze(context.Background(), head, scancache.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ws, claimed := New().ClassifyChange("Legacy/Sources/Legacy/b.swift", base, head, a); claimed || len(ws) != 0 {
+		t.Fatalf("deleted package source: %+v, %v", ws, claimed)
+	}
+	if ws, claimed := New().ClassifyChange("Stray/c.swift", base, head, a); !claimed || len(ws) != 1 || ws[0].Tier != model.TierFull {
+		t.Fatalf("orphan source: %+v, %v", ws, claimed)
+	}
+}
+
+func TestOutsidePathReportedOnce(t *testing.T) {
+	files := map[string]string{
+		"Package.swift":   tools + "import PackageDescription\nlet package = Package(name: \"Demo\", targets: [.testTarget(name: \"T\", resources: [.copy(\"../../../outside\")])])",
+		"Tests/T/a.swift": "import XCTest",
+	}
+	a, err := New().Analyze(context.Background(), tree.NewMapTree(files), scancache.New())
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, u := range a.Unresolved {
+		if u.Spec == "../../../outside" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("outside path reported %d times: %+v", n, a.Unresolved)
+	}
+}
