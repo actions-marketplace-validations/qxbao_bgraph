@@ -1147,7 +1147,10 @@ the reason in the `dynamic` note of every PHP unit the layer would have consider
      file with alternative control syntax outside function bodies), a closure or anonymous class outside a named body, a
      one-line function, and a changed function that declares a named function or class inside its body.
 5. **Tokenizer cross-check**: with the configured PHP (`[dynamic_layer] php`, `--php`, `Options.PHP`, default `php` on
-   PATH), the head of every file the refinement accepted must pass `php -l`, and PHP's own tokenizer
+   PATH), base and head of every file the refinement accepted must pass `php -l` with every diagnostic on
+   (`error_reporting=-1`) and emit the same compile-time diagnostics (messages compared without line numbers: PHP emits
+   a deprecation or warning of any function body when it compiles the file, whether or not the function runs, and a
+   suite may turn it into a failure), and PHP's own tokenizer
    (`PhpToken::tokenize` with `TOKEN_PARSE`) must find, at base and head, exactly the named functions with a body (start
    and end lines, at any depth) that the guard found. Any difference or failure puts the file back at file level.
 6. **Per test file**, for a changed file c the refinement accepted, a test file f whose record lists c is kept when any

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -149,8 +150,21 @@ func CrossCheck(ctx context.Context, exe string, files []CheckFile) map[string]s
 		if os.WriteFile(b, f.Base, 0o644) != nil || os.WriteFile(h, f.Head, 0o644) != nil {
 			return all("cannot write temporary files for the tokenizer cross-check")
 		}
-		if out, err := run("-l", h); err != nil {
-			fail[f.Path] = "php -l fails at the head: " + firstN(strings.TrimSpace(out), 200)
+		// Compile both versions with every diagnostic on: PHP emits compile-time diagnostics (deprecations, warnings) of
+		// every function body when the file is included, executed or not, so any difference can fail a test that never
+		// runs the changed function.
+		lint := []string{"-d", "error_reporting=-1", "-d", "display_errors=stderr", "-d", "display_startup_errors=1", "-d", "log_errors=0", "-l"}
+		bout, berr := run(append(lint, b)...)
+		hout, herr := run(append(lint, h)...)
+		switch {
+		case herr != nil:
+			fail[f.Path] = "php -l fails at the head: " + firstN(strings.TrimSpace(hout), 200)
+		case berr != nil:
+			fail[f.Path] = "php -l fails at the base: " + firstN(strings.TrimSpace(bout), 200)
+		default:
+			if d := diagDiff(bout, b, hout, h); d != "" {
+				fail[f.Path] = "the change alters the diagnostics PHP emits when it compiles the file: " + firstN(d, 160)
+			}
 		}
 		args = append(args, b, h)
 	}
@@ -195,6 +209,44 @@ func CrossCheck(ctx context.Context, exe string, files []CheckFile) map[string]s
 		}
 	}
 	return fail
+}
+
+var reLintLine = regexp.MustCompile(` on line \d+$`)
+
+// diagnostics returns the compile-time diagnostics of `php -l` output for file (path and line numbers removed: lines move),
+// sorted; the "No syntax errors" line is not one.
+func diagnostics(out, file string) []string {
+	var d []string
+	for _, l := range strings.Split(strings.ReplaceAll(out, "\r\n", "\n"), "\n") {
+		l = strings.TrimSpace(l)
+		if l == "" || strings.HasPrefix(l, "No syntax errors detected") {
+			continue
+		}
+		l = strings.ReplaceAll(l, file, "<file>")
+		l = strings.ReplaceAll(l, filepath.ToSlash(file), "<file>")
+		d = append(d, reLintLine.ReplaceAllString(l, ""))
+	}
+	slices.Sort(d)
+	return d
+}
+
+// diagDiff returns a diagnostic the head emits and the base does not (or the reverse), "" when both emit the same ones.
+func diagDiff(bout, bfile, hout, hfile string) string {
+	b, h := diagnostics(bout, bfile), diagnostics(hout, hfile)
+	if slices.Equal(b, h) {
+		return ""
+	}
+	for _, x := range h {
+		if !slices.Contains(b, x) {
+			return x
+		}
+	}
+	for _, x := range b {
+		if !slices.Contains(h, x) {
+			return "no longer: " + x
+		}
+	}
+	return "the number of diagnostics changed"
 }
 
 // Downgrade returns changed with the KindLines files that failed the cross-check (or were not checked) back at file level.
