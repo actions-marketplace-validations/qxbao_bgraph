@@ -162,6 +162,17 @@ func (r *repo) resolutionRoot(dir string) string {
 	return dir
 }
 
+// enclosing returns the nearest package directory strictly above dir ("." when there is none).
+func (r *repo) enclosing(dir string) string {
+	if dir == "." {
+		return "."
+	}
+	if p := r.nearest(path.Dir(dir)); p != nil {
+		return p.dir
+	}
+	return "."
+}
+
 // nearest returns the package containing directory dir (the deepest package directory at or above it).
 func (r *repo) nearest(dir string) *pkg {
 	if r == nil {

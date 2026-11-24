@@ -18,7 +18,7 @@ const integrationNote = "integration tests run the app on a device or emulator: 
 func dartCommands(tests []model.SelectedTest, opt Options) []Command {
 	type group struct {
 		runner             string
-		whole, wholeInteg  bool
+		whole              bool
 		files, integration []string
 	}
 	groups := map[string]*group{}

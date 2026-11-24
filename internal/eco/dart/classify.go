@@ -93,6 +93,9 @@ func (*Eco) ClassifyChange(f string, base, head tree.Tree, _ *eco.Analysis) ([]m
 		for _, r := range sides {
 			if r != nil {
 				s.addAll(r.allMembers(dir))
+				if p := r.pkgs[dir]; p != nil && p.raw == nil {
+					s.tree[dir] = true // an unreadable root may have members below it
+				}
 			}
 		}
 	case isBuildYAML(name):
@@ -142,6 +145,14 @@ func (s *scopes) resolution(dir string) {
 		s.add(root)
 		s.addAll(r.allMembers(root))
 		s.addAll(r.allMembers(dir))
+		if p := r.pkgs[root]; p != nil && p.member {
+			// A member whose workspace root is unknown (the root's pubspec does not parse or does not list it): every
+			// package below the nearest enclosing package may share its resolution.
+			s.tree[r.enclosing(root)] = true
+		}
+		if p := r.pkgs[root]; p != nil && p.raw == nil {
+			s.tree[root] = true // an unreadable root may have members below it
+		}
 	}
 }
 

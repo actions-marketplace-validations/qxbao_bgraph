@@ -268,3 +268,31 @@ func TestIsBuildYAML(t *testing.T) {
 		}
 	}
 }
+
+func TestClassifyUnreadableWorkspaceRoot(t *testing.T) {
+	files := map[string]string{
+		"pubspec.yaml":   "name: ws\nworkspace: [a\n",
+		"pubspec.lock":   "packages: {}\n",
+		"a/pubspec.yaml": "name: a\nresolution: workspace\n",
+	}
+	base := tree.NewMapTree(files)
+	head := map[string]string{}
+	for k, v := range files {
+		head[k] = v
+	}
+	head["pubspec.lock"] = "packages: {x: {}}\n"
+	ws, ok := New(nil).ClassifyChange("pubspec.lock", base, tree.NewMapTree(head), nil)
+	if !ok || len(ws) != 1 || ws[0].Scope != "." || ws[0].Exact {
+		t.Fatalf("an unreadable workspace root widens every package below it: %+v", ws)
+	}
+	head["pubspec.lock"] = files["pubspec.lock"]
+	head["a/pubspec.yaml"] = "name: a\nresolution: workspace\ndependencies: {x: any}\n"
+	ws, ok = New(nil).ClassifyChange("a/pubspec.yaml", base, tree.NewMapTree(head), nil)
+	below := false
+	for _, w := range ws {
+		below = below || (w.Scope == "." && !w.Exact)
+	}
+	if !ok || !below {
+		t.Fatalf("a member whose root is unknown widens the enclosing package's tree: %+v", ws)
+	}
+}

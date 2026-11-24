@@ -148,6 +148,9 @@ whole-package unit ID such as `<dart-all-tests:packages/core>`. A target that ma
 - Paths built at run time by other means than a literal head, a literal tail or a `join(...)` call are not followed; a
   file read that way usually widens through the `unreferenced_file` rule. A process launch is assumed to run its own
   package's `bin/`; a program of another package started by name (`dart run other:tool`) needs a `[[rule]]`.
+- A literal is resolved against its own file, package and the repository root only. An asset of another package loaded
+  by its key (`AssetImage('assets/x.png', package: 'other')`) is not linked to the test that loads it; a change to it
+  widens to its own package only, so such assets need a `[[rule]]`.
 - `flutter test` applies only the nearest `flutter_test_config.dart`; bgraph links every ancestor one.
 - Flutter `integration_test` commands need a device; their selection is still reported.
 
