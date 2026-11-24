@@ -102,6 +102,26 @@ func cmdGoDyn(ctx context.Context, args []string) (int, error) {
 			}
 		}
 		var all []evalkit.GoDynT2Result
+		if *render { // re-render t2.md from the t2.json files given in --from (comma-separated), concatenated
+			for _, f := range splitList(*from) {
+				b, err := os.ReadFile(f)
+				if err != nil {
+					return 2, err
+				}
+				var part []evalkit.GoDynT2Result
+				if err := json.Unmarshal(b, &part); err != nil {
+					return 2, err
+				}
+				all = append(all, part...)
+			}
+			if err := evalkit.WriteDynJSON(*out, "t2.json", all); err != nil {
+				return 1, err
+			}
+			md := evalkit.GoDynT2Markdown(all)
+			os.WriteFile(filepath.Join(*out, "t2.md"), []byte(md), 0o644)
+			fmt.Print(md)
+			return 0, nil
+		}
 		viol := 0
 		for _, r := range pick(nil) {
 			cfg, err := cfgOf(r)

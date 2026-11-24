@@ -183,12 +183,12 @@ func goTestRun(ctx context.Context, gl *goLayout, units []string, runRe string, 
 	res := map[string]*goPkgRun{}
 	t0 := time.Now()
 	for _, md := range mods {
-		a := []string{"test", "-json", "-count=1", "-timeout=10m"}
+		a := []string{"test", "-json", "-count=1", "-timeout=" + min(timeout, 10*time.Minute).String()}
 		if runRe != "" {
 			a = append(a, "-run", runRe)
 		}
 		a = append(a, args[md]...)
-		so, tl, to, err := runProc(ctx, filepath.Join(gl.root, filepath.FromSlash(md)), nil, timeout, "go", a...)
+		so, tl, to, err := runProc(ctx, filepath.Join(gl.root, filepath.FromSlash(md)), nil, timeout+2*time.Minute, "go", a...)
 		if ctx.Err() != nil {
 			return res, time.Since(t0), ctx.Err()
 		}
@@ -268,7 +268,9 @@ func goResolveUnfinished(ctx context.Context, gl *goLayout, res map[string]*goPk
 			if a != "run" {
 				continue
 			}
-			one, _, err := goTestRun(ctx, gl, []string{u}, "^"+regexp.QuoteMeta(n)+"$", 10*time.Minute)
+			// 2 minutes: a test that deadlocks alone under a mutant (it was cut short by a sibling's panic in the package run)
+			// fails by the test timeout.
+			one, _, err := goTestRun(ctx, gl, []string{u}, "^"+regexp.QuoteMeta(n)+"$", 2*time.Minute)
 			if err != nil {
 				return err
 			}
