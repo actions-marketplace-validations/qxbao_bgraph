@@ -88,6 +88,9 @@ type Result struct {
 	Changes []ChangeInfo
 	// UnitEco: selected unit ID → its ecosystem.
 	UnitEco map[string]string
+	// Graph: the union graph the selection walked (nil when the selection ended before it was built). Dynamic layers that narrow
+	// inside precise units read the edge kinds on the paths from the changed files.
+	Graph *graph.Graph
 }
 
 // Select computes the selection.
@@ -154,6 +157,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		units = append(units, ha.Tests...)
 	}
 	g := graph.Build(append(all, eco.LinkAnalysis(in.BaseTree), eco.LinkAnalysis(in.HeadTree))...)
+	res.Graph = g
 	links := linkSides(in.BaseTree, in.HeadTree)
 	// A file read through symbolic links changes every path that reads it (its aliases): they are classified as changed files
 	// too (a manifest seen through a directory link, a glob over the link directory, a scoped unresolved import...).
