@@ -101,6 +101,14 @@ Decide and fix before any code:
     often sits in a non-test helper package the test imports, so the scanner must keep relative-path literals of
     non-test files too. Do not accept a bare `./name` (a working-directory data path such as caddy's `"./caddy"`
     selected every package once); check every task whose selection grows.
+  - Check every resolution rule against the real toolchain, not the spec you remember (Dart resolves `../..` of a library
+    under `lib/` against its `package:` URI, clamped at `lib/`: a file-path-only reading left hundreds of imports
+    unresolved). A ten-line program in the toolchain's Docker image settles it.
+  - The test runner is code too: when the repository holds a package the runner itself depends on (Dart: `path`, `args`,
+    `collection` under dart-lang/core), the package manager resolves the runner's copy to the local one, and a change to
+    it alters every test of that resolution. Take the runner's dependency closure from the package manager.
+  - Assets and programs addressed by name, not path (Flutter `AssetImage(..., package:)`, `dart run pkg:tool`), are never
+    reached by literal edges: tie them to the tests of the package and of its dependents.
   - **Bump `AnalyzerVersion` on every logic change** — analysis snapshots are keyed by it and stale snapshots hide fixes
     (this bit us repeatedly; never bump it *down*). A change in a shared layer that alters what an analysis sees (the
     tree's symlink semantics, path rules) needs its own cache-key bump.
@@ -185,7 +193,9 @@ anything there on your own; at each phase close ask the user whether to keep or 
    read the manifests at that base commit; where the toolchain can answer, take the dependency closure of each missing
    unit at C, e.g. `go list -deps -test`, and look for changed files in it) and is classified real miss vs oracle
    artefact before anything is claimed. SWE-bench-Live FAIL_TO_PASS lists often contain thousands of unrelated (flaky,
-   timing) names: expect artefacts there, and still check each one.
+   timing) names: expect artefacts there, and still check each one. Read each task's harness command: a chain
+   `cd a && test && cd ../b && test` never runs b when a fails at P, so all of b's tests look FAIL_TO_PASS (Dart: 23 of
+   31 violations). Pass absolute `--work`/`--out` paths: the harness changes directory.
 7. **Provider cross-check** when the ecosystem has an exact graph provider (`cargo metadata --no-deps`, Gradle/MSBuild
    project graphs, `go list`): `bgraph-eval <provider>` on ~5 base commits per repo via temporary worktrees; projects,
    targets and root files must match; extra non-member projects are acceptable (they can only widen). Run it under
