@@ -50,6 +50,9 @@ Usage:
   bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--json] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
   bgraph index     [--root DIR]
   bgraph mcp       [--root DIR]        (MCP server on stdio)
+  bgraph agent install   [--root DIR] [--target auto|claude|agents|claude,agents] [--skill] [--hook] [--mcp] [--json]
+  bgraph agent uninstall [--root DIR] [--json]
+  bgraph agent hook      (PostToolUse hook of Claude Code and Codex, reads stdin)
   bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json|go-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
   bgraph audit     --summary --log FILE [--json]
   bgraph record    [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
@@ -81,6 +84,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runRecord(rest, stdout, stderr)
 	case "dynamic":
 		return runDynamic(rest, stdout, stderr)
+	case "agent":
+		return runAgent(rest, os.Stdin, stdout, stderr)
 	case "doctor":
 		fmt.Fprintf(stderr, "bgraph %s: not implemented (later phase)\n", cmd)
 		return 2
@@ -222,15 +227,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 			fmt.Fprintf(stdout, "# %s\n", n)
 		}
 		for _, c := range plan.Commands {
-			line := shellLine(c.Argv)
-			for i := len(c.Env) - 1; i >= 0; i-- {
-				k, v, _ := strings.Cut(c.Env[i], "=")
-				line = k + "=" + shellQuote(v) + " " + line
-			}
-			if c.Project != "." && c.Project != "" {
-				line = "cd " + shellQuote(c.Project) + " && " + line
-			}
-			fmt.Fprintln(stdout, line)
+			fmt.Fprintln(stdout, bgraph.ShellLine(c))
 		}
 	}
 	return 0
@@ -339,22 +336,4 @@ func suggestRule(u model.Unresolved) string {
 
 func indent(s, pre string) string {
 	return pre + strings.ReplaceAll(s, "\n", "\n"+pre)
-}
-
-// shellLine joins argv into one shell line (display only; uses POSIX-style single quotes).
-func shellLine(argv []string) string {
-	q := make([]string, len(argv))
-	for i, a := range argv {
-		q[i] = shellQuote(a)
-	}
-	return strings.Join(q, " ")
-}
-
-func shellQuote(s string) string {
-	if s != "" && strings.IndexFunc(s, func(r rune) bool {
-		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("-_./:=@+,", r))
-	}) < 0 {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }

@@ -36,6 +36,8 @@ type (
 	SelectedTest = model.SelectedTest
 	Widening     = model.Widening
 	Tier         = model.Tier
+	// UnresolvedImport is an import the graph could not resolve (Index.Unresolved, DependentsResult.Unresolved).
+	UnresolvedImport = model.Unresolved
 )
 
 // Options configures Index.
