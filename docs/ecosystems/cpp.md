@@ -58,15 +58,17 @@ process APIs can make repository-wide changes reach the source and its dependent
 Configure each build directory with the same generator, toolchain and test options as your full suite. bgraph
 generates build and test commands from a selection using the configured directories.
 
-- CTest plans run `cmake --build` and then `ctest --output-on-failure`. Named tests are matched by an anchored regex.
+- CTest plans run `cmake --build` and then `ctest --output-on-failure`. The build step has the runner `cmake` in
+  JSON plans. Named tests are matched by an anchored regex.
   CTest errors when a test command would run no tests. The adapter requires CMake and CTest 3.20 or later.
 - Meson plans run `meson test` with the selected names. Meson handles the rebuild. Use Meson 1.2 or later so an
   unmatched test name reports an error.
 
 The default build directory is `build` relative to each project. If both backends are selected at the same root, the
 defaults there are `build-cmake` and `build-meson`. Use `bgraph command --build-dir DIR` to point to another directory
-and `--build-config NAME` for a CMake multi-config generator. In the MCP `test_commands` tool, use `build_dir` and
-`build_config`. Execute commands in the order given and stop if a build fails.
+and `--build-config NAME` for a CMake multi-config generator. An absolute `--build-dir` only works when the selection
+has one C/C++ project; with several, use a directory relative to each project. In the MCP `test_commands` tool, use
+`build_dir` and `build_config`. Execute commands in the order given and stop if a build fails.
 
 Long filters and names that cannot be passed safely run the whole configured project.
 

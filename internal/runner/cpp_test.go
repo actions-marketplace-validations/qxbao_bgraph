@@ -2,6 +2,8 @@ package runner
 
 import (
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/qxbao/bgraph/internal/model"
@@ -19,7 +21,7 @@ func TestCppCommands(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Command{
-		{Runner: "ctest", Project: ".", Argv: []string{"cmake", "--build", "build"}},
+		{Runner: CMakeBuildRunner, Project: ".", Argv: []string{"cmake", "--build", "build"}, Note: "builds the tests of the next ctest command: stop if it fails"},
 		{Runner: "ctest", Project: ".", Argv: []string{"ctest", "--test-dir", "build", "--output-on-failure", "--no-tests=error", "-R", `^(core\.unit|slow)$`}},
 		{Runner: "meson", Project: "tools", Argv: []string{"meson", "test", "-C", "build", "--print-errorlogs", "quick"}},
 	}
@@ -81,5 +83,29 @@ func TestCppBuildOptions(t *testing.T) {
 	}
 	if _, err := Commands(sel, Options{BuildDir: "shared"}); err == nil {
 		t.Fatal("expected error for two backends sharing a build directory")
+	}
+}
+
+func TestCppBuildDirectorySpelling(t *testing.T) {
+	sel := model.Selection{Scope: model.TierGraph, Tests: []model.SelectedTest{
+		{Unit: "cpp:cmake:Lib::test:one", Runner: "ctest", Project: "Lib"},
+		{Unit: "cpp:cmake:lib::test:two", Runner: "ctest", Project: "lib"},
+	}}
+	_, err := Commands(sel, Options{})
+	if caseInsensitiveFS != (err != nil) {
+		t.Fatalf("Lib/build and lib/build: error = %v, case-insensitive filesystem = %v", err, caseInsensitiveFS)
+	}
+
+	abs := "/tmp/build"
+	if runtime.GOOS == "windows" {
+		abs = `C:\build`
+	}
+	one := model.Selection{Scope: model.TierGraph, Tests: sel.Tests[:1]}
+	if p, err := Commands(one, Options{BuildDir: abs}); err != nil || len(p.Commands) != 2 {
+		t.Fatalf("one project with an absolute build directory: plan = %+v, error = %v", p, err)
+	}
+	sel.Tests[1] = model.SelectedTest{Unit: "cpp:cmake:other::test:two", Runner: "ctest", Project: "other"}
+	if _, err := Commands(sel, Options{BuildDir: abs}); err == nil || !strings.Contains(err.Error(), "relative to each project") {
+		t.Fatalf("two projects with an absolute build directory: error = %v", err)
 	}
 }

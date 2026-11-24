@@ -76,7 +76,11 @@ func Source(src []byte) model.ScanResult {
 					if len(m) == 0 || strings.ContainsAny(m[1]+m[2], "\\\x00") {
 						return uncertain("nonliteral C/C++ include or embed")
 					}
-					out.Imports = append(out.Imports, model.ImportRef{Kind: model.ImportStatic, Spec: m[1] + m[2], Suffix: match[1], Line: line})
+					kind := model.ImportStatic
+					if m[2] != "" {
+						kind = model.ImportSystem
+					}
+					out.Imports = append(out.Imports, model.ImportRef{Kind: kind, Spec: m[1] + m[2], Suffix: match[1], Line: line})
 				case "pragma":
 					if strings.Contains(match[2], "comment") || strings.Contains(match[2], "dependency") {
 						return uncertain("C/C++ pragma linker input")
@@ -121,8 +125,15 @@ func Source(src []byte) model.ScanResult {
 			start = false
 		case identifierByte(s[0]):
 			i := 1
-			for i < len(s) && identifierByte(s[i]) {
-				i++
+			for i < len(s) {
+				if identifierByte(s[i]) {
+					i++
+				} else if isDigit(s[0]) && s[i] == '\'' && i+1 < len(s) && identifierByte(s[i+1]) {
+					// A C++14 digit separator continues a number token.
+					i += 2
+				} else {
+					break
+				}
 			}
 			word := s[:i]
 			switch {
@@ -142,6 +153,7 @@ func Source(src []byte) model.ScanResult {
 }
 
 var directiveName = regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*)(.*)$`)
+var headerDirective = regexp.MustCompile(`^[ \t]*(?:include|include_next|import|embed)[ \t]*$`)
 var includeName = regexp.MustCompile(`^[ \t]*(?:"([^"]+)"|<([^>]+)>)(?:[ \t].*)?$`)
 
 // These entry points can name paths or executables at runtime, including
@@ -162,6 +174,23 @@ var runtimeAPI = map[string]bool{
 
 func identifierByte(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_'
+}
+
+func isDigit(c byte) bool {
+	return c >= '0' && c <= '9'
+}
+
+// inNumber reports whether text ends inside a preprocessing number, where a
+// quote is a C++14 digit separator rather than a character literal.
+func inNumber(text string) bool {
+	i := len(text)
+	for i > 0 && (identifierByte(text[i-1]) || text[i-1] == '\'' || text[i-1] == '.') {
+		i--
+	}
+	for i < len(text) && text[i] == '.' {
+		i++
+	}
+	return i < len(text) && isDigit(text[i]) && identifierByte(text[len(text)-1])
 }
 
 func rawPrefix(s string) int {
@@ -194,17 +223,23 @@ func directive(s string) (string, bool) {
 			s = s[i+4:]
 		case strings.HasPrefix(s, "//"):
 			return strings.TrimSpace(b.String()), true
-		case s[0] == '"' || s[0] == '<':
-			end := s[0]
-			if end == '<' {
-				end = '>'
-			}
-			i := strings.IndexByte(s[1:], end)
+		case s[0] == '<' && headerDirective.MatchString(b.String()):
+			i := strings.IndexByte(s[1:], '>')
 			if i < 0 {
 				return "", false
 			}
 			b.WriteString(s[:i+2])
 			s = s[i+2:]
+		case s[0] == '\'' && inNumber(b.String()):
+			b.WriteByte(s[0])
+			s = s[1:]
+		case s[0] == '"' || s[0] == '\'':
+			i := quotedEnd(s)
+			if i < 0 {
+				return "", false
+			}
+			b.WriteString(s[:i])
+			s = s[i:]
 		default:
 			b.WriteByte(s[0])
 			s = s[1:]

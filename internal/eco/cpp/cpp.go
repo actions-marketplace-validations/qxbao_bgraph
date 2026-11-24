@@ -361,6 +361,13 @@ func (b *builder) includes(sc eco.Scanner, f string) {
 			continue
 		}
 		for _, matched := range b.includeFiles[strings.ToLower(tail)] {
+			// A case-insensitive match is only plausible for a C/C++ header.
+			// Another file must match exactly, and an extensionless system
+			// include (<version>, <vector>) names a standard header.
+			if !scan.Native(matched) && (path.Base(matched) != tail ||
+				ref.Kind == model.ImportSystem && path.Ext(tail) == "") {
+				continue
+			}
 			b.edge(f, matched, model.EdgeImport, spec)
 			if !scan.Native(matched) && ref.Suffix != "embed" {
 				b.unresolved(matched, spec, "nonstandard C/C++ include can reference additional inputs", model.UnresolvedUncertainScan)

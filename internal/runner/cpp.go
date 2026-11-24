@@ -5,6 +5,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"strings"
 
@@ -15,6 +16,13 @@ import (
 // Restrict native filters to portable names. Meson interprets wildcards and
 // colons, and CTest uses a different regex engine from Go's.
 var nativeTestName = regexp.MustCompile(`^[A-Za-z0-9_.][A-Za-z0-9_.-]*$`)
+
+// CMakeBuildRunner labels the build step that precedes a ctest command.
+const CMakeBuildRunner = "cmake"
+
+// The default filesystems on Windows and macOS fold case, so two spellings
+// of a build directory there are the same directory.
+var caseInsensitiveFS = runtime.GOOS == "windows" || runtime.GOOS == "darwin"
 
 func cppCommands(tests []model.SelectedTest, opt Options) ([]Command, error) {
 	if strings.ContainsAny(opt.BuildDir+opt.BuildConfig, "\x00\r\n") || strings.HasPrefix(opt.BuildConfig, "-") {
@@ -49,6 +57,9 @@ func cppCommands(tests []model.SelectedTest, opt Options) ([]Command, error) {
 		}
 		return strings.Compare(a.project, b.project)
 	})
+	if filepath.IsAbs(opt.BuildDir) && len(keys) > 1 {
+		return nil, fmt.Errorf("the absolute C/C++ build directory %s cannot serve the %d selected C/C++ projects: use a directory relative to each project", opt.BuildDir, len(keys))
+	}
 	var commands []Command
 	dirs := map[string]key{}
 	for _, k := range keys {
@@ -68,7 +79,10 @@ func cppCommands(tests []model.SelectedTest, opt Options) ([]Command, error) {
 		if !filepath.IsAbs(buildDir) {
 			dir = path.Join(k.project, dir)
 		}
-		dir = strings.ToLower(path.Clean(dir))
+		dir = path.Clean(dir)
+		if caseInsensitiveFS {
+			dir = strings.ToLower(dir)
+		}
 		if old, exists := dirs[dir]; exists {
 			return nil, fmt.Errorf("C/C++ test commands for %s (%s) and %s (%s) share a build directory", old.project, old.runner, k.project, k.runner)
 		}
@@ -111,7 +125,8 @@ func cppCommands(tests []model.SelectedTest, opt Options) ([]Command, error) {
 			}
 		}
 		if build != nil {
-			commands = append(commands, Command{Runner: k.runner, Project: k.project, Argv: build})
+			commands = append(commands, Command{Runner: CMakeBuildRunner, Project: k.project, Argv: build,
+				Note: "builds the tests of the next ctest command: stop if it fails"})
 		}
 		commands = append(commands, cmd)
 	}

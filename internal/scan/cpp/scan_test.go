@@ -67,6 +67,37 @@ func TestSourceUncertainty(t *testing.T) {
 	}
 }
 
+func TestSourceOrdinaryDirectivesAndNumbers(t *testing.T) {
+	got := Source([]byte(`#if __cplusplus < 201103L
+#error "needs C++11 // or later"
+#endif
+#define LT(a, b) ((a) < (b))
+#define QUOTE '"'
+#if LIMIT > 1'000'000
+#endif
+#include <vector>
+#include "local.h"
+constexpr int N = 1'000;
+constexpr unsigned M = 0xFF'FF;
+char c = 'x';
+`))
+	if got.Uncertain {
+		t.Fatal(got.UncertainReason)
+	}
+	want := []model.ImportRef{
+		{Kind: model.ImportSystem, Spec: "vector", Suffix: "include", Line: 8},
+		{Kind: model.ImportStatic, Spec: "local.h", Suffix: "include", Line: 9},
+	}
+	if !reflect.DeepEqual(got.Imports, want) {
+		t.Fatalf("imports = %+v, want %+v", got.Imports, want)
+	}
+	for _, src := range []string{"#include <unterminated.h\n", "#define S \"unterminated\n"} {
+		if got := Source([]byte(src)); !got.Uncertain {
+			t.Errorf("source %q should be uncertain", src)
+		}
+	}
+}
+
 func FuzzScanners(f *testing.F) {
 	f.Add([]byte("add_test(NAME x COMMAND binary)\n"))
 	f.Add([]byte("t = executable('t', ['foo.c', 'bar.c'])\ntest('foo', t)"))
@@ -75,7 +106,7 @@ func FuzzScanners(f *testing.F) {
 		_, _ = CMake(b)
 		_, _ = Meson(b)
 		for _, ref := range Source(b).Imports {
-			if ref.Spec == "" || ref.Line < 1 || ref.Kind != model.ImportStatic {
+			if ref.Spec == "" || ref.Line < 1 || ref.Kind != model.ImportStatic && ref.Kind != model.ImportSystem {
 				t.Errorf("invalid C/C++ input reference: %+v", ref)
 			}
 		}

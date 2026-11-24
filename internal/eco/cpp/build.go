@@ -23,6 +23,10 @@ type target struct {
 	executable bool
 	files      []string
 	deps       []string
+	// either holds target_sources entries named from another directory:
+	// CMake resolves them from the caller's directory, or from the target's
+	// declaring directory under older policies. At least one must exist.
+	either [][2]string
 }
 
 type project struct {
@@ -74,6 +78,19 @@ func (p *project) finish(t tree.Tree) {
 	}
 	for _, name := range slices.Sorted(maps.Keys(p.targets)) {
 		tg := p.targets[name]
+		for _, pair := range tg.either {
+			found := false
+			for _, f := range pair {
+				if t.Has(f) {
+					tg.files = append(tg.files, f)
+					found = true
+				}
+			}
+			if !found {
+				tg.files = append(tg.files, pair[0])
+			}
+		}
+		tg.either = nil
 		for _, f := range tg.files {
 			if !t.Has(f) {
 				p.fail(path.Join(p.dir, manifestName(p.system)), 1, "literal build input is absent: "+f)
@@ -204,7 +221,6 @@ func (p *project) cmake(dir string, c scan.Call) bool {
 			if !ok {
 				return false
 			}
-			tg.files = append(tg.files, f)
 			// Older CMake policies resolve relative entries from the target's
 			// declaring directory instead of the caller's directory.
 			if tg.dir != dir {
@@ -212,8 +228,12 @@ func (p *project) cmake(dir string, c scan.Call) bool {
 				if !ok {
 					return false
 				}
-				tg.files = append(tg.files, alternate)
+				if alternate != f {
+					tg.either = append(tg.either, [2]string{f, alternate})
+					continue
+				}
 			}
+			tg.files = append(tg.files, f)
 			// Interface sources can be compiled by the consuming targets.
 		}
 		return true

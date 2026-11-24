@@ -121,6 +121,8 @@ const (
 	ImportSysPath ImportKind = "sys_path" // sys.path.insert/append(...): Spec is a path relative to the file's directory, or "cwd:<path>"; Dynamic: not evaluable
 	ImportPlugin  ImportKind = "plugin"   // pytest_plugins = ["a.b"]
 	ImportRead    ImportKind = "read"     // PHP literal file access
+	// C/C++: a quoted #include/#import/#embed is ImportStatic; an angle-bracket one is ImportSystem. Suffix holds the directive name.
+	ImportSystem ImportKind = "system"
 	// Ruby (internal/scan/ruby documents Spec, Suffix and Dynamic for each kind). Suffix holds the base of a path ("" a feature or a
 	// path relative to an unknown directory, "rel" relative to the scanned file's directory, "root" relative to the project root).
 	ImportRbRequire     ImportKind = "rb_require"      // require / require_relative / require_dependency / autoload
