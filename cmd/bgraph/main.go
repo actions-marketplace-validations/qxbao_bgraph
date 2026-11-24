@@ -44,20 +44,20 @@ func main() {
 const usage = `bgraph - select affected tests from the file-level import graph (fail-closed)
 
 Usage:
-  bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env]
-  bgraph explain   [--root DIR] [--base REF] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] <test|file>
+  bgraph affected  [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env]
+  bgraph explain   [--root DIR] [--base REF] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env] <test|file>
   bgraph unresolved [--root DIR] [--class unknown|dynamic|ambiguous|uncertain_scan]
-  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--build-dir DIR] [--build-config NAME] [--json] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env]
+  bgraph command   [--root DIR] [--base REF] [--list-dir DIR] [--build-dir DIR] [--build-config NAME] [--json] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env]
   bgraph index     [--root DIR]
   bgraph mcp       [--root DIR]        (MCP server on stdio)
   bgraph agent install   [--root DIR] [--target auto|claude|agents|claude,agents] [--skill] [--hook] [--mcp] [--json]
   bgraph agent uninstall [--root DIR] [--json]
   bgraph agent hook      (PostToolUse hook of Claude Code and Codex, reads stdin)
-  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json|go-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env]
+  bgraph audit     --results FILE [--results FILE ...] [--format auto|junit|jest-json|playwright-json|go-json] [--root DIR] [--base REF] [--head REF] [--failed ID,...] [--json] [--log FILE] [--strict] [--dynamic[=false]] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env]
   bgraph audit     --summary --log FILE [--json]
-  bgraph record    [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
+  bgraph record    [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty] [--out FILE] [--build-args ARGS] [--keep-logs] [--json]
   bgraph dynamic import [--root DIR] FILE
-  bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--json]
+  bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env] [--json]
   bgraph update    [--check] [--version VERSION] [--force]
   bgraph doctor                (not implemented)
   bgraph version | --version | help
@@ -101,7 +101,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("bgraph "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
-	var base, head, failed, class, listDir, buildDir, buildConfig, python, nodeExe, rubyExe, phpExe string
+	var base, head, failed, class, listDir, buildDir, buildConfig, python, nodeExe, rubyExe, phpExe, goExe string
 	var asJSON bool
 	var dyn dynamicFlag
 	var trust bool
@@ -112,6 +112,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		fs.StringVar(&nodeExe, "node", "", "node executable of the dynamic layer (overrides bgraph.toml [dynamic_layer] node)")
 		fs.StringVar(&rubyExe, "ruby", "", "ruby executable of the dynamic layer (overrides bgraph.toml [dynamic_layer] ruby)")
 		fs.StringVar(&phpExe, "php", "", "php executable of the dynamic layer (overrides bgraph.toml [dynamic_layer] php)")
+		fs.StringVar(&goExe, "go", "", "go command of the dynamic layer (overrides bgraph.toml [dynamic_layer] go)")
 		fs.BoolVar(&trust, "trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	}
 	switch cmd {
@@ -151,7 +152,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: python, Node: nodeExe, Ruby: rubyExe, PHP: phpExe, TrustNativeEnv: trust})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: python, Node: nodeExe, Ruby: rubyExe, PHP: phpExe, Go: goExe, TrustNativeEnv: trust})
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1

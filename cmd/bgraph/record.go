@@ -22,8 +22,9 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 	nodeExe := fs.String("node", "", "node executable (overrides bgraph.toml [dynamic_layer] node; default node on PATH)")
 	rubyExe := fs.String("ruby", "", "ruby executable (overrides bgraph.toml [dynamic_layer] ruby; default ruby on PATH)")
 	phpExe := fs.String("php", "", "php executable, with Xdebug 3 (overrides bgraph.toml [dynamic_layer] php; default php on PATH)")
-	ecoName := fs.String("eco", "", "record only this ecosystem: python, node, jvm, dotnet, ruby or php (default: [dynamic_layer] ecosystems, else every one with test units)")
-	buildArgs := fs.String("build-args", "", "jvm: extra Maven/Gradle arguments of the recording build; dotnet: extra dotnet build/test arguments (e.g. -c Release); space-separated")
+	goExe := fs.String("go", "", "go command (overrides bgraph.toml [dynamic_layer] go; default go on PATH)")
+	ecoName := fs.String("eco", "", "record only this ecosystem: python, node, jvm, dotnet, ruby, php or go (default: [dynamic_layer] ecosystems, else every one with test units)")
+	buildArgs := fs.String("build-args", "", "jvm: extra Maven/Gradle arguments of the recording build; dotnet: extra dotnet build/test arguments (e.g. -c Release); go: extra go list / go test -c build flags (records made with them are used only when GOFLAGS carries the same flags); space-separated")
 	keepLogs := fs.Bool("keep-logs", false, "jvm: keep the collector logs (debugging)")
 	trust := fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 	units := fs.String("units", "", "only the test units (files) matching this glob")
@@ -44,7 +45,7 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	ctx := context.Background()
-	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, Node: *nodeExe, Ruby: *rubyExe, PHP: *phpExe, TrustNativeEnv: *trust})
+	ix, err := bgraph.Open(ctx, *root, bgraph.Options{Python: *python, Node: *nodeExe, Ruby: *rubyExe, PHP: *phpExe, Go: *goExe, TrustNativeEnv: *trust})
 	if err != nil {
 		fmt.Fprintln(stderr, "error:", err)
 		return 1
@@ -109,14 +110,14 @@ func runRecord(args []string, stdout, stderr io.Writer) int {
 // runDynamic implements `bgraph dynamic import FILE` and `bgraph dynamic status`.
 func runDynamic(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--json]")
+		fmt.Fprintln(stderr, "usage: bgraph dynamic import [--root DIR] FILE | bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env] [--json]")
 		return 2
 	}
 	sub, rest := args[0], args[1:]
 	fs := flag.NewFlagSet("bgraph dynamic "+sub, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	root := fs.String("root", ".", "directory inside the repo")
-	var python, nodeExe, rubyExe, phpExe, ecoName *string
+	var python, nodeExe, rubyExe, phpExe, goExe, ecoName *string
 	var asJSON, trust *bool
 	switch sub {
 	case "import":
@@ -125,7 +126,8 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 		nodeExe = fs.String("node", "", "node executable (overrides bgraph.toml [dynamic_layer] node)")
 		rubyExe = fs.String("ruby", "", "ruby executable (overrides bgraph.toml [dynamic_layer] ruby)")
 		phpExe = fs.String("php", "", "php executable (overrides bgraph.toml [dynamic_layer] php)")
-		ecoName = fs.String("eco", "", "only this ecosystem (python, node, jvm, dotnet, ruby or php); default: every one with records or test units; JSON: an object with --eco, else an array")
+		goExe = fs.String("go", "", "go command (overrides bgraph.toml [dynamic_layer] go)")
+		ecoName = fs.String("eco", "", "only this ecosystem (python, node, jvm, dotnet, ruby, php or go); default: every one with records or test units; JSON: an object with --eco, else an array")
 		trust = fs.Bool("trust-native-env", false, "as bgraph.toml [dynamic_layer] trust_native_env = true")
 		asJSON = fs.Bool("json", false, "in JSON")
 	default:
@@ -144,7 +146,7 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 	}
 	opt := bgraph.Options{}
 	if python != nil {
-		opt.Python, opt.Node, opt.Ruby, opt.PHP, opt.TrustNativeEnv = *python, *nodeExe, *rubyExe, *phpExe, *trust
+		opt.Python, opt.Node, opt.Ruby, opt.PHP, opt.Go, opt.TrustNativeEnv = *python, *nodeExe, *rubyExe, *phpExe, *goExe, *trust
 	}
 	ctx := context.Background()
 	ix, err := bgraph.Open(ctx, *root, opt)
@@ -167,7 +169,7 @@ func runDynamic(args []string, stdout, stderr io.Writer) int {
 	}
 	ecos := []string{*ecoName}
 	if *ecoName == "" {
-		ecos = []string{"python", "node", "ruby", "php"}
+		ecos = []string{"python", "node", "ruby", "php", "go"}
 	}
 	var sts []bgraph.DynamicStatus
 	for _, e := range ecos {
