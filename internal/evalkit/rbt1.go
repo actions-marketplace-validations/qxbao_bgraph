@@ -60,6 +60,8 @@ type RbT1Info struct {
 
 	a     *eco.Analysis
 	files []string
+	// pkgOf maps located files to their package directory (Dart: a whole-project unit runs only its own package).
+	pkgOf map[string]string
 }
 
 // RbWide explains the size of a Ruby selection: widenings by reason and the sites behind them.
@@ -177,6 +179,13 @@ func rbRequired(ctx context.Context, dir, p string, ids []string, tp map[string]
 // rbMissing returns the required unit IDs the selection lacks (a selected whole-project unit covers the files of its project),
 // records the violations per name and the units still missing if ambiguous names required only the test-patch candidates.
 func rbMissing(req []string, sel []SelUnit, info *RbT1Info, changed []string) []string {
+	return fileUnitMissing(req, sel, info, changed, ruby.ParseWholeUnitID, pyWithin)
+}
+
+// fileUnitMissing is rbMissing for any file-granular ecosystem; parseWhole returns the project directory of a whole-project unit ID,
+// within(f, dir) reports whether the whole-project unit of directory dir runs f (a file, or the directory of a required whole unit).
+func fileUnitMissing(req []string, sel []SelUnit, info *RbT1Info, changed []string, parseWhole func(string) (string, bool),
+	within func(f, dir string) bool) []string {
 	have := map[string]bool{}
 	for _, u := range sel {
 		have[u.Unit] = true
@@ -186,11 +195,11 @@ func rbMissing(req []string, sel []SelUnit, info *RbT1Info, changed []string) []
 			return true
 		}
 		f := id
-		if d, ok := ruby.ParseWholeUnitID(id); ok {
+		if d, ok := parseWhole(id); ok {
 			f = d
 		}
 		for _, u := range sel {
-			if u.Whole && pyWithin(f, u.WholeProject) {
+			if u.Whole && within(f, u.WholeProject) {
 				return true
 			}
 		}
@@ -231,7 +240,10 @@ func rbMissing(req []string, sel []SelUnit, info *RbT1Info, changed []string) []
 }
 
 // rbDiagnose fills the reach fields and Class of the violations from the Ruby graph at P.
-func rbDiagnose(info *RbT1Info) {
+func rbDiagnose(info *RbT1Info) { fileUnitDiagnose(info, ruby.ParseWholeUnitID) }
+
+// fileUnitDiagnose is rbDiagnose for any file-granular ecosystem (info.a holds the ecosystem's analysis at P).
+func fileUnitDiagnose(info *RbT1Info, parseWhole func(string) (string, bool)) {
 	if info == nil || len(info.Violations) == 0 || info.a == nil {
 		return
 	}
@@ -254,7 +266,7 @@ func rbDiagnose(info *RbT1Info) {
 	for i := range info.Violations {
 		v := &info.Violations[i]
 		start := v.Unit
-		if d, ok := ruby.ParseWholeUnitID(start); ok {
+		if d, ok := parseWhole(start); ok {
 			start = d
 		}
 		seen := map[string]bool{start: true}
@@ -329,31 +341,37 @@ func rbInfoDetail(i *RbT1Info) string {
 // WriteRubyReport writes ruby.md next to t1.md: oracle statistics, per-repo results, widening reasons and sites, skipped tasks and
 // every violation in detail.
 func WriteRubyReport(dir string, rs []T1Result) error {
+	return writeFileOracleReport(dir, "ruby.md", "Ruby", rs, func(r T1Result) (*RbT1Info, *RbWide) { return r.Rb, r.RbW })
+}
+
+// writeFileOracleReport writes the report of a file-granular oracle (Ruby, Dart) to dir/file; get returns a result's oracle details.
+func writeFileOracleReport(dir, file, lang string, rs []T1Result, get func(T1Result) (*RbT1Info, *RbWide)) error {
 	var md bytes.Buffer
-	fmt.Fprintf(&md, "# Ruby T1 detail\n\n")
+	fmt.Fprintf(&md, "# %s T1 detail\n\n", lang)
 	var di RbT1Info
 	nt := 0
 	var dropped, noOwn []string
 	for _, r := range rs {
-		if r.Rb == nil {
+		rb, _ := get(r)
+		if rb == nil {
 			continue
 		}
 		nt++
-		di.Names += r.Rb.Names
-		di.Kept += r.Rb.Kept
-		di.Untouched += r.Rb.Untouched
-		di.NotFound += r.Rb.NotFound
-		di.NoOwner += r.Rb.NoOwner
-		di.Ambiguous += r.Rb.Ambiguous
-		for _, d := range r.Rb.Dropped {
+		di.Names += rb.Names
+		di.Kept += rb.Kept
+		di.Untouched += rb.Untouched
+		di.NotFound += rb.NotFound
+		di.NoOwner += rb.NoOwner
+		di.Ambiguous += rb.Ambiguous
+		for _, d := range rb.Dropped {
 			dropped = append(dropped, r.ID+": "+d)
 		}
-		for _, f := range r.Rb.NoOwnerFiles {
+		for _, f := range rb.NoOwnerFiles {
 			noOwn = append(noOwn, r.ID+": "+f)
 		}
 	}
 	fmt.Fprintf(&md, "## Oracle\n\n%d tasks reached the oracle; FAIL_TO_PASS names %d; kept as requirements %d (ambiguous %d); dropped: untouched by the test patch (n2p) %d, "+
-		"not found %d, outside a Ruby test unit %d, no owning unit %d\n\n", nt, di.Names, di.Kept, di.Ambiguous, di.Untouched, di.NotFound, len(dropped), di.NoOwner)
+		"not found %d, outside a %s test unit %d, no owning unit %d\n\n", nt, di.Names, di.Kept, di.Ambiguous, di.Untouched, di.NotFound, lang, len(dropped), di.NoOwner)
 	for _, d := range dropped {
 		fmt.Fprintf(&md, "- dropped `%.160s`\n", d)
 	}
@@ -444,12 +462,13 @@ func WriteRubyReport(dir string, rs []T1Result) error {
 
 	fmt.Fprintf(&md, "\n## Widening sites (tasks that are full or select more than half of the units)\n\n")
 	for _, r := range rs {
-		if r.RbW == nil || !(r.Status == "full" || r.Units > 0 && 2*r.Selected > r.Units) {
+		_, rw := get(r)
+		if rw == nil || !(r.Status == "full" || r.Units > 0 && 2*r.Selected > r.Units) {
 			continue
 		}
-		fmt.Fprintf(&md, "- `%s` %s sel=%d/%d widened=%d whole=%d %v\n", r.ID, r.Status, r.Selected, r.Units, r.RbW.Widened, r.RbW.Whole, mapStr(r.RbW.WideCount))
+		fmt.Fprintf(&md, "- `%s` %s sel=%d/%d widened=%d whole=%d %v\n", r.ID, r.Status, r.Selected, r.Units, rw.Widened, rw.Whole, mapStr(rw.WideCount))
 		var ks []string
-		for k := range r.RbW.Sites {
+		for k := range rw.Sites {
 			ks = append(ks, k)
 		}
 		sort.Strings(ks)
@@ -458,23 +477,24 @@ func WriteRubyReport(dir string, rs []T1Result) error {
 				fmt.Fprintf(&md, "  - ... +%d sites\n", len(ks)-8)
 				break
 			}
-			fmt.Fprintf(&md, "  - `%s` %s\n", k, r.RbW.Sites[k])
+			fmt.Fprintf(&md, "  - `%s` %s\n", k, rw.Sites[k])
 		}
 	}
 
 	fmt.Fprintf(&md, "\n## Violations (detail)\n\n")
 	nv, gone := 0, 0
 	for _, r := range rs {
-		if r.Status != "violation" || r.Rb == nil {
+		rb, _ := get(r)
+		if r.Status != "violation" || rb == nil {
 			continue
 		}
 		nv++
-		if len(r.Rb.PatchOnlyMissing) == 0 {
+		if len(rb.PatchOnlyMissing) == 0 {
 			gone++
 		}
 		fmt.Fprintf(&md, "### `%s` (%s, %s) scope=%s, selected %d/%d\n\n- missing: %v\n- still missing under the patch-only policy: %v\n- changed (%d): %v\n- widenings: %v\n",
-			r.ID, r.Repo, r.Role, r.Scope, r.Selected, r.Units, r.Missing, r.Rb.PatchOnlyMissing, len(r.Changed), r.Changed, r.Widenings)
-		for _, v := range r.Rb.Violations {
+			r.ID, r.Repo, r.Role, r.Scope, r.Selected, r.Units, r.Missing, rb.PatchOnlyMissing, len(r.Changed), r.Changed, r.Widenings)
+		for _, v := range rb.Violations {
 			fmt.Fprintf(&md, "- unit `%s` (name `%.120s`, files %v, vanishes under patch-only: %v): class **%s**, forward reach %d nodes, reached changed files %v, unresolved in reach %v\n",
 				v.Unit, v.Name, v.Files, v.PatchOnlyGone, v.Class, v.ReachSize, v.ReachedChanged, v.Unresolved)
 		}
@@ -485,5 +505,5 @@ func WriteRubyReport(dir string, rs []T1Result) error {
 	} else {
 		fmt.Fprintf(&md, "Violating tasks that would be clean under the patch-only policy: %d of %d.\n", gone, nv)
 	}
-	return os.WriteFile(filepath.Join(dir, "ruby.md"), md.Bytes(), 0o644)
+	return os.WriteFile(filepath.Join(dir, file), md.Bytes(), 0o644)
 }

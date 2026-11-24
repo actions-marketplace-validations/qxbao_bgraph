@@ -22,6 +22,8 @@ type Task struct {
 	Source     string          `json:"source,omitempty"`
 	// F2PKind is set by the Rust fetcher: "f2p", or "n2p" when FAIL_TO_PASS was taken from Multi-SWE-bench n2p_tests (tests added by the test patch).
 	F2PKind string `json:"f2p_kind,omitempty"`
+	// TestCmd is the harness test command recorded by the dataset (Dart fetcher: Longtail-SWE and SWE-rebench-V2 install_config).
+	TestCmd string `json:"test_cmd,omitempty"`
 }
 
 // ParseF2P reads FAIL_TO_PASS: a JSON array, a string containing a JSON array, or a Python list-literal-style string ('a', "b").

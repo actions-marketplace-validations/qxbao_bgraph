@@ -9,6 +9,7 @@
 //	bgraph-eval jvm-locate|dotnet-locate|go-locate|php-locate|swift-locate --tasks tasks-<eco>.jsonl --work DIR [--out locate.json] [--examples 3]   (locate FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-gib|jvm-provider --tasks tasks-jvm.jsonl --work DIR --out DIR   (JVM: superset check against gitflow-incremental-builder; Maven reactor and Gradle projects against bgraph units)
 //	bgraph-eval dotnet-affected|dotnet-provider --tasks tasks-dotnet.jsonl --work DIR --out DIR   (.NET: superset check against dotnet-affected; ProjectReference edges against msbuild)
+//	bgraph-eval dart-locate --tasks tasks-dart.jsonl --work DIR [--out dart-locate.json] [--examples 3]   (locate Dart FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval rb-locate --tasks tasks-ruby.jsonl --work DIR [--out rb-locate.json] [--examples 3]   (locate Ruby FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
@@ -119,6 +120,8 @@ func main() {
 		err = cmdJVMLocate(ctx, os.Args[2:], "ruby")
 	case "php-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "php")
+	case "dart-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "dart")
 	case "lockdiff":
 		err = cmdLockdiff(ctx, os.Args[2:])
 	case "manifest":
@@ -173,7 +176,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
-	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby | swift; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
+	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby | swift | dart; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
 	rulesDir := fs.String("rules-dir", "", "inject DIR/<owner>__<name>.toml as bgraph.toml into P and C of that repo's tasks (python [[dynamic]] declarations)")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
@@ -199,6 +202,9 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "php" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/php.json"
+	}
+	if *eco == "dart" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/dart.json"
 	}
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return fmt.Errorf("--tasks, --work, --out are required")
@@ -264,6 +270,11 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "php" {
 		if werr := evalkit.WritePHPReport(*out, rs); werr != nil {
+			return werr
+		}
+	}
+	if *eco == "dart" {
+		if werr := evalkit.WriteDartReport(*out, rs); werr != nil {
 			return werr
 		}
 	}
@@ -390,9 +401,9 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift | dart")
 	fs.Parse(args)
-	if *eco == "php" || *eco == "swift" {
+	if *eco == "php" || *eco == "swift" || *eco == "dart" {
 		outSet := false
 		fs.Visit(func(f *flag.Flag) { outSet = outSet || f.Name == "out" })
 		if !outSet {
@@ -448,6 +459,8 @@ func cmdManifest(args []string) error {
 		man = evalkit.BuildJVMDotnetManifest(*eco, t1, *metaPath, *maxPer)
 	} else if *eco == "ruby" {
 		man = evalkit.BuildRubyManifest(t1, *metaPath, *maxPer)
+	} else if *eco == "dart" {
+		man = evalkit.BuildDartManifest(t1, *metaPath, *maxPer)
 	} else if *eco == "swift" {
 		ds = []evalkit.DatasetInfo{{Name: "nebius/Longtail-SWE", URL: "https://huggingface.co/datasets/nebius/Longtail-SWE", Notes: "hard and easy splits, Swift rows with recorded FAIL_TO_PASS results"}}
 		ds[0].Revision = metaString(*metaPath, "swift_datasets", ds[0].Name)

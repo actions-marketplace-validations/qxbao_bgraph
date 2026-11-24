@@ -85,6 +85,7 @@ type gitTree struct {
 	files []string
 	oid   map[string]string
 	dirs  map[string]bool
+	links map[string]bool // symbolic links (mode 120000): listed as files, not followed (see followGitLinks)
 	mu    sync.Mutex
 	cmd   *exec.Cmd
 	in    io.WriteCloser
@@ -114,6 +115,12 @@ func newGitTreeWant(ctx context.Context, repoDir, rev string, want func(string) 
 		p := e[tab+1:]
 		t.files = append(t.files, p)
 		t.oid[p] = f[2]
+		if f[0] == "120000" {
+			if t.links == nil {
+				t.links = map[string]bool{}
+			}
+			t.links[p] = true
+		}
 		for d := filepath.ToSlash(filepath.Dir(p)); d != "." && !t.dirs[d]; d = filepath.ToSlash(filepath.Dir(d)) {
 			t.dirs[d] = true
 		}
