@@ -79,7 +79,7 @@ func phpClean(ctx context.Context, dir string) error {
 		if len(ln) < 4 {
 			continue
 		}
-		p := ln[3:]
+		p := strings.TrimPrefix(ln[3:], `"`) // quoted when it has spaces or special characters
 		if p == "vendor/" || strings.HasPrefix(p, "vendor/") || p == "composer.lock" {
 			continue
 		}
