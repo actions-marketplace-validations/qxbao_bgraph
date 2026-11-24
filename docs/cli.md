@@ -51,6 +51,7 @@ An uncertain selection is not an error: it is reported as a widening and the exi
 | `--python EXE` | interpreter (overrides `[dynamic_layer] python`) |
 | `--node EXE` | node executable (overrides `[dynamic_layer] node`) |
 | `--ruby EXE` | Ruby executable (overrides `[dynamic_layer] ruby`) |
+| `--php EXE` | PHP executable (overrides `[dynamic_layer] php`) |
 | `--trust-native-env` | as `[dynamic_layer] trust_native_env = true` |
 
 Without `--dynamic`, `bgraph.toml` decides.
@@ -88,7 +89,7 @@ bgraph affected --base A --head B --json
 | `warnings` | object[] | widenings that do not change the scope (`case_mismatch`, `rule_rejected`, `dynamic_skipped`) |
 | `always_run` | string[] | new test files and previously failed units |
 | `narrowed` | object[] | widened units removed by the dynamic layer: `unit`, `recorded` (time), `commit`, `reason` |
-| `index_stats` | object | counters: `units`, `seeds`, `reached`, `unresolved` (and `narrowed_classes` with the JVM class layer) |
+| `index_stats` | object | counters: `units`, `seeds`, `reached`, `unresolved` (and `narrowed_classes` with the JVM class layer, `narrowed_test_files` with the PHP layer) |
 
 A selected test:
 
@@ -105,7 +106,7 @@ A selected test:
 | `test_modules` | declared SwiftPM test modules used to build the package's `swift test --skip` argument |
 | `widened` | selected only because of a widening; only such units can be removed by the dynamic layer |
 | `dynamic` | why the dynamic layer kept the unit |
-| `class_filter`, `classes` | the JVM class layer narrowed the unit: only these test classes run (the module is still built) |
+| `class_filter`, `classes` | the JVM or .NET class layer narrowed the unit: only these test classes run (the module is still built); the PHP layer: only these test files (repo-relative) run, none when `classes` is empty |
 
 A widening:
 
@@ -236,9 +237,9 @@ default branch, see [`ci/record-github-actions.yml`](ci/record-github-actions.ym
 ## `record`
 
 ```text
-bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
-              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
-              [--json] [--quiet]
+bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
+              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE]
+              [--trust-native-env] [--json] [--quiet]
 ```
 
 Runs test units with a dependency collector and stores the records of the [dynamic layer](dynamic-layer.md).
@@ -246,8 +247,8 @@ Runs test units with a dependency collector and stores the records of the [dynam
 | Flag | Default | Meaning |
 |---|---|---|
 | `--eco` | `[dynamic_layer] ecosystems`, else every ecosystem with test units | record one ecosystem |
-| `--units GLOB` | all | only units matching the glob |
-| `--jobs N` | Python and Ruby: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
+| `--units GLOB` | all | only units matching the glob (PHP: the project unit `<dir>::php` or its test files `<dir>::php#<file>`) |
+| `--jobs N` | Python, Ruby and PHP: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
 | `--timeout D` | `10m` | per unit (per build for JVM, per test host for .NET); a unit that times out gets an incomplete record |
 | `--allow-dirty` | off | record a working tree that differs from `HEAD` |
 | `--out FILE` | the state directory | write the records to a JSONL file instead (import elsewhere with `bgraph dynamic import`) |
@@ -259,6 +260,11 @@ Runs test units with a dependency collector and stores the records of the [dynam
 Ruby (`--eco ruby`) runs each test file as the runner adapter does, with the collector preloaded through `RUBYOPT` and the
 `--ruby` executable's directory first on `PATH`; the environment variables of the shell (`BUNDLE_GEMFILE`, `BUNDLE_PATH`,
 `BUNDLE_WITHOUT`...) apply, see [dynamic layer §10.4](dynamic-layer.md#104-collector).
+
+PHP (`--eco php`) lists the test files of each Composer project with a PHPUnit XML configuration, then runs each test file
+alone as the runner adapter does, with the collector prepended through an ini file on `PHP_INI_SCAN_DIR` and Xdebug in
+`coverage,develop` mode; the `--php` executable must load Xdebug 3 and have no `auto_prepend_file`, see
+[dynamic layer §11.4](dynamic-layer.md#114-collector).
 
 The summary lists the commit, units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
 toolchain addons accepted (Node) and the incomplete reasons. Exit code `0` even when some units failed or are incomplete.
@@ -272,13 +278,13 @@ cache, restore the newest records on pull requests.
 
 ```text
 bgraph dynamic import [--root DIR] FILE
-bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env] [--json]
+bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--trust-native-env] [--json]
 ```
 
 - `import` merges a records file (from `record --out`) into the store, for example records made by CI on the main branch.
 - `status` reports, per ecosystem, the store, the number of records and recorded units, records of the current
   environment, records usable at `HEAD` (and why the others are not) and the incomplete reasons. Without `--eco` it
-  reports Python, Node and Ruby when they have records or test units; with `--json`, an object for `--eco`, else an array.
+  reports Python, Node, Ruby and PHP when they have records or test units; with `--json`, an object for `--eco`, else an array.
 
 ## `mcp`
 

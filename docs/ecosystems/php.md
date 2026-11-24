@@ -13,7 +13,7 @@ and Git and can run before dependencies are installed.
 | Runners | PHPUnit, Pest |
 | Manifests and configuration | `composer.json`, `phpunit.xml`, `phpunit.xml.dist`, `phpunit.dist.xml`, `Pest.php` |
 | Lockfile | `composer.lock` at [level L0](../lockfiles.md) |
-| Dynamic layer | none |
+| Dynamic layer | test files inside a selected project, off by default ([below](#dynamic-layer)) |
 
 ## Supported layouts
 
@@ -76,6 +76,28 @@ $ bgraph command --base HEAD
 vendor/bin/phpunit --configuration phpunit.xml.dist
 ```
 
+## Dynamic layer
+
+The [dynamic layer](../dynamic-layer.md#11-php-per-test-file-narrowing) (`[dynamic_layer] ecosystems = ["php"]`, off
+by default) narrows a selected project to the test files whose recorded runs can see the change. Composer autoloads
+classes lazily, so each test file includes a small part of the project; PHP copies nothing between files at compile time,
+so a modified file that a test file never included, read, stat'ed or listed cannot change its run. When every change to a
+`.php` file lies inside function or method bodies, a test file that included the file is also removed when it executed
+no line of a changed function.
+
+```console
+$ bgraph record --eco php
+$ bgraph command --base HEAD --dynamic
+# scope: graph
+vendor/bin/phpunit --configuration phpunit.xml.dist tests/Monolog/Formatter/LineFormatterTest.php tests/Monolog/SignalHandlerTest.php
+```
+
+Requirements: PHPUnit 10 or later, or Pest 2 or later, a PHPUnit XML configuration, installed Composer dependencies, and
+Xdebug 3 in the PHP that records. Only modifications of existing PHP code files and unreferenced documentation files are
+narrowed; Composer manifests and lockfiles, PHPUnit XML, `Pest.php`, data files and additions keep the whole project. A
+project whose selected test files are all removed stays in the selection with an empty `classes` list, and the run plan
+has no command for it.
+
 ## Addressing units in `bgraph.toml`
 
 Use a project directory to select units under it or an exact ID to select a single project.
@@ -94,7 +116,7 @@ An `affects` glob matches unit files, which are virtual nodes for PHP. Use an ID
 - Changes to a single input generally select the entire suite of a single-project repository.
 - Composer scripts and repository-specific runner flags may need to run through the caller's own CI command. A
   detected PHPUnit or Pest script with an unknown suite layout asks the caller to run its full suite.
-- Composer lockfile changes select the project at L0. Dynamic test-level narrowing is unavailable.
+- Composer lockfile changes select the project at L0. The [dynamic layer](#dynamic-layer) never narrows them.
 - The shadow audit currently maps result files to file-based test units. PHP project units are evaluated through the PHP
   T1 and T2 oracles.
 
