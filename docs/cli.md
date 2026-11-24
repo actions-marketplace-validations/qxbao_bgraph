@@ -65,7 +65,7 @@ bgraph affected [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...
 | Flag | Meaning |
 |---|---|
 | `--json` | print the [selection as JSON](#json-output) |
-| `--failed ID,...` | test unit IDs that failed in the previous run; they are always selected if they still exist |
+| `--failed ID,...` | test unit IDs that failed in the previous run; they are always selected if they still exist. A sub-unit ID `<unit>#<sub>` as listed under `narrowed` (PHP: `<dir>::php#<test file>`) selects its unit; the PHP layer then always runs that test file |
 
 Text output lists the scope, the base, the number of changed files, each widening (reason, path, tier, scope, detail
 and suggestion), warnings, the selected tests with their first reason, and the units removed by the dynamic layer.

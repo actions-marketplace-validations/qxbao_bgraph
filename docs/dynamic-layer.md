@@ -1100,7 +1100,8 @@ K(U) = { f ∈ Files(U) : f changed  OR  no usable record(f)  OR  record(f) keep
   in the current environment, every dependency is unchanged at the base, its runner accepts several test operands
   (PHPUnit 10 or later, Pest 2 or later), and the base has exactly the tracked files of the configuration's test
   locations that it recorded: a test file added or removed since the recording would otherwise be missed.
-- A unit in `always_run` (previously failed) is not narrowed.
+- A unit in `always_run` (previously failed) is not narrowed; a test file named there by its sub-unit ID (`--failed
+  '.::php#tests/LoggerTest.php'`, the form `narrowed` lists) always runs.
 - The unit stays selected with `class_filter` and `classes` (the kept test files, sorted); removed test files are
   `narrowed` entries `<unit>#<file>` and `index_stats.narrowed_test_files` counts them. A unit with no kept test file stays
   selected with an empty `classes` list, and the run plan has no command for it. A `full` selection is never narrowed.
