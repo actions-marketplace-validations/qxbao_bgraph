@@ -1,4 +1,4 @@
-Only description/version/repository/topics and formatting change in pubspec.yaml: no widening (the lib change
+Only description/repository/topics and formatting change in pubspec.yaml: no widening (the lib change
 selects its test).
 -- base/pubspec.yaml --
 name: app
@@ -24,7 +24,7 @@ void main() => test('b', () => b());
 # reformatted
 name: app
 description: The app.
-version: 1.0.1
+version: 1.0.0
 repository: https://example.com/app
 topics: [x]
 environment: {sdk: ^3.5.0}

@@ -80,7 +80,7 @@ The comparison is structural: both versions are parsed, so comments and formatti
 
 | Change | Effect |
 |---|---|
-| `pubspec.yaml`, only `description`, `homepage`, `repository`, `issue_tracker`, `documentation`, `topics`, `funding`, `screenshots`, `false_secrets`, `platforms`, `publish_to` or `version` | none (a test that reads `pubspec.yaml` by a literal still depends on it) |
+| `pubspec.yaml`, only `description`, `homepage`, `repository`, `issue_tracker`, `documentation`, `topics`, `funding`, `screenshots`, `false_secrets`, `platforms` or `publish_to` | none (a test that reads `pubspec.yaml` by a literal still depends on it) |
 | `pubspec.yaml`, any other key (`dependencies`, `dev_dependencies`, `dependency_overrides`, `environment`, `resolution`, `workspace`, `executables`, `flutter:`...), a package added or removed, or a file that does not parse | `module`, `manifest_changed`: the package, the packages that share its resolution (a workspace root and all its members), and every in-repository package that depends on it by path or by name, transitively |
 | `pubspec_overrides.yaml` | `module`, `manifest_changed`: as above |
 | `pubspec.lock` | `module`, `lock_changed` at L0: the package and, at a workspace root, every member |

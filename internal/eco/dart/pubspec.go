@@ -301,10 +301,12 @@ func dependsOn(q *pkg, dirs map[string]bool, names map[string]bool) bool {
 	return false
 }
 
-// harmlessKeys are pubspec keys that change neither resolution nor the build: metadata for pub.dev and the version string.
+// harmlessKeys are pubspec keys that change neither resolution nor the build: metadata for pub.dev. `version` is not one of
+// them: pub checks path and workspace packages against their dependents' constraints (and a dev_dependency cycle through a
+// hosted package checks the package's own version), so a bump can make a version solve fail.
 var harmlessKeys = map[string]bool{
 	"description": true, "homepage": true, "repository": true, "issue_tracker": true, "documentation": true, "topics": true,
-	"funding": true, "screenshots": true, "false_secrets": true, "platforms": true, "publish_to": true, "version": true,
+	"funding": true, "screenshots": true, "false_secrets": true, "platforms": true, "publish_to": true,
 }
 
 // changedKeys lists the top-level keys whose values differ between two parsed pubspecs.

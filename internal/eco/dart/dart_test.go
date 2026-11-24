@@ -218,7 +218,7 @@ func TestClassifyHarmlessAndWorkspace(t *testing.T) {
 	})
 	head := tree.NewMapTree(map[string]string{
 		"pubspec.yaml":   "name: ws\nworkspace: [a, b]\n",
-		"a/pubspec.yaml": "name: a\nresolution: workspace\ndescription: y\nversion: 2.0.0\n",
+		"a/pubspec.yaml": "name: a\nresolution: workspace\ndescription: y\ntopics: [t]\n",
 		"b/pubspec.yaml": "name: b\nresolution: workspace\n",
 		"c/pubspec.yaml": "name: c\ndependencies:\n  a: any\n",
 		"d/pubspec.yaml": "name: d\n",
