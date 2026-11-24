@@ -247,6 +247,39 @@ Findings:
 
 These checks are not a release gate: the dynamic layer stays off by default.
 
+#### Swift dynamic layer feasibility
+
+A history sample of 1,055 first-parent pairs from Swift Argument Parser, Swift Collections and Swift Numerics yielded
+39 body-only candidates (3.7%) using a permissive lexical check. It allowed edits confined to function bodies in
+existing source files with unchanged Git modes, alongside optional documentation edits. The parser could not parse
+the source in 104 other pairs. The result estimates guard eligibility.
+
+On Linux arm64 with SwiftPM 6.2.1, one filtered invocation per XCTest class or Swift Testing suite produced distinct LLVM
+coverage reports. A test failed after an edit confined to a function body in the Swift file it read as text. Its base
+profile recorded execution in the test itself and zero executed regions in the changed file. A coverage-only selector
+could therefore drop a failing test. SwiftPM merges profiles per invocation, including in the parallel XCTest probe.
+[SwiftPM 6.2.1 coverage export](https://github.com/swiftlang/swift-package-manager/blob/swift-6.2.1-RELEASE/Sources/Commands/SwiftTestCommand.swift#L575-L615)
+
+The dynamic layer remains planned pending runtime dependency tracing and a compiler-checked guard.
+
+#### Dart dynamic layer feasibility
+
+Across 1,500 first-parent pairs in dart-lang/http, melos and dart-petitparser, 474 passed a preliminary path and mode
+check. Of those, seven had widened Dart file units. They accounted for 69 of the 5,434 static Dart test selections
+(1.3%), even if every eligible widened unit could be removed. A separate syntax-only check found 139 pairs with edits
+confined to function or method bodies, with optional documentation edits.
+
+On Dart 3.14.1/Linux arm64, `dart test --coverage` produced one report per VM test file. All 18 reports from
+dart-petitparser included executed lines in their own test file. Median runtime was 5.88 s for the plain suite and
+9.22 s for coverage. Serial isolated coverage runs took 27.47 s in total.
+[Per-suite coverage export in test_core 0.6.18](https://github.com/dart-lang/test/blob/test_core-v0.6.18/pkgs/test_core/lib/src/runner/coverage.dart)
+
+A test that read an unimported Dart file as text passed at the base. Its coverage report omitted the read file.
+Changing a function body in that file made the test fail, and bgraph's static selector kept it through an
+`unreferenced_file` widening. A separate body-only edit caused a suite to fail to load despite having no
+execution hits in the edited function. The Dart layer remains planned pending runtime dependency tracing and
+compiler validation. The probe covered the Dart VM; Flutter's test runner needs its own evaluation.
+
 ### Lockfile differential check
 
 | Format | Repositories | Commits | Project checks | Mismatches | Parse errors |
