@@ -65,8 +65,12 @@ type Package struct {
 	// then names other files and lines for its blocks. Those names are not the compiled files' own and are ignored; the body
 	// guard refuses changes to any file with such a directive.
 	LineDirectives bool
-	bin            string
-	Elapsed        time.Duration
+	// Dirs: the directory (absolute, forward slashes) of every repository package of the build closure, outside vendor
+	// directories. A record requires the same set of .go files in each at the base: a file added to a compiled package can add
+	// an init function or a method that changes what runs.
+	Dirs    []string
+	bin     string
+	Elapsed time.Duration
 }
 
 // Outcome is what one isolated run of a test function produced.
@@ -124,6 +128,27 @@ func goEnv(extra []string) []string {
 		out = append(out, kv)
 	}
 	return out
+}
+
+// withPathFirst returns env with dir put first on PATH ("" or "bin" alone: env unchanged).
+func withPathFirst(env []string, dir string) []string {
+	if dir == "" || dir == "bin" || !filepath.IsAbs(dir) {
+		return env
+	}
+	out := make([]string, 0, len(env)+1)
+	name, cur := "PATH", ""
+	for _, kv := range env {
+		k, v, _ := strings.Cut(kv, "=")
+		if k == "PATH" || runtime.GOOS == "windows" && strings.EqualFold(k, "PATH") {
+			name, cur = k, v
+			continue
+		}
+		out = append(out, kv)
+	}
+	if cur != "" {
+		dir += string(os.PathListSeparator) + cur
+	}
+	return append(out, name+"="+dir)
 }
 
 // listPkg is the part of `go list -json` the collector reads.
@@ -251,6 +276,9 @@ func listDeps(ctx context.Context, opt RunOptions, p *Package) ([]string, error)
 		}
 		if ip, _, _ := strings.Cut(lp.ImportPath, " "); !strings.HasSuffix(ip, ".test") {
 			p.Pkgs[ip] = dir
+			if !strings.Contains("/"+dir+"/", "/vendor/") && !slices.Contains(p.Dirs, dir) {
+				p.Dirs = append(p.Dirs, dir)
+			}
 		}
 		lists := [][]string{lp.GoFiles, lp.CgoFiles, lp.CompiledGoFiles, lp.CFiles, lp.CXXFiles, lp.MFiles, lp.HFiles, lp.FFiles,
 			lp.SFiles, lp.SwigFiles, lp.SwigCXXFiles, lp.SysoFiles, lp.EmbedFiles}
@@ -322,6 +350,7 @@ func listDeps(ctx context.Context, opt RunOptions, p *Package) ([]string, error)
 	}
 	sort.Strings(p.Files)
 	sort.Strings(p.TestFiles)
+	sort.Strings(p.Dirs)
 	p.TestFiles = slices.Compact(p.TestFiles)
 	var pats []string
 	for m := range mods {
@@ -549,7 +578,8 @@ func runFunc(ctx context.Context, opt RunOptions, covdata []string, spawn *spawn
 	cmd := exec.CommandContext(rctx, p.bin, "-test.run=^"+name+"$", "-test.count=1", "-test.v=true", "-test.paniconexit0",
 		"-test.gocoverdir="+covDir, "-test.timeout="+opt.Timeout.String())
 	cmd.Dir = opt.abs(p.Unit.Dir)
-	cmd.Env = append(goEnv(opt.Env), "GOCOVERDIR="+covDir)
+	// As go test does: GOROOT/bin first on PATH (a test that runs "go" gets the same toolchain).
+	cmd.Env = append(withPathFirst(goEnv(opt.Env), filepath.Join(opt.Probe.Get("GOROOT"), "bin")), "GOCOVERDIR="+covDir)
 	mw := &markWriter{name: name}
 	cmd.Stdout, cmd.Stderr = mw, mw
 	setProcessGroup(cmd)

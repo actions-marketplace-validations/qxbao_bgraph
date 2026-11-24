@@ -119,6 +119,61 @@ func TestSource(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestData reads a data file of the package directory (no static edge: the path is inside the package).
+func TestData(t *testing.T) {
+	if b, err := os.ReadFile("testdata/a.json"); err != nil || string(b) != "{}\n" {
+		t.Fatal(err, string(b))
+	}
+}
+
+// TestEnv runs only when REPORT_IT=1: skipped while recording, so its record is incomplete.
+func TestEnv(t *testing.T) {
+	if os.Getenv("REPORT_IT") != "1" {
+		t.Skip("REPORT_IT not set")
+	}
+	if Render() == "" {
+		t.Fatal("empty")
+	}
+}
+`
+
+const goLint = `package lint
+
+// Value returns one.
+func Value() int {
+	return 1
+}
+`
+
+const goLintTest = `package lint
+
+import (
+	"go/parser"
+	"go/token"
+	"strings"
+	"testing"
+)
+
+// TestDoc reads the package's own sources: every doc comment starts with the function's name.
+func TestDoc(t *testing.T) {
+	pkgs, err := parser.ParseDir(token.NewFileSet(), ".", nil, parser.ParseComments)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range pkgs {
+		for _, f := range p.Files {
+			for _, cg := range f.Comments {
+				if strings.HasPrefix(cg.Text(), "Returns") {
+					t.Fatal(cg.Text())
+				}
+			}
+		}
+	}
+	if Value() != 1 {
+		t.Fatal("value")
+	}
+}
 `
 
 // TestRecordGoIntegration records a small Go module with the real collector (coverage of every package, os and syscall) and
@@ -146,6 +201,8 @@ func TestRecordGoIntegration(t *testing.T) {
 		"report/report_test.go":    goReportTest,
 		"report/testdata/a.json":   "{}\n",
 		"README.md":                "# shop\n",
+		"lint/lint.go":             goLint,
+		"lint/lint_test.go":        goLintTest,
 		"shop/doc_unreferenced.md": "notes\n",
 	})
 	state := t.TempDir()
@@ -164,19 +221,26 @@ func TestRecordGoIntegration(t *testing.T) {
 	for _, r := range recs {
 		by[r.Unit] = r
 	}
-	if sum.Units != 7 || len(recs) != 9 || len(warn) > 0 {
+	if sum.Units != 10 || len(recs) != 13 || len(warn) > 0 {
 		t.Fatalf("summary %+v, %d records, %v", sum, len(recs), warn)
 	}
 	if l := by["go:shop"]; !l.Complete || !slices.Equal(l.Classes, []string{"ExampleDescribe", "TestCount", "TestExternal", "TestHelper", "TestTotal"}) {
 		t.Fatalf("list record %+v", l)
 	}
-	for _, u := range []string{"go:shop#TestTotal", "go:shop#TestCount", "go:shop#TestHelper", "go:shop#ExampleDescribe", "go:report#TestRender", "go:report#TestSource"} {
+	for _, u := range []string{"go:shop#TestTotal", "go:shop#TestCount", "go:shop#TestHelper", "go:shop#ExampleDescribe", "go:report#TestRender", "go:report#TestSource",
+		"go:report#TestData", "go:lint#TestDoc"} {
 		if r := by[u]; !r.Complete || !r.Pass {
 			t.Errorf("%s: complete=%v pass=%v (%s)", u, r.Complete, r.Pass, r.Incomplete)
 		}
 	}
 	if r := by["go:shop#TestExternal"]; r.Complete || !r.Pass || !strings.Contains(r.Incomplete, "starts a process the collector does not observe") {
 		t.Errorf("TestExternal: complete=%v pass=%v (%s)", r.Complete, r.Pass, r.Incomplete)
+	}
+	if r := by["go:report#TestEnv"]; r.Complete || !r.Pass || !strings.Contains(r.Incomplete, "test skipped") {
+		t.Errorf("TestEnv: complete=%v pass=%v (%s)", r.Complete, r.Pass, r.Incomplete)
+	}
+	if r := by["go:report#TestData"]; r.Deps["report/testdata/a.json"] == "" || !slices.Contains(r.Dirs, "shop") || !slices.Contains(r.Dirs, "report") {
+		t.Errorf("TestData deps %v dirs %v", r.Deps, r.Dirs)
 	}
 	if r := by["go:report#TestRender"]; r.Deps["shop/cart.go"] == "" || r.Deps["report/report_test.go"] == "" || r.Deps["go.mod"] == "" {
 		t.Errorf("TestRender deps %v", r.Deps)
@@ -232,7 +296,7 @@ func TestRecordGoIntegration(t *testing.T) {
 
 	// Cart.Total: only TestTotal (and the incomplete TestExternal) run in shop; report compiles only.
 	write("shop/cart.go", strings.Replace(goCart, "n += x", "n += x * 1", 1))
-	s := check("Total", map[string]unitRun{"go:shop": {true, []string{"TestExternal", "TestTotal"}}, "go:report": {true, nil}})
+	s := check("Total", map[string]unitRun{"go:shop": {true, []string{"TestExternal", "TestTotal"}}, "go:report": {true, []string{"TestEnv"}}})
 	plan, err := runner.Commands(s, runner.Options{})
 	if err != nil {
 		t.Fatal(err)
@@ -241,7 +305,7 @@ func TestRecordGoIntegration(t *testing.T) {
 	for _, c := range plan.Commands {
 		lines = append(lines, strings.Join(c.Argv, " "))
 	}
-	if !slices.Contains(lines, "go test -run ^$ ./report") || !slices.Contains(lines, "go test -run ^(TestExternal|TestTotal)$ ./shop") {
+	if !slices.Contains(lines, "go test -run ^(TestEnv)$ ./report") || !slices.Contains(lines, "go test -run ^(TestExternal|TestTotal)$ ./shop") {
 		t.Errorf("commands %v", lines)
 	}
 	// Audit: a failure of a removed function of a selected package is a miss; one of a kept function is not.
@@ -260,14 +324,18 @@ func TestRecordGoIntegration(t *testing.T) {
 	if rep := audit1("TestTotal"); !rep.Clean {
 		t.Errorf("audit of a kept function: %+v", rep)
 	}
+	// A package-level failure (build, vet, TestMain) is not a removed function.
+	if rep := audit1("(package failed)"); !rep.Clean {
+		t.Errorf("audit of a package failure: %+v", rep)
+	}
 	// Cart.Count: the example (through Describe) and report's TestRender run it.
 	write("shop/cart.go", strings.Replace(goCart, "return len(c.Items)", "return len(c.Items[:])", 1))
 	check("Count", map[string]unitRun{"go:shop": {true, []string{"ExampleDescribe", "TestCount", "TestExternal"}},
-		"go:report": {true, []string{"TestRender"}}})
+		"go:report": {true, []string{"TestEnv", "TestRender"}}})
 	// A line added inside Total moves Count and Describe: every function that executed a line below it is kept.
 	write("shop/cart.go", strings.Replace(goCart, "n := 0", "n := 0\n\tn += 0", 1))
 	check("shift", map[string]unitRun{"go:shop": {true, []string{"ExampleDescribe", "TestCount", "TestExternal", "TestTotal"}},
-		"go:report": {true, []string{"TestRender"}}})
+		"go:report": {true, []string{"TestEnv", "TestRender"}}})
 	// A signature change: the guard refuses, nothing is narrowed.
 	write("shop/cart.go", strings.Replace(goCart, "func Describe(c Cart) string", "func Describe(c Cart, _ ...int) string", 1))
 	s = check("signature", map[string]unitRun{"go:shop": whole, "go:report": whole})
@@ -278,10 +346,17 @@ func TestRecordGoIntegration(t *testing.T) {
 	// Price: report reads price.go as data (a fixture edge): report runs whole; in shop only the helper test ran Price.
 	write("shop/price.go", strings.Replace(goPrice, "x * 2", "x + x", 1))
 	s = check("Price", map[string]unitRun{"go:shop": {true, []string{"TestExternal", "TestHelper"}}, "go:report": whole})
-	if !strings.Contains(notes(s), "fixture, embed, cgo or program-building edge") {
+	if !strings.Contains(notes(s), "fixture, embed, cgo or directory-pattern edge") {
 		t.Errorf("Price notes %s", notes(s))
 	}
 	write("shop/price.go", goPrice)
+	// A comment-only change in a package whose tests parse their own sources: kept whole.
+	write("lint/lint.go", strings.Replace(goLint, "// Value returns one.", "// Returns one.", 1))
+	s = check("lint comment", map[string]unitRun{"go:lint": whole})
+	if !strings.Contains(notes(s), "Go sources as data") {
+		t.Errorf("lint notes %s", notes(s))
+	}
+	write("lint/lint.go", goLint)
 	// A changed test file keeps its package whole.
 	write("shop/cart_test.go", strings.Replace(goCartTest, "t.Fatal(\"count\")", "t.Fatal(\"count!\")", 1))
 	check("test file", map[string]unitRun{"go:shop": whole})
@@ -295,19 +370,36 @@ func TestRecordGoIntegration(t *testing.T) {
 	// A new test file in shop since the recording: the function list is not usable.
 	write("shop/cart.go", strings.Replace(goCart, "n += x", "n += x * 1", 1))
 	write("shop/more_test.go", "package shop\n\nimport \"testing\"\n\nfunc TestMore(t *testing.T) {}\n")
-	run := exec.Command("git", "-c", "core.autocrlf=false", "add", "shop/more_test.go")
-	run.Dir = root
-	if out, err := run.CombinedOutput(); err != nil {
-		t.Fatal(err, string(out))
+	git := func(args ...string) {
+		t.Helper()
+		run := exec.Command("git", append([]string{"-c", "core.autocrlf=false"}, args...)...)
+		run.Dir = root
+		if out, err := run.CombinedOutput(); err != nil {
+			t.Fatal(err, string(out))
+		}
 	}
-	run = exec.Command("git", "-c", "core.autocrlf=false", "commit", "-q", "-m", "more")
-	run.Dir = root
-	if out, err := run.CombinedOutput(); err != nil {
-		t.Fatal(err, string(out))
-	}
-	s = check("added test file", map[string]unitRun{"go:shop": whole, "go:report": {true, nil}})
+	git("add", "shop/more_test.go")
+	git("commit", "-q", "-m", "more")
+	s = check("added test file", map[string]unitRun{"go:shop": whole, "go:report": {true, []string{"TestEnv"}}})
 	if !strings.Contains(notes(s), "was not there when recorded") {
 		t.Errorf("added test file notes %s", notes(s))
+	}
+	// A source file added since the recording to a package report's binary compiles (shop): report's function records are not
+	// usable, every function runs.
+	write("shop/hook.go", "package shop\n\nfunc init() {}\n")
+	git("add", "shop/hook.go")
+	git("commit", "-q", "-m", "hook")
+	check("added source file", map[string]unitRun{"go:shop": whole, "go:report": whole})
+	git("rm", "-q", "shop/hook.go")
+	git("commit", "-q", "-m", "no hook")
+	check("hook removed", map[string]unitRun{"go:shop": whole, "go:report": {true, []string{"TestEnv"}}})
+	// A data file of report changed between the recording and the base: report's records are stale.
+	write("report/testdata/a.json", "[]\n")
+	git("add", "report/testdata/a.json")
+	git("commit", "-q", "-m", "data")
+	s = check("stale data", map[string]unitRun{"go:shop": whole, "go:report": whole})
+	if !strings.Contains(notes(s), "stale") {
+		t.Errorf("stale data notes %s", notes(s))
 	}
 }
 

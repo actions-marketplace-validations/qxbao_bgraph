@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
@@ -28,13 +29,14 @@ func (ix *Index) goExe(rf *rules.File) (string, error) {
 	return godyn.ResolveGo(ix.repo.Root, cfg)
 }
 
-// goProbe runs (or reuses) the probe of the configured go command, from the repository root.
-func (ix *Index) goProbe(ctx context.Context, rf *rules.File) (string, godyn.Probe, error) {
+// goProbe runs (or reuses) the probe of the configured go command, from the repository root, with the extra environment of a
+// recording (nil at selection time).
+func (ix *Index) goProbe(ctx context.Context, rf *rules.File, extra []string) (string, godyn.Probe, error) {
 	exe, err := ix.goExe(rf)
 	if err != nil {
 		return "", godyn.Probe{}, fmt.Errorf("go: %w", err)
 	}
-	p, err := ix.goProbes.Get(ctx, exe, ix.repo.Root)
+	p, err := ix.goProbes.Get(ctx, exe, ix.repo.Root, extra)
 	if err != nil {
 		return "", godyn.Probe{}, fmt.Errorf("go: %w", err)
 	}
@@ -43,11 +45,11 @@ func (ix *Index) goProbe(ctx context.Context, rf *rules.File) (string, godyn.Pro
 
 // goFingerprint is the Go environment fingerprint at selection time (no build arguments: bgraph's go test commands carry none).
 func (ix *Index) goFingerprint(ctx context.Context, rf *rules.File) (string, error) {
-	_, p, err := ix.goProbe(ctx, rf)
+	_, p, err := ix.goProbe(ctx, rf, nil)
 	if err != nil {
 		return "", err
 	}
-	return godyn.Fingerprint(p, nil), nil
+	return godyn.Fingerprint(p, nil, nil), nil
 }
 
 // applyGoTests runs the Go layer on a selection: a selected Go package runs only the top-level test functions whose records
@@ -96,21 +98,15 @@ func (ix *Index) applyGoTests(ctx context.Context, in selector.Input, res select
 		return goSkip(sel, res.UnitEco, "environment fingerprint: "+err.Error())
 	}
 	// Units the static graph reaches from a changed file through an edge the records cannot judge are kept whole.
-	var seeds []string
-	for _, c := range res.Changes {
-		if res.Graph.IsNode(c.Path) {
-			seeds = append(seeds, c.Path)
-		}
-	}
-	reached := res.Graph.WalkTainted(seeds, godyn.PlainEdge)
+	reached := res.Graph.WalkTainted(res.ChangedSeeds, godyn.PlainEdge)
 	tainted := map[string]bool{}
 	for _, t := range sel.Tests {
 		if slices.ContainsFunc(t.Files, func(f string) bool { return reached[f] }) {
 			tainted[t.Unit] = true
 		}
 	}
-	return godyn.Narrow(sel, godyn.Params{Env: env, Records: recs, Base: in.BaseTree, UnitEco: res.UnitEco, Changed: changed,
-		Tainted: tainted})
+	return godyn.Narrow(sel, godyn.Params{Env: env, Records: recs, Base: in.BaseTree, Head: in.HeadTree, UnitEco: res.UnitEco,
+		Changed: changed, Tainted: tainted})
 }
 
 // goSkip returns sel with a dynamic_skipped warning for the Go layer, and the reason on every Go unit it would have considered.
@@ -169,19 +165,40 @@ func (ix *Index) recordGo(ctx context.Context, opt RecordOptions, rf *rules.File
 	if why := godyn.CheckFlags(opt.BuildArgs, godyn.GOFLAGS(opt.Env)); why != "" {
 		return nil, nil, fmt.Errorf("go: %s", why)
 	}
-	exe, probe, err := ix.goProbe(ctx, rf)
+	// The build and the test processes get opt.Env: the probe and the fingerprint see the same environment.
+	exe, probe, err := ix.goProbe(ctx, rf, opt.Env)
 	if err != nil {
 		return nil, nil, err
 	}
-	env := godyn.Fingerprint(probe, opt.BuildArgs)
+	env := godyn.Fingerprint(probe, opt.BuildArgs, opt.Env)
 	ropt := godyn.RunOptions{Go: exe, Probe: probe, Root: ix.repo.Root, TmpDir: ix.tmpDir(), Timeout: opt.Timeout, Jobs: opt.Jobs,
 		Env: opt.Env, BuildArgs: opt.BuildArgs, Keep: func(unit, sub string) bool { return keep(unit) || keep(sub) }}
 	if ropt.Jobs <= 0 {
 		ropt.Jobs = godyn.DefaultJobs()
 	}
+	// The data files of each unit: the package directory's files and the targets of the unit's and its library's edges that the
+	// records cannot judge.
+	edges := map[string][]model.Edge{}
+	for _, a := range an.Analyses {
+		for _, e := range a.Edges {
+			edges[e.From] = append(edges[e.From], e)
+		}
+	}
+	var dmu sync.Mutex
+	dataOf := map[string][]string{}
+	data := func(u godyn.Unit) []string {
+		dmu.Lock()
+		defer dmu.Unlock()
+		if d, ok := dataOf[u.ID]; ok {
+			return d
+		}
+		d := godyn.DataFiles(wt, u.Dir, append(slices.Clone(edges[golang.Node(u.Dir)]), edges[golang.LibNode(u.Dir)]...))
+		dataOf[u.ID] = d
+		return d
+	}
 	if opt.Progress != nil {
 		ropt.Progress = func(done, total int, o godyn.Outcome) {
-			opt.Progress(done, total, godyn.RecordOf(o, wt, ix.repo.Root, env, head, now), o.Elapsed, o.Tail)
+			opt.Progress(done, total, godyn.RecordOf(o, wt, ix.repo.Root, env, head, now, data(o.Pkg.Unit)), o.Elapsed, o.Tail)
 		}
 	}
 	pkgs, outs, err := godyn.Collect(ctx, ropt, units)
@@ -191,7 +208,7 @@ func (ix *Index) recordGo(ctx context.Context, opt RecordOptions, rf *rules.File
 	var recs []dynamic.Record
 	recorded := map[string]bool{}
 	for _, o := range outs {
-		recs = append(recs, godyn.RecordOf(o, wt, ix.repo.Root, env, head, now))
+		recs = append(recs, godyn.RecordOf(o, wt, ix.repo.Root, env, head, now, data(o.Pkg.Unit)))
 		recorded[o.Pkg.Unit.ID] = true
 	}
 	sum.Units += len(outs)
@@ -205,7 +222,7 @@ func (ix *Index) recordGo(ctx context.Context, opt RecordOptions, rf *rules.File
 		if !recorded[p.Unit.ID] && !keep(p.Unit.ID) {
 			continue
 		}
-		r := godyn.ListRecordOf(p, wt, env, head, now)
+		r := godyn.ListRecordOf(p, wt, env, head, now, data(p.Unit))
 		if !r.Complete {
 			skipped = append(skipped, p.Unit.ID+": "+r.Incomplete)
 		}

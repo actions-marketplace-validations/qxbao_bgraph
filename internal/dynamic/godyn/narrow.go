@@ -2,9 +2,13 @@ package godyn
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"path"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/qxbao/bgraph/internal/classify"
@@ -193,6 +197,8 @@ type Params struct {
 	Changed []Changed // Guard's classification, refined
 	// Tainted: units the static graph reaches from a changed file through an edge PlainEdge rejects (kept whole).
 	Tainted map[string]bool
+	// Head: the head tree (with Base, where ReadsOwnSources looks for tests reading their package's sources).
+	Head tree.Tree
 }
 
 // latest returns the latest Go record per unit for environment env.
@@ -214,13 +220,16 @@ func latest(recs []dynamic.Record, env string) map[string]dynamic.Record {
 func keepReason(rec dynamic.Record, changed []Changed) string {
 	for _, c := range changed {
 		if _, ok := rec.Deps[c.Path]; !ok {
-			continue // not compiled into the test binary (nor embedded)
+			continue // neither compiled into the test binary, embedded, nor a data file of the unit
 		}
 		switch c.Kind {
 		case KindDoc:
-			return "its test binary embeds the changed file " + c.Path
+			return "its test binary embeds the changed file " + c.Path + ", or it lies among the unit's data files"
 		case KindTest:
-			return "its test binary compiles the changed test file " + c.Path
+			return "its record depends on the changed test file " + c.Path
+		}
+		if slices.Contains(rec.Reads, c.Path) {
+			continue // a .go file the binary does not compile (another build configuration, a data directory)
 		}
 		tbl, ok := rec.LineCov[c.Path]
 		if !ok {
@@ -283,8 +292,93 @@ func sameTestFiles(cl dynamic.Record, base tree.Tree, dir string) string {
 			return "test file " + f + " was not there when recorded"
 		}
 	}
-	if len(cl.Deps) != len(files) {
-		return fmt.Sprintf("%d test files when recorded, %d at the base", len(cl.Deps), len(files))
+	n := 0
+	for d := range cl.Deps {
+		if path.Dir(d) == dir && strings.HasSuffix(d, "_test.go") {
+			n++
+		}
+	}
+	if n != len(files) {
+		return fmt.Sprintf("%d test files when recorded, %d at the base", n, len(files))
+	}
+	return ""
+}
+
+// sameGoFiles: every package directory of the record's build closure holds, at the base, only .go files the record lists (a
+// file added to a compiled package can add an init function or a method).
+func sameGoFiles(r dynamic.Record, goByDir map[string][]string) string {
+	for _, d := range r.Dirs {
+		for _, f := range goByDir[d] {
+			if _, ok := r.Deps[f]; !ok {
+				return "Go file " + f + " was not there when recorded"
+			}
+		}
+	}
+	return ""
+}
+
+// selfReadImports are packages a test uses to read Go source files as data.
+var selfReadImports = []string{"go/parser", "go/ast", "go/doc", "go/build", "go/format", "go/types", "golang.org/x/tools/go/packages"}
+
+// ReadsOwnSources returns why the test files of package directory dir in t may read the package's own Go sources as data
+// ("" when nothing says so): a test file imports a Go source parser or loader (go/parser, go/ast, go/doc, go/build, go/format,
+// go/types, go/token with go/printer, golang.org/x/tools/go/packages or go/analysis...), or has a string literal ".", a *.go
+// pattern, or the name of a .go file of dir. The static graph has no edge for paths inside the package's own directory, and
+// coverage does not see reads. A test file that does not parse counts as reading.
+func ReadsOwnSources(t tree.Tree, dir string) string {
+	if t == nil {
+		return ""
+	}
+	for _, f := range TestFiles(t, dir) {
+		src, err := t.Read(f)
+		if err != nil {
+			return "cannot read " + f
+		}
+		fset := token.NewFileSet()
+		af, err := parser.ParseFile(fset, f, src, parser.SkipObjectResolution)
+		if err != nil {
+			return f + " does not parse"
+		}
+		imps := map[string]bool{}
+		for _, im := range af.Imports {
+			if p, err := strconv.Unquote(im.Path.Value); err == nil {
+				imps[p] = true
+			}
+		}
+		for p := range imps {
+			if slices.Contains(selfReadImports, p) || p == "golang.org/x/tools/go/analysis" || strings.HasPrefix(p, "golang.org/x/tools/go/analysis/") {
+				return f + " imports " + p
+			}
+		}
+		if imps["go/token"] && imps["go/printer"] {
+			return f + " imports go/token and go/printer"
+		}
+		why := ""
+		ast.Inspect(af, func(n ast.Node) bool {
+			if why != "" {
+				return false
+			}
+			lit, ok := n.(*ast.BasicLit)
+			if !ok || lit.Kind != token.STRING {
+				return true
+			}
+			v, err := strconv.Unquote(lit.Value)
+			if err != nil {
+				return true
+			}
+			v = strings.ReplaceAll(v, "\\", "/")
+			s := strings.TrimPrefix(v, "./")
+			switch {
+			case v == "." || v == "./" || s == "*.go" || strings.HasSuffix(s, ".go") && !strings.Contains(s, "/") && strings.ContainsAny(s, "*?["):
+				why = fmt.Sprintf("%s:%d: string literal %q", f, fset.Position(lit.Pos()).Line, v)
+			case strings.HasSuffix(s, ".go") && s != "" && t.Has(path.Join(dir, s)) && path.Dir(path.Join(dir, s)) == dir:
+				why = fmt.Sprintf("%s:%d: string literal %q names a Go file of the package", f, fset.Position(lit.Pos()).Line, v)
+			}
+			return true
+		})
+		if why != "" {
+			return why
+		}
 	}
 	return ""
 }
@@ -305,6 +399,12 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 		}
 	}
 	byUnit := latest(p.Records, p.Env)
+	goByDir := map[string][]string{}
+	for _, f := range p.Base.Files() {
+		if strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") {
+			goByDir[path.Dir(f)] = append(goByDir[path.Dir(f)], f)
+		}
+	}
 	bp := dynamic.Params{Eco: Eco, Collector: CollectorID, Env: p.Env, BaseOID: func(f string) string {
 		if !p.Base.Has(f) {
 			return ""
@@ -330,7 +430,15 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 			continue
 		}
 		if p.Tainted[t.Unit] {
-			keep("the static graph reaches it from a changed file through a fixture, embed, cgo or program-building edge (a test may read the file or run a program built from it)")
+			keep("the static graph reaches it from a changed file through a fixture, embed, cgo or directory-pattern edge (a test may read the file as data)")
+			continue
+		}
+		if why := ReadsOwnSources(p.Base, dir); why != "" {
+			keep("its tests may read the package's Go sources as data (" + why + ")")
+			continue
+		}
+		if why := ReadsOwnSources(p.Head, dir); why != "" {
+			keep("its tests may read the package's Go sources as data (" + why + ")")
 			continue
 		}
 		cl, ok := byUnit[t.Unit]
@@ -359,7 +467,7 @@ func Narrow(sel model.Selection, p Params) model.Selection {
 				continue
 			}
 			r, ok := byUnit[sub]
-			if !ok || dynamic.Usable(r, nil, bp) != "" || keepReason(r, p.Changed) != "" {
+			if !ok || dynamic.Usable(r, nil, bp) != "" || sameGoFiles(r, goByDir) != "" || keepReason(r, p.Changed) != "" {
 				run = append(run, name)
 				continue
 			}

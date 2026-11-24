@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -26,7 +27,7 @@ const Eco = "go"
 
 // CollectorID identifies the collector and its record format: bump it whenever what the collector observes or writes changes
 // (records of other versions are not used).
-const CollectorID = "go-cover-1"
+const CollectorID = "go-cover-2"
 
 // ResolveGo turns the configured go command into an executable path: a name without separator is looked up on PATH, anything
 // else is relative to the repo root. Empty: "go".
@@ -80,8 +81,8 @@ func (p Probe) Lines() []string {
 	return out
 }
 
-// RunProbe runs `go env -json` with exe from dir.
-func RunProbe(ctx context.Context, exe, dir string) (Probe, error) {
+// RunProbe runs `go env -json` with exe from dir, in the process environment plus extra (KEY=VALUE, the last setting wins).
+func RunProbe(ctx context.Context, exe, dir string, extra []string) (Probe, error) {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	args := append([]string{"env", "-json"}, probeVars...)
@@ -89,6 +90,7 @@ func RunProbe(ctx context.Context, exe, dir string) (Probe, error) {
 	args = append(args, "GOMODCACHE") // not fingerprinted: where module sources live, not what they are
 	cmd := exec.CommandContext(ctx, exe, args...)
 	cmd.Dir = dir
+	cmd.Env = goEnv(extra)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
@@ -108,26 +110,26 @@ func firstN(s string, n int) string {
 	return s
 }
 
-// ProbeCache caches RunProbe per executable path, modification time and directory.
+// ProbeCache caches RunProbe per executable path, modification time, directory and extra environment.
 type ProbeCache struct {
 	mu sync.Mutex
 	m  map[string]Probe
 }
 
-// Get returns the probe of exe run from dir, running it when its path or modification time is new.
-func (c *ProbeCache) Get(ctx context.Context, exe, dir string) (Probe, error) {
+// Get returns the probe of exe run from dir with the extra environment, running it when its path or modification time is new.
+func (c *ProbeCache) Get(ctx context.Context, exe, dir string, extra []string) (Probe, error) {
 	st, err := os.Stat(exe)
 	if err != nil {
 		return Probe{}, err
 	}
-	key := exe + "\x00" + st.ModTime().UTC().Format(time.RFC3339Nano) + "\x00" + dir
+	key := exe + "\x00" + st.ModTime().UTC().Format(time.RFC3339Nano) + "\x00" + dir + "\x00" + strings.Join(extra, "\x00")
 	c.mu.Lock()
 	if v, ok := c.m[key]; ok {
 		c.mu.Unlock()
 		return v, nil
 	}
 	c.mu.Unlock()
-	v, err := RunProbe(ctx, exe, dir)
+	v, err := RunProbe(ctx, exe, dir, extra)
 	if err != nil {
 		return Probe{}, err
 	}
@@ -145,11 +147,23 @@ func (c *ProbeCache) Get(ctx context.Context, exe, dir string) (Probe, error) {
 var envVars = []string{"GOFLAGS", "GOEXPERIMENT", "GODEBUG", "CGO_ENABLED", "GOOS", "GOARCH", "GOWORK", "GO111MODULE",
 	"GOTOOLCHAIN", "GOFIPS140"}
 
-// envVarLines returns the environment variables of the fingerprint.
-func envVarLines() []string {
+// lookupEnv returns the value of k in the process environment plus extra (the last setting wins; names ignore case on
+// Windows, as in the child's environment).
+func lookupEnv(k string, extra []string) (string, bool) {
+	v, ok := os.LookupEnv(k)
+	for _, kv := range extra {
+		if n, val, found := strings.Cut(kv, "="); found && (n == k || runtime.GOOS == "windows" && strings.EqualFold(n, k)) {
+			v, ok = val, true
+		}
+	}
+	return v, ok
+}
+
+// envVarLines returns the environment variables of the fingerprint, as the go command and the test processes see them.
+func envVarLines(extra []string) []string {
 	var out []string
 	for _, k := range envVars {
-		if v, ok := os.LookupEnv(k); ok {
+		if v, ok := lookupEnv(k, extra); ok {
 			out = append(out, "env "+k+"="+v)
 		}
 	}
@@ -160,9 +174,11 @@ func envVarLines() []string {
 // Fingerprint is the environment fingerprint of the Go layer: the collector, the go probe, the environment variables that change
 // builds, and the recording's extra build arguments. Selection uses no build arguments (bgraph's `go test` commands carry none),
 // so records made with --build-args are usable only when the same arguments reach every run through GOFLAGS instead. Module
-// dependency state is in each record's dependencies (go.mod, go.sum), whose changes the guard refuses.
-func Fingerprint(p Probe, buildArgs []string) string {
-	lines := append(p.Lines(), envVarLines()...)
+// dependency state is in each record's dependencies (go.mod, go.sum), whose changes the guard refuses. extra is the recording's
+// extra environment (RecordOptions.Env), which the build and the test processes get too (nil at selection time); p must be
+// probed with the same extra environment.
+func Fingerprint(p Probe, buildArgs, extra []string) string {
+	lines := append(p.Lines(), envVarLines(extra)...)
 	if len(buildArgs) > 0 {
 		lines = append(lines, "build-args "+strings.Join(buildArgs, "\x1f"))
 	}
@@ -172,12 +188,7 @@ func Fingerprint(p Probe, buildArgs []string) string {
 // GOFLAGS returns the GOFLAGS the go command and the test processes of a recording see: the process environment's, then the
 // recording's extra variables (the last setting wins, as in the child's environment).
 func GOFLAGS(extra []string) string {
-	v := os.Getenv("GOFLAGS")
-	for _, kv := range extra {
-		if k, val, ok := strings.Cut(kv, "="); ok && strings.EqualFold(k, "GOFLAGS") {
-			v = val
-		}
-	}
+	v, _ := lookupEnv("GOFLAGS", extra)
 	return v
 }
 

@@ -266,7 +266,7 @@ func TestNarrowKeeps(t *testing.T) {
 	whole("changed test file", s, "test file shop/cart_test.go changed")
 	// The static graph reaches the unit through a fixture or program-building edge.
 	s, _ = run(t, sel("shop/cart.go"), ch, base, bodyHead, records(base), map[string]bool{unit: true})
-	whole("tainted", s, "fixture, embed, cgo or program-building edge")
+	whole("tainted", s, "fixture, embed, cgo or directory-pattern edge")
 	// Previously failed.
 	f := sel("shop/cart.go")
 	f.AlwaysRun = []string{unit}

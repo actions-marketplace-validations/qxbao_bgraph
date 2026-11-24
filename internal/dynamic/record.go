@@ -62,6 +62,9 @@ type Record struct {
 	// "<executed line ranges>|<instrumentable but not executed line ranges>" ("3-5,9|6-8"; docs/dynamic-layer.md §11.3). An
 	// included file without an entry has no line table: no change to it can be judged at function level.
 	LineCov map[string]string `json:"line_cov,omitempty"`
+	// Dirs: Go function records list the repository package directories of the test binary's build closure; the record is
+	// usable only while each holds, at the base, no .go file that is not among Deps (a file added to a compiled package).
+	Dirs []string `json:"dirs,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.
@@ -92,6 +95,11 @@ func (r Record) valid() error {
 	for _, p := range r.Reads {
 		if !cleanRel(p) {
 			return fmt.Errorf("read %q is not a clean repo-relative path", p)
+		}
+	}
+	for _, p := range r.Dirs {
+		if p != "." && !cleanRel(p) {
+			return fmt.Errorf("directory %q is not a clean repo-relative path", p)
 		}
 	}
 	for p, v := range r.LineCov {

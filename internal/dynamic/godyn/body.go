@@ -52,6 +52,7 @@ type parsed struct {
 	skelAt []int           // line of each skeleton token
 	bodies [][]tok         // tokens strictly inside each body (comments dropped)
 	head   []string        // lines before the package clause
+	prefix []byte          // the raw bytes before the package clause (build constraints, package documentation)
 }
 
 const bodyPlaceholder = token.Token(-1)
@@ -72,6 +73,7 @@ func parseSide(name string, src []byte) (*parsed, string) {
 			p.funcs = append(p.funcs, fd)
 		}
 	}
+	p.prefix = src[:tf.Offset(f.Package)]
 	pkgLine := p.fset.Position(f.Package).Line
 	for i, l := range bytes.Split(src, []byte("\n")) {
 		if i+1 >= pkgLine {
@@ -152,17 +154,6 @@ func (p *parsed) generated() bool {
 	return false
 }
 
-// constraints returns the build constraint lines before the package clause.
-func (p *parsed) constraints() []string {
-	var out []string
-	for _, l := range p.head {
-		if t := strings.TrimSpace(l); strings.HasPrefix(t, "//go:build") || strings.HasPrefix(t, "// +build") {
-			out = append(out, t)
-		}
-	}
-	return out
-}
-
 // lineDirectiveAt returns the line of a //line or /*line directive in the file, 0 when there is none.
 func (p *parsed) lineDirectiveAt() int {
 	for _, cg := range p.file.Comments {
@@ -236,8 +227,9 @@ func BodyGuard(name string, base, head []byte) (spans []Span, shift bool, first 
 		return nil, false, 0, "a cgo file (imports \"C\")"
 	case b.generated() || h.generated():
 		return nil, false, 0, "a generated file (Code generated ... DO NOT EDIT)"
-	case strings.Join(b.constraints(), "\n") != strings.Join(h.constraints(), "\n"):
-		return nil, false, 0, "the build constraint changed"
+	case !bytes.Equal(b.prefix, h.prefix):
+		// Build constraints (//go:build, // +build and the blank line that ends them) live there: compare it byte for byte.
+		return nil, false, 0, "the text before the package clause changed (build constraints or package documentation)"
 	}
 	if l := b.lineDirectiveAt(); l > 0 {
 		return nil, false, 0, fmt.Sprintf("a //line directive at base line %d (coverage lines would not be the file's own)", l)
@@ -270,8 +262,10 @@ func BodyGuard(name string, base, head []byte) (spans []Span, shift bool, first 
 	}
 	bl := strings.Split(string(base), "\n")
 	hl := strings.Split(string(head), "\n")
-	for _, hk := range diffHunks(bl, hl) {
-		if hk.b1-hk.b0 != hk.h1-hk.h0 {
+	hunks, exact := diffHunks(bl, hl)
+	for _, hk := range hunks {
+		if hk.b1-hk.b0 != hk.h1-hk.h0 || !exact {
+			// An approximate diff (one hunk over the whole changed region) cannot tell where lines move: treat it as a shift.
 			return spans, true, hk.b0 + 1, ""
 		}
 	}

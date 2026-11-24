@@ -5,8 +5,9 @@ package godyn
 type hunk struct{ b0, b1, h0, h1 int } // base lines [b0,b1), head lines [h0,h1), 0-based
 
 // diffHunks computes the changed regions between a and b (Myers' O(ND) algorithm after trimming the common prefix and suffix).
-// When the edit distance is very large the middle is one hunk (wider, never narrower).
-func diffHunks(a, b []string) []hunk {
+// When the edit distance is very large the middle is one hunk (wider, never narrower) and exact is false: its line counts do not
+// tell whether lines inside it moved.
+func diffHunks(a, b []string) (hunks []hunk, exact bool) {
 	pre := 0
 	for pre < len(a) && pre < len(b) && a[pre] == b[pre] {
 		pre++
@@ -17,11 +18,11 @@ func diffHunks(a, b []string) []hunk {
 	}
 	a2, b2 := a[pre:len(a)-suf], b[pre:len(b)-suf]
 	if len(a2) == 0 && len(b2) == 0 {
-		return nil
+		return nil, true
 	}
 	whole := []hunk{{pre, pre + len(a2), pre, pre + len(b2)}}
 	if len(a2) == 0 || len(b2) == 0 {
-		return whole
+		return whole, true
 	}
 	ids := map[string]int{}
 	id := func(s string) int {
@@ -70,7 +71,7 @@ func diffHunks(a, b []string) []hunk {
 		}
 	}
 	if found < 0 {
-		return whole
+		return whole, false
 	}
 	// Backtrack: mark matched (diagonal) pairs.
 	type pair struct{ i, j int }
@@ -116,5 +117,5 @@ func diffHunks(a, b []string) []hunk {
 		}
 		ci, cj = ni+1, nj+1
 	}
-	return out
+	return out, true
 }

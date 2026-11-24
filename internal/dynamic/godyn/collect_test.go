@@ -102,7 +102,7 @@ func TestRecordOfIncomplete(t *testing.T) {
 	good := Outcome{Unit: SubID(unit, "TestTotal"), Name: "TestTotal", Pkg: pkg, Ran: true, Exit: 0, Counters: 1, MainWrote: true, Started: 0,
 		Lines: map[string]LineSet{abs("shop/cart.go"): {15: true, 23: false}}}
 	now := time.Now()
-	r := RecordOf(good, wt, repo, env, "c1", now)
+	r := RecordOf(good, wt, repo, env, "c1", now, nil)
 	if !r.Complete || !r.Pass || r.LineCov["shop/cart.go"] != "15|23" || len(r.Deps) != 3 {
 		t.Fatalf("good: %+v", r)
 	}
@@ -143,7 +143,7 @@ func TestRecordOfIncomplete(t *testing.T) {
 	for name, c := range cases {
 		o := good
 		c.f(&o)
-		r := RecordOf(o, wt, repo, env, "c1", now)
+		r := RecordOf(o, wt, repo, env, "c1", now, nil)
 		if c.want == "" {
 			if !r.Complete {
 				t.Errorf("%s: incomplete %q", name, r.Incomplete)
@@ -161,16 +161,16 @@ func TestListRecordOf(t *testing.T) {
 	wt := tree.NewMapTree(map[string]string{"shop/a_test.go": "package shop\n", "shop/b_linux_test.go": "package shop\n",
 		"shop/sub/c_test.go": "package sub\n", "shop/a.go": "package shop\n"})
 	p := &Package{Unit: Unit{ID: unit, Dir: "shop", Module: "."}, Names: []string{"TestA", "TestB"}}
-	r := ListRecordOf(p, wt, env, "c1", time.Now())
+	r := ListRecordOf(p, wt, env, "c1", time.Now(), nil)
 	if !r.Complete || !r.Pass || len(r.Deps) != 2 || r.Deps["shop/b_linux_test.go"] == "" || len(r.Classes) != 2 {
 		t.Fatalf("%+v", r)
 	}
 	p.Names = nil
-	if r := ListRecordOf(p, wt, env, "c1", time.Now()); r.Complete {
+	if r := ListRecordOf(p, wt, env, "c1", time.Now(), nil); r.Complete {
 		t.Error("empty list complete")
 	}
 	p.Err = "go test -c: exit 1"
-	if r := ListRecordOf(p, wt, env, "c1", time.Now()); r.Complete || r.Pass {
+	if r := ListRecordOf(p, wt, env, "c1", time.Now(), nil); r.Complete || r.Pass {
 		t.Error("failed build usable")
 	}
 }
@@ -195,20 +195,20 @@ func TestCheckFlags(t *testing.T) {
 func TestFingerprint(t *testing.T) {
 	p := Probe{Vars: map[string]string{"GOVERSION": "go1.25.1", "GOOS": "linux", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOROOT": "/a"}}
 	q := Probe{Vars: map[string]string{"GOVERSION": "go1.25.1", "GOOS": "linux", "GOARCH": "amd64", "CGO_ENABLED": "0", "GOROOT": "/b"}}
-	if Fingerprint(p, nil) != Fingerprint(q, nil) {
+	if Fingerprint(p, nil, nil) != Fingerprint(q, nil, nil) {
 		t.Error("GOROOT changes the fingerprint")
 	}
-	if Fingerprint(p, nil) == Fingerprint(p, []string{"-tags=x"}) {
+	if Fingerprint(p, nil, nil) == Fingerprint(p, []string{"-tags=x"}, nil) {
 		t.Error("build arguments do not change the fingerprint")
 	}
 	q.Vars["GOVERSION"] = "go1.25.2"
-	if Fingerprint(p, nil) == Fingerprint(q, nil) {
+	if Fingerprint(p, nil, nil) == Fingerprint(q, nil, nil) {
 		t.Error("the toolchain version does not change the fingerprint")
 	}
 	t.Setenv("GOEXPERIMENT", "x")
-	a := Fingerprint(p, nil)
+	a := Fingerprint(p, nil, nil)
 	t.Setenv("GOEXPERIMENT", "y")
-	if a == Fingerprint(p, nil) {
+	if a == Fingerprint(p, nil, nil) {
 		t.Error("GOEXPERIMENT does not change the fingerprint")
 	}
 }

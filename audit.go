@@ -146,7 +146,9 @@ func (ix *Index) Audit(ctx context.Context, ch Change, results []AuditResult) (A
 					case i < 0 && !slices.ContainsFunc(units[0].Files, covered):
 						ft.Reason = why
 						rep.Missed = append(rep.Missed, ft)
-					case i >= 0 && sel.Tests[i].ClassFilter:
+					case i >= 0 && sel.Tests[i].ClassFilter && f.Test != "" && f.Test != "(package failed)":
+						// A package-level failure (build, vet, TestMain, init) is not a removed function: the narrowed
+						// package still builds and runs TestMain.
 						// The Go layer runs only the kept top-level test functions of a narrowed package.
 						top, _, _ := strings.Cut(f.Test, "/")
 						if !slices.Contains(sel.Tests[i].Classes, top) {

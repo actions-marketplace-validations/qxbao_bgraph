@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/qxbao/bgraph/internal/dynamic"
+	"github.com/qxbao/bgraph/internal/glob"
+	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
@@ -62,9 +64,67 @@ func (m *mapper) tracked(p string) (string, bool) {
 	return "", false
 }
 
+// DataFiles returns the files a package unit's tests may read as data, besides what its binary compiles: every tracked file
+// under the package directory dir, recursively (testdata included; "." is the whole repository), and the targets of the unit's
+// edges that PlainEdge rejects (fixture files, directory and embed patterns, resolved against t). A record depends on them so
+// that a change between the recording and the base makes it stale.
+func DataFiles(t tree.Tree, dir string, edges []model.Edge) []string {
+	set := map[string]bool{}
+	files := t.Files()
+	for _, f := range files {
+		if dir == "." || strings.HasPrefix(f, dir+"/") {
+			set[f] = true
+		}
+	}
+	for _, e := range edges {
+		if PlainEdge(e) {
+			continue
+		}
+		if e.Kind != model.EdgePattern {
+			if t.Has(e.To) {
+				set[e.To] = true
+			}
+			continue
+		}
+		pat, err := glob.Compile(e.To)
+		if err != nil {
+			continue
+		}
+		for _, f := range files {
+			if pat.Match(f) {
+				set[f] = true
+			}
+		}
+	}
+	out := make([]string, 0, len(set))
+	for f := range set {
+		out = append(out, f)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// goFilesIn returns the tracked non-test .go files directly in directory dir of t (any build constraint). Test files are left
+// out: another package's test files never compile into a binary, and the unit's own are checked by its function-list record.
+func goFilesIn(t tree.Tree, dir string) []string {
+	var out []string
+	prefix := dir + "/"
+	if dir == "." {
+		prefix = ""
+	}
+	for _, f := range t.Files() {
+		if rest, ok := strings.CutPrefix(f, prefix); ok && !strings.Contains(rest, "/") && strings.HasSuffix(f, ".go") && !strings.HasSuffix(f, "_test.go") {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // RecordOf turns the outcome of a test function into its record. t is the working tree at the recorded commit (its keys are the
-// blob OIDs of the content the test binary was built from); root is the repository root on disk.
-func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time) dynamic.Record {
+// blob OIDs of the content the test binary was built from); root is the repository root on disk; data are the unit's data files
+// (DataFiles). Deps hold the compiled and embedded files, every .go file of the closure's package directories (Dirs) and the data
+// files; those not compiled into the binary are also listed in Reads (a change to them cannot change what the binary runs).
+func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time, data []string) dynamic.Record {
 	r := dynamic.Record{Eco: Eco, Unit: o.Unit, Collector: CollectorID, Commit: commit, Deps: map[string]string{}, Env: env,
 		Complete: true, Recorded: now.UTC(), LineCov: map[string]string{}}
 	var why []string
@@ -84,6 +144,9 @@ func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time) d
 	case o.Started > o.Counters-1:
 		why = append(why, fmt.Sprintf("starts a process the collector does not observe (%d started, %d instrumented processes besides the test wrote coverage)",
 			o.Started, o.Counters-1))
+	case o.Skipped:
+		// A skipped test ran only up to t.Skip; whether it skips depends on its environment, which the record cannot pin.
+		why = append(why, "test skipped")
 	}
 	r.Pass = o.Exit == 0 && !o.TimedOut && o.Err == "" && o.Ran && !o.NoTests
 	why = append(why, o.Incomplete...)
@@ -91,6 +154,7 @@ func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time) d
 		why = append(why, "a covered file maps to no tracked repository file: "+n)
 	}
 	m := newMapper(root, t)
+	compiled := map[string]bool{}
 	if p := o.Pkg; p != nil {
 		why = append(why, p.Outside...)
 		for _, a := range p.Files {
@@ -105,10 +169,38 @@ func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time) d
 			}
 			if k := t.Key(f); k != "" {
 				r.Deps[f] = k
+				compiled[f] = true
 			} else {
 				why = append(why, "cannot hash "+f)
 			}
 		}
+		extra := slices.Clone(data)
+		for _, a := range p.Dirs {
+			d := m.rel(a)
+			if d == "" {
+				if !within(a, slash(root)) {
+					continue
+				}
+				d = "."
+			}
+			r.Dirs = append(r.Dirs, d)
+			extra = append(extra, goFilesIn(t, d)...)
+		}
+		for _, f := range extra {
+			if compiled[f] {
+				continue
+			}
+			if k := t.Key(f); k != "" {
+				r.Deps[f] = k
+				r.Reads = append(r.Reads, f)
+			} else {
+				why = append(why, "cannot hash "+f)
+			}
+		}
+		slices.Sort(r.Dirs)
+		r.Dirs = slices.Compact(r.Dirs)
+		slices.Sort(r.Reads)
+		r.Reads = slices.Compact(r.Reads)
 		canary := false
 		for _, a := range p.TestFiles {
 			if f, ok := m.tracked(m.rel(a)); ok {
@@ -129,7 +221,7 @@ func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time) d
 			why = append(why, "a covered file maps to no tracked repository file: "+a)
 			continue
 		}
-		if _, in := r.Deps[f]; !in || path.Ext(f) != ".go" {
+		if !compiled[f] || path.Ext(f) != ".go" {
 			if o.Pkg == nil || !o.Pkg.LineDirectives {
 				why = append(why, "a covered file is not among the compiled files: "+f)
 			}
@@ -148,8 +240,9 @@ func RecordOf(o Outcome, t tree.Tree, root, env, commit string, now time.Time) d
 }
 
 // ListRecordOf turns the build of a package into its function-list record: Classes are the listed top-level Test, Example and
-// Fuzz functions; Deps every tracked _test.go file directly in the package directory (any build constraint).
-func ListRecordOf(p *Package, t tree.Tree, env, commit string, now time.Time) dynamic.Record {
+// Fuzz functions; Deps every tracked _test.go file directly in the package directory (any build constraint) and the unit's data
+// files (DataFiles).
+func ListRecordOf(p *Package, t tree.Tree, env, commit string, now time.Time, data []string) dynamic.Record {
 	r := dynamic.Record{Eco: Eco, Unit: p.Unit.ID, Collector: CollectorID, Commit: commit, Deps: map[string]string{}, Env: env,
 		Complete: true, Pass: p.Err == "", Recorded: now.UTC(), Classes: slices.Clone(p.Names)}
 	var why []string
@@ -167,6 +260,13 @@ func ListRecordOf(p *Package, t tree.Tree, env, commit string, now time.Time) dy
 	}
 	if len(r.Deps) == 0 {
 		why = append(why, "no tracked test file in the package directory")
+	}
+	for _, f := range data {
+		if k := t.Key(f); k != "" {
+			r.Deps[f] = k
+		} else {
+			why = append(why, "cannot hash "+f)
+		}
 	}
 	if len(why) > 0 {
 		r.Complete = false
