@@ -108,12 +108,14 @@ func TestReadsOwnSources(t *testing.T) {
 	}
 }
 
-// The text before the package clause is compared byte for byte; an approximate diff counts as a line shift.
+// The directives before the package clause must not change (a header with "+build" or a block comment is compared byte for
+// byte); documentation edits there pass. An approximate diff counts as a line shift.
 func TestBodyGuardPrefixAndApproximateDiff(t *testing.T) {
 	for name, edit := range map[string][2]string{
-		"+build added":       {"// Package shop", "// +build linux\n\n// Package shop"},
-		"blank line removed": {"// Package shop is a test fixture.\npackage shop", "// Package shop is a test fixture.\n\npackage shop"},
-		"package doc":        {"// Package shop is a test fixture.", "// Package shop is a fixture."},
+		"+build added":      {"// Package shop", "// +build linux\n\n// Package shop"},
+		"go:build added":    {"// Package shop", "//go:build linux\n\n// Package shop"},
+		"go:generate added": {"// Package shop", "//go:generate stringer -type=X\n\n// Package shop"},
+		"block comment":     {"// Package shop is a test fixture.", "/* Package shop is a test fixture. */"},
 	} {
 		head := strings.Replace(cartGo, edit[0], edit[1], 1)
 		if head == cartGo {
@@ -121,6 +123,22 @@ func TestBodyGuardPrefixAndApproximateDiff(t *testing.T) {
 		}
 		if _, _, _, why := BodyGuard("shop.go", []byte(cartGo), []byte(head)); !strings.Contains(why, "before the package clause") {
 			t.Errorf("%s: %q", name, why)
+		}
+	}
+	for name, edit := range map[string][2]string{
+		"package doc":      {"// Package shop is a test fixture.", "// Package shop is a fixture."},
+		"blank line added": {"// Package shop is a test fixture.\npackage shop", "// Package shop is a test fixture.\n\npackage shop"},
+	} {
+		head := strings.Replace(cartGo, edit[0], edit[1], 1)
+		if head == cartGo {
+			t.Fatalf("%s: no change", name)
+		}
+		spans, shift, _, why := BodyGuard("shop.go", []byte(cartGo), []byte(head))
+		if why != "" || len(spans) != 0 {
+			t.Errorf("%s: spans %v why %q", name, spans, why)
+		}
+		if want := name == "blank line added"; shift != want {
+			t.Errorf("%s: shift %v", name, shift)
 		}
 	}
 	var b, h strings.Builder

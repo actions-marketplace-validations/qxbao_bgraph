@@ -8,6 +8,7 @@ import (
 	"go/scanner"
 	"go/token"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -35,6 +36,34 @@ func directive(text string) bool {
 		}
 	}
 	return false
+}
+
+// headerDirective matches a directive line before the package clause (//go:build, //go:generate, //line...): the
+// "//word:" form the go command and the compiler recognize.
+var headerDirective = regexp.MustCompile(`^//[a-z0-9]+:`)
+
+// sameHeader reports whether the text before the package clause builds the same at base and head. A header with a
+// legacy "+build" line or a block comment is compared byte for byte (the blank line that ends "+build" constraints
+// matters, and a block comment hides what looks like a line comment); otherwise only its directive lines must be
+// identical, so copyright and package documentation edits pass (their line shift is still judged by the caller).
+func sameHeader(base, head []byte) bool {
+	if bytes.Equal(base, head) {
+		return true
+	}
+	if bytes.Contains(base, []byte("+build")) || bytes.Contains(head, []byte("+build")) ||
+		bytes.Contains(base, []byte("/*")) || bytes.Contains(head, []byte("/*")) {
+		return false
+	}
+	directives := func(src []byte) []string {
+		var out []string
+		for _, l := range strings.Split(string(src), "\n") {
+			if l = strings.TrimSpace(l); headerDirective.MatchString(l) {
+				out = append(out, l)
+			}
+		}
+		return out
+	}
+	return slices.Equal(directives(base), directives(head))
 }
 
 // tok is one token of a file: kind and literal (the literal of an automatically inserted semicolon is "\n").
@@ -227,9 +256,8 @@ func BodyGuard(name string, base, head []byte) (spans []Span, shift bool, first 
 		return nil, false, 0, "a cgo file (imports \"C\")"
 	case b.generated() || h.generated():
 		return nil, false, 0, "a generated file (Code generated ... DO NOT EDIT)"
-	case !bytes.Equal(b.prefix, h.prefix):
-		// Build constraints (//go:build, // +build and the blank line that ends them) live there: compare it byte for byte.
-		return nil, false, 0, "the text before the package clause changed (build constraints or package documentation)"
+	case !sameHeader(b.prefix, h.prefix):
+		return nil, false, 0, "the text before the package clause changed (build constraints or directives)"
 	}
 	if l := b.lineDirectiveAt(); l > 0 {
 		return nil, false, 0, fmt.Sprintf("a //line directive at base line %d (coverage lines would not be the file's own)", l)
