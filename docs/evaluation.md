@@ -220,14 +220,14 @@ overall (0.100 on hono), median 239 ms per commit (p95 1.0 s).
 
 ### Dynamic layer
 
-| | Python | Node | JVM (class layer) | Ruby (method layer) |
-|---|---|---|---|---|
-| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) |
-| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository |
-| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) |
-| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 |
-| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** |
-| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – |
+| | Python | Node | JVM (class layer) | Ruby (method layer) | PHP (file and function layer) |
+|---|---|---|---|---|---|
+| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) | monolog, php-option, collection, pest-plugin-arch (+ dbal in replay; Carbon, PHP-Parser, composer for the guard rate) |
+| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository | 93 of 98 (monolog), 11 of 12, 5 of 5, 20 of 49 (pest-plugin-arch: fixtures listed as test files); 94.6 % and 99.2 % in replay |
+| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) | **0** (112 narrowed mutants of 113) |
+| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 | 1.000 → 0.071 (monolog), 0.200, 0.167, 0.918 (pest-plugin-arch) |
+| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** | 165 / 19,865 test files / **0** |
+| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – | 0 failures |
 
 Findings:
 
@@ -241,6 +241,9 @@ Findings:
   first-parent commits of six repositories; nearly every refusal is class- or module-level code. Ruby narrows precise
   units: on rack, dry-types and rake every test file reaches every library file statically, and with the method records
   a median of 0.12–0.19 of the test files remains on the mutants.
+- The PHP guard accepts 43–68 % of 500 first-parent commits on five repositories (monolog, dbal, Carbon,
+  PHP-Parser, composer); refusals are CI files, file additions, manifests and non-PHP data files. A PHP static unit is the
+  whole Composer project, so the layer removes most test files: a median of 0.07–0.10 remains on replayed commits.
 
 These checks are not a release gate: the dynamic layer stays off by default.
 

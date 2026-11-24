@@ -1295,3 +1295,50 @@ fail alone are never removed).
   then never removed.
 - Listings by packages the runner depends on (phpunit/php-file-iterator under Pest, for example) are dependencies: changes
   to any file of the listed test directories keep every test file whose process made the listing.
+
+### 11.8 Evaluation
+
+Docker (Linux), PHP 8.3, Xdebug 3.5, each repository's own Composer install; `bgraph-eval phpdyn t2|guard|replay`. The
+oracle is the JUnit report of the whole suite per test file, never the collector.
+
+**Hybrid mutation**: records made once at R, then every killed mutant selected statically and with the layer on. A
+violation is a test file red on the mutant (and not at R) that the hybrid selection does not run.
+
+| | php-option | collection | pest-plugin-arch (Pest) | monolog |
+|---|---|---|---|---|
+| Test files / complete records | 5 / 5 | 12 / 11 | 49 / 20 | 98 / 93 |
+| Recording / whole suite | 0.2 s / 0.2 s | 6.3 s / 2.4 s | 3.3 s / 1.3 s | 11.0 s / 18.6 s |
+| Killed mutants / narrowed / refused / every file kept | 9 / 8 / 0 / 1 | 12 / 12 / 0 / 0 | 12 / 12 / 0 / 0 | 80 / 80 / 0 / 0 |
+| **Violations** | **0** | **0** | **0** | **0** |
+| Median test files run, static → hybrid | 1.000 → 0.200 | 1.000 → 0.167 | 1.000 → 0.918 | 1.000 → 0.071 |
+| Same, function-level refinement off | 1.000 | 0.333 | 0.969 | 0.082 |
+
+On pest-plugin-arch, 29 of the listed files under `tests/` are fixtures that contain no test (their records are
+incomplete), and Pest's file iterator makes the test directory a dependency of every record.
+
+**Guard over 500 first-parent commits** (no records):
+
+| | monolog | dbal | Carbon | PHP-Parser | composer |
+|---|---|---|---|---|---|
+| Full selection / refused / accepted | 77 / 81 / 339 | 89 / 188 / 213 | 90 / 68 / 341 | 37 / 217 / 246 | 74 / 128 / 298 |
+| Share accepted | 0.68 | 0.43 | 0.68 | 0.49 | 0.60 |
+| Accepted with every changed source file at function level / mixed / file level / tests and docs only | 105 / 19 / 113 / 102 | 34 / 60 / 93 / 26 | 67 / 29 / 107 / 138 | 53 / 14 / 95 / 84 | 108 / 36 / 87 / 67 |
+
+Refusals: CI files (a full selection), file additions, manifest and lockfile changes, and non-PHP files with no
+documentation role (`.dist`, `.neon`, PHP-Parser's `.test` fixtures and `.y` grammar). Source files stay at file level
+almost only for changes outside function bodies.
+
+**Replay** of 150 first-parent commits, with fresh records at each parent for the commits the guard accepts, and every
+removed test file run at the commit:
+
+| | monolog | dbal |
+|---|---|---|
+| Full / refused / accepted | 37 / 20 / 93 | 37 / 38 / 72 |
+| Narrowed (at function level) | 93 (46) | 72 (13) |
+| Removed test files run at the commit / **misses** | 7,610 / **0** | 12,255 / **0** |
+| Hybrid differing from static where nothing is narrowed | 0 | 0 |
+| Median test files run, static → hybrid | 1.000 → 0.076 | 1.000 → 0.103 |
+| Complete records | 94.6 % | 99.2 % |
+
+Incomplete records are test files that start processes (Git and Mercurial processors, `exec`) or write outside the
+repository. Recording costs about 1.1× (monolog) to 2.5× (dbal) running the test files alone without the collector.
