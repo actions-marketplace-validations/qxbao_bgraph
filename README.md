@@ -152,7 +152,7 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
 | ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files, for JVM and .NET test classes, and for Ruby test files by the methods they ran. [Dynamic layer](docs/dynamic-layer.md) |
 | 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |
-| 🤖 **MCP server** | `bgraph mcp` gives coding agents `affected_tests`, `dependents_of` and `explain_selection`. [MCP](docs/cli.md#mcp) |
+| 🤖 **Agent integration** | `bgraph agent install` tells coding agents to run the affected tests; `bgraph mcp` gives them `test_commands`, `affected_tests`, `dependents_of` and `explain_selection`. [Coding agents](docs/agents.md) |
 | 🧩 **Go library** | Embed the selector in your own tooling with `bgraph.Open` and `Index.Select`. |
 
 ## Install
@@ -209,8 +209,11 @@ Give your agent the same selection it would get in CI, so it runs the right test
 suite:
 
 ```sh
-claude mcp add bgraph -- bgraph mcp --root .
+bgraph agent install --skill                 # a short guidance block in CLAUDE.md / AGENTS.md, and /bgraph-test
+claude mcp add bgraph -- bgraph mcp --root . # optional: the MCP tools
 ```
+
+The guidance is a few lines between markers, and `bgraph agent uninstall` removes it. Other MCP clients:
 
 ```json
 {
@@ -292,6 +295,7 @@ A `full` selection is not an error: the step fails only when bgraph itself fails
 | [Architecture](docs/architecture.md) | the fail-closed contract, the graph, scope tiers, widening reasons |
 | [Configuration](docs/configuration.md) | the `bgraph.toml` reference ([annotated example](docs/bgraph.example.toml)) |
 | [CLI](docs/cli.md) | commands, flags, JSON output, exit codes, shadow audits, MCP |
+| [Coding agents](docs/agents.md) | agent guidance, MCP tools, hook, Go API for agent hosts |
 | [Ecosystems](docs/README.md#ecosystems) | per-language rules, units and runner commands |
 | [Lockfiles](docs/lockfiles.md) | levels L0, L1 and L2 |
 | [Dynamic layer](docs/dynamic-layer.md) | record-based narrowing |

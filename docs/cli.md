@@ -14,6 +14,7 @@ repository; default `.`).
 | [`record`](#record) | record per-test dependencies for the dynamic layer |
 | [`dynamic import`, `dynamic status`](#dynamic) | manage dynamic-layer records |
 | [`mcp`](#mcp) | MCP server on stdio |
+| [`agent install`, `agent uninstall`, `agent hook`](#agent) | guidance for coding agents: instruction-file block, skill, hook |
 | [`version`](#version), `help` | print the version or the usage |
 
 `bgraph doctor` is reserved: it prints "not implemented" and exits with code `2`.
@@ -288,6 +289,7 @@ queries are fast. Tools:
 | Tool | Arguments | Result |
 |---|---|---|
 | `affected_tests` | `base?`, `head?`, `previously_failed?`, `limit?`, `dynamic?` | the selection: scope, tests with reasons, widening, warnings, narrowed units |
+| `test_commands` | `base?`, `head?`, `previously_failed?`, `limit?`, `dynamic?` | the `command` plan: scope, each command with its `shell` line (run from the repository root), notes, widening, warnings; commands are never truncated, and scope `full` has none |
 | `dependents_of` | `files`, `rev?`, `limit?` | the files that depend on the given files (tests first), each with its dependency chain, the selected test units, and the unresolved imports that may depend on them |
 | `explain_selection` | `target`, `base?`, `head?`, `limit?`, `dynamic?` | why a test is selected, or where a file leads |
 
@@ -304,6 +306,36 @@ counts give the real size. The `widening`, `warnings`, `narrowed` and `unresolve
 ```
 
 With Claude Code: `claude mcp add bgraph -- bgraph mcp --root /path/to/repo`.
+
+The server instructions tell the agent when to call which tool. Tool errors (a bad argument, an unknown ref for
+`dependents_of`) are tool results with `isError` set, not protocol errors. The same tools are a Go API: see
+[Coding agents](agents.md#go-api).
+
+## `agent`
+
+```text
+bgraph agent install   [--root DIR] [--target auto|claude|agents|claude,agents] [--skill] [--hook] [--mcp] [--json]
+bgraph agent uninstall [--root DIR] [--json]
+bgraph agent hook
+```
+
+`install` writes the guidance that makes coding agents use bgraph to the repository root (details in
+[Coding agents](agents.md)):
+
+| Flag | Meaning |
+|---|---|
+| `--target` | `claude` (`CLAUDE.md`), `agents` (`AGENTS.md`), both, or `auto` (default: the existing ones, both when neither exists) |
+| `--skill` | also write the `bgraph-test` skill (`.claude/skills`, `.agents/skills`, per target) |
+| `--hook` | also add the PostToolUse hook: `.claude/settings.local.json` (target `claude`), `.codex/hooks.json` (target `agents`; Codex asks the user to approve it with `/hooks`) |
+| `--mcp` | also add the bgraph server to `.mcp.json` |
+| `--json` | print the changes as JSON: `[{"path", "action", "note"}]`, action `created`, `updated`, `removed`, `unchanged` or `skipped` |
+
+The instruction-file block is delimited by `<!-- bgraph:start -->` / `<!-- bgraph:end -->`; a second `install` changes
+nothing. `uninstall` removes the block, the generated skills, the hook entry and the default `.mcp.json` entry, deletes
+the files and directories that end up empty, and leaves everything else alone.
+
+`hook` is the hook command of Claude Code and Codex: it reads the hook input on stdin and, after a Bash call that ran a whole test
+suite, prints a context note pointing at `bgraph command`, once per session. It always exits `0`.
 
 ## `version`
 

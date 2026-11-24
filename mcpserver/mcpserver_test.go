@@ -14,6 +14,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/qxbao/bgraph"
+	"github.com/qxbao/bgraph/agent"
 )
 
 func testRepo(t *testing.T, files map[string]string) string {
@@ -60,7 +61,11 @@ func connect(t *testing.T, root string) *mcp.ClientSession {
 	}
 	t.Cleanup(func() { ix.Close() })
 	ct, st := mcp.NewInMemoryTransports()
-	ss, err := New(ix, "test").Connect(ctx, st, nil)
+	srv, err := New(ix, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ss, err := srv.Connect(ctx, st, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,6 +128,9 @@ func TestServer(t *testing.T) {
 	cs := connect(t, root)
 	ctx := context.Background()
 
+	if got := cs.InitializeResult().Instructions; got != agent.Instructions {
+		t.Errorf("instructions = %q", got)
+	}
 	tools, err := cs.ListTools(ctx, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -133,9 +141,12 @@ func TestServer(t *testing.T) {
 		if tl.OutputSchema == nil {
 			t.Errorf("%s has no output schema", tl.Name)
 		}
+		if a := tl.Annotations; a == nil || !a.ReadOnlyHint || a.OpenWorldHint == nil || *a.OpenWorldHint {
+			t.Errorf("%s annotations = %+v", tl.Name, a)
+		}
 	}
 	slices.Sort(names)
-	if !slices.Equal(names, []string{"affected_tests", "dependents_of", "explain_selection"}) {
+	if !slices.Equal(names, []string{"affected_tests", "dependents_of", "explain_selection", "test_commands"}) {
 		t.Fatalf("tools = %v", names)
 	}
 
@@ -169,6 +180,32 @@ func TestServer(t *testing.T) {
 	res, obj, text = call(t, cs, "affected_tests", map[string]any{"base": "no-such-ref"})
 	if res.IsError || obj["scope"] != "full" || len(list(t, obj, "widening")) == 0 || !strings.HasPrefix(text, "SCOPE: FULL") {
 		t.Errorf("full: err=%v obj=%v text=%q", res.IsError, obj, text)
+	}
+
+	// test_commands: one vitest command covering the six selected files, never truncated.
+	res, obj, text = call(t, cs, "test_commands", map[string]any{"base": "HEAD", "limit": 1})
+	if res.IsError {
+		t.Fatalf("test_commands: %s", text)
+	}
+	cmds := list(t, obj, "commands")
+	if obj["scope"] != "graph" || obj["tests_total"] != float64(6) || len(cmds) != 1 {
+		t.Fatalf("test_commands = %v", obj)
+	}
+	c := cmds[0].(map[string]any)
+	if c["runner"] != "vitest" || !strings.Contains(c["shell"].(string), "vitest run") || len(c["argv"].([]any)) < 6+2 {
+		t.Errorf("command = %v", c)
+	}
+	if !strings.Contains(text, c["shell"].(string)) || !strings.HasPrefix(text, "scope: graph") {
+		t.Errorf("text = %q", text)
+	}
+	list(t, obj, "widening")
+	list(t, obj, "notes")
+	res, obj, text = call(t, cs, "test_commands", map[string]any{"base": "no-such-ref"})
+	if res.IsError || obj["scope"] != "full" || len(list(t, obj, "commands")) != 0 || !strings.HasPrefix(text, "SCOPE: FULL") {
+		t.Errorf("full test_commands: obj=%v text=%q", obj, text)
+	}
+	if res, _, _ := call(t, cs, "test_commands", map[string]any{"bogus": 1}); !res.IsError {
+		t.Error("an unknown argument should be a tool error")
 	}
 
 	// dependents_of

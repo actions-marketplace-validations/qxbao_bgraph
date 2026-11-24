@@ -10,7 +10,7 @@ import (
 	"os/signal"
 
 	"github.com/qxbao/bgraph"
-	"github.com/qxbao/bgraph/internal/mcpserver"
+	"github.com/qxbao/bgraph/mcpserver"
 )
 
 // runMCP serves the MCP protocol on stdio (stdout carries protocol messages only; diagnostics go to stderr).
