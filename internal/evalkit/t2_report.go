@@ -3,6 +3,7 @@ package evalkit
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -69,6 +70,7 @@ func T2Markdown(q T2Result) string {
 	pythonReport(&b, q)
 	goReport(&b, q)
 	swiftReport(&b, q)
+	dartReport(&b, q)
 	b.WriteString("\n## native⊄ bgraph\n\n")
 	n = 0
 	for _, r := range q.Repos {
@@ -206,5 +208,43 @@ func swiftReport(b *strings.Builder, q T2Result) {
 		}
 		fmt.Fprintf(b, "| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d |\n",
 			r.Repo.Name, r.Baseline.Tests, r.Baseline.Files, r.Generated, r.Killed, r.Survived, r.NoCompile, r.Timeout, r.Errors, partial, r.MedBgraph, len(r.Violations))
+	}
+}
+
+// dartReport writes the per-repo mutant accounting of the Dart repos and the widening reasons of their selections.
+func dartReport(b *strings.Builder, q T2Result) {
+	header := false
+	for _, r := range q.Repos {
+		if r.Repo.Eco != "dart" {
+			continue
+		}
+		if !header {
+			b.WriteString("\n## Dart mutants\n\n| repo | R | generated | does not compile | run | killed | survived | timeout | errors | selected < all | full | violations | median selected/units | suites | tests | pre-broken units | flaky units | suite ms |\n|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+			header = true
+		}
+		partial := 0
+		reasons := map[string]int{}
+		for _, c := range r.Checks {
+			if c.Err == "" && !c.Full() && c.Units > 0 && c.Selected < c.Units {
+				partial++
+			}
+			for w := range c.Widenings {
+				reasons[w]++
+			}
+		}
+		suite := int64(0)
+		if len(r.Baseline.RunMs) > 0 {
+			suite = slices.Max(r.Baseline.RunMs)
+		}
+		fmt.Fprintf(b, "| %s | %.10s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %.3f | %d | %d | %d | %d | %d |\n", r.Repo.Name, r.Repo.R, r.Generated, r.NoCompile,
+			r.Killed+r.Survived+r.Timeout, r.Killed, r.Survived, r.Timeout, r.Errors, partial, r.Full, len(r.Violations), r.MedBgraph, r.Baseline.Files, r.Baseline.Tests,
+			len(r.Baseline.Failing), len(r.Baseline.Flaky), suite)
+		if len(reasons) > 0 {
+			fmt.Fprintf(b, "\nWidening reasons in %s (mutants per tier:reason):", r.Repo.Name)
+			for _, k := range slices.Sorted(maps.Keys(reasons)) {
+				fmt.Fprintf(b, " `%s` %d;", k, reasons[k])
+			}
+			b.WriteString("\n\n")
+		}
 	}
 }

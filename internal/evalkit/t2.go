@@ -54,6 +54,9 @@ type T2Repo struct {
 	Venv       string   `json:"venv,omitempty"`    // python: virtual environment directory, relative to the T2 root (holds the repo's dependencies and the editable install)
 	Spec       []string `json:"spec,omitempty"`    // mocha: spec paths of the whole suite (Args hold the other options); ruby rspec: paths given to rspec when listing the suite
 	Task       string   `json:"task,omitempty"`    // ruby minitest/test-unit: the Rake::TestTask whose file list and libs define the suite (default "test")
+
+	Packages []string `json:"packages,omitempty"` // dart: package directories whose whole `dart test` suites the oracle runs ("." = root)
+	Image    string   `json:"image,omitempty"`    // dart: Docker image of the toolchain (pinned by digest)
 }
 
 // T2Manifest is the T2 repo manifest.
@@ -609,6 +612,8 @@ func (r T2Repo) BuildOracle(ctx context.Context, cfg *T2Config, store *OracleSto
 		return r.buildOracleSwift(ctx, cfg, store, have)
 	case "php":
 		return r.buildOraclePHP(ctx, cfg, store, have)
+	case "dart":
+		return r.buildOracleDart(ctx, cfg, store, have)
 	}
 	root := filepath.Join(cfg.Dir, r.Dir)
 	if err := r.ensureClean(ctx, root); err != nil {
@@ -826,7 +831,7 @@ func (r T2Repo) CheckMutant(ctx context.Context, ix *bgraph.Index, root, idxDir 
 	case "ruby":
 		ck.Changed = sel.Changed
 		ck.Near = pyNear(sel, ck.Missed)
-	case "php", "swift":
+	case "php", "swift", "dart":
 		ck.Changed = sel.Changed
 		return ck
 	}
@@ -955,7 +960,7 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 		return
 	}
 	defer ix.Close()
-	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" || r.Eco == "swift" {
+	if r.Eco == "rust" || r.Eco == "python" || r.Eco == "jvm" || r.Eco == "dotnet" || r.Eco == "go" || r.Eco == "ruby" || r.Eco == "swift" || r.Eco == "dart" {
 		if b, err := os.ReadFile(filepath.Join(cfg.Dir, "mutants-"+r.Dir+".json")); err == nil {
 			var c struct {
 				Mutants []T2Mutant `json:"mutants"`
@@ -967,6 +972,13 @@ func (r T2Repo) checkAll(ctx context.Context, cfg *T2Config, root string, recs [
 	}
 	if r.Eco == "swift" {
 		recs, err = r.swiftCachedMutants(cfg, recs)
+		if err != nil {
+			rr.Error = err.Error()
+			return
+		}
+	}
+	if r.Eco == "dart" {
+		recs, err = r.dartCachedMutants(cfg, recs)
 		if err != nil {
 			rr.Error = err.Error()
 			return

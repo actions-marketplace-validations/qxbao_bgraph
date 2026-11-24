@@ -1,0 +1,39 @@
+{
+ "version": 1,
+ "notes": "Dart T2 with Dart 3.14.1 in Docker (image pinned by digest; override with BGRAPH_DART_IMAGE). One long-lived container per repo with the checkout at /repo and the pub cache in the named volume bgraph-dart-t2-pubcache; `dart pub get` runs once per package, then every run is `dart test --reporter json` in each listed package, the packages concurrently. Two whole-suite baselines at R give the suite census (the provider cross-check) and the tests already red or flaky there (excluded per test). Every mutant runs the whole suite of every listed package; red suites are confirmed by re-running their packages; a load failure with a compile error marks the mutant nocompile. Tries is the fixed number of sampled one-token mutations per repository, split evenly over the listed packages. dart-lang/core is a multi-package repository without a pub workspace (independent pubspecs, no path dependencies); its listed packages are the ones outside package:test's own dependency closure: in a package's directory pub resolves every package:<name> to the root package, so mutating args, async, collection, convert, crypto, logging, path or typed_data also mutates the test runner (a crashing or non-compiling `dart test`), which is a runner artefact rather than a test verdict. invertase/melos is a pub workspace whose melos package depends on its conventional_commit member.",
+ "repos": [
+  {
+   "name": "petitparser/dart-petitparser",
+   "dir": "petitparser__dart-petitparser",
+   "remote": "https://github.com/petitparser/dart-petitparser.git",
+   "r": "7b03d65c44a2db598206e4bd1ddf1cbc6bdf6216",
+   "eco": "dart",
+   "image": "dart@sha256:cc23a83aeb12fe5d7843105683c5b8354cff9533b90c0d897bc07c6797792dda",
+   "packages": ["."],
+   "tries": 40,
+   "seed": "v1"
+  },
+  {
+   "name": "dart-lang/core",
+   "dir": "dart-lang__core",
+   "remote": "https://github.com/dart-lang/core.git",
+   "r": "0762ac318188cf0ade513d1c62b02b72b45f6b33",
+   "eco": "dart",
+   "image": "dart@sha256:cc23a83aeb12fe5d7843105683c5b8354cff9533b90c0d897bc07c6797792dda",
+   "packages": ["pkgs/characters", "pkgs/fixnum", "pkgs/os_detect", "pkgs/platform"],
+   "tries": 40,
+   "seed": "v1"
+  },
+  {
+   "name": "invertase/melos",
+   "dir": "invertase__melos",
+   "remote": "https://github.com/invertase/melos.git",
+   "r": "d11594c9c6fdf08bc9891abedb12b0453ad35832",
+   "eco": "dart",
+   "image": "dart@sha256:cc23a83aeb12fe5d7843105683c5b8354cff9533b90c0d897bc07c6797792dda",
+   "packages": ["packages/conventional_commit", "packages/melos"],
+   "tries": 24,
+   "seed": "v1"
+  }
+ ]
+}
