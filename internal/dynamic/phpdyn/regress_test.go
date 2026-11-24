@@ -93,6 +93,40 @@ func TestSharedStateWrites(t *testing.T) {
 	}
 }
 
+// A package installed from a Composer path repository as a copy (not a symbolic link) is not fingerprinted: no narrowing.
+func TestMirroredPathPackage(t *testing.T) {
+	root := t.TempDir()
+	comp := filepath.Join(root, "vendor", "composer")
+	os.MkdirAll(comp, 0o755)
+	os.MkdirAll(filepath.Join(root, "vendor", "acme", "b"), 0o755)
+	write := func(j string) { os.WriteFile(filepath.Join(comp, "installed.json"), []byte(j), 0o644) }
+	write(`{"packages":[{"name":"psr/log","dist":{"type":"zip"},"install-path":"../psr/log"}]}`)
+	if _, err := InstalledParts(root, []string{"vendor"}); err != nil {
+		t.Fatal(err)
+	}
+	write(`{"packages":[{"name":"acme/b","dist":{"type":"path"},"install-path":"../acme/b"}]}`)
+	if _, err := InstalledParts(root, []string{"vendor"}); err == nil || !strings.Contains(err.Error(), "mirrored") {
+		t.Fatalf("mirrored path package accepted: %v", err)
+	}
+	os.RemoveAll(filepath.Join(root, "vendor", "acme", "b"))
+	os.MkdirAll(filepath.Join(root, "packages", "b"), 0o755)
+	if err := os.Symlink(filepath.Join(root, "packages", "b"), filepath.Join(root, "vendor", "acme", "b")); err != nil {
+		t.Skip("no symbolic links here")
+	}
+	if _, err := InstalledParts(root, []string{"vendor"}); err != nil {
+		t.Fatalf("symlinked path package refused: %v", err)
+	}
+	// Composer 1 format, no installed.json at all.
+	write(`[{"name":"acme/c","dist":{"type":"path"},"install-path":"../acme/c"}]`)
+	if _, err := InstalledParts(root, []string{"vendor"}); err == nil {
+		t.Fatal("mirrored path package (Composer 1 format) accepted")
+	}
+	os.Remove(filepath.Join(comp, "installed.json"))
+	if _, err := InstalledParts(root, []string{"vendor"}); err == nil {
+		t.Fatal("no installed.json accepted")
+	}
+}
+
 // A test file that failed in the previous run, named by its sub-unit ID (in always_run), is kept even when its record would
 // remove it.
 func TestPreviouslyFailedTestFile(t *testing.T) {

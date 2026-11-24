@@ -494,10 +494,50 @@ final class BgraphPhpFileProxy
                 }
             }
         }
+        // Paths are classified by their real location: a Composer path repository installs a package as a symbolic link from
+        // the vendor directory to repository files, which are dependencies, not environment.
+        $real = static function (string $p): string {
+            $r = @realpath($p);
+            if ($r === false) {
+                $d = @realpath(dirname($p));
+                $r = $d === false ? $p : $d . '/' . basename($p);
+            }
+            return str_replace('\\', '/', $r);
+        };
+        $byReal = [];
+        $twice = [];
+        foreach ($cov as $f => $v) {
+            $rf = $real((string) $f);
+            if (isset($byReal[$rf])) {
+                $twice[$rf] = true; // compiled under two spellings: no single table (bgraph keeps every test file then)
+            }
+            $byReal[$rf] = $v;
+        }
+        $cov = array_diff_key($byReal, $twice);
+        $seen = [];
+        foreach (BgraphPhpFileProxy::$seen as $p => $e) {
+            $rp = $real($p);
+            if (!isset($seen[$rp])) {
+                $seen[$rp] = $e;
+                continue;
+            }
+            $m = &$seen[$rp];
+            $m['k'] = array_values(array_unique(array_merge($m['k'], $e['k'])));
+            foreach (['pre', 'w', 'wok', 'wf'] as $flag) {
+                $m[$flag] = ($m[$flag] ?? false) || ($e[$flag] ?? false);
+            }
+            unset($m);
+        }
+        $includedAll = [];
+        foreach (get_included_files() as $f) {
+            if ($f !== BgraphPhpCollect::$self) {
+                $includedAll[$real($f)] = true;
+            }
+        }
         $events = [];
         $outside = [];
         $own = $norm(rtrim($out, '/\\')) . '/'; // the output directory holds the process tree's own TMPDIR and caches
-        foreach (BgraphPhpFileProxy::$seen as $p => $e) {
+        foreach ($seen as $p => $e) {
             if ($inRepo($p)) {
                 $events[$p] = $e;
                 continue;
@@ -515,18 +555,12 @@ final class BgraphPhpFileProxy
                 $outside[] = ['p' => $p, 'w' => $wf, 'r' => $r];
             }
         }
-        foreach (get_included_files() as $f) {
-            if ($f !== BgraphPhpCollect::$self && !$inRepo($f) && !isset(BgraphPhpFileProxy::$seen[$f])) {
-                $k = $norm($f);
-                if (!str_starts_with($k, $own)) {
-                    $outside[] = ['p' => $f, 'w' => false, 'r' => true];
-                }
-            }
-        }
         $included = [];
-        foreach (get_included_files() as $f) {
-            if ($f !== BgraphPhpCollect::$self && $inRepo($f)) {
+        foreach (array_keys($includedAll) as $f) {
+            if ($inRepo($f)) {
                 $included[] = $f;
+            } elseif (!isset($seen[$f]) && !str_starts_with($norm($f), $own)) {
+                $outside[] = ['p' => $f, 'w' => false, 'r' => true];
             }
         }
         $data = [

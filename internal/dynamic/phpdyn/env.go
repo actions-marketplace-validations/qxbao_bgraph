@@ -223,7 +223,6 @@ var installedFiles = []string{"composer/installed.json", "composer/installed.php
 func InstalledParts(root string, vendors []string) (map[string]string, error) {
 	files := map[string]string{}
 	for _, v := range vendors {
-		found := false
 		for _, f := range installedFiles {
 			rel := path.Join(v, f)
 			b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
@@ -231,15 +230,52 @@ func InstalledParts(root string, vendors []string) (map[string]string, error) {
 				continue
 			}
 			files[rel] = digest(b)
-			if f == "composer/installed.json" || f == "composer/installed.php" {
-				found = true
-			}
 		}
-		if !found {
-			return nil, fmt.Errorf("%s: no installed Composer dependencies on disk (run composer install): the dependency state is unknown", v)
+		b, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(v), "composer", "installed.json"))
+		if err != nil {
+			return nil, fmt.Errorf("%s: no composer/installed.json on disk (run composer install): the dependency state is unknown", v)
+		}
+		if why := mirroredPathPackage(filepath.Join(root, filepath.FromSlash(v), "composer"), b); why != "" {
+			return nil, fmt.Errorf("%s: %s", v, why)
 		}
 	}
 	return files, nil
+}
+
+// mirroredPathPackage returns why the installed state cannot be fingerprinted when a package installed from a Composer path
+// repository is a copy rather than a symbolic link: its files in the vendor directory change only when Composer mirrors them
+// again, and installed.json does not change with the source. Symbolic links are followed by the collector to the repository
+// files they point to.
+func mirroredPathPackage(composerDir string, installed []byte) string {
+	type pkg struct {
+		Name string `json:"name"`
+		Dist struct {
+			Type string `json:"type"`
+		} `json:"dist"`
+		InstallPath string `json:"install-path"`
+	}
+	var pkgs []pkg
+	var v2 struct {
+		Packages []pkg `json:"packages"`
+	}
+	if err := json.Unmarshal(installed, &v2); err == nil && v2.Packages != nil {
+		pkgs = v2.Packages
+	} else if err := json.Unmarshal(installed, &pkgs); err != nil {
+		return "unreadable composer/installed.json"
+	}
+	for _, p := range pkgs {
+		if p.Dist.Type != "path" {
+			continue
+		}
+		if p.InstallPath == "" {
+			return "package " + p.Name + " comes from a path repository and its install path is unknown"
+		}
+		st, err := os.Lstat(filepath.Join(composerDir, filepath.FromSlash(p.InstallPath)))
+		if err != nil || st.Mode()&os.ModeSymlink == 0 {
+			return "package " + p.Name + " is mirrored from a path repository (not a symbolic link): its installed copy is not fingerprinted"
+		}
+	}
+	return ""
 }
 
 // Fingerprint is the environment fingerprint of docs/dynamic-layer.md §11.5: the collector, OS and architecture, the PHP probe,

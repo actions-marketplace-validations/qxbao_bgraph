@@ -1225,7 +1225,8 @@ process of the tree. In each process it:
   the `pcov` functions (another coverage user); and `php_strip_whitespace`, `highlight_file` and `show_source`, which read
   a file without the `file://` wrapper (allowed only from the runner's own package).
 
-Attribution: paths are made repository-relative (outside the repository and inside a vendor directory, `.git` or
+Attribution: paths are resolved to their real location (a package a Composer path repository installed as a symbolic
+link from the vendor directory is read from repository files, which are dependencies), then made repository-relative (outside the repository and inside a vendor directory, `.git` or
 `node_modules`: the environment's); a tracked file is a dependency; a path that does not exist is dropped (additions are
 refused); an untracked repository file is ignored when the run created it (its first event in the process is a write),
 otherwise the record is incomplete. Outside the repository, the collector reports the files a process wrote (content,
@@ -1251,8 +1252,9 @@ machine, loaded extensions and Zend extensions with their versions, Xdebug's ver
 `opcache.enable_cli`, `auto_prepend_file`, `auto_append_file`, `include_path`, `short_open_tag`, `pcov.enabled` (probed
 once from an empty directory with Xdebug off, cached by executable path and modification time); the variables `PHPRC`,
 `PHP_INI_SCAN_DIR`, `APP_ENV`, `APP_DEBUG`, `COMPOSER_RUNTIME_ENV`, `COMPOSER_VENDOR_DIR` and every `SYMFONY_*`
-variable; and the installed dependency state of the unit's vendor directory **on disk**: `composer/installed.json` or
-`composer/installed.php` (one is required) and Composer's autoload files. A unit whose runner is not installed in a vendor
+variable; and the installed dependency state of the unit's vendor directory **on disk**: `composer/installed.json` (required)
+and `installed.php` and Composer's autoload files. A package installed from a Composer path repository as a copy rather than
+a symbolic link (`"symlink": false`) has no fingerprint: its copy changes only when Composer mirrors it again. A unit whose runner is not installed in a vendor
 directory has no fingerprint and is not narrowed. The PHP that selects is also needed for the cross-check of
 [11.2](#112-guards); without one nothing is narrowed.
 
