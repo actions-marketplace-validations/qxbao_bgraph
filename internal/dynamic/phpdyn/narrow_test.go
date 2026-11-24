@@ -194,6 +194,9 @@ func TestNarrowFunctionLevelKeeps(t *testing.T) {
 		"no line table":           {cov: map[string]string{}, head: body},
 		"no instrumentable line":  {cov: map[string]string{"src/Cart.php": "8-9|"}, head: body},
 		"read as data":            {cov: map[string]string{"src/Cart.php": "8-9|13-14"}, reads: []string{"src/Cart.php"}, head: body},
+		// Same line count, but total() moves one line down (a comment added above it, a blank line removed below).
+		"lines moved, same line count": {cov: map[string]string{"src/Cart.php": "8-9|13-14"},
+			head: strings.Replace(strings.Replace(cartPHP, "namespace App;\n", "namespace App;\n// note\n", 1), "    }\n\n    public", "    }\n    public", 1)},
 		"line shift below change": {cov: map[string]string{"src/Cart.php": "8-9,15|13-14"}, head: strings.Replace(cartPHP, "return 2;", "$a = 1;\n        return 2;", 1)},
 	}
 	for name, c := range cases {
