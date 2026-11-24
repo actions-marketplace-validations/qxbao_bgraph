@@ -91,6 +91,9 @@ type Result struct {
 	// Graph: the union graph the selection walked (nil when the selection ended before it was built). Dynamic layers that narrow
 	// inside precise units read the edge kinds on the paths from the changed files.
 	Graph *graph.Graph
+	// ChangedSeeds: the paths the precise walk starts from (the changed files that are graph nodes, the paths that read them
+	// through a symbolic link, the targets of changed links), in seed order.
+	ChangedSeeds []string
 }
 
 // Select computes the selection.
@@ -377,6 +380,9 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		}
 	}
 	reachP := g.Walk(changedSeeds)
+	for _, sd := range changedSeeds {
+		res.ChangedSeeds = append(res.ChangedSeeds, sd.Path)
+	}
 	// Warnings of the current tree relevant to the selection (the file with the problem is on the backward path).
 	for _, e := range in.Ecos {
 		if ha := headA[e.Name()]; ha != nil {
