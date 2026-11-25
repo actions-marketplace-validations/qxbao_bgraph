@@ -1,0 +1,40 @@
+Only the registration owning the edited test executable source is affected.
+-- base/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(sample LANGUAGES C)
+enable_testing()
+add_library(core STATIC core.c)
+add_library(helper STATIC helper.c)
+target_link_libraries(helper PUBLIC core)
+add_executable(unit_test unit.c)
+target_link_libraries(unit_test PRIVATE helper)
+add_executable(other_test other.c)
+add_test(NAME unit COMMAND unit_test)
+add_test(NAME other COMMAND other_test)
+-- base/core.c --
+int core(void) { return 1; }
+-- base/helper.c --
+int core(void); int helper(void) { return core(); }
+-- base/unit.c --
+int helper(void); int main(void) { return helper() == 1 ? 0 : 1; }
+-- base/other.c --
+int main(void) { return 0; }
+-- base/common.h --
+#define COMMON 1
+-- base/fixtures/data.json --
+{"value": 1}
+-- base/web/package.json --
+{"name":"web","scripts":{"test":"vitest"}}
+-- base/web/vitest.config.js --
+export default {}
+-- base/web/a.js --
+export const a = 1
+-- base/web/a.test.js --
+import './a.js'
+-- head/unit.c --
+int helper(void); int main(void) { return helper() == 2 ? 0 : 1; }
+-- want --
+select cpp:cmake:.::test:unit
+noselect cpp:cmake:.::test:other
+noselect web/a.test.js
+notfull

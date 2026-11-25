@@ -88,6 +88,12 @@ type Result struct {
 	Changes []ChangeInfo
 	// UnitEco: selected unit ID → its ecosystem.
 	UnitEco map[string]string
+	// Graph: the union graph the selection walked (nil when the selection ended before it was built). Dynamic layers that narrow
+	// inside precise units read the edge kinds on the paths from the changed files.
+	Graph *graph.Graph
+	// ChangedSeeds: the paths the precise walk starts from (the changed files that are graph nodes, the paths that read them
+	// through a symbolic link, the targets of changed links), in seed order.
+	ChangedSeeds []string
 }
 
 // Select computes the selection.
@@ -154,6 +160,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		units = append(units, ha.Tests...)
 	}
 	g := graph.Build(append(all, eco.LinkAnalysis(in.BaseTree), eco.LinkAnalysis(in.HeadTree))...)
+	res.Graph = g
 	links := linkSides(in.BaseTree, in.HeadTree)
 	// A file read through symbolic links changes every path that reads it (its aliases): they are classified as changed files
 	// too (a manifest seen through a directory link, a glob over the link directory, a scoped unresolved import...).
@@ -373,6 +380,9 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		}
 	}
 	reachP := g.Walk(changedSeeds)
+	for _, sd := range changedSeeds {
+		res.ChangedSeeds = append(res.ChangedSeeds, sd.Path)
+	}
 	// Warnings of the current tree relevant to the selection (the file with the problem is on the backward path).
 	for _, e := range in.Ecos {
 		if ha := headA[e.Name()]; ha != nil {
@@ -392,7 +402,7 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 		st, ok := chosen[u.ID]
 		if !ok {
 			st = &model.SelectedTest{Unit: u.ID, Project: u.Project, Runner: u.Runner, Files: u.Files, Whole: u.Whole, Package: u.Package,
-				Config: u.Config, Dir: u.Dir, BinDir: u.BinDir, RunnerPaths: u.RunnerPaths}
+				Config: u.Config, Dir: u.Dir, BinDir: u.BinDir, RunnerPaths: u.RunnerPaths, TestModules: u.TestModules}
 			chosen[u.ID] = st
 			res.UnitEco[u.ID] = u.Eco
 		}
@@ -452,8 +462,11 @@ func run(ctx context.Context, in Input, res *Result) model.Selection {
 	}
 	// Previously failed tests.
 	for _, id := range in.PreviouslyFailed {
+		// A sub-unit ID ("<unit>#<test file or class>", as the dynamic layer lists narrowed sub-units) selects its unit; the
+		// sub-unit ID itself goes to AlwaysRun so that the dynamic layer keeps that sub-unit.
+		uid, _, sub := strings.Cut(id, "#")
 		for _, u := range units {
-			if u.ID == id {
+			if u.ID == id || sub && u.ID == uid {
 				choose(u, "previously_failed", true)
 				s.sel.AlwaysRun = append(s.sel.AlwaysRun, id)
 			}

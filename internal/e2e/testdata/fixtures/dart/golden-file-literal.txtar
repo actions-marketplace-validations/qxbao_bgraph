@@ -1,0 +1,29 @@
+matchesGoldenFile('goldens/button.png') is relative to the test file: a golden change selects that test.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  flutter:
+    sdk: flutter
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+-- base/test/button_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => testWidgets('b', (t) async {
+  await expectLater(find.byType(Object), matchesGoldenFile('goldens/button.png'));
+});
+-- base/test/goldens/button.png --
+png-1
+-- base/test/logic_test.dart --
+import 'package:flutter_test/flutter_test.dart';
+void main() => test('l', () {});
+-- head/test/goldens/button.png --
+png-2
+-- want --
+scope graph
+select test/button_test.dart
+noselect test/logic_test.dart

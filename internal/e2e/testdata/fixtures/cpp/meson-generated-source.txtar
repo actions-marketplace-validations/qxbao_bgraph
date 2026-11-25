@@ -1,0 +1,17 @@
+A generated executable source requires a whole Meson suite.
+-- base/native/meson.build --
+project('generated', 'c')
+conf = configuration_data()
+conf.set('VALUE', 1)
+gen = configure_file(input: 'test.c.in', output: 'test.c', configuration: conf)
+t = executable('generated-check', gen)
+test('generated-check', t)
+-- base/native/test.c.in --
+int main(void) { return @VALUE@ == 1 ? 0 : 1; }
+-- head/native/test.c.in --
+int main(void) { return @VALUE@ == 2 ? 0 : 1; }
+-- want --
+select cpp:meson:native::all
+noselect cpp:meson:native::test:generated-check
+widen dynamic_import
+notfull

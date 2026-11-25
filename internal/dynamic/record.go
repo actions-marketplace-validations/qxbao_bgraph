@@ -55,6 +55,16 @@ type Record struct {
 	// Reads: Ruby records list the dependencies the unit read as data (or found by listing a directory), as opposed to loading
 	// them as code: any change to them keeps the unit.
 	Reads []string `json:"reads,omitempty"`
+	// Runner: the PHP file-list record names the installed test runner and its version, "phpunit@<version>" or
+	// "pest@<version>" (docs/dynamic-layer.md §11.3); a runner that accepts one test operand only is never narrowed.
+	Runner string `json:"runner,omitempty"`
+	// LineCov: PHP file records list, per repository file the test file's processes included with Xdebug's coverage running,
+	// "<executed line ranges>|<instrumentable but not executed line ranges>" ("3-5,9|6-8"; docs/dynamic-layer.md §11.3). An
+	// included file without an entry has no line table: no change to it can be judged at function level.
+	LineCov map[string]string `json:"line_cov,omitempty"`
+	// Dirs: Go function records list the repository package directories of the test binary's build closure; the record is
+	// usable only while each holds, at the base, no .go file that is not among Deps (a file added to a compiled package).
+	Dirs []string `json:"dirs,omitempty"`
 }
 
 // valid reports whether r is well formed enough to be stored and considered at all.
@@ -87,7 +97,55 @@ func (r Record) valid() error {
 			return fmt.Errorf("read %q is not a clean repo-relative path", p)
 		}
 	}
+	for _, p := range r.Dirs {
+		if p != "." && !cleanRel(p) {
+			return fmt.Errorf("directory %q is not a clean repo-relative path", p)
+		}
+	}
+	for p, v := range r.LineCov {
+		if !cleanRel(p) {
+			return fmt.Errorf("line table of %q: not a clean repo-relative path", p)
+		}
+		if !lineTable(v) {
+			return fmt.Errorf("line table of %q: malformed %q", p, v)
+		}
+	}
+	if strings.ContainsAny(r.Runner, " \t\r\n") {
+		return fmt.Errorf("runner %q is malformed", r.Runner)
+	}
 	return nil
+}
+
+// lineTable reports whether v has the LineCov form "<ranges>|<ranges>", each ranges a comma-separated list of "n" or "n-m".
+func lineTable(v string) bool {
+	a, b, ok := strings.Cut(v, "|")
+	if !ok {
+		return false
+	}
+	for _, rs := range []string{a, b} {
+		if rs == "" {
+			continue
+		}
+		for _, r := range strings.Split(rs, ",") {
+			x, y, two := strings.Cut(r, "-")
+			if !digits(x) || two && !digits(y) {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+func digits(s string) bool {
+	if s == "" || len(s) > 9 {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func cleanRel(p string) bool {

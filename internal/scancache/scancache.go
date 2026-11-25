@@ -6,6 +6,7 @@
 package scancache
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -19,6 +20,8 @@ import (
 	"sync"
 
 	"github.com/qxbao/bgraph/internal/model"
+	cppscan "github.com/qxbao/bgraph/internal/scan/cpp"
+	dartscan "github.com/qxbao/bgraph/internal/scan/dart"
 	goscan "github.com/qxbao/bgraph/internal/scan/golang"
 	jsscan "github.com/qxbao/bgraph/internal/scan/js"
 	phpscan "github.com/qxbao/bgraph/internal/scan/php"
@@ -26,11 +29,12 @@ import (
 	rbscan "github.com/qxbao/bgraph/internal/scan/ruby"
 	rsscan "github.com/qxbao/bgraph/internal/scan/rust"
 	sfcscan "github.com/qxbao/bgraph/internal/scan/sfc"
+	swiftscan "github.com/qxbao/bgraph/internal/scan/swift"
 	"github.com/qxbao/bgraph/internal/tree"
 )
 
 // ScannerVersion: bump this string whenever scanner behavior changes (lexer, import recognition rules) to invalidate the durable cache.
-const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5+rb-9"
+const ScannerVersion = "js-1+sfc-1+rs-2+py-2+go-2+php-5+rb-9+swift-6+cpp-3+dart-1"
 
 // Cache is a caching eco.Scanner, safe for concurrent use.
 type Cache struct {
@@ -118,6 +122,13 @@ func (c *Cache) warn(format string, a ...any) {
 
 // lang picks the scanner by file extension.
 func lang(p string) string {
+	// .inc is both a PHP and a C/C++ include extension; Scan picks by content.
+	if strings.EqualFold(path.Ext(p), ".inc") {
+		return "inc"
+	}
+	if cppscan.Native(p) {
+		return "cpp"
+	}
 	if phpscan.Source(p) {
 		return "php"
 	}
@@ -132,6 +143,10 @@ func lang(p string) string {
 		return "py"
 	case ".go":
 		return "go"
+	case ".swift":
+		return "swift"
+	case ".dart":
+		return "dart"
 	case ".rb", ".rake", ".ru", ".gemspec":
 		return "rb"
 	}
@@ -140,6 +155,12 @@ func lang(p string) string {
 		return "rb"
 	}
 	return ""
+}
+
+// phpInclude reports whether an .inc file holds PHP code: PHP is only parsed
+// inside an open tag, so a file without one has no PHP references.
+func phpInclude(b []byte) bool {
+	return bytes.Contains(bytes.ToLower(b), []byte("<?php")) || bytes.Contains(b, []byte("<?="))
 }
 
 // cacheKey: the key combines scanner version, language, file extension (the extension changes how lexing works: JSX in .tsx/.ts) and the content key.
@@ -203,6 +224,14 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 	}
 	var r model.ScanResult
 	switch l {
+	case "inc":
+		if phpInclude(b) {
+			r = phpscan.Scan(b)
+		} else {
+			r = cppscan.Source(b)
+		}
+	case "cpp":
+		r = cppscan.Source(b)
 	case "sfc":
 		r = sfcscan.Scan(p, b)
 	case "rs":
@@ -215,6 +244,10 @@ func (c *Cache) Scan(t tree.Tree, p string) (model.ScanResult, error) {
 		r = rbscan.Scan(p, b)
 	case "php":
 		r = phpscan.Scan(b)
+	case "swift":
+		r = swiftscan.Scan(b)
+	case "dart":
+		r = dartscan.Scan(b)
 	default:
 		r = jsscan.Scan(p, b)
 	}

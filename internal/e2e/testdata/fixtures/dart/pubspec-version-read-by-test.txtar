@@ -1,0 +1,29 @@
+A description change is harmless, but a test that reads pubspec.yaml by literal still depends on it.
+-- base/pubspec.yaml --
+name: app
+description: Old.
+version: 1.0.0
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/test/version_test.dart --
+import 'package:test/test.dart';
+import 'dart:io';
+void main() => test('v', () => File('pubspec.yaml').readAsStringSync());
+-- base/test/logic_test.dart --
+import 'package:test/test.dart';
+void main() => test('l', () {});
+-- head/pubspec.yaml --
+name: app
+description: New.
+version: 1.0.0
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- want --
+scope graph
+nowiden manifest_changed
+select test/version_test.dart
+noselect test/logic_test.dart

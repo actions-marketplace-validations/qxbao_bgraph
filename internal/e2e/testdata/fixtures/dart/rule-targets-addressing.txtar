@@ -1,0 +1,58 @@
+[[rule]] targets address Dart units by test file, package directory and whole unit ID.
+-- base/a/pubspec.yaml --
+name: a
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/a/test/x_test.dart --
+import 'package:test/test.dart';
+void main() => test('x', () {});
+-- base/a/test/y_test.dart --
+import 'package:test/test.dart';
+void main() => test('y', () {});
+-- base/b/pubspec.yaml --
+name: b
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/b/test/b_test.dart --
+import 'package:test/test.dart';
+void main() => test('b', () {});
+-- base/c/pubspec.yaml --
+name: c
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/c/dart_test.yaml --
+include: ../shared_test.yaml
+-- base/c/test/c_test.dart --
+import 'package:test/test.dart';
+void main() => test('c', () {});
+-- base/d/pubspec.yaml --
+name: d
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/d/test/d_test.dart --
+import 'package:test/test.dart';
+void main() => test('d', () {});
+-- base/proto/api.proto --
+syntax = "proto3";
+-- base/bgraph.toml --
+[[rule]]
+paths = ["proto/**"]
+affects = ["a/test/x_test.dart", "b", "<dart-all-tests:c>"]
+reason = "generated from protos"
+-- head/proto/api.proto --
+syntax = "proto3"; // v2
+-- want --
+select a/test/x_test.dart
+select b/test/b_test.dart
+select <dart-all-tests:c>
+noselect a/test/y_test.dart
+noselect d/test/d_test.dart
+notfull

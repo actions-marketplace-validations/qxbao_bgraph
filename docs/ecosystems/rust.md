@@ -159,9 +159,9 @@ Absolute paths in build-script literals are ignored (they cannot name a reposito
 $ bgraph command --base origin/main
 # scope: graph
 # cargo: running a subset with -p changes feature unification compared to a full workspace run
-cd crates/core && cargo test -p core --lib --test api --test cli
-cd crates/core && cargo test -p core --doc
-cd crates/server && cargo test -p server --lib --bin server
+(cd crates/core && cargo test -p core --lib --test api --test cli)
+(cd crates/core && cargo test -p core --doc)
+(cd crates/server && cargo test -p server --lib --bin server)
 ```
 
 - Target selectors: `--lib`, `--bin <name>`, `--test <name>`, `--bench <name>`, `--example <name>`, sorted (lib, bin, test, bench,

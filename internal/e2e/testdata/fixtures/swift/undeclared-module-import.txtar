@@ -1,0 +1,24 @@
+An undeclared scoped import can still resolve to a SwiftPM module in a shared build.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.target(name: "Core"), .target(name: "Support-Module"), .testTarget(name: "CoreSuite", dependencies: ["Core"]), .testTarget(name: "OtherSuite", dependencies: ["Support-Module"])])
+-- base/Sources/Core/Logic.swift --
+public func value() -> Int { 1 }
+-- base/Sources/Other/Other.swift --
+public func other() -> Int { 1 }
+-- base/Tests/CoreSuite/Tests.swift --
+#if os(Linux)
+  @_implementationOnly import struct Support_Module.Type
+#endif
+import XCTest
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/Sources/Support-Module/Other.swift --
+public struct Type { static let value = 1 }
+-- head/Sources/Support-Module/Other.swift --
+public struct Type { static let value = 2 }
+-- want --
+select swift:.::test:CoreSuite
+select swift:.::test:OtherSuite
+notfull

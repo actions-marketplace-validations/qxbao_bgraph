@@ -188,7 +188,7 @@ in that build's directory. The wrapper nearest to the build directory (in it or 
 ```sh
 # gradle: a remote build cache already avoids re-running unchanged tests; ... A project without a `test` task (no java plugin) makes `:<project>:test` fail
 ./gradlew :app:test :core:test
-cd backend && ../gradlew :core:test
+(cd backend && ../gradlew :core:test)
 ```
 
 Long task lists are split into batches. Scope `none` emits no command; `full` emits no selective command.

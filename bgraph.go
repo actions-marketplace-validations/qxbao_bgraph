@@ -9,10 +9,14 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/qxbao/bgraph/internal/dynamic/godyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
+	"github.com/qxbao/bgraph/internal/dynamic/phpdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/eco"
+	"github.com/qxbao/bgraph/internal/eco/cpp"
+	"github.com/qxbao/bgraph/internal/eco/dart"
 	"github.com/qxbao/bgraph/internal/eco/dotnet"
 	"github.com/qxbao/bgraph/internal/eco/golang"
 	"github.com/qxbao/bgraph/internal/eco/jvm"
@@ -21,6 +25,7 @@ import (
 	"github.com/qxbao/bgraph/internal/eco/python"
 	"github.com/qxbao/bgraph/internal/eco/ruby"
 	"github.com/qxbao/bgraph/internal/eco/rust"
+	"github.com/qxbao/bgraph/internal/eco/swift"
 	"github.com/qxbao/bgraph/internal/gitx"
 	"github.com/qxbao/bgraph/internal/glob"
 	"github.com/qxbao/bgraph/internal/model"
@@ -36,6 +41,8 @@ type (
 	SelectedTest = model.SelectedTest
 	Widening     = model.Widening
 	Tier         = model.Tier
+	// UnresolvedImport is an import the graph could not resolve (Index.Unresolved, DependentsResult.Unresolved).
+	UnresolvedImport = model.Unresolved
 )
 
 // Options configures Index.
@@ -55,6 +62,10 @@ type Options struct {
 	Node string
 	// Ruby: Ruby executable of the dynamic layer (docs/dynamic-layer.md §10), overriding bgraph.toml [dynamic_layer] ruby.
 	Ruby string
+	// PHP: PHP executable of the dynamic layer (docs/dynamic-layer.md §11), overriding bgraph.toml [dynamic_layer] php.
+	PHP string
+	// Go: go command of the dynamic layer, overriding bgraph.toml [dynamic_layer] go.
+	Go string
 }
 
 // Index is the index of one repo. It keeps the scan cache between Select calls (the MCP server lives for the whole session).
@@ -70,6 +81,10 @@ type Index struct {
 	nodeProbes nodedyn.ProbeCache
 	// rubyProbes caches the Ruby executable's description (docs/dynamic-layer.md §10.5).
 	rubyProbes rbdyn.ProbeCache
+	// phpProbes caches the PHP executable's probe (docs/dynamic-layer.md §11.5).
+	phpProbes phpdyn.ProbeCache
+	// goProbes caches the go command's probe (go env).
+	goProbes godyn.ProbeCache
 }
 
 // Open opens the repo containing root.
@@ -202,7 +217,7 @@ func (ix *Index) Select(ctx context.Context, ch Change) (Selection, error) {
 
 // Ecosystems are the supported ecosystems.
 func Ecosystems(rf *rules.File) []eco.Ecosystem {
-	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf), jvm.New(rf), golang.New(rf), php.New(rf), ruby.New(rf)}
+	return []eco.Ecosystem{node.New(rf), rust.New(rf), python.New(rf), dotnet.New(rf), jvm.New(rf), golang.New(rf), php.New(rf), ruby.New(rf), swift.New(), cpp.New(), dart.New(rf)}
 }
 
 func loadRules(t tree.Tree) (*rules.File, error) {

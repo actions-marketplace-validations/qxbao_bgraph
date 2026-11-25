@@ -13,6 +13,9 @@
 //   - maven, gradle: units are modules/projects built by the build tool; see maven.go and gradle.go.
 //   - go: units are package directories, one `go test ./<dir> ./<dir2>` per module (run in the module directory); see gotest.go.
 //   - rspec, rails, minitest, rake: Ruby test files, one command per (project, runner, Gemfile, -I directories); see ruby.go.
+//   - swift: `swift test` skips unselected test modules in each package; see swift.go.
+//   - ctest, meson: test names in a configured build directory; see cpp.go.
+//   - dart, flutter: test files, one `dart test` / `flutter test` per package (integration tests separately); see dart.go.
 //   - node --test: globs (Node >= 21); a name with glob characters → fall back to a whole-project `node --test`.
 package runner
 
@@ -25,7 +28,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/qxbao/bgraph/internal/eco/cpp"
+	"github.com/qxbao/bgraph/internal/eco/dart"
 	"github.com/qxbao/bgraph/internal/eco/php"
+	"github.com/qxbao/bgraph/internal/eco/swift"
 	"github.com/qxbao/bgraph/internal/model"
 )
 
@@ -34,6 +40,8 @@ type Options struct {
 	ListDir       string  // where list files are written; "" → no list file, pass arguments directly
 	MaxArgChars   int     // default 8000 (below cmd.exe's 8191 limit)
 	FullThreshold float64 // 0 = off; selected units / total units > threshold → full
+	BuildDir      string  // CTest and Meson build directory, relative to each project or absolute; default "build"
+	BuildConfig   string  // CMake multi-config build configuration, e.g. Release
 }
 
 // Command is one test-run command.
@@ -93,7 +101,8 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 	type key struct{ project, runner string }
 	groups := map[key][]string{}
 	var keys []key
-	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests, phpTests []model.SelectedTest
+	var cargoTests, pyTests, dotnetTests, jvmTests, goTests, rbTests, phpTests, swiftTests, dartTests []model.SelectedTest
+	var cppTests []model.SelectedTest
 	for _, t := range sel.Tests {
 		if t.Runner == "cargo" {
 			cargoTests = append(cargoTests, t) // units are virtual targets, not files: dedicated adapter
@@ -113,6 +122,18 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		}
 		if t.Runner == "go" {
 			goTests = append(goTests, t) // units are package directories: dedicated adapter (gotest.go)
+			continue
+		}
+		if t.Runner == swift.Runner {
+			swiftTests = append(swiftTests, t)
+			continue
+		}
+		if t.Runner == cpp.CTestRunner || t.Runner == cpp.MesonRunner {
+			cppTests = append(cppTests, t)
+			continue
+		}
+		if t.Runner == dart.RunnerDart || t.Runner == dart.RunnerFlutter {
+			dartTests = append(dartTests, t) // one command per package, integration tests apart (dart.go)
 			continue
 		}
 		if t.Runner == "rspec" || t.Runner == "rails" || t.Runner == "minitest" || t.Runner == "rake" {
@@ -210,11 +231,25 @@ func Commands(sel model.Selection, opt Options) (Plan, error) {
 		plan.Notes = append(plan.Notes, notes...)
 	}
 	if len(phpTests) > 0 {
-		cmds, ok := phpCommands(phpTests, opt)
+		cmds, notes, ok := phpCommands(phpTests, opt)
 		if !ok {
 			return full("PHP project does not have a representable runner command: run the full suite")
 		}
 		plan.Commands = append(plan.Commands, cmds...)
+		plan.Notes = append(plan.Notes, notes...)
+	}
+	if len(swiftTests) > 0 {
+		plan.Commands = append(plan.Commands, swiftCommands(swiftTests, opt)...)
+	}
+	if len(cppTests) > 0 {
+		cmds, err := cppCommands(cppTests, opt)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.Commands = append(plan.Commands, cmds...)
+	}
+	if len(dartTests) > 0 {
+		plan.Commands = append(plan.Commands, dartCommands(dartTests, opt)...)
 	}
 	return plan, nil
 }

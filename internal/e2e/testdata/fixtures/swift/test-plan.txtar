@@ -1,0 +1,29 @@
+An Xcode test plan change widens to the Swift package only.
+-- base/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Root", targets: [.target(name: "Core"), .target(name: "Other"), .testTarget(name: "CoreSuite", dependencies: ["Core"]), .testTarget(name: "OtherSuite", dependencies: ["Other"])])
+-- base/Sources/Core/Logic.swift --
+public func value() -> Int { 1 }
+-- base/Sources/Other/Other.swift --
+public func other() -> Int { 1 }
+-- base/Tests/CoreSuite/Tests.swift --
+import XCTest
+-- base/Tests/OtherSuite/Tests.swift --
+import XCTest
+-- base/Tools/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Tools", targets: [.testTarget(name: "Suite")])
+-- base/Tools/Tests/Suite/Test.swift --
+import XCTest
+-- base/Smoke.xctestplan --
+{"version": 1}
+-- head/Smoke.xctestplan --
+{"version": 2}
+-- want --
+select swift:.::test:CoreSuite
+select swift:.::test:OtherSuite
+noselect swift:Tools::test:Suite
+widen test_config_changed
+scope module

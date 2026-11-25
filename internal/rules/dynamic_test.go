@@ -63,16 +63,19 @@ sys_path_only = true
 reason = "r"
 
 [dynamic_layer]
-ecosystems = ["python", "python", "node", "ruby"]
+ecosystems = ["python", "python", "node", "ruby", "php", "go"]
 python = ".venv/Scripts/python.exe"
 node = "tools/node.exe"
 ruby = "C:/Ruby34/bin/ruby.exe"
+php = "/usr/bin/php8.3"
+go = "tools/go/bin/go"
 trust_native_env = true
 `))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d := f.Dynamic; len(d.Ecosystems) != 3 || d.Ecosystems[0] != "python" || d.Ecosystems[1] != "node" || d.Ecosystems[2] != "ruby" ||
+	if d := f.Dynamic; len(d.Ecosystems) != 5 || d.Ecosystems[0] != "python" || d.Ecosystems[1] != "node" || d.Ecosystems[2] != "ruby" ||
+		d.Ecosystems[3] != "php" || d.PHP != "/usr/bin/php8.3" || d.Ecosystems[4] != "go" || d.Go != "tools/go/bin/go" ||
 		d.Python != ".venv/Scripts/python.exe" || d.Node != "tools/node.exe" || d.Ruby != "C:/Ruby34/bin/ruby.exe" || !d.TrustNativeEnv ||
 		len(f.Dynamics) != 1 {
 		t.Fatalf("%+v", f)
@@ -86,6 +89,8 @@ trust_native_env = true
 		"[dynamic_layer]\nnode = \"node \"":        "node",
 		"[dynamic_layer]\nbogus = 1":               "bogus",
 		"[dynamic_layer]\nruby = \"ruby \"":        "ruby",
+		"[dynamic_layer]\nphp = \"php \"":          "php",
+		"[dynamic_layer]\ngo = \"go \"":            "dynamic_layer.go",
 		"[dynamic_layer]\npython = \" python\"":    "python",
 	} {
 		if _, err := Parse("x", []byte(src)); err == nil || !strings.Contains(err.Error(), want) {

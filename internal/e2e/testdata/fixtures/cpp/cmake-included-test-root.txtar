@@ -1,0 +1,23 @@
+A nested project declaration can supply tests to an enclosing CTest build.
+-- base/outer/CMakeLists.txt --
+cmake_minimum_required(VERSION 3.20)
+project(outer LANGUAGES C)
+enable_testing()
+add_subdirectory(child)
+add_executable(outer_test outer.c)
+add_test(NAME outer COMMAND outer_test)
+-- base/outer/outer.c --
+int main(void) { return 0; }
+-- base/outer/child/CMakeLists.txt --
+project(child LANGUAGES C)
+add_executable(inner_test inner.c)
+add_test(NAME inner COMMAND inner_test)
+-- base/outer/child/inner.c --
+int main(void) { return 0; }
+-- head/outer/child/inner.c --
+int main(void) { return 1; }
+-- want --
+select cpp:cmake:outer::test:inner
+noselect cpp:cmake:outer/child::all
+noselect cpp:cmake:outer::test:outer
+scope graph

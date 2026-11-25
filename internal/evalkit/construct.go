@@ -19,6 +19,8 @@ type indexBuilder struct {
 	Head               string // current commit (base, then P, then C)
 	ready              bool
 	allowPromisedBlobs bool
+	// ignoreWhitespace retries a failing patch with --ignore-whitespace (Dart: some dataset patches lost the CRs of CRLF files).
+	ignoreWhitespace bool
 }
 
 func newIndexBuilder(repo, idxFile, base string) *indexBuilder {
@@ -94,7 +96,12 @@ func (b *indexBuilder) Apply(ctx context.Context, patch, msg string) (string, er
 		patch += "\n"
 	}
 	if _, err := gitIn(ctx, b.repo, b.env, patch, "apply", "--cached", "--binary", "--whitespace=nowarn"); err != nil {
-		return "", err
+		if !b.ignoreWhitespace {
+			return "", err
+		}
+		if _, err2 := gitIn(ctx, b.repo, b.env, patch, "apply", "--cached", "--binary", "--whitespace=nowarn", "--ignore-whitespace"); err2 != nil {
+			return "", err
+		}
 	}
 	return b.commit(ctx, msg)
 }

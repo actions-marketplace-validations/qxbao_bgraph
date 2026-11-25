@@ -1,0 +1,48 @@
+A version bump can break the version solve of an in-repo dependent (pub checks a path dependency against its constraint):
+the package and its dependents widen, an unrelated package does not.
+-- base/core/pubspec.yaml --
+name: core
+version: 1.0.0
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/core/lib/core.dart --
+int core() => 1;
+-- base/core/test/core_test.dart --
+import 'package:test/test.dart';
+void main() => test('c', () {});
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  core:
+    path: ../core
+dev_dependencies:
+  test: ^1.25.0
+-- base/app/test/app_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/other/test/other_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/core/pubspec.yaml --
+name: core
+version: 2.0.0
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- want --
+scope module
+widen manifest_changed
+select core/test/core_test.dart
+select app/test/app_test.dart
+noselect other/test/other_test.dart

@@ -1,0 +1,30 @@
+A dart_test.yaml change widens its package (test_config_changed).
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/dart_test.yaml --
+timeout: 30s
+-- base/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/other/pubspec.yaml --
+name: other
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/other/test/o_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/dart_test.yaml --
+timeout: 60s
+tags:
+  slow: {}
+-- want --
+scope module
+widen test_config_changed
+select test/a_test.dart
+noselect other/test/o_test.dart

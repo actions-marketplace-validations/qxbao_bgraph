@@ -1,0 +1,28 @@
+melos.yaml changes linking for every package below it; Node tests are not selected.
+-- base/melos.yaml --
+name: mono
+packages:
+  - packages/*
+-- base/packages/a/pubspec.yaml --
+name: a
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/packages/a/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/web/package.json --
+{"name":"web","devDependencies":{"vitest":"^2.0.0"}}
+-- base/web/src/a.ts --
+export const a = 1
+-- base/web/src/a.test.ts --
+import { a } from './a'
+-- head/melos.yaml --
+name: mono
+packages:
+  - packages/**
+-- want --
+widen test_config_changed
+select packages/a/test/a_test.dart
+noselect web/src/a.test.ts

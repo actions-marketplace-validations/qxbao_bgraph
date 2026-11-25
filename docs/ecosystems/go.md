@@ -14,7 +14,7 @@ command is never run.
 | Runners | `go test` |
 | Manifests/configs read | `go.mod`, `go.work` (directive-level), `vendor/`, `.golangci.*` (harmless) |
 | Lockfiles (and level) | `go.sum`: lines only added widen nothing, any other change is level L0; see [lockfiles](../lockfiles.md) |
-| Dynamic layer | none |
+| Dynamic layer | top-level test functions inside a selected package, per changed function (off by default; [dynamic layer §12](../dynamic-layer.md#12-go-per-test-function-narrowing)) |
 
 ## Supported layouts
 
@@ -175,13 +175,15 @@ $ bgraph command --base origin/main
 # scope: graph
 # go: one `go test` per module, run in the module directory with package paths relative to it (a go.work above it still applies); go test has no argument file, so long lists are split into batches
 go test ./internal/store ./pkg/api
-cd tools && go test .
+(cd tools && go test .)
 ```
 
 - `.` is the module's root package; other packages are `./<rel>`.
 - `go test` has no argument file: a command line longer than 8000 characters is split into batches, each its own command
   (with a note that exit codes must be merged).
 - A unit whose ID cannot be parsed or lies outside its module directory runs the whole module: `go test ./...`.
+- A package narrowed by the [dynamic layer](../dynamic-layer.md#12-go-per-test-function-narrowing) gets a command of its own,
+  `go test -run '^(TestA|TestB)$' ./<rel>`, or `-run '^$'` when no test function is kept: the package is still built and vetted.
 
 See [cli](../cli.md) for the command's options and JSON output.
 

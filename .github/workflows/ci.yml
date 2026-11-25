@@ -97,6 +97,23 @@ jobs:
           go build -trimpath -ldflags "-X main.version=0.0.0-ci" -o "$RUNNER_TEMP/bgraph-bin/$exe" ./cmd/bgraph
           echo "binary=$RUNNER_TEMP/bgraph-bin/$exe" >> "$GITHUB_OUTPUT"
 
+      - name: Run generated SwiftPM command
+        if: runner.os == 'Linux'
+        env:
+          BGRAPH_BINARY: ${{ steps.build.outputs.binary }}
+        run: bash evalkit/repro/swift-runner.sh "$BGRAPH_BINARY"
+
+      - name: Run generated CTest and Meson commands
+        if: runner.os == 'Linux'
+        timeout-minutes: 4
+        env:
+          BGRAPH_BINARY: ${{ steps.build.outputs.binary }}
+        run: |
+          tools="$RUNNER_TEMP/bgraph-cpp-tools"
+          python3 -m venv "$tools"
+          "$tools/bin/python" -m pip install cmake==3.31.10 meson==1.8.5 ninja==1.13.0
+          PATH="$tools/bin:$PATH" bash evalkit/repro/cpp-runner.sh "$BGRAPH_BINARY"
+
       # A fixture repository whose last commit changes package a only: the selection is `go test ./a`.
       - name: Create fixture repository
         id: fixture

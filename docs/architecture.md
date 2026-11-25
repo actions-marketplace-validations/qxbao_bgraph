@@ -99,7 +99,7 @@ These codes are stable and appear in the `reason` field of `widening` and `warni
 | `dynamic_import` | module (scope stays `graph`) | An import whose target is computed at run time (`import(x)`, `importlib.import_module(name)`, a non-literal `sys.path` edit...). |
 | `ambiguous_import` | module (scope stays `graph`) | An import that could resolve to several targets in ways bgraph cannot decide. |
 | `uncertain_scan` | module (scope stays `graph`) | The scanner could not trust its own reading of the file (unsupported syntax, an unclosed block...). |
-| `config_is_code` | module | (detail of an `unknown_import` on every test of the project, and the reason of a whole-project unit) a runner configuration key (aliases, test patterns, projects) is computed by code, so any change in the project selects every test of the project. Describe it with [`[[config]]`](configuration.md#config). |
+| `config_is_code` | module | Configuration computed by code requires a whole-project unit. For Node, this can be the detail of an `unknown_import` for each test, and [`[[config]]`](configuration.md#config) can describe the computed key. SwiftPM also reports this reason when an opaque manifest changes. |
 | `manifest_changed` | module | A manifest (`package.json`, `Cargo.toml`, `pyproject.toml`, `pom.xml`, `go.mod`...) changed in a way that can affect builds or tests. |
 | `test_config_changed` | module | A test runner or compiler configuration changed (`vitest.config.*`, `tsconfig.json`, pytest settings, `.cargo/config.toml`, `*.runsettings`...). |
 | `lock_changed` | module or graph | A lockfile changed. See [Lockfiles](lockfiles.md). |
@@ -234,7 +234,7 @@ Files in the global widening table affect every test and widen to `full` (`globa
 | `container` | `**/Dockerfile*`, `**/*.dockerfile`, `**/.dockerignore`, `**/docker-compose*.y*ml`, `**/compose*.y*ml` |
 | `build_script` | `**/Makefile`, `**/GNUmakefile`, `**/*.mk`, `**/justfile`, `**/Justfile`, `**/.justfile`, `**/Taskfile.y*ml` |
 | `env` | `**/.env`, `**/.env.*`, `**/.envrc` |
-| `toolchain_pin` | `**/.nvmrc`, `**/.node-version`, `**/.python-version`, `**/rust-toolchain`, `**/rust-toolchain.toml`, `**/global.json`, `**/.tool-versions`, `**/mise.toml`, `**/.mise.toml`, `**/.sdkmanrc`, `**/.java-version`, `**/.ruby-version`, `**/go.work`, `**/go.work.sum` |
+| `toolchain_pin` | `**/.nvmrc`, `**/.node-version`, `**/.python-version`, `**/rust-toolchain`, `**/rust-toolchain.toml`, `**/global.json`, `**/.tool-versions`, `**/mise.toml`, `**/.mise.toml`, `**/.sdkmanrc`, `**/.java-version`, `**/.ruby-version`, `**/go.work`, `**/go.work.sum`, `**/.fvmrc`, `**/.fvm/fvm_config.json` |
 | `workspace_def` | `**/pnpm-workspace.yaml`, `**/lerna.json`, `**/nx.json`, `**/turbo.json`, `rush.json`, `.gitmodules` |
 | `git_attributes` | `**/.gitattributes` |
 | `package_manager_config` | `**/.npmrc`, `**/.yarnrc`, `**/.yarnrc.yml`, `**/.pnpmfile.cjs`, `**/bunfig.toml`, `**/.yarn/**` |

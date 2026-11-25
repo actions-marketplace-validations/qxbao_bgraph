@@ -121,6 +121,8 @@ const (
 	ImportSysPath ImportKind = "sys_path" // sys.path.insert/append(...): Spec is a path relative to the file's directory, or "cwd:<path>"; Dynamic: not evaluable
 	ImportPlugin  ImportKind = "plugin"   // pytest_plugins = ["a.b"]
 	ImportRead    ImportKind = "read"     // PHP literal file access
+	// C/C++: a quoted #include/#import/#embed is ImportStatic; an angle-bracket one is ImportSystem. Suffix holds the directive name.
+	ImportSystem ImportKind = "system"
 	// Ruby (internal/scan/ruby documents Spec, Suffix and Dynamic for each kind). Suffix holds the base of a path ("" a feature or a
 	// path relative to an unknown directory, "rel" relative to the scanned file's directory, "root" relative to the project root).
 	ImportRbRequire     ImportKind = "rb_require"      // require / require_relative / require_dependency / autoload
@@ -141,6 +143,13 @@ const (
 	ImportRbBinPath     ImportKind = "rb_bin_path"     // Gem.bin_path("gem", "exe"): Spec the executable name
 	ImportRbFixturesAll ImportKind = "rb_fixtures_all" // fixtures :all (Rails)
 	ImportRbLoadPath    ImportKind = "rb_load_path"    // $LOAD_PATH / $: edit (recorded only)
+	// Dart (internal/scan/dart documents Spec, Suffix and Dynamic for each kind).
+	ImportDartImport  ImportKind = "dart_import"  // import directive (every URI of a conditional import)
+	ImportDartExport  ImportKind = "dart_export"  // export directive (every URI of a conditional export)
+	ImportDartPart    ImportKind = "dart_part"    // part directive; import augment (Suffix "augment")
+	ImportDartString  ImportKind = "dart_string"  // a string literal that may name a file or directory
+	ImportDartLoad    ImportKind = "dart_load"    // Isolate.spawnUri / loadUri: code loaded at run time
+	ImportDartProcess ImportKind = "dart_process" // Process.run / runSync / start, TestProcess.start
 )
 
 // ImportRef is a reference found in the source text.
@@ -308,6 +317,9 @@ type TestUnit struct {
 	// test operands for PHP. Their paths are relative to the repository.
 	BinDir      string   `json:"bin_dir,omitempty"`
 	RunnerPaths []string `json:"runner_paths,omitempty"`
+	// TestModules lists every declared test module in the unit's SwiftPM package.
+	// The runner can exclude unselected modules while keeping other discovered tests.
+	TestModules []string `json:"test_modules,omitempty"`
 	// Dir is the directory the unit's tests live in, set when Files holds only a virtual node and the unit may be narrower than its
 	// project (a Go package inside a module): a [[rule]] directory target matches it like a file of the unit.
 	Dir string `json:"dir,omitempty"`
@@ -325,7 +337,8 @@ type SelectedTest struct {
 	Config      string   `json:"config,omitempty"`  // see TestUnit.Config
 	BinDir      string   `json:"bin_dir,omitempty"`
 	RunnerPaths []string `json:"runner_paths,omitempty"`
-	Dir         string   `json:"dir,omitempty"` // see TestUnit.Dir (Go: the package directory)
+	TestModules []string `json:"test_modules,omitempty"` // see TestUnit.TestModules
+	Dir         string   `json:"dir,omitempty"`          // see TestUnit.Dir (Go: the package directory)
 	// Widened: the unit is selected only because of a widening (unresolved import seed, module/package scope widening, "whole
 	// project" unit), not by the backward walk from the changed files, a [[rule]] target, previously_failed or as a new test
 	// (docs/dynamic-layer.md §1). Only widened units can be removed by the dynamic layer.

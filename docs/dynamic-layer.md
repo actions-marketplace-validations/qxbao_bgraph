@@ -12,6 +12,8 @@ what it may remove, when it refuses, what a record is, and what each collector o
 | JVM | test classes inside a selected Maven module / Gradle project | Java agent, one fresh test JVM per class | implemented |
 | .NET | test classes inside a selected test project (VSTest or Microsoft.Testing.Platform) | code coverage (Microsoft.CodeCoverage), one fresh test host per class | implemented ([9.11](#911-net)) |
 | Ruby | selected test files (precise ones too), per changed method | Ruby's `Coverage` in methods mode, preloaded through `RUBYOPT` in every Ruby process of one test file | implemented ([10](#10-ruby-per-method-narrowing)) |
+| PHP | test files inside a selected Composer / PHPUnit project, per changed file or changed function | Xdebug line coverage, a `file://` stream wrapper proxy and a function monitor, prepended through `PHP_INI_SCAN_DIR` in every PHP process of one test file | implemented ([11](#11-php-per-test-file-narrowing)) |
+| Go | top-level test functions inside a selected package, per changed function | Go coverage (`-cover`, atomic counters) of the repository's packages, one fresh process per test function, process starts counted | implemented ([12](#12-go-per-test-function-narrowing)) |
 
 Section numbers are stable: code comments refer to them.
 
@@ -29,6 +31,8 @@ Section numbers are stable: code comments refer to them.
 - [9. JVM and .NET: per-test-class narrowing](#9-jvm-and-net-per-test-class-narrowing)
   - [9.11 .NET](#911-net)
 - [10. Ruby: per-method narrowing](#10-ruby-per-method-narrowing)
+- [11. PHP: per-test-file narrowing](#11-php-per-test-file-narrowing)
+- [12. Go: per-test-function narrowing](#12-go-per-test-function-narrowing)
 
 ## Goal and non-goal
 
@@ -39,19 +43,20 @@ net: a unit the static graph reaches through ordinary edges is never removed.
 Selected = S_precise ∪ { t ∈ S_widened \ S_precise : not (record(t) usable AND Dep(t) ∩ Changed = ∅) }
 ```
 
-(The JVM and .NET class layers and the Ruby method layer are the exceptions: they narrow precise units, see
-[9.1](#91-what-is-narrowed) and [10.1](#101-what-is-narrowed).)
+(The JVM and .NET class layers, the Ruby method layer, the PHP test-file layer and the Go test-function layer are the
+exceptions: they narrow precise units, see [9.1](#91-what-is-narrowed), [10.1](#101-what-is-narrowed), [11.1](#111-what-is-narrowed)
+and [12.1](#121-what-is-narrowed).)
 
 Enabling it:
 
 ```toml
 [dynamic_layer]
-ecosystems = ["python"]          # "python", "node", "jvm", "dotnet", "ruby"
+ecosystems = ["python"]          # "python", "node", "jvm", "dotnet", "ruby", "php", "go"
 ```
 
 `--dynamic` turns the layer on for every supported ecosystem for one run; `--dynamic=false` turns it off even when
 `bgraph.toml` enables it. Library callers use `Change.Dynamic` (`DynamicOn` / `DynamicOff` / default) and
-`Options.Python`, `Options.Node`, `Options.Ruby`, `Options.TrustNativeEnv`. See [Configuration](configuration.md#dynamic_layer).
+`Options.Python`, `Options.Node`, `Options.Ruby`, `Options.PHP`, `Options.Go`, `Options.TrustNativeEnv`. See [Configuration](configuration.md#dynamic_layer).
 
 The layer has passed mutation and replay checks (see [7](#7-evaluation) and [Evaluation](evaluation.md#dynamic-layer))
 but not a release gate: enable it per ecosystem after evaluating it on your repository, for example with
@@ -1069,3 +1074,490 @@ install at each checkout, so older commits get the gems they declare):
 The commits that were not narrowed changed only test files (the selection is already those files), test support every
 file loads (`test/helper.rb`, `spec/support/*.rb`, `spec_helper.rb`), or a method every file runs; on two dry-types
 commits no record was usable (the suite does not start at those commits in this environment), so nothing was removed.
+
+## 11. PHP: per-test-file narrowing
+
+The PHP layer (`ecosystems = ["php"]`, off by default) narrows **precise** units, like the class layers of
+[9](#9-jvm-and-net-per-test-class-narrowing): the static PHP unit is the whole Composer / PHPUnit project
+([PHP](ecosystems/php.md)), selected whole on every change, and the layer runs only some of its test files. Composer
+loads classes lazily, so a test file run alone includes a small part of the project, and PHP copies nothing from one file
+into another at compile time: a file modified in place that a test file's processes never included, read, stat'ed or
+listed cannot change that test file's run. File-level records are therefore sound on their own; a function-level
+refinement removes more when every change lies inside function bodies. Sections [3](#3-records) and
+[6](#6-output-and-tooling) apply with the changes below; this section replaces [1](#1-which-units-can-be-narrowed),
+[2](#2-when-narrowing-is-allowed), [4](#4-python-collector) and [5](#5-environment-fingerprint) for PHP. The
+implementation is `internal/dynamic/phpdyn`.
+
+### 11.1 What is narrowed
+
+A selected PHP unit U (runner PHPUnit or Pest, not a Composer-script suite, with a PHPUnit XML configuration) runs only
+the test files K(U):
+
+```text
+K(U) = { f ∈ Files(U) : f changed  OR  no usable record(f)  OR  record(f) keeps f for a changed file (11.2) }
+```
+
+- Sub-unit ID `<unit ID>#<repo-relative test file>`, for example `.::php#tests/Monolog/LoggerTest.php`. PHPUnit and Pest
+  both run a test file given as a positional operand, and a file is what is recorded in isolation.
+- `Files(U)` comes from the **file-list record** of U ([11.3](#113-records)). It is usable only when it is complete, made
+  in the current environment, every dependency is unchanged at the base, its runner accepts several test operands
+  (PHPUnit 10 or later, Pest 2 or later), and the base has exactly the tracked files of the configuration's test
+  locations that it recorded: a test file added or removed since the recording would otherwise be missed.
+- A unit in `always_run` (previously failed) is not narrowed; a test file named there by its sub-unit ID (`--failed
+  '.::php#tests/LoggerTest.php'`, the form `narrowed` lists) always runs.
+- The unit stays selected with `class_filter` and `classes` (the kept test files, sorted); removed test files are
+  `narrowed` entries `<unit>#<file>` and `index_stats.narrowed_test_files` counts them. A unit with no kept test file stays
+  selected with an empty `classes` list, and the run plan has no command for it. A `full` selection is never narrowed.
+- Kept units get a `dynamic` note (`PHP layer: 7 of 98 test files run`, or why the whole unit runs).
+
+### 11.2 Guards
+
+Per selection; any refusal keeps the static selection with a `dynamic_skipped` warning naming the file and the reason, and
+the reason in the `dynamic` note of every PHP unit the layer would have considered.
+
+1. The selection is not `full`, no widening is global or `full`, and no widening comes from the PHP ecosystem (a Composer
+   manifest, lockfile, installed dependency or test configuration change).
+2. Every changed file has status `M` with an unchanged regular-file mode, is not a symbolic link nor read through one, is
+   not in the global table, not claimed by an ecosystem (`composer.json`, `composer.lock`, PHPUnit XML, `Pest.php`, files
+   of a vendor directory), and not named by a `[[config]]`, `[[dynamic]]` or `[[rule]]`.
+3. Each changed file is then one of:
+   - **PHP code**: an extension the PHP scanner reads (`.php`, `.phpt`, `.inc`, `.phtml`...) with the role source or test
+     at base and head. It is judged at **file level**: a test file is kept when its record lists it among the files its
+     processes included, read, stat'ed or listed (any test file that included a changed test file is kept too, and the
+     changed test file itself always runs);
+   - **documentation**: a documentation or license-style file, as in [2](#2-when-narrowing-is-allowed), except that the
+     PHP analysis may own it (the data role and an ownership edge, which every file of a project has) and graph edges do
+     not matter: the collector observes every read, include, stat and listing, as in the JVM variant
+     ([9.9](#99-decisions-and-implementation), decision 3). No other ecosystem may give it a role. A test file whose
+     record read it is kept.
+
+   Anything else refuses: data and fixture files, templates without a PHP role, JSON and YAML, CI files, additions,
+   deletions and renames.
+4. **Function-level refinement** (never a refusal: a file it cannot judge stays at file level). It applies to a changed
+   `.php` file without the test role. Base and head are read with `internal/scan/php`'s full tokenizer (strings,
+   interpolation, heredoc and nowdoc, comments, `#[` attributes, `?>` and inline HTML, `__halt_compiler`); a file it cannot
+   read with certainty (a short open tag, an unterminated literal) stays at file level. A **body** is the lines strictly
+   inside an outermost named function or method of a class, interface, trait or enum declared at file or namespace level,
+   unconditionally: after the line of its opening brace and before the line of its closing brace. Every token that does
+   not start on a body line (plain comments dropped; doc comments, attributes and inline HTML kept) must be identical at
+   base and head; the bodies are paired in order, and each pair whose tokens differ is a changed function, identified by
+   its base span (the line of `function` to the line of the closing brace). Consequently:
+   - accepted: changes inside a method or function body, including closures, arrow functions and anonymous classes inside
+     it; changes to plain comments, blank lines and white space anywhere;
+   - file level: any change to a signature, a return type, an attribute, a doc comment outside a body (read by reflection:
+     PHPUnit metadata, annotations), class constants, properties and property hooks, trait uses, enum cases, `namespace`,
+     `use`, `declare` and other file-level statements; a function declared conditionally (inside an `if` block, or any
+     file with alternative control syntax outside function bodies), a closure or anonymous class outside a named body, a
+     one-line function, and a changed function that declares a named function or class inside its body.
+5. **Tokenizer cross-check**: with the configured PHP (`[dynamic_layer] php`, `--php`, `Options.PHP`, default `php` on
+   PATH), base and head of every file the refinement accepted must pass `php -l` with every diagnostic on
+   (`error_reporting=-1`) and emit the same compile-time diagnostics (messages compared without line numbers: PHP emits
+   a deprecation or warning of any function body when it compiles the file, whether or not the function runs, and a
+   suite may turn it into a failure), and PHP's own tokenizer
+   (`PhpToken::tokenize` with `TOKEN_PARSE`) must find, at base and head, exactly the named functions with a body (start
+   and end lines, at any depth) that the guard found. Any difference or failure puts the file back at file level.
+6. **Per test file**, for a changed file c the refinement accepted, a test file f whose record lists c is kept when any
+   of these holds:
+   1. f read, stat'ed or listed c as data;
+   2. f included c but its record has no line table for c (included before the collector started);
+   3. a changed function's base span contains a line Xdebug saw executed in f's line table for c;
+   4. a changed function's span contains no instrumentable line in f's table (a function defined by `eval`, excluded from
+      coverage, a coverage gap: the change cannot be judged);
+   5. **line shift**: some hunk of the line diff of c (comment and blank-line hunks included) has a different number of
+      base and head lines, and f executed a line of c at or after the start of the first such hunk (`__LINE__`, exception
+      lines and backtraces would differ; a later hunk may move the lines back, but every line after the first unbalanced
+      hunk counts as moved).
+
+   Otherwise f is removed (only comments or white space changed, or none of the changed functions ran).
+
+### 11.3 Records
+
+Collector ID `php-xdebug-1`; store `<state dir>/dynamic/php.jsonl`; import, export and `bgraph dynamic status` as for the
+other layers. Two optional record fields serve the layer (older store lines decode unchanged):
+
+- **File-list record**, one per project unit (unit ID `<dir>::php`): `classes` are the test files the configured test
+  suites map to, listed with the project's own PHPUnit: its XML configuration loader and file iterator, exactly as
+  PHPUnit's test-suite mapper does (default test suite, directories with prefix, suffix and `phpVersion`, files,
+  excludes), without loading the test files (`--list-test-files` runs data providers, which may need extensions or
+  services the listing does not). Pest uses the same configuration. `runner` is `phpunit@<version>` or `pest@<version>`
+  of the installed package. `deps` are the configuration files (the XML and `Pest.php` files), the listed files and every
+  tracked file under the configuration's test locations (each `<directory>` and `<file>` of every test suite; the whole
+  project when one cannot be resolved statically: wildcards, placeholders, paths outside the repository). A listing
+  failure, a listed file that is not tracked or lies outside those locations, or a listed test file that cannot be run
+  alone makes the list incomplete: the unit is not narrowed.
+- **File record**, one per listed test file (unit ID `<dir>::php#<file>`): `deps` are every tracked repository file the
+  test file's processes included (`get_included_files()`), opened, stat'ed, or found by listing a directory (every tracked
+  file below it), with the blob OIDs of the working tree at `HEAD`. The test file itself must be among the included files
+  (canary). `reads` are the dependencies read, written, stat'ed or listed rather than only included. `line_cov` maps each
+  included file to `"<executed lines>|<instrumentable lines not executed>"` as Xdebug reports them (`1` and `-1`; dead
+  code is not instrumentable), merged over the processes of the test file; a file included in a process without a line
+  table for it has none.
+- **Pass** = exit code 0 and at least one test ran (from the runner's summary). A test file that fails alone is recorded
+  with `pass: false` and never removed.
+
+### 11.4 Collector
+
+`bgraph record --eco php [--units GLOB] [--jobs N] [--timeout D] [--php EXE]` first lists each project's test files, then
+runs each test file in a process tree of its own, from the project directory, as the runner adapter runs a narrowed unit
+with one operand: `php <bin-dir>/phpunit --configuration <xml> --no-coverage --do-not-cache-result --cache-directory <tmp>
+--no-logging --colors=never <file>` (Pest the same, with `--test-directory` when the adapter passes one). `--units` matches
+project unit IDs or test-file sub-unit IDs. `--jobs` defaults to half the CPUs; a test file that times out has its whole
+process tree killed.
+
+The PHP that records must load Xdebug 3 and have no `auto_prepend_file` (the collector would replace it). The collector,
+embedded in the binary, is written to a temporary directory with an ini file (`auto_prepend_file=<collector>`,
+`xdebug.mode=coverage,develop`); `PHP_INI_SCAN_DIR` is set to that directory followed by the user's value (or PHP's
+compiled scan directory), and `XDEBUG_MODE=coverage,develop`, `COLUMNS=120` and `LINES=50` are set (symfony/console
+otherwise starts `stty`). Each test file also gets an empty temporary directory of its own (`TMPDIR`, `TEMP`, `TMP`,
+`sys_temp_dir` through a second ini file, `XDG_CACHE_HOME`), removed afterwards, so that a cache one test file generates
+there (a compiled container, a kernel cache, a configuration cache) cannot stand in, for another test file, for the
+repository files it was generated from. Child PHP processes inherit all of it, so the collector runs first in every PHP
+process of the tree. In each process it:
+
+- restricts Xdebug's coverage filter to the repository without its Composer vendor directories and starts line coverage
+  (unused and dead code included) before anything else, and opens an output buffer of its own; PHP ends output buffering
+  after the shutdown functions and after every object destructor, and the buffer's final call writes the line tables of
+  repository files and `get_included_files()` to `$BGRAPH_PHP_OUT/<pid>-<random>.json`, so code that destructors run at
+  shutdown is observed (when the tests end that buffer earlier, the record is incomplete);
+- replaces the `file://` stream wrapper by a proxy that logs every repository path opened (include, read, write), stat'ed
+  or listed, then performs the operation with the built-in wrapper. Stats and listings made by the runner's own package
+  (`vendor/phpunit/phpunit/`, `vendor/pestphp/pest/`) or by Composer's `ClassLoader.php` are not dependencies: they only
+  decide which files exist, which additions, deletions and renames change, and those are refused. Reads of the runner's
+  configuration files are dependencies. At shutdown a probe checks that the proxy is still the `file://` wrapper;
+- monitors, with Xdebug's function monitor, `proc_open`, `exec`, `shell_exec`, `system`, `passthru`, `popen`, `mail`,
+  `pcntl_fork`, `pcntl_exec`, `dl`, `FFI::cdef`, `FFI::load`, `FFI::scope`; `xdebug_start_code_coverage`,
+  `xdebug_stop_code_coverage`, `xdebug_set_filter`, `xdebug_start_function_monitor`, `xdebug_stop_function_monitor` and
+  the `pcov` functions (another coverage user); and `php_strip_whitespace`, `highlight_file` and `show_source`, which read
+  a file without the `file://` wrapper (allowed only from the runner's own package).
+
+Attribution: paths are resolved to their real location (a package a Composer path repository installed as a symbolic
+link from the vendor directory is read from repository files, which are dependencies), then made repository-relative
+(outside the repository and inside a vendor directory, `.git` or `node_modules`: the environment's); a tracked file is a
+dependency; a path that does not exist is dropped (additions are refused); an untracked repository file is ignored when
+the run created it (its first event in the process is a write), otherwise the record is incomplete. Outside the
+repository, the collector reports the files a process wrote (content, not directories) and the files it read or
+included, outside its own temporary directory.
+
+The record is **incomplete** when: a process is started by anything other than the runner's own package (test code,
+libraries, `shell_exec` included); a process the runner started (PHPUnit's process isolation) wrote no output, or was
+not a direct child (a shell or wrapper in between), or the number of outputs differs from the launches; more than one
+process wrote output as the test process; the process forks, replaces itself, loads an extension with `dl` or calls FFI;
+another coverage user is active (`pcov.enabled`, coverage started before the collector, a monitored coverage, filter or
+monitor call by the tests); a file is read by `php_strip_whitespace`, `highlight_file` or `show_source`; the `file://`
+proxy was replaced or removed; the collector could not install itself; a process wrote no output (a crash, `exit` in a
+destructor); an untracked repository file that existed before the run was included, read or stat'ed; the process wrote a
+file outside the repository (or into a vendor directory) and its own temporary directory; it read or included a file
+outside the repository that another test file wrote during the same recording; it read or included a file of a vendor
+directory modified after that directory's `composer/installed.json` (a cache written there, outside Composer's own
+`composer/` metadata); the test file was not included (canary); the runner's summary is missing or reports no test; the
+run timed out.
+
+### 11.5 Environment fingerprint
+
+Per project unit: `sha256` of the collector ID; OS and architecture; the configured PHP's `PHP_VERSION`, `PHP_OS`,
+machine, loaded extensions and Zend extensions with their versions, Xdebug's version, and the ini values
+`zend.assertions`, `error_reporting`, `memory_limit`, `precision`, `serialize_precision`, `date.timezone`,
+`default_charset`, `opcache.enable_cli`, `auto_prepend_file`, `auto_append_file`, `include_path`, `short_open_tag`,
+`pcov.enabled` (probed once from an empty directory with Xdebug off, cached by executable path and modification time);
+the variables `PHPRC`, `PHP_INI_SCAN_DIR`, `APP_ENV`, `APP_DEBUG`, `COMPOSER_RUNTIME_ENV`, `COMPOSER_VENDOR_DIR` and
+every `SYMFONY_*` variable; and the installed dependency state of the unit's vendor directory **on disk**:
+`composer/installed.json` (required) and `installed.php` and Composer's autoload files. A package installed from a
+Composer path repository as a copy rather than a symbolic link (`"symlink": false`) has no fingerprint: its copy changes
+only when Composer mirrors it again. A unit whose runner is not installed in a vendor directory has no fingerprint and
+is not narrowed. The PHP that selects is also needed for the cross-check of [11.2](#112-guards); without one nothing is
+narrowed.
+
+### 11.6 Running a narrowed selection
+
+`bgraph command` runs a narrowed unit with the same command as the whole unit plus its kept test files as positional
+operands (relative to the project directory, `./`-prefixed when one starts with `-`):
+
+```console
+$ bgraph command --base HEAD --dynamic
+# scope: graph
+vendor/bin/phpunit --configuration phpunit.xml.dist tests/Monolog/Formatter/LineFormatterTest.php tests/Monolog/SignalHandlerTest.php
+```
+
+A unit with no kept test file gets no command (a note says so). When the operands would make the command longer than the
+command-line limit, the unit runs whole with a note. Test files that share state through static properties or the order
+they run in may behave differently in a narrowed run than in the whole suite (false alarms, not misses: test files that
+fail alone are never removed).
+
+### 11.7 Residual risks (accepted)
+
+- A cache outside the repository, its vendor directories and the per-test-file temporary directory (under `HOME` but not
+  `XDG_CACHE_HOME`, for example) that an earlier run wrote and the recorded test file only reads: the record lists the
+  cache, not the repository files it came from. Writes there during the recording make records incomplete.
+- Files PHP touches without the `file://` wrapper: `glob()`, `realpath()` and existence through the include path resolver
+  only tell whether a path exists (changed only by additions and deletions, which are refused); native extensions reading
+  files themselves; a destructor or late shutdown function that ends the collector's output buffer (later code is not
+  observed).
+- Code that runs only through a test file's interaction with others in one process (global state, static caches) is
+  not observed in the isolated recording, as for the static layer.
+- Xdebug's develop mode changes `var_dump` and error output: a test that depends on them may fail while recorded and is
+  then never removed.
+- Listings by packages the runner depends on (phpunit/php-file-iterator under Pest, for example) are dependencies: changes
+  to any file of the listed test directories keep every test file whose process made the listing.
+
+### 11.8 Evaluation
+
+Docker (Linux), PHP 8.3, Xdebug 3.5, each repository's own Composer install; `bgraph-eval phpdyn t2|guard|replay`. The
+oracle is the JUnit report of the whole suite per test file, never the collector.
+
+**Hybrid mutation**: records made once at R, then every killed mutant selected statically and with the layer on. A
+violation is a test file red on the mutant (and not at R) that the hybrid selection does not run.
+
+| | php-option | collection | pest-plugin-arch (Pest) | monolog |
+|---|---|---|---|---|
+| Test files / complete records | 5 / 5 | 12 / 11 | 49 / 20 | 98 / 93 |
+| Recording / whole suite | 0.2 s / 0.2 s | 6.3 s / 2.4 s | 3.3 s / 1.3 s | 11.0 s / 18.6 s |
+| Killed mutants / narrowed / refused / every file kept | 9 / 8 / 0 / 1 | 12 / 12 / 0 / 0 | 12 / 12 / 0 / 0 | 80 / 80 / 0 / 0 |
+| **Violations** | **0** | **0** | **0** | **0** |
+| Median test files run, static → hybrid | 1.000 → 0.200 | 1.000 → 0.167 | 1.000 → 0.918 | 1.000 → 0.071 |
+| Same, function-level refinement off | 1.000 | 0.333 | 0.969 | 0.082 |
+
+On pest-plugin-arch, 29 of the listed files under `tests/` are fixtures that contain no test (their records are
+incomplete), and Pest's file iterator makes the test directory a dependency of every record.
+
+**Guard over 500 first-parent commits** (no records):
+
+| | monolog | dbal | Carbon | PHP-Parser | composer |
+|---|---|---|---|---|---|
+| Full selection / refused / accepted | 77 / 81 / 339 | 89 / 188 / 213 | 90 / 68 / 341 | 37 / 217 / 246 | 74 / 128 / 298 |
+| Share accepted | 0.68 | 0.43 | 0.68 | 0.49 | 0.60 |
+| Accepted with every changed source file at function level / mixed / file level / tests and docs only | 105 / 19 / 113 / 102 | 34 / 60 / 93 / 26 | 67 / 29 / 107 / 138 | 53 / 14 / 95 / 84 | 108 / 36 / 87 / 67 |
+
+Refusals: CI files (a full selection), file additions, manifest and lockfile changes, and non-PHP files with no
+documentation role (`.dist`, `.neon`, PHP-Parser's `.test` fixtures and `.y` grammar). Source files stay at file level
+almost only for changes outside function bodies.
+
+**Replay** of 150 first-parent commits, with fresh records at each parent for the commits the guard accepts, and every
+removed test file run at the commit:
+
+| | monolog | dbal |
+|---|---|---|
+| Full / refused / accepted | 37 / 20 / 93 | 37 / 38 / 72 |
+| Narrowed (at function level) | 93 (46) | 72 (13) |
+| Removed test files run at the commit / **misses** | 7,610 / **0** | 12,255 / **0** |
+| Hybrid differing from static where nothing is narrowed | 0 | 0 |
+| Median test files run, static → hybrid | 1.000 → 0.076 | 1.000 → 0.103 |
+| Complete records | 94.6 % | 99.2 % |
+
+Incomplete records are test files that start processes (Git and Mercurial processors, `exec`) or write outside the
+repository. Recording costs about 1.1× (monolog) to 2.5× (dbal) running the test files alone without the collector.
+
+## 12. Go: per-test-function narrowing
+
+The static Go unit is the package ([Go](ecosystems/go.md)), and its import graph is exact, so the static layer never
+selects a package that does not compile a changed file. Precision is lost in two other places: a package that imports a
+changed package but never runs the changed function (every package of hcl imports `hclsyntax`), and the test functions
+of a selected package that never run it. The Go layer removes both with one record kind, Go coverage per top-level test
+function. Go's `-cover` rewrites the source before compiling, so cross-package inlining cannot hide a callee; methods
+called through interfaces, generic instantiations, closures and `init` functions are counted.
+
+**Compilation is never narrowed.** A narrowed package still runs `go test`: with a `-run` filter of the kept functions,
+or `-run '^$'` (build, the vet checks `go test` runs, `TestMain` and `init`, no test) when none is kept. A head that does
+not type-check fails wherever it would have, so the guards need no type checker.
+
+### 12.1 What is narrowed
+
+A sub-unit is a top-level test function as `-test.list '.*'` prints it: `Test*`, `Example*` and `Fuzz*` (its seed corpus;
+benchmarks do not run under `go test`). ID `go:<dir>#<Name>`, for example `go:hclsyntax#TestParseConfig`. Subtests are
+not split.
+
+A selected Go unit (not a whole-suite unit) with a usable package list record (12.3) runs only its kept functions. A
+test function is removed if and only if:
+
+- its package is not previously failed or `always_run`, not a `[[rule]]` target, has no changed test file, and was not
+  reached by a static edge the records cannot judge (below);
+- it has a usable function record (complete, passed, current environment and collector, every dependency's blob
+  unchanged at the base, the same package file sets at the base);
+- for every changed file, its record does not keep it (12.2, rule 4).
+
+The package stays in `tests` with `class_filter` and the kept names in `classes`; removed functions are listed in
+`narrowed` as `go:<dir>#<Name>`. A `full` selection is never narrowed.
+
+A package is kept whole (no filter) when:
+
+- one of its `_test.go` files changed: coverage does not instrument test files, so a changed helper cannot be judged;
+- the static selection reached it through an edge other than an import, the structural edges of the Go analysis
+  (package file, the test binary compiling its package, module and module-level files), a package a test may build or a
+  program it may run (a real build or run starts a process, which makes the record incomplete): fixture data,
+  `//go:embed`, directory patterns, cgo, edges of other ecosystems. These are the cases where a test reads a changed
+  file as data;
+- one of its test files, at base or head, may read the package's own Go sources: it imports `go/parser`, `go/ast`,
+  `go/doc`, `go/build`, `go/format`, `go/types`, `golang.org/x/tools/go/packages` or `golang.org/x/tools/go/analysis…`,
+  or `go/token` with `go/printer`, or has a string literal `.`, `./`, a `*.go` glob without a slash, or the name of a `.go`
+  file of its own directory; or it does not parse.
+
+### 12.2 Guards
+
+Per selection; a refusal keeps the static selection, with a `dynamic_skipped` warning and the reason in the `dynamic`
+note of every Go unit the layer would have considered.
+
+1. The selection is not `full` and has no widening at all (a manifest, lockfile, `go.work`, vendor or global change
+   widens, and a widened selection is never narrowed).
+2. Every changed file has status `M` with an unchanged regular-file mode, is not a symbolic link nor read through one,
+   is not in the global table, not claimed by an ecosystem, and not named by a `[[config]]`, `[[dynamic]]` or `[[rule]]`.
+3. Each changed file is then one of:
+   - **Go source**: a `.go` file with the source role at base and head, not under `testdata/`, `vendor/` or a directory
+     starting with `.` or `_`, passing the body guard (4);
+   - **Go test file**: a `_test.go` file with the test role at base and head; its package is kept whole;
+   - **documentation**: as in [2](#2-when-narrowing-is-allowed); a function whose record depends on it (an embedded
+     file) is kept.
+
+   Anything else refuses: assembly, C and header files, `.syso`, data and testdata files, Go files under `testdata`
+   (programs a test builds), additions, deletions and renames.
+4. **Body guard** (`go/parser` at base and head; a parse error refuses). It refuses a cgo file (`import "C"`), a
+   generated file (`// Code generated … DO NOT EDIT.`), a `//line` directive anywhere in the file, and a change to the
+   text before the package clause other than plain comments: its directive lines (`//go:build`, `//go:generate`…) must be
+   identical, and a header with a `+build` line or a block comment must be identical byte for byte (the blank line that
+   ends `+build` constraints matters). The **skeleton** of a file is its token sequence with every function body replaced
+   by a placeholder and plain comments dropped, directive comments (`//go:`, `//line`, `//export`, `// +build`,
+   `//extern`, `//sys`) kept; skeletons must be identical. Bodies are paired in order (same receiver type and name); each
+   pair whose tokens differ is a **changed function**, identified by its base span (the line of `func` to the line of its
+   closing brace). Consequently:
+   - accepted: changes inside a function or method body (closures, local types and constants included), `init` bodies,
+     and comments anywhere;
+   - refused: signatures, receivers, type parameters, constants, variables and their initializers (closures in
+     package-level variables included), types and struct tags, imports, and every directive (`//go:embed`,
+     `//go:linkname`, `//go:noinline`…).
+
+   Per test function, for a changed Go source file `c`, the function is kept when:
+   1. its record compiled `c` but has no coverage table for it (a build constraint excluded it, or a `//line` name);
+   2. a changed function's base span contains a line it executed;
+   3. a changed function's span contains no instrumentable line in its table (the change cannot be judged);
+   4. **line shift**: some hunk of `c` (comment and blank-line hunks included) has a different number of base and head
+      lines, and it executed a line of `c` at or after the first such hunk (`runtime.Caller`, panics and log lines with
+      file positions would differ). An approximate diff (edit distance over 1,000) counts as a shift from its first line.
+
+   A changed file the record lists only as data (not compiled into its binary) never keeps a function through coverage.
+
+### 12.3 Records
+
+Collector ID `go-cover-2`. Two record kinds, in `<state dir>/dynamic/go.jsonl`:
+
+- **Package list** (`go:<dir>`): `classes` = the names `-test.list '.*'` prints; deps = every tracked file under the
+  package directory, recursively. Usable when its deps are unchanged at the base and the base has exactly the same set of
+  `_test.go` files in that directory (an added test file can add a function). An empty list (only `TestMain`, nothing
+  runnable on this platform) is never narrowed.
+- **Function** (`go:<dir>#<Name>`): deps = every tracked file compiled into the test binary (the in-repository packages of
+  `go list -deps -test`), every tracked file under the package directory, the targets of the unit's non-import static
+  edges, and the module's `go.mod`, `go.sum`, the `go.work` in effect and `vendor/modules.txt`, with their blob OIDs;
+  files that are not compiled into the binary are also listed in `reads`. `dirs` lists the repository package
+  directories of the build closure: a non-test `.go` file at the base in one of them that the record does not list makes
+  the record unusable (a new file can add an `init`, a method satisfying an interface, a package variable). `line_cov`
+  (as PHP, [11.3](#113-records)): per compiled `.go` file with coverage blocks, the executed and the instrumentable but
+  not executed line ranges.
+
+Store, import, export and `bgraph dynamic status` are as for the other layers.
+
+### 12.4 Collector
+
+`bgraph record --eco go [--units GLOB] [--jobs N] [--timeout D] [--go EXE]` builds, per package unit, one test binary
+from the module directory:
+
+```text
+go test -c -cover -covermode=atomic -coverpkg=<the repository's packages of the module and of its go.work>,os,syscall -o <tmp> <package>
+```
+
+then runs each listed function in a process of its own, from the package directory as `go test` does:
+`<binary> -test.run '^<Name>$' -test.count=1 -test.v -test.gocoverdir=<dir> -test.timeout=<timeout>`, with `GOCOVERDIR`
+set and `GOROOT/bin` first on `PATH`, and converts the counters with `go tool covdata textfmt`. The process tree is
+killed on timeout. `--jobs` defaults to half the CPUs. `GOFLAGS` applies to the build (set build tags there); `-cover`,
+`-covermode` or `-coverpkg` in `GOFLAGS` or `--build-args` refuse the recording. Records made with `--build-args` are
+not used at selection time, which does not know them.
+
+**Processes.** Every instrumented process (the test binary re-executed as a helper process, a common Go pattern) writes
+its own counter file into `GOCOVERDIR`. `os` and `syscall` are instrumented so that the atomic counter of the first block
+of `syscall.StartProcess` (Windows) or `syscall.forkExec` (Unix) counts every process the test started, through
+`os/exec`, `os.StartProcess` or `syscall.ForkExec`. More processes started than instrumented counter files (beyond the
+test's own) makes the record incomplete: the test ran a program coverage does not see (`go build`, `go run`, a shell, a
+tool).
+
+A record is **incomplete** when: a process was not observed; the test was skipped (`t.Skip` during recording proves
+nothing about the run that matters); the test did not run, timed out or crashed without a counter file; the counters
+cannot be converted; a covered file maps to no tracked repository file, or is not among the compiled files (except names
+given by `//line` directives in a binary that contains them); a dependency cannot be hashed; the build depends on a
+module or `go.work` outside the repository and the module cache; the package's own test files are not among the
+dependencies (canary). A function that fails alone gets `pass = false` and is never removed. A package whose test binary
+does not build gets no record (a warning).
+
+### 12.5 Environment fingerprint
+
+`sha256` of: the collector ID; `go env` of the configured Go (`[dynamic_layer] go`, `--go`, `Options.Go`, default `go`
+on PATH; cached by executable path and modification time): `GOVERSION`, `GOOS`, `GOARCH` and its level variables
+(`GOAMD64`, `GOARM64`…), `CGO_ENABLED`, `GOEXPERIMENT`, `GOFLAGS`, `GOFIPS140`, `GOROOT`, and with cgo `CC`, `CXX`,
+`CGO_*FLAGS` and `PKG_CONFIG`; and the variables `GOFLAGS`, `GOEXPERIMENT`, `GODEBUG`, `CGO_ENABLED`, `GOOS`, `GOARCH`,
+`GOWORK`, `GO111MODULE`, `GOTOOLCHAIN`, `GOFIPS140`. At record time the recording's own environment is used, the same one
+the build and the tests get. Module dependencies are in each record's deps (`go.mod`, `go.sum`), and changes to them are
+refused anyway.
+
+### 12.6 Running a narrowed selection
+
+`bgraph command` runs each narrowed package in a `go test` command of its own, from its module directory:
+`go test -run '^(TestA|TestB)$' ./<dir>`, or `-run '^$'` when no function is kept. Unfiltered packages keep the batched
+command. A filter that would exceed the command-line limit runs the package whole. `bgraph audit` does not count a
+package-level failure (`(package failed)`: build, vet, `TestMain`, `init`) of a narrowed package as a removed test.
+
+### 12.7 Residual risks (accepted)
+
+- Process starts that bypass `syscall` (cgo `system()`, `golang.org/x/sys/windows.CreateProcess`, a raw clone), and
+  programs that run without a process start: a test talking to a daemon over a socket (testcontainers, the Docker
+  daemon) runs code coverage never sees.
+- Data reads through computed paths (`os.ReadFile(filepath.Join(root, …))`, walking the repository) that neither the
+  graph nor the own-sources check sees.
+- `runtime.FuncForPC(…).FileLine` and other source positions of functions the test never calls: the line-shift rule
+  looks at executed lines only.
+- The recording runs with `-test.v`, so `testing.Verbose()` is true while recording and false in a plain `go test`.
+- Records are per function in a fresh process: a removed function whose outcome depends on global state that a kept
+  function leaves behind in a whole-package run is not seen (as in every layer).
+
+### 12.8 Evaluation
+
+Windows 11, the Go each repository requires (1.25.1, 1.26.0, 1.26.8) with `GOTOOLCHAIN=local` at record and select time;
+`bgraph-eval godyn t2|guard|replay`. The oracle is `go test -json` of the whole package, never the collector.
+
+**Hybrid mutation**: records made once at R, every killed mutant selected statically and with the layer on. A violation
+is a red package missing, or a red top-level test of a kept package not kept.
+
+| | hcl | prometheus/common | connect-go |
+|---|---|---|---|
+| Packages / test functions | 18 / 169 | 10 / 211 | 10 / 239 |
+| Complete records / recorded | 186 / 187 | 220 / 221 | 241 / 249 |
+| Recording / whole suite (warm build cache) | 17 s / 3.9 s | 14 s / 5.9 s | 84 s / 51 s |
+| Killed mutants / narrowed / refused / every function kept | 20 / 16 / 1 / 3 | 20 / 17 / 0 / 3 | 20 / 15 / 0 / 5 |
+| **Violations** | **0** | **0** | **0** |
+| Test functions run, static → hybrid (sum) | 1,073 → 629 (−42 %) | 1,508 → 284 (−82 %) | 2,304 → 2,205 (−5 %) |
+
+connect-go's tests are a few large functions with subtests that almost all run the changed code, and the tests of
+`cmd/connect-go-v2-migrate` read their own sources (kept whole).
+
+**Guard over 500 first-parent commits** (no records; afero has 345):
+
+| | hcl | prometheus/common | connect-go | chi | afero |
+|---|---|---|---|---|---|
+| Full selection / nothing selected / refused / accepted | 165 / 151 / 106 / 78 | 95 / 25 / 323 / 57 | 74 / 74 / 257 / 95 | 246 / 86 / 94 / 74 | 196 / 42 / 67 / 39 |
+| Accepted / commits that change a `.go` file | 27 % | 23 % | 26 % | 20 % | 18 % |
+
+Full selections (a CI file or `.go-version` changed with the code) are a third to a half of all commits. Most refusals
+are declarations outside function bodies and, on prometheus/common, `go.mod` / `go.sum` updates. This run predates the
+relaxation of the header check to directive lines, which refused 2–9 more commits per repository (copyright and package
+documentation edits).
+
+**Replay** of the 150 most recent first-parent commits plus every other accepted commit of the last 500, with fresh
+records at the parent of each accepted commit and every removed function run at the commit:
+
+| | hcl | prometheus/common |
+|---|---|---|
+| Accepted and replayed with records | 78 | 55 |
+| Removed functions run at the commit / **misses** | 2,588 / **0** | 397 / **0** |
+| Hybrid differing from static where nothing is narrowed | 0 | 0 |
+| Complete records | 99.5 % | 99.0 % |
+| Test functions run, accepted commits | −41.5 % | −20.8 % |
+| Test functions run, the 150-commit window | −13.4 % | −0.5 % |
+
+On hcl, 45 removed functions of one commit had no verdict: that commit does not compile, which the compile-only run of
+the narrowed packages reports. Two prometheus/common parents could not be checked out on a case-insensitive file system.
+The layer narrows strongly where the guard accepts, but the guard accepts too few commits for the default-on gate
+(≥ 15 % fewer tests over all replayed commits); it stays off by default.

@@ -1,6 +1,8 @@
 package bgraph
 
 import (
+	"strings"
+
 	"github.com/qxbao/bgraph/internal/explain"
 	"github.com/qxbao/bgraph/internal/model"
 	"github.com/qxbao/bgraph/internal/runner"
@@ -14,7 +16,8 @@ type (
 	// caller's environment; ListFile, Batch/Batches and Note as documented in docs/cli.md (`command`).
 	Command = runner.Command
 	// CommandOptions configures Commands: ListDir (where list files are written; "" passes arguments directly),
-	// MaxArgChars (default 8000) and FullThreshold (0 = off; a selected/total unit ratio above it makes the plan full).
+	// MaxArgChars (default 8000), FullThreshold (0 = off; a selected/total unit ratio above it makes the plan full),
+	// and the native runner options BuildDir and BuildConfig.
 	CommandOptions = runner.Options
 )
 
@@ -59,3 +62,30 @@ const (
 	ReasonRuleRejected    = model.ReasonRuleRejected   // warnings only
 	ReasonDynamicSkipped  = model.ReasonDynamicSkipped // warnings only
 )
+
+// ShellLine renders c as one POSIX shell line to run from the repository root.
+// A subshell keeps project directory changes local to each command.
+func ShellLine(c Command) string {
+	q := make([]string, len(c.Argv))
+	for i, a := range c.Argv {
+		q[i] = shellQuote(a)
+	}
+	line := strings.Join(q, " ")
+	for i := len(c.Env) - 1; i >= 0; i-- {
+		k, v, _ := strings.Cut(c.Env[i], "=")
+		line = k + "=" + shellQuote(v) + " " + line
+	}
+	if c.Project != "." && c.Project != "" {
+		line = "(cd " + shellQuote(c.Project) + " && " + line + ")"
+	}
+	return line
+}
+
+func shellQuote(s string) string {
+	if s != "" && strings.IndexFunc(s, func(r rune) bool {
+		return !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("-_./:=@+,", r))
+	}) < 0 {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}

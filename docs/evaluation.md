@@ -17,7 +17,9 @@ external evaluation below got a fixture that fails before the fix.
 ### T1: FAIL_TO_PASS
 
 Real bug-fix tasks from SWE-bench-family datasets (SWE-bench Verified, SWE-bench Multilingual, Multi-SWE-bench,
-SWE-bench-Live MultiLang, SWE-Sharp-Bench) and [BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
+SWE-bench-Live MultiLang, SWE-Sharp-Bench, [Longtail-SWE](https://huggingface.co/datasets/nebius/Longtail-SWE),
+[SWE-rebench V2](https://huggingface.co/datasets/nebius/SWE-rebench-V2)) and
+[BugsPHP](https://github.com/EmInReLab/bugsPHP). Each task has a parent
 commit P, the fixed commit C (gold patch + test patch) and the list of tests that fail at P and pass at C (FAIL_TO_PASS).
 BugsPHP reconstructs P by restoring the buggy versions of the source files on the fixed tree. C is the recorded fixed
 tree. The oracle takes PHPUnit tests recorded as failing or erroring at P and passing at C.
@@ -54,6 +56,9 @@ the real tools:
 | .NET project references | `dotnet msbuild -getItem:ProjectReference` |
 | Go packages, imports and embeds | `go list -e -json -test ./...` |
 | PHP projects, autoload roots and runnable suites | `composer show --self`, `composer show --path`, PHPUnit and Pest test listing |
+| SwiftPM packages, test targets and source files | `swift package dump-package`, `swift package describe --type json` |
+| CMake and Meson test registration and target sources | CTest JSON, CMake File API, `meson introspect --tests --targets` |
+| Dart test files | the suites `dart test` loads in a whole run (JSON reporter) |
 | JVM selection superset | Gradle/Maven incremental-build plugin (GIB) |
 | .NET selection superset | dotnet-affected |
 | Node selection superset | Vitest / Jest `--changed` |
@@ -95,6 +100,17 @@ suites run in a Linux arm64 container. Median selection is selected units / all 
 | Go | 243 (dev 169, holdout 74) | 0 (26 oracle artefacts, hand-classified) | 1 % | 0.380 (holdout 0.133) | holdout 4.1 % |
 | PHP | 269 (dev 162, holdout 107) | 0 | 0 % | 1.000 | holdout 2.8 % |
 | Ruby | 117 (dev 61, holdout 56); all 836 fetched tasks: 0 violations | 0 | 2 % (holdout 4 %) | 1.000 | 2.6 % (holdout 5.6 %) |
+| Swift | 10 (holdout) | 0 | 40 % | 0.977 | 50 % over the 6 non-full tasks |
+| C and C++ | 86 (holdout) | 0 | 15 % | 1.000 | 4.1 % over the 73 non-full tasks |
+| Dart / Flutter | 274 (dev 185, holdout 89) | 0 (31 oracle artefacts, hand-classified) | 6 % (holdout 3 %) | 0.850 (holdout 0.849) | 1.1 % (holdout 3.4 %) |
+
+Swift's holdout covers six Longtail-SWE repositories. Four tasks widened to the full suite because they changed a global
+input. In the dev set, 13 of 16 tasks could be evaluated. One upstream repository was unavailable, one task used
+generated tests, and one generated a SwiftPM wrapper around an Xcode project outside the committed tree.
+
+The C and C++ holdout evaluated 86 of 100 task rows from pinned SWE-bench datasets. Thirteen widened to full on
+global inputs and 14 had no usable mapping. The dev set evaluated 46 of 53 rows with zero violations. Some zstd
+requirements use the CTest or Meson registration for the same executable or script as a proxy for a benchmark command.
 
 Notes per ecosystem:
 
@@ -128,6 +144,18 @@ Notes per ecosystem:
   every computed require now also depends on the suffix union of its literal tail, so a wrong evaluation can no longer end in
   a missing target. Selectivity is about 1.0: each test helper loads the whole library, and computed requires (plugin
   loaders, `require name` helpers) fire in 113 of 117 tasks. Median selection time 0.6 s.
+- **Dart / Flutter** (Longtail-SWE and SWE-rebench V2, 291 tasks from 50 repositories, 275 after the 40-per-repository cap;
+  holdout 25 repositories). The locator mapped 17,091 of 17,161 failing-to-passing names to one test file. Each of the 31
+  violations was checked by computing the import closure of the missing test file at the fixed commit: none contains a
+  changed file. 23 come from harness commands that chain packages (`cd a && dart test && cd ../b && …`), so the later
+  packages never ran on the unfixed tree; 5 are tests that fail without a changed file in their closure (timing tests);
+  2 are names shared by several files where the file the test patch touches is selected; 1 regenerates code from a
+  generator before testing while the regenerated files sit in the test patch. Full widenings are CI files
+  (`global_input`), one submodule and three computed loads or unreferenced files outside every package. Selectivity is
+  low because most packages export their whole library through one file that tests import, and a `version` bump in
+  `pubspec.yaml` widens the package and its dependents. Median selection time 645 ms. During the evaluation, relative
+  imports under `lib/` were found to resolve against the library's `package:` URI (`..` stops at `lib/`); both readings
+  now count.
 
 ### T2 mutation summary
 
@@ -141,6 +169,9 @@ Notes per ecosystem:
 | Go | hcl, prometheus/common, connect-go | 60 | 0 | 0.389 / 0.100 / 0.200 |
 | PHP | php-option, collection, pest-plugin-arch | 33 | 0 | 1.000 / 1.000 / 1.000 |
 | Ruby | rack (Minitest), dry-types (RSpec, Zeitwerk), rake (test-unit) | 188 | 0 | 0.975 / 1.000 / 1.000 |
+| Swift | swift-argument-parser, swift-collections, swift-numerics | 14 | 0 | 1.000 / 1.000 / 1.000 |
+| C and C++ | fmt, Catch2 (CTest), FriBidi (Meson) | 11 | 0 | 0.750 / 1.000 / 1.000 |
+| Dart | petitparser, dart-lang/core (characters, fixnum, os_detect, platform), melos (pub workspace) | 74 | 0 | 1.000 / 0.028 / 0.871 |
 
 On Node, Vitest's and Jest's own `--changed` selection was a subset of bgraph's on every non-full mutant. The Go set
 found one real miss during development (a test that builds and runs a command of the same module); test literals naming
@@ -148,6 +179,24 @@ in-repository import paths now depend on that package.
 
 The three PHP repositories have one runnable project each. The native Composer path-dependency fixture adds a second
 suite to check that an unrelated PHP project stays unselected when the shared package breaks its consumer.
+
+Swift's three XCTest suites ran in Linux arm64 with Swift 6.2.1. The evaluation used a local workaround for a Foundation
+run-loop stall in Docker Desktop, applied to both baselines and all mutant runs. Swift Collections used its release
+suite, which excludes 24 debug-only cases. Four mutants failed to compile and were excluded. The pinned runs selected
+the whole indexed suite. A separate native fixture verified that the generated command skips the unaffected target
+and still runs tests declared in a linked library. Linux CI repeats this check for XCTest and Swift Testing using the
+same pinned Swift toolchain. [Runner smoke test](../evalkit/repro/swift-runner.sh)
+
+The C and C++ T2 run used two whole-suite baselines per repository. One fmt mutant was excluded because a CTest
+case timed out. Linux CI includes a fixture that verifies both generated commands against native failures and
+checks that the independent tests do not run. [Runner smoke test](../evalkit/repro/cpp-runner.sh)
+
+Dart's suites ran in the `dart:stable` image (Dart 3.14.1, pinned by digest) with `dart test --reporter json`, giving a
+verdict per test file. 8 mutants did not compile and were excluded. In melos, 39 tests that shell out to pub and git
+already fail at R and were excluded one by one. In the melos workspace, mutants of `conventional_commit` selected the melos
+tests that import it through the workspace, and every red unit among them. Packages that `package:test` itself depends
+on (args, path, collection) were left out: inside such a package, pub resolves the test runner's own dependency to the
+mutated copy, so a mutant breaks `dart test` itself.
 
 ### Native-tool and provider checks
 
@@ -159,6 +208,9 @@ suite to check that an unrelated PHP project stays unselected when the shared pa
 | Go | 25 repositories, 50 base commits, 656 modules, 7,234 packages with tests: every package with tests is a unit; 87,926 in-repo import edges and 6,602 embedded files covered. 107 extra units (packages excluded by build constraints on the host OS): over-selection only |
 | PHP | 15 revisions across 3 repositories matched the project and a source file in a PSR-4 root reported by Composer. The generated commands ran all three native suites. In a native two-project fixture, changing a Composer path dependency selected its one consumer. |
 | Ruby | rack, dry-types, rake: the test files the runners collect (`RSpec.configuration.files_to_run`, the `Rake::TestTask` file list) are exactly bgraph's units (121 of 121, none missing, none extra) |
+| Swift | On both macOS and Linux arm64 with Swift 6.2.1, 210 package instances parsed statically matched native test metadata, including 65 test targets and 687 source paths. Another 36 instances were covered by whole-package units. Five were unavailable for comparison. |
+| C and C++ | Linux arm64 configured 37 project instances at 26 revisions. The 29 nonempty suites (22 CTest, 7 Meson) were covered by whole-project units at the correct build roots. Eight registered no tests. Separate literal fixtures matched both named tests and both direct source links for each backend. |
+| Dart | 3 repositories, 7 packages: the test files `dart test` loads in a whole run are exactly bgraph's units (66 of 66, none missing, none extra); a `@TestOn('browser')` file skipped on the VM is the one explained extra seen in a probe |
 | Node | Vitest / Jest `--changed` ⊆ bgraph on every non-full T2 mutant. Comparison with general code-graph tools: [Benchmarks](benchmarks.md) |
 
 ### Replay
@@ -168,14 +220,14 @@ overall (0.100 on hono), median 239 ms per commit (p95 1.0 s).
 
 ### Dynamic layer
 
-| | Python | Node | JVM (class layer) | Ruby (method layer) |
-|---|---|---|---|---|
-| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) |
-| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository |
-| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) |
-| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 |
-| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** |
-| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – |
+| | Python | Node | JVM (class layer) | Ruby (method layer) | PHP (file and function layer) | Go (function layer) |
+|---|---|---|---|---|---|---|
+| Repositories | click, marshmallow, attrs, Python-Markdown, pygments, werkzeug | dayjs, hono, express (+ immutable-js in replay) | gson, moshi | rack, dry-types, rake (+ rubocop, jekyll, asciidoctor for the guard rate) | monolog, php-option, collection, pest-plugin-arch (+ dbal in replay; Carbon, PHP-Parser, composer for the guard rate) | hcl, prometheus/common, connect-go (+ chi, afero for the guard rate) |
+| Records complete | 89–100 % with `trust_native_env` (0 % with the strict default on Windows) | 98–100 % on dayjs and express; hono 125 of 161 (26 incomplete: a native bundler binding not on the allowlist, workerd spawns; the rest fail on Windows: bun/deno/workerd runtime tests) | 122 of 130 (gson), 32 of 39 (moshi) | 112 of 121 test files (the rest fail at R or start a non-Ruby process); 8–49 s per repository | 93 of 98 (monolog), 11 of 12, 5 of 5, 20 of 49 (pest-plugin-arch: fixtures listed as test files); 94.6 % and 99.2 % in replay | 186 of 187 (hcl), 220 of 221, 241 of 249 (the rest start a process); 99.3 % in replay |
+| Hybrid mutation: violations caused by the layer | **0** (92 narrowed mutants) | **0** (62 narrowed mutants) | **0** (33 narrowed mutants, 339 failing classes all kept) | **0** (152 narrowed mutants of 188, 1,105 red test files all kept) | **0** (112 narrowed mutants of 113) | **0** (48 narrowed mutants of 60) |
+| Median selection, static → hybrid | 1.000 → 0.118–0.194 on widening-heavy repositories | 0.032 → 0.021, 0.056 → 0.025, 0.957 → 0.946 | 1.0 → 0.70 (gson), 0.80 (moshi) | 0.975 → 0.175, 1.000 → 0.186, 1.000 → 0.120 | 1.000 → 0.071 (monolog), 0.200, 0.167, 0.918 (pest-plugin-arch) | test functions run: 1,073 → 629 (hcl), 1,508 → 284, 2,304 → 2,205 |
+| Replay: verified narrowed commits / removed units / violations | 29 / 734 / **0** | 28 / 829 / **0** | 9 / 383 classes / **0** | 13 / 395 / **0** | 165 / 19,865 test files / **0** | 133 / 2,985 test functions / **0** |
+| Equality on non-widened commits | 0 failures (1,200 checks) | 0 failures | – | – | 0 failures | 0 failures (249 commits) |
 
 Findings:
 
@@ -189,8 +241,48 @@ Findings:
   first-parent commits of six repositories; nearly every refusal is class- or module-level code. Ruby narrows precise
   units: on rack, dry-types and rake every test file reaches every library file statically, and with the method records
   a median of 0.12–0.19 of the test files remains on the mutants.
+- The PHP guard accepts 43–68 % of 500 first-parent commits on five repositories (monolog, dbal, Carbon,
+  PHP-Parser, composer); refusals are CI files, file additions, manifests and non-PHP data files. A PHP static unit is the
+  whole Composer project, so the layer removes most test files: a median of 0.07–0.10 remains on replayed commits.
+- The Go guard accepts 18–27 % of the commits that change Go code over 500 first-parent commits of five repositories
+  (hcl, prometheus/common, connect-go, chi, afero); a third to a half of all commits are full selections. Where it
+  accepts, the layer runs 21–42 % fewer test functions on replayed commits, but only 0.5–13 % fewer over the whole
+  history, below the default-on gate.
 
 These checks are not a release gate: the dynamic layer stays off by default.
+
+#### Swift dynamic layer feasibility
+
+A history sample of 1,055 first-parent pairs from Swift Argument Parser, Swift Collections and Swift Numerics yielded
+39 body-only candidates (3.7%) using a permissive lexical check. It allowed edits confined to function bodies in
+existing source files with unchanged Git modes, alongside optional documentation edits. The parser could not parse
+the source in 104 other pairs. The result estimates guard eligibility.
+
+On Linux arm64 with SwiftPM 6.2.1, one filtered invocation per XCTest class or Swift Testing suite produced distinct LLVM
+coverage reports. A test failed after an edit confined to a function body in the Swift file it read as text. Its base
+profile recorded execution in the test itself and zero executed regions in the changed file. A coverage-only selector
+could therefore drop a failing test. SwiftPM merges profiles per invocation, including in the parallel XCTest probe.
+[SwiftPM 6.2.1 coverage export](https://github.com/swiftlang/swift-package-manager/blob/swift-6.2.1-RELEASE/Sources/Commands/SwiftTestCommand.swift#L575-L615)
+
+The dynamic layer remains planned pending runtime dependency tracing and a compiler-checked guard.
+
+#### Dart dynamic layer feasibility
+
+Across 1,500 first-parent pairs in dart-lang/http, melos and dart-petitparser, 474 passed a preliminary path and mode
+check. Of those, seven had widened Dart file units. They accounted for 69 of the 5,434 static Dart test selections
+(1.3%), even if every eligible widened unit could be removed. A separate syntax-only check found 139 pairs with edits
+confined to function or method bodies, with optional documentation edits.
+
+On Dart 3.14.1/Linux arm64, `dart test --coverage` produced one report per VM test file. All 18 reports from
+dart-petitparser included executed lines in their own test file. Median runtime was 5.88 s for the plain suite and
+9.22 s for coverage. Serial isolated coverage runs took 27.47 s in total.
+[Per-suite coverage export in test_core 0.6.18](https://github.com/dart-lang/test/blob/test_core-v0.6.18/pkgs/test_core/lib/src/runner/coverage.dart)
+
+A test that read an unimported Dart file as text passed at the base. Its coverage report omitted the read file.
+Changing a function body in that file made the test fail, and bgraph's static selector kept it through an
+`unreferenced_file` widening. A separate body-only edit caused a suite to fail to load despite having no
+execution hits in the edited function. The Dart layer remains planned pending runtime dependency tracing and
+compiler validation. The probe covered the Dart VM; Flutter's test runner needs its own evaluation.
 
 ### Lockfile differential check
 

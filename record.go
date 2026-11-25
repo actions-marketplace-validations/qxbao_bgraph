@@ -13,7 +13,9 @@ import (
 
 	"github.com/qxbao/bgraph/internal/dynamic"
 	"github.com/qxbao/bgraph/internal/dynamic/dotnetdyn"
+	"github.com/qxbao/bgraph/internal/dynamic/godyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
+	"github.com/qxbao/bgraph/internal/dynamic/phpdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/eco"
@@ -32,7 +34,7 @@ type DynamicRecord = dynamic.Record
 
 // RecordOptions configures Index.Record.
 type RecordOptions struct {
-	// Eco: the ecosystem to record ("python", "node", "jvm", "dotnet" or "ruby"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
+	// Eco: the ecosystem to record ("python", "node", "jvm", "dotnet", "ruby", "php" or "go"). Empty: the ecosystems of bgraph.toml [dynamic_layer] ecosystems when
 	// set, otherwise every ecosystem with a dynamic layer that has test units.
 	Eco        string
 	Units      string        // glob on unit IDs (test files); empty: every unit
@@ -243,6 +245,10 @@ func (ix *Index) Record(ctx context.Context, opt RecordOptions) (RecordSummary, 
 			recs, skipped, err = ix.recordDotnet(ctx, opt, an, wt, head, now, keep, &sum)
 		case rbdyn.Eco:
 			recs, skipped, err = ix.recordRuby(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		case phpdyn.Eco:
+			recs, skipped, err = ix.recordPHP(ctx, opt, rf, an, wt, head, now, keep, &sum)
+		case godyn.Eco:
+			recs, skipped, err = ix.recordGo(ctx, opt, rf, an, wt, head, now, keep, &sum)
 		}
 		sum.Skipped = append(sum.Skipped, skipped...)
 		if err != nil {
@@ -402,7 +408,16 @@ func reasonKey(why string) string {
 		"forks ran classes the runner did not report: ", "loads untracked file ", "reads untracked file ",
 		"native extension in the repository: ", "starts a non-Ruby process: ", "starts a Ruby process that wrote no coverage: ",
 		"starts a Ruby process whose pid is unknown: ", "exec of a Ruby process that wrote no coverage: ", "the collector raised ",
-		"the tests called Coverage.", "unreadable collector output "} {
+		"the tests called Coverage.", "unreadable collector output ", "includes untracked file ", "sees untracked file ",
+		"starts a process (", "another coverage user: ", "forks the process (", "replaces the process (pcntl_exec) at ",
+		"loads a PHP extension (dl) at ", "calls native code through FFI at ", "the runner started ",
+		"lists a test file that is not tracked: ", "lists a test file outside the configured test directories: ", "test file ",
+		"listing the test files: ", "malformed line table for ", "cannot install the collector's output buffer", "reads a file without the stream wrapper (", "writes a file outside the repository and its temporary directory: ",
+		"reads a file written into the vendor directory after composer install: ", "reads shared state another test file wrote: ",
+		"starts a process the collector does not observe (", "a covered file maps to no tracked repository file: ",
+		"compiles untracked repository file ", "a covered file is not among the compiled files: ", "go tool covdata textfmt: ",
+		"builds module ", "builds with a go.work outside the repository: ", "go list: ", "go test -c: ", "-test.list: ",
+		"malformed coverage profile line "} {
 		if strings.HasPrefix(why, pre) {
 			return strings.TrimSpace(pre)
 		}
@@ -492,18 +507,35 @@ func (ix *Index) DynamicStatusOf(ctx context.Context, eco string) (DynamicStatus
 			}
 		}
 	}
-	env, collector, err := ix.ecoEnv(ctx, eco, an.Rules, ht)
-	if err != nil {
-		st.EnvError = err.Error()
-	}
-	st.Env = env
-	units := map[string]bool{}
-	p := dynamic.Params{Eco: eco, Collector: collector, Env: env, BaseOID: func(p string) string {
-		if !ht.Has(p) {
-			return ""
+	// envOf returns the current environment of a record's unit: one per ecosystem, except PHP (one per project's vendor directory).
+	var envOf func(unit string) string
+	var collector string
+	if eco == phpdyn.Eco {
+		collector = phpdyn.CollectorID
+		envs := map[string]string{}
+		if _, probe, perr := ix.phpProbe(ctx, an.Rules); perr != nil {
+			st.EnvError = perr.Error()
+		} else {
+			units, _ := phpRecordUnits(an)
+			fp := ix.phpUnitEnvs(probe)
+			for _, u := range units {
+				if e, why := fp(u.BinDir); e != "" {
+					envs[u.ID] = e
+				} else if st.EnvError == "" {
+					st.EnvError = u.ID + ": " + why
+				}
+			}
 		}
-		return ht.Key(p)
-	}}
+		envOf = func(unit string) string { u, _, _ := strings.Cut(unit, "#"); return envs[u] }
+	} else {
+		env, c, err := ix.ecoEnv(ctx, eco, an.Rules, ht)
+		if err != nil {
+			st.EnvError = err.Error()
+		}
+		st.Env, collector = env, c
+		envOf = func(string) string { return env }
+	}
+	units := map[string]bool{}
 	for _, r := range recs {
 		units[r.Unit] = true
 		if !r.Complete {
@@ -511,13 +543,28 @@ func (ix *Index) DynamicStatusOf(ctx context.Context, eco string) (DynamicStatus
 				st.Reasons[reasonKey(why)]++
 			}
 		}
+		env := envOf(r.Unit)
 		if env == "" || r.Env != env {
 			continue
 		}
+		p := dynamic.Params{Eco: eco, Collector: collector, Env: env, BaseOID: func(p string) string {
+			if !ht.Has(p) {
+				return ""
+			}
+			return ht.Key(p)
+		}}
 		st.CurrentEnv++
 		files := []string{r.Unit}
-		if eco == jvm.Name || eco == dotnetdyn.Eco {
+		switch {
+		case eco == jvm.Name || eco == dotnetdyn.Eco:
 			files = nil // class and class-list records: the class's file is among its dependencies, not named by the unit
+		case eco == godyn.Eco:
+			files = nil // function-list and function records: the canary is checked when recording
+		case eco == phpdyn.Eco:
+			files = nil // file-list record
+			if _, f, ok := strings.Cut(r.Unit, "#"); ok {
+				files = []string{f}
+			}
 		}
 		why := dynamic.Usable(r, files, p)
 		if why == "" {

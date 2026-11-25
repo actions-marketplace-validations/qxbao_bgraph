@@ -5,7 +5,7 @@
 <h3 align="center">Your agent writes the code in minutes. Don't wait an hour for the tests.</h3>
 
 <p align="center">
-  <b>bgraph</b> runs only the tests a change can affect, across eight language ecosystems,<br>
+  <b>bgraph</b> runs only the tests a change can affect, across eleven language ecosystems,<br>
   and never silently skips one.
 </p>
 
@@ -17,7 +17,7 @@
   <a href="https://pkg.go.dev/github.com/qxbao/bgraph"><img src="https://img.shields.io/badge/API%20docs-pkg.go.dev-14B8A6?style=flat&labelColor=0F172A" alt="API docs on pkg.go.dev"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-F59E0B?style=flat&labelColor=0F172A" alt="License: Apache-2.0"></a>
   <br>
-  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go%20%C2%B7%20Ruby%20%C2%B7%20PHP-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go, Ruby, PHP"></a>
+  <a href="#supported-ecosystems"><img src="https://img.shields.io/badge/ecosystems-Node%20%C2%B7%20Python%20%C2%B7%20Rust%20%C2%B7%20JVM%20%C2%B7%20.NET%20%C2%B7%20Go%20%C2%B7%20Ruby%20%C2%B7%20PHP%20%C2%B7%20Swift%20%C2%B7%20C%2FC%2B%2B%20%C2%B7%20Dart-white?style=flat&labelColor=0F172A" alt="Node, Python, Rust, JVM, .NET, Go, Ruby, PHP, Swift, C/C++, Dart"></a>
   <a href="#built-for-coding-agents"><img src="https://img.shields.io/badge/MCP-server%20included-white?style=flat&labelColor=0F172A" alt="MCP server included"></a>
   <a href="#github-action"><img src="https://img.shields.io/badge/GitHub%20Action-qxbao%2Fbgraph%40v0-white?style=flat&labelColor=0F172A&logo=githubactions&logoColor=white" alt="GitHub Action: qxbao/bgraph@v0"></a>
   <img src="https://img.shields.io/badge/tested%20on-Linux%20%C2%B7%20macOS%20%C2%B7%20Windows-white?style=flat&labelColor=0F172A" alt="Tested on Linux, macOS and Windows">
@@ -44,14 +44,14 @@ is a regression shipped to production. bgraph is built around that constraint:
 
 <table>
   <tr>
-    <td align="center" width="25%"><h3>1,767</h3>real bug-fix tasks replayed<br>across eight ecosystems</td>
-    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 548 mutation kills</td>
+    <td align="center" width="25%"><h3>2,137</h3>real bug-fix tasks replayed<br>across eleven ecosystems</td>
+    <td align="center" width="25%"><h3>0</h3>missed failing tests<br>in 647 mutation kills</td>
     <td align="center" width="25%"><h3>3–13%</h3>of the suite selected on<br>well-structured repositories</td>
     <td align="center" width="25%"><h3>&lt; 1 s</h3>typical selection time,<br>index cached between runs</td>
   </tr>
 </table>
 
-<sub>Numbers from the project's own evaluation: SWE-bench-family FAIL_TO_PASS tasks, mutation testing on 22 open-source
+<sub>Numbers from the project's own evaluation: FAIL_TO_PASS tasks from public benchmarks, mutation testing on 31 open-source
 repositories, median selection on dayjs, hono and the Go holdout set. Method and every result:
 <a href="docs/evaluation.md">docs/evaluation.md</a>.</sub>
 
@@ -90,7 +90,7 @@ Turn a selection into commands your runner understands:
 ```console
 $ bgraph command --base origin/main
 # scope: graph
-cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
+(cd packages/core && npx vitest run src/a.test.ts src/b.test.ts)
 ```
 
 ## Benchmarks
@@ -137,6 +137,9 @@ and per-task causes: [docs/benchmarks.md](docs/benchmarks.md).
 | <img src="https://cdn.simpleicons.org/go" width="20" alt=""> | [**Go**](docs/ecosystems/go.md) | package | `go test`, modules, `go.work`, vendoring |
 | <img src="https://cdn.simpleicons.org/php" width="20" alt=""> | [**PHP**](docs/ecosystems/php.md) | Composer project | PHPUnit, Pest |
 | <img src="https://cdn.simpleicons.org/ruby" width="20" alt=""> | [**Ruby**](docs/ecosystems/ruby.md) | test file | RSpec, Minitest, Test::Unit, Rails test, Bundler |
+| <img src="https://cdn.simpleicons.org/swift" width="20" alt=""> | [**Swift**](docs/ecosystems/swift.md) | SwiftPM test target or package | `swift test`, XCTest, Swift Testing |
+| <img src="https://cdn.simpleicons.org/cplusplus" width="20" alt=""> | [**C / C++**](docs/ecosystems/cpp.md) | registered test or build project | CMake/CTest and Meson |
+| <img src="https://cdn.simpleicons.org/dart" width="20" alt=""> | [**Dart / Flutter**](docs/ecosystems/dart.md) | test file | `dart test`, `flutter test`, pub workspaces, melos |
 
 Polyglot repositories work out of the box: every ecosystem selects independently, and a change in one does not select
 another's tests unless it is a shared input (CI definitions, toolchain pins).
@@ -146,38 +149,36 @@ another's tests unless it is a shared input (CI definitions, toolchain pins).
 | Feature | What it does |
 |---|---|
 | 🛡️ **Fail-closed by design** | Every uncertainty becomes a widening with a reason code (`dynamic_import`, `manifest_changed`, `lock_changed`, ...) and a suggested `bgraph.toml` entry. [Architecture](docs/architecture.md) |
-| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches. [Lockfiles](docs/lockfiles.md) |
-| ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest, RSpec, Minitest and more. [CLI](docs/cli.md#command) |
+| 🔒 **Lockfile-aware** | `pnpm-lock.yaml`, `package-lock.json`, `yarn.lock`, `bun.lock`, `Cargo.lock`, `uv.lock` and `poetry.lock` are compared by resolved dependency closure, so a bump selects only the projects it reaches; a `go.sum` change that only adds lines selects nothing. [Lockfiles](docs/lockfiles.md) |
+| ▶️ **Ready-to-run commands** | `bgraph command` prints runner commands for Vitest, pytest, Cargo, Maven, .NET, Go, PHPUnit, Pest, RSpec, Minitest, SwiftPM, CTest, Meson, `dart test`, `flutter test` and more. [CLI](docs/cli.md#command) |
 | 🔍 **Explainable** | `bgraph explain` shows the dependency chain behind every selected test; `bgraph unresolved` lists what could not be read. [CLI](docs/cli.md#explain) |
-| ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files, for JVM and .NET test classes, and for Ruby test files by the methods they ran. [Dynamic layer](docs/dynamic-layer.md) |
+| ⚡ **Dynamic layer** | Optional per-test records narrow widened selections further for Python and Node test files, for JVM and .NET test classes, for Ruby and PHP test files by the methods and functions they ran, and for Go test functions. [Dynamic layer](docs/dynamic-layer.md) |
 | 🧪 **Shadow mode for CI** | Keep running the full suite while `bgraph audit` reports any failure the selection would have skipped. [Example workflow](docs/ci/shadow-github-actions.yml) |
-| 🤖 **MCP server** | `bgraph mcp` gives coding agents `affected_tests`, `dependents_of` and `explain_selection`. [MCP](docs/cli.md#mcp) |
+| 🤖 **Agent integration** | `bgraph agent install` tells coding agents to run the affected tests; `bgraph mcp` gives them `test_commands`, `affected_tests`, `dependents_of` and `explain_selection`. [Coding agents](docs/agents.md) |
 | 🧩 **Go library** | Embed the selector in your own tooling with `bgraph.Open` and `Index.Select`. |
 
 ## Install
 
-**Prebuilt binaries** for Linux, macOS and Windows (amd64 and arm64) are on the
-[releases page](https://github.com/qxbao/bgraph/releases/latest), with a `checksums.txt` (SHA-256) for each release.
-
 Linux and macOS:
 
 ```sh
-v=$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/qxbao/bgraph/releases/latest | sed 's|.*/tag/v||')
-os=$(uname -s | tr '[:upper:]' '[:lower:]'); arch=$(uname -m | sed 's/x86_64/amd64/; s/aarch64/arm64/')
-curl -fsSL "https://github.com/qxbao/bgraph/releases/download/v$v/bgraph_${v}_${os}_${arch}.tar.gz" | tar -xz bgraph
-sudo mv bgraph /usr/local/bin/
+curl -fsSL https://raw.githubusercontent.com/qxbao/bgraph/main/scripts/install.sh | sh
 ```
 
-Windows (PowerShell; use `windows_arm64` on ARM):
+Windows (PowerShell):
 
 ```powershell
-$v = (Invoke-RestMethod https://api.github.com/repos/qxbao/bgraph/releases/latest).tag_name.TrimStart('v')
-Invoke-WebRequest "https://github.com/qxbao/bgraph/releases/download/v$v/bgraph_${v}_windows_amd64.zip" -OutFile bgraph.zip
-Expand-Archive bgraph.zip -DestinationPath "$env:LOCALAPPDATA\bgraph" -Force
-# then add $env:LOCALAPPDATA\bgraph to your PATH
+irm https://raw.githubusercontent.com/qxbao/bgraph/main/scripts/install.ps1 | iex
 ```
 
-**From source** (Go 1.25 or later):
+The script picks the build for your OS and CPU, checks it against the release's `checksums.txt` (SHA-256), installs it
+(`~/.local/bin`, or `%LOCALAPPDATA%\Programs\bgraph` on Windows) and adds that directory to your `PATH`. Set
+`BGRAPH_VERSION` for a specific release, `BGRAPH_INSTALL_DIR` for another directory, `BGRAPH_NO_MODIFY_PATH=1` to leave
+`PATH` alone. The archives are also on the [releases page](https://github.com/qxbao/bgraph/releases/latest).
+
+`bgraph update` replaces the binary with the latest release (`--check` only reports, `--version` picks one).
+
+**From source** (Go 1.25.1 or later):
 
 ```sh
 go install github.com/qxbao/bgraph/cmd/bgraph@latest
@@ -208,8 +209,11 @@ Give your agent the same selection it would get in CI, so it runs the right test
 suite:
 
 ```sh
-claude mcp add bgraph -- bgraph mcp --root .
+bgraph agent install --skill                 # a short guidance block in CLAUDE.md / AGENTS.md, and /bgraph-test
+claude mcp add bgraph -- bgraph mcp --root . # optional: the MCP tools
 ```
+
+The guidance is a few lines between markers, and `bgraph agent uninstall` removes it. Other MCP clients:
 
 ```json
 {
@@ -291,6 +295,7 @@ A `full` selection is not an error: the step fails only when bgraph itself fails
 | [Architecture](docs/architecture.md) | the fail-closed contract, the graph, scope tiers, widening reasons |
 | [Configuration](docs/configuration.md) | the `bgraph.toml` reference ([annotated example](docs/bgraph.example.toml)) |
 | [CLI](docs/cli.md) | commands, flags, JSON output, exit codes, shadow audits, MCP |
+| [Coding agents](docs/agents.md) | agent guidance, MCP tools, hook, Go API for agent hosts |
 | [Ecosystems](docs/README.md#ecosystems) | per-language rules, units and runner commands |
 | [Lockfiles](docs/lockfiles.md) | levels L0, L1 and L2 |
 | [Dynamic layer](docs/dynamic-layer.md) | record-based narrowing |

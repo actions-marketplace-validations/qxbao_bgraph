@@ -1,0 +1,32 @@
+A package's own pubspec.lock widens that package only.
+-- base/a/pubspec.yaml --
+name: a
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/a/pubspec.lock --
+packages: {}
+-- base/a/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/b/pubspec.yaml --
+name: b
+environment:
+  sdk: ^3.5.0
+dependencies:
+  a:
+    path: ../a
+dev_dependencies:
+  test: ^1.25.0
+-- base/b/test/b_test.dart --
+import 'package:test/test.dart';
+void main() => test('b', () {});
+-- head/a/pubspec.lock --
+packages:
+  x: {}
+-- want --
+scope module
+widen lock_changed
+select a/test/a_test.dart
+noselect b/test/b_test.dart

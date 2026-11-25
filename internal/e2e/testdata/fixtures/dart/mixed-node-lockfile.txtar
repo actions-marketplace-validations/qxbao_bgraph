@@ -1,0 +1,28 @@
+Mixed repository: a Node lockfile change selects no Dart test.
+-- base/package.json --
+{"name":"site","devDependencies":{"vitest":"^2.0.0"}}
+-- base/package-lock.json --
+{"name":"site","lockfileVersion":3,"packages":{"":{"name":"site"}}}
+-- base/src/a.ts --
+export const a = 1
+-- base/src/a.test.ts --
+import { a } from './a'
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/pubspec.lock --
+packages: {}
+-- base/lib/b.dart --
+int b() => 1;
+-- base/test/b_test.dart --
+import 'package:test/test.dart';
+import 'package:app/b.dart';
+void main() => test('b', () => b());
+-- head/package-lock.json --
+{"name":"site","lockfileVersion":3,"packages":{"":{"name":"site","dependencies":{"x":"1"}},"node_modules/x":{"version":"1.0.0"}}}
+-- want --
+select src/a.test.ts
+noselect test/b_test.dart

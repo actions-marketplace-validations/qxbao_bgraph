@@ -1,0 +1,52 @@
+The repository holds `path`, which package:test itself depends on. Pub resolves the runner's `path` to the workspace
+member, so a change to it alters `dart test` for every member, even a test that never imports path. A package outside the
+workspace resolves the hosted path and is not selected.
+-- base/pubspec.yaml --
+name: ws
+environment:
+  sdk: ^3.6.0
+workspace:
+  - pkgs/path
+  - pkgs/fixnum
+-- base/pkgs/path/pubspec.yaml --
+name: path
+environment:
+  sdk: ^3.6.0
+resolution: workspace
+dev_dependencies:
+  test: ^1.25.0
+-- base/pkgs/path/lib/path.dart --
+String join(String a, String b) => '$a/$b';
+-- base/pkgs/path/test/path_test.dart --
+import 'package:test/test.dart';
+import 'package:path/path.dart';
+void main() => test('j', () => join('a', 'b'));
+-- base/pkgs/fixnum/pubspec.yaml --
+name: fixnum
+environment:
+  sdk: ^3.6.0
+resolution: workspace
+dev_dependencies:
+  test: ^1.25.0
+-- base/pkgs/fixnum/lib/fixnum.dart --
+int one() => 1;
+-- base/pkgs/fixnum/test/fixnum_test.dart --
+import 'package:test/test.dart';
+import 'package:fixnum/fixnum.dart';
+void main() => test('f', () => one());
+-- base/outside/pubspec.yaml --
+name: outside
+environment:
+  sdk: ^3.6.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/outside/test/o_test.dart --
+import 'package:test/test.dart';
+void main() => test('o', () {});
+-- head/pkgs/path/lib/path.dart --
+String join(String a, String b) => '$a\$b';
+-- want --
+scope graph
+select pkgs/path/test/path_test.dart
+select pkgs/fixnum/test/fixnum_test.dart
+noselect outside/test/o_test.dart

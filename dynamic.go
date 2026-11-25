@@ -7,8 +7,10 @@ import (
 
 	"github.com/qxbao/bgraph/internal/dynamic"
 	"github.com/qxbao/bgraph/internal/dynamic/dotnetdyn"
+	"github.com/qxbao/bgraph/internal/dynamic/godyn"
 	"github.com/qxbao/bgraph/internal/dynamic/jvmdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/nodedyn"
+	"github.com/qxbao/bgraph/internal/dynamic/phpdyn"
 	"github.com/qxbao/bgraph/internal/dynamic/pydyn"
 	"github.com/qxbao/bgraph/internal/dynamic/rbdyn"
 	"github.com/qxbao/bgraph/internal/model"
@@ -76,6 +78,12 @@ func (ix *Index) ecoEnv(ctx context.Context, eco string, rf *rules.File, t tree.
 	case rbdyn.Eco:
 		env, err = ix.rubyEnv(ctx, rf, t)
 		return env, rbdyn.CollectorID, err
+	case phpdyn.Eco:
+		// PHP records carry the environment of their unit (its vendor directory): see phpEnvs.
+		return "", phpdyn.CollectorID, errors.New("php environments are per unit")
+	case godyn.Eco:
+		env, err = ix.goFingerprint(ctx, rf)
+		return env, godyn.CollectorID, err
 	}
 	return "", "", errors.New("no dynamic layer for ecosystem " + eco)
 }
@@ -137,6 +145,14 @@ func (ix *Index) applyDynamic(ctx context.Context, ch Change, in selector.Input,
 		}
 		if eco == rbdyn.Eco {
 			sel = ix.applyRubyMethods(ctx, in, res, sel) // per-method layer: narrows precise Ruby test files (docs/dynamic-layer.md §10)
+			continue
+		}
+		if eco == phpdyn.Eco {
+			sel = ix.applyPHPFiles(ctx, in, res, sel) // per-test-file layer inside Composer projects (docs/dynamic-layer.md §11)
+			continue
+		}
+		if eco == godyn.Eco {
+			sel = ix.applyGoTests(ctx, in, res, sel) // per-test-function layer inside Go packages
 			continue
 		}
 		candidate := false

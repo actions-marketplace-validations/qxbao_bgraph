@@ -1,0 +1,50 @@
+package: import of another in-repo package declared as a path dependency.
+-- base/packages/core/pubspec.yaml --
+name: core
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/packages/core/lib/core.dart --
+export 'src/impl.dart';
+-- base/packages/core/lib/src/impl.dart --
+int impl() => 1;
+-- base/packages/core/test/core_test.dart --
+import 'package:test/test.dart';
+import 'package:core/core.dart';
+void main() => test('c', () => impl());
+-- base/packages/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  core:
+    path: ../core
+dev_dependencies:
+  test: ^1.25.0
+-- base/packages/app/lib/app.dart --
+import 'package:core/core.dart';
+int run() => impl();
+-- base/packages/app/test/app_test.dart --
+import 'package:test/test.dart';
+import 'package:app/app.dart';
+void main() => test('a', () => run());
+-- base/packages/util/pubspec.yaml --
+name: util
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/packages/util/lib/util.dart --
+int u() => 1;
+-- base/packages/util/test/util_test.dart --
+import 'package:test/test.dart';
+import 'package:util/util.dart';
+void main() => test('u', () => u());
+-- head/packages/core/lib/src/impl.dart --
+int impl() => 2;
+-- want --
+scope graph
+select packages/core/test/core_test.dart
+select packages/app/test/app_test.dart
+noselect packages/util/test/util_test.dart

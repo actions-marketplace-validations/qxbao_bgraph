@@ -1,0 +1,40 @@
+Manifest and lockfile changes reach transitive users at exact Swift package scopes.
+-- base/App/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "App", dependencies: [.package(path: "../Layer")], targets: [.testTarget(name: "Suite", dependencies: [.product(name: "Layer", package: "Layer")])])
+-- base/App/Tests/Suite/Test.swift --
+import XCTest
+-- base/Layer/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Layer", products: [.library(name: "Layer", targets: ["Layer"])], dependencies: [.package(path: "Leaf")], targets: [.target(name: "Layer", dependencies: [.product(name: "Leaf", package: "Leaf")]), .testTarget(name: "Suite")])
+-- base/Layer/Sources/Layer/Layer.swift --
+import Leaf
+-- base/Layer/Tests/Suite/Test.swift --
+import XCTest
+-- base/Layer/Leaf/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Leaf", products: [.library(name: "Leaf", targets: ["Leaf"])], targets: [.target(name: "Leaf"), .testTarget(name: "LeafChecks", dependencies: ["Leaf"])])
+-- base/Layer/Leaf/Sources/Leaf/Leaf.swift --
+public func value() -> Int { 1 }
+-- base/Layer/Leaf/Tests/LeafChecks/Test.swift --
+import XCTest
+-- base/Spare/Package.swift --
+// swift-tools-version: 5.9
+import PackageDescription
+let package = Package(name: "Spare", targets: [.testTarget(name: "Suite")])
+-- base/Spare/Tests/Suite/Test.swift --
+import XCTest
+-- base/Layer/Leaf/Package.resolved --
+{"version":2}
+-- head/Layer/Leaf/Package.resolved --
+{"version":3}
+-- want --
+select swift:Layer/Leaf::test:LeafChecks
+select swift:Layer::test:Suite
+select swift:App::test:Suite
+noselect swift:Spare::test:Suite
+widen lock_changed
+scope module

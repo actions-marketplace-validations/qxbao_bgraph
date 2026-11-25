@@ -1,0 +1,34 @@
+A conditional import depends on every branch, not only the default URI.
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/lib/platform.dart --
+import 'src/stub.dart'
+    if (dart.library.io) 'src/io.dart'
+    if (dart.library.js_interop) 'src/web.dart';
+String name() => impl();
+-- base/lib/src/stub.dart --
+String impl() => throw UnsupportedError('');
+-- base/lib/src/io.dart --
+String impl() => 'io';
+-- base/lib/src/web.dart --
+String impl() => 'web';
+-- base/lib/plain.dart --
+int plain() => 1;
+-- base/test/platform_test.dart --
+import 'package:test/test.dart';
+import 'package:app/platform.dart';
+void main() => test('p', () => name());
+-- base/test/plain_test.dart --
+import 'package:test/test.dart';
+import 'package:app/plain.dart';
+void main() => test('q', () => plain());
+-- head/lib/src/io.dart --
+String impl() => 'IO';
+-- want --
+scope graph
+select test/platform_test.dart
+noselect test/plain_test.dart

@@ -1,0 +1,59 @@
+A dependency change widens to the package and its in-repo dependents, not to unrelated packages.
+-- base/core/pubspec.yaml --
+name: core
+environment:
+  sdk: ^3.5.0
+dependencies:
+  http: ^1.0.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/core/test/core_test.dart --
+import 'package:test/test.dart';
+void main() => test('c', () {});
+-- base/app/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dependencies:
+  core:
+    path: ../core
+dev_dependencies:
+  test: ^1.25.0
+-- base/app/test/app_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/tool/pubspec.yaml --
+name: tool
+environment:
+  sdk: ^3.5.0
+dependencies:
+  core: any
+dev_dependencies:
+  test: ^1.25.0
+-- base/tool/test/tool_test.dart --
+import 'package:test/test.dart';
+void main() => test('t', () {});
+-- base/util/pubspec.yaml --
+name: util
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/util/test/util_test.dart --
+import 'package:test/test.dart';
+void main() => test('u', () {});
+-- head/core/pubspec.yaml --
+name: core
+environment:
+  sdk: ^3.5.0
+dependencies:
+  http: ^1.2.0
+dev_dependencies:
+  test: ^1.25.0
+-- want --
+scope module
+widen manifest_changed
+select core/test/core_test.dart
+select app/test/app_test.dart
+select tool/test/tool_test.dart
+noselect util/test/util_test.dart

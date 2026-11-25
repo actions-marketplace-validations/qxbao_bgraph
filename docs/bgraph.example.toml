@@ -35,6 +35,8 @@
 #             Go: a module directory selects every package of the module; a package directory (e.g. "internal/api")
 #             selects that package and the packages below it; a glob over .go files selects no Go unit.
 #             PHP: use a project directory or an exact ID such as "services/api::php" (".::php" at the root).
+#             Swift uses a package or test target directory, or an ID such as "swift:packages/kit::test:KitTests".
+#             C and C++ use a build project directory or an ID such as "cpp:cmake:library::test:parse".
 #             A target that matches no test unit is a configuration error: the selection becomes full (user_rule).
 #   reason  : free text, shown in explanations. Strongly recommended; nothing checks it.
 # ---------------------------------------------------------------------------------------------------------------------
@@ -213,6 +215,17 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 #   python           : interpreter for `bgraph record` and the environment fingerprint ("python" on PATH by default;
 #                      a path with a separator is relative to the repo root, e.g. ".venv/Scripts/python.exe").
 #   node             : node executable for `bgraph record` and the Node fingerprint ("node" on PATH by default).
+#   php              : PHP executable for `bgraph record --eco php` (it must load Xdebug 3), the PHP fingerprint and the
+#                      tokenizer cross-check of changed files ("php" on PATH by default). The "php" ecosystem narrows a
+#                      selected Composer project to the test files whose recorded run (one process tree per test file,
+#                      docs/dynamic-layer.md §11) included, read, stat'ed or listed a changed file, or executed a changed
+#                      function when every change lies inside function bodies. PHPUnit >= 10 or Pest >= 2 with a PHPUnit
+#                      XML configuration; only modified PHP code files or documentation files.
+#   go               : go command for `bgraph record --eco go` and the Go fingerprint ("go" on PATH by default). The "go"
+#                      ecosystem narrows a selected package to the top-level test functions whose recorded run (one
+#                      process per function with Go coverage, docs/dynamic-layer.md §12) executed a changed function;
+#                      the package is still built (`-run '^$'` when none is kept). Only when every changed file is a
+#                      modified .go file whose changes lie inside function bodies, a test file or a documentation file.
 #   trust_native_env : native extension modules installed in the environment (not CPython's own) do not make a
 #                      record incomplete; their versions are part of the fingerprint. Default false. (Node: the
 #                      toolchain addons of docs/dynamic-layer.md §8.3 are accepted without it.)
@@ -225,6 +238,8 @@ reason = "load_plugins() imports entry points of installed packages, never a mod
 # ecosystems = ["python"]
 # python = ".venv/bin/python"
 # node = "node"
+# php = "php"
+# go = "go"
 # trust_native_env = false
 
 # ---------------------------------------------------------------------------------------------------------------------

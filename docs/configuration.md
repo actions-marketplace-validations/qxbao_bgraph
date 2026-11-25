@@ -35,10 +35,10 @@ there). Review narrowing entries like code, and re-check them when what they des
 | Table | Kind | Read by | Purpose |
 |---|---|---|---|
 | [`[[rule]]`](#rule) | widening (`"none"`: narrowing) | all ecosystems | a dependency no import expresses |
-| [`[[generated]]`](#generated) | narrowing | Node | git-ignored build outputs that code imports |
+| [`[[generated]]`](#generated) | narrowing | Node, Dart | git-ignored build outputs that code imports |
 | [`[[config]]`](#config) | narrowing | Node | runner-config keys computed in code |
 | [`[[dynamic]]`](#dynamic) | narrowing | Python, Ruby | what dynamic imports of a file can load |
-| [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET, Ruby | enable the record-based dynamic layer |
+| [`[dynamic_layer]`](#dynamic_layer) | narrowing | Python, Node, JVM, .NET, Ruby, PHP, Go | enable the record-based dynamic layer |
 | [`[lockfile]`](#lockfile) | narrowing at `L2` | Node, Rust, Python | lockfile comparison level |
 | [`[options]`](#options) | – | selector | thresholds |
 
@@ -73,6 +73,15 @@ unit. Globs match the units' files; a glob over `.go` files selects no Go unit (
 For PHP, use a project directory or an exact ID such as `services/api::php` (`.::php` at the repository root).
 See [PHP](ecosystems/php.md#addressing-units-in-bgraphtoml).
 
+For Swift, use a package or test target directory, or an exact ID such as `swift:packages/kit::test:KitTests`. An opaque package has
+an ID such as `swift:packages/kit::all`. See [Swift](ecosystems/swift.md#addressing-units-in-bgraphtoml).
+
+For C and C++, use a build project directory or an exact ID such as `cpp:cmake:library::test:parse`.
+See [C and C++](ecosystems/cpp.md#addressing-units-in-bgraphtoml).
+
+For Dart, use a test file, a glob over test files, a package directory, or a whole-package ID such as
+`<dart-all-tests:packages/core>`. See [Dart](ecosystems/dart.md#addressing-units-in-bgraphtoml).
+
 A target that matches no test unit of the current tree (a mistyped or stale directory, a package without tests, a glob
 that matches no unit's file) is a configuration error: when the rule matches a changed file, the selection is `full`
 (`user_rule`) and the detail names the target.
@@ -92,8 +101,8 @@ reason = "not read by any build or test"
 
 ## `[[generated]]`
 
-Build outputs that git ignores but code imports (for example tests importing `"../dist/index.js"`, or a workspace
-package whose `exports` point to `dist/`). Without an entry, such an import is an unresolved import scoped to the package
+Build outputs that git ignores but code imports (for example tests importing `"../dist/index.js"`, a workspace
+package whose `exports` point to `dist/`, or a Dart `part 'user.g.dart'` written by build_runner). Without an entry, such an import is an unresolved import scoped to the package
 that builds it (`unknown_import`, detail `generated_output`): any change in that package selects the importer. An entry
 names the files the output is built from, so only changes to those select the importing tests.
 
@@ -194,20 +203,22 @@ reason = "require \"mytool/plugins/#{name}\" only loads the bundled plugins"
 
 ## `[dynamic_layer]`
 
-Enables the [dynamic layer](dynamic-layer.md): recorded test dependencies narrow widened selections (and, for JVM, .NET
-and Ruby, precise ones: see [9](dynamic-layer.md#9-jvm-and-net-per-test-class-narrowing) and
-[10](dynamic-layer.md#10-ruby-per-method-narrowing)). Off by default. It
+Enables the [dynamic layer](dynamic-layer.md): recorded test dependencies narrow widened selections (and, for JVM, .NET,
+Ruby, PHP and Go, precise ones: see [9](dynamic-layer.md#9-jvm-and-net-per-test-class-narrowing),
+[10](dynamic-layer.md#10-ruby-per-method-narrowing), [11](dynamic-layer.md#11-php-per-test-file-narrowing) and [12](dynamic-layer.md#12-go-per-test-function-narrowing)). Off by default. It
 is a table of its own (not `[dynamic]`) because `[[dynamic]]` is the array of dynamic-import declarations.
 
 | Key | Default | Value |
 |---|---|---|
-| `ecosystems` | `[]` (off) | ecosystems to narrow: `"python"`, `"node"`, `"jvm"`, `"dotnet"`, `"ruby"` |
+| `ecosystems` | `[]` (off) | ecosystems to narrow: `"python"`, `"node"`, `"jvm"`, `"dotnet"`, `"ruby"`, `"php"`, `"go"` |
 | `python` | `"python"` on PATH | interpreter for `bgraph record` and the Python environment fingerprint; a path with a separator is relative to the repository root |
 | `node` | `"node"` on PATH | node executable for `bgraph record` and the Node fingerprint (same rules) |
 | `ruby` | `"ruby"` on PATH | Ruby executable for `bgraph record`, the Ruby fingerprint and the parse check of changed files (same rules); its directory is put first on `PATH` for the recorded test processes |
+| `php` | `"php"` on PATH | PHP executable for `bgraph record` (it must load Xdebug 3), the PHP fingerprint and the tokenizer cross-check of the function-level refinement (same rules) |
+| `go` | `"go"` on PATH | go command for `bgraph record` and the Go fingerprint (same rules) |
 | `trust_native_env` | `false` | native extension modules of the environment do not make a record incomplete; their versions are in the fingerprint. Records made under the other setting are not used. |
 
-The CLI overrides these with `--dynamic` / `--dynamic=false`, `--python`, `--node`, `--ruby` and `--trust-native-env`.
+The CLI overrides these with `--dynamic` / `--dynamic=false`, `--python`, `--node`, `--ruby`, `--php`, `--go` and `--trust-native-env`.
 
 ```toml
 [dynamic_layer]

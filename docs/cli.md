@@ -14,6 +14,8 @@ repository; default `.`).
 | [`record`](#record) | record per-test dependencies for the dynamic layer |
 | [`dynamic import`, `dynamic status`](#dynamic) | manage dynamic-layer records |
 | [`mcp`](#mcp) | MCP server on stdio |
+| [`agent install`, `agent uninstall`, `agent hook`](#agent) | guidance for coding agents: instruction-file block, skill, hook |
+| [`update`](#update) | replace the binary with a newer release |
 | [`version`](#version), `help` | print the version or the usage |
 
 `bgraph doctor` is reserved: it prints "not implemented" and exits with code `2`.
@@ -50,6 +52,8 @@ An uncertain selection is not an error: it is reported as a widening and the exi
 | `--python EXE` | interpreter (overrides `[dynamic_layer] python`) |
 | `--node EXE` | node executable (overrides `[dynamic_layer] node`) |
 | `--ruby EXE` | Ruby executable (overrides `[dynamic_layer] ruby`) |
+| `--php EXE` | PHP executable (overrides `[dynamic_layer] php`) |
+| `--go EXE` | go command (overrides `[dynamic_layer] go`) |
 | `--trust-native-env` | as `[dynamic_layer] trust_native_env = true` |
 
 Without `--dynamic`, `bgraph.toml` decides.
@@ -63,7 +67,7 @@ bgraph affected [--root DIR] [--base REF] [--head REF] [--json] [--failed ID,...
 | Flag | Meaning |
 |---|---|
 | `--json` | print the [selection as JSON](#json-output) |
-| `--failed ID,...` | test unit IDs that failed in the previous run; they are always selected if they still exist |
+| `--failed ID,...` | test unit IDs that failed in the previous run; they are always selected if they still exist. A sub-unit ID `<unit>#<sub>` as listed under `narrowed` (PHP: `<dir>::php#<test file>`, Go: `go:<dir>#<TestName>`) selects its unit, and the dynamic layer keeps that sub-unit (a test class for JVM and .NET, a test file for PHP, a top-level test function for Go; a Python, Node or Ruby test file for any `<file>#<test>`) |
 
 Text output lists the scope, the base, the number of changed files, each widening (reason, path, tier, scope, detail
 and suggestion), warnings, the selected tests with their first reason, and the units removed by the dynamic layer.
@@ -87,7 +91,7 @@ bgraph affected --base A --head B --json
 | `warnings` | object[] | widenings that do not change the scope (`case_mismatch`, `rule_rejected`, `dynamic_skipped`) |
 | `always_run` | string[] | new test files and previously failed units |
 | `narrowed` | object[] | widened units removed by the dynamic layer: `unit`, `recorded` (time), `commit`, `reason` |
-| `index_stats` | object | counters: `units`, `seeds`, `reached`, `unresolved` (and `narrowed_classes` with the JVM class layer) |
+| `index_stats` | object | counters: `units`, `seeds`, `reached`, `unresolved` (and `narrowed_classes` with the JVM class layer, `narrowed_test_files` with the PHP layer) |
 
 A selected test:
 
@@ -95,15 +99,16 @@ A selected test:
 |---|---|
 | `unit` | unit ID (a test file, `crate::target`, `maven:<dir>`, `go:<dir>`...; see the [ecosystem pages](README.md#ecosystems)) |
 | `project` | the directory the runner runs from |
-| `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`, `phpunit`, `pest` |
+| `runner` | `jest`, `vitest`, `mocha`, `ava`, `node-test`, `playwright`, `pytest`, `django`, `cargo`, `maven`, `gradle`, `dotnet`, `go`, `phpunit`, `pest`, `swift`, `ctest`, `meson`, `dart`, `flutter` |
 | `files` | the unit's files (a virtual node for build-level units) |
 | `reasons` | reason chains, each step joined by ` ; `, e.g. `src/a.test.ts --import-> src/util.ts ; src/util.ts (changed)` |
 | `whole` | run the project's whole test suite (the test file set is unknown) |
 | `dir` | the directory the unit's tests live in, when the unit is narrower than its project (Go: the package directory) |
 | `package`, `config` | ecosystem-specific runner addressing details (for example the Cargo package for `-p`, the Go import path, the pytest config file or Django driver; see the ecosystem pages) |
+| `test_modules` | declared SwiftPM test modules used to build the package's `swift test --skip` argument |
 | `widened` | selected only because of a widening; only such units can be removed by the dynamic layer |
 | `dynamic` | why the dynamic layer kept the unit |
-| `class_filter`, `classes` | the JVM class layer narrowed the unit: only these test classes run (the module is still built) |
+| `class_filter`, `classes` | the JVM or .NET class layer narrowed the unit: only these test classes run (the module is still built); the PHP layer: only these test files (repo-relative) run, none when `classes` is empty |
 
 A widening:
 
@@ -121,15 +126,18 @@ A widening:
 ## `command`
 
 ```text
-bgraph command [--root DIR] [--base REF] [--list-dir DIR] [--json] [dynamic flags]
+bgraph command [--root DIR] [--base REF] [--list-dir DIR] [--build-dir DIR] [--build-config NAME] [--json] [dynamic flags]
 ```
 
 Turns the selection into runner commands. Text output starts with `# scope: <scope>` and `# <note>` lines, then one
-shell line per command (`cd <project> && ...` when the project is not the root, environment variables as a prefix).
+shell line per command. A command for a nested project runs in a subshell, so every line starts from the repository
+root. Any environment variables appear before the executable.
 
 | Flag | Meaning |
 |---|---|
 | `--list-dir DIR` | write list files there (Playwright `--test-list`, pytest `@argfile`, Gradle init scripts for class filters) instead of long argument lists |
+| `--build-dir DIR` | configured CTest or Meson build directory, relative to each project or absolute |
+| `--build-config NAME` | configuration for CMake multi-config builds, such as `Debug` or `Release` |
 | `--json` | print the plan as JSON |
 
 JSON plan: `scope`, `commands` (each with `runner`, `project` (working directory), `argv`, optional `env`, `list_file`,
@@ -151,7 +159,7 @@ The per-runner command shapes are in the [ecosystem pages](README.md#ecosystems)
 $ bgraph command --base origin/main
 # scope: graph
 # vitest: the argument is a substring of the path, so a.test.ts also matches aa.test.ts (over-selection, safe)
-cd packages/core && npx vitest run src/a.test.ts src/b.test.ts
+(cd packages/core && npx vitest run src/a.test.ts src/b.test.ts)
 ```
 
 ## `explain`
@@ -231,9 +239,9 @@ default branch, see [`ci/record-github-actions.yml`](ci/record-github-actions.ym
 ## `record`
 
 ```text
-bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
-              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env]
-              [--json] [--quiet]
+bgraph record [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--units GLOB] [--jobs N] [--timeout D] [--allow-dirty]
+              [--out FILE] [--build-args ARGS] [--keep-logs] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE]
+              [--trust-native-env] [--json] [--quiet]
 ```
 
 Runs test units with a dependency collector and stores the records of the [dynamic layer](dynamic-layer.md).
@@ -241,8 +249,8 @@ Runs test units with a dependency collector and stores the records of the [dynam
 | Flag | Default | Meaning |
 |---|---|---|
 | `--eco` | `[dynamic_layer] ecosystems`, else every ecosystem with test units | record one ecosystem |
-| `--units GLOB` | all | only units matching the glob |
-| `--jobs N` | Python and Ruby: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
+| `--units GLOB` | all | only units matching the glob (PHP: the project unit `<dir>::php` or its test files `<dir>::php#<file>`; Go: the package `go:<dir>` or its functions `go:<dir>#<Name>`) |
+| `--jobs N` | Python, Ruby, PHP and Go: half the CPUs; Node: a quarter; JVM and .NET: min(4, CPUs/2) parallel test JVMs or test hosts | parallelism |
 | `--timeout D` | `10m` | per unit (per build for JVM, per test host for .NET); a unit that times out gets an incomplete record |
 | `--allow-dirty` | off | record a working tree that differs from `HEAD` |
 | `--out FILE` | the state directory | write the records to a JSONL file instead (import elsewhere with `bgraph dynamic import`) |
@@ -254,6 +262,15 @@ Runs test units with a dependency collector and stores the records of the [dynam
 Ruby (`--eco ruby`) runs each test file as the runner adapter does, with the collector preloaded through `RUBYOPT` and the
 `--ruby` executable's directory first on `PATH`; the environment variables of the shell (`BUNDLE_GEMFILE`, `BUNDLE_PATH`,
 `BUNDLE_WITHOUT`...) apply, see [dynamic layer §10.4](dynamic-layer.md#104-collector).
+
+PHP (`--eco php`) lists the test files of each Composer project with a PHPUnit XML configuration, then runs each test file
+alone as the runner adapter does, with the collector prepended through an ini file on `PHP_INI_SCAN_DIR` and Xdebug in
+`coverage,develop` mode; the `--php` executable must load Xdebug 3 and have no `auto_prepend_file`, see
+[dynamic layer §11.4](dynamic-layer.md#114-collector).
+
+Go (`--eco go`) builds one coverage-instrumented test binary per package and runs each top-level test function alone,
+from the package directory, with `GOCOVERDIR` set; `GOFLAGS` applies to the build (set build tags there: records made
+with `--build-args` are not used at selection time), see [dynamic layer §12.4](dynamic-layer.md#124-collector).
 
 The summary lists the commit, units, recorded, complete (and passed), incomplete, failed, the store, elapsed time, the native
 toolchain addons accepted (Node) and the incomplete reasons. Exit code `0` even when some units failed or are incomplete.
@@ -267,13 +284,13 @@ cache, restore the newest records on pull requests.
 
 ```text
 bgraph dynamic import [--root DIR] FILE
-bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby] [--python EXE] [--node EXE] [--ruby EXE] [--trust-native-env] [--json]
+bgraph dynamic status [--root DIR] [--eco python|node|jvm|dotnet|ruby|php|go] [--python EXE] [--node EXE] [--ruby EXE] [--php EXE] [--go EXE] [--trust-native-env] [--json]
 ```
 
 - `import` merges a records file (from `record --out`) into the store, for example records made by CI on the main branch.
 - `status` reports, per ecosystem, the store, the number of records and recorded units, records of the current
   environment, records usable at `HEAD` (and why the others are not) and the incomplete reasons. Without `--eco` it
-  reports Python, Node and Ruby when they have records or test units; with `--json`, an object for `--eco`, else an array.
+  reports Python, Node, Ruby, PHP and Go when they have records or test units; with `--json`, an object for `--eco`, else an array.
 
 ## `mcp`
 
@@ -287,6 +304,7 @@ queries are fast. Tools:
 | Tool | Arguments | Result |
 |---|---|---|
 | `affected_tests` | `base?`, `head?`, `previously_failed?`, `limit?`, `dynamic?` | the selection: scope, tests with reasons, widening, warnings, narrowed units |
+| `test_commands` | `base?`, `head?`, `previously_failed?`, `limit?`, `dynamic?` | the `command` plan: scope, each command with its `shell` line (run from the repository root), notes, widening, warnings; commands are never truncated, and scope `full` has none |
 | `dependents_of` | `files`, `rev?`, `limit?` | the files that depend on the given files (tests first), each with its dependency chain, the selected test units, and the unresolved imports that may depend on them |
 | `explain_selection` | `target`, `base?`, `head?`, `limit?`, `dynamic?` | why a test is selected, or where a file leads |
 
@@ -303,6 +321,53 @@ counts give the real size. The `widening`, `warnings`, `narrowed` and `unresolve
 ```
 
 With Claude Code: `claude mcp add bgraph -- bgraph mcp --root /path/to/repo`.
+
+The server instructions tell the agent when to call which tool. Tool errors (a bad argument, an unknown ref for
+`dependents_of`) are tool results with `isError` set, not protocol errors. The same tools are a Go API: see
+[Coding agents](agents.md#go-api).
+
+## `agent`
+
+```text
+bgraph agent install   [--root DIR] [--target auto|claude|agents|claude,agents] [--skill] [--hook] [--mcp] [--json]
+bgraph agent uninstall [--root DIR] [--json]
+bgraph agent hook
+```
+
+`install` writes the guidance that makes coding agents use bgraph to the repository root (details in
+[Coding agents](agents.md)):
+
+| Flag | Meaning |
+|---|---|
+| `--target` | `claude` (`CLAUDE.md`), `agents` (`AGENTS.md`), both, or `auto` (default: the existing ones, both when neither exists) |
+| `--skill` | also write the `bgraph-test` skill (`.claude/skills`, `.agents/skills`, per target) |
+| `--hook` | also add the PostToolUse hook: `.claude/settings.local.json` (target `claude`), `.codex/hooks.json` (target `agents`; Codex asks the user to approve it with `/hooks`) |
+| `--mcp` | also add the bgraph server to `.mcp.json` |
+| `--json` | print the changes as JSON: `[{"path", "action", "note"}]`, action `created`, `updated`, `removed`, `unchanged` or `skipped` |
+
+The instruction-file block is delimited by `<!-- bgraph:start -->` / `<!-- bgraph:end -->`; a second `install` changes
+nothing. `uninstall` removes the block, the generated skills, the hook entry and the default `.mcp.json` entry, deletes
+the files and directories that end up empty, and leaves everything else alone.
+
+`hook` is the hook command of Claude Code and Codex: it reads the hook input on stdin and, after a Bash call that ran a whole test
+suite, prints a context note pointing at `bgraph command`, once per session. It always exits `0`.
+
+## `update`
+
+`bgraph update [--check] [--version VERSION] [--force]` replaces the running binary with the latest release (or
+`--version`, which may also downgrade). It downloads the archive for the current OS and CPU from GitHub releases,
+verifies it against the release's `checksums.txt` (SHA-256), and swaps the binary in place; a binary that is already
+current is left alone.
+
+| Flag | Meaning |
+|---|---|
+| `--check` | only print whether a newer release exists |
+| `--version VERSION` | install that release, e.g. `0.2.0` |
+| `--force` | install even when the version is the same, or the binary is a development build (`dev` or a Go pseudo-version) |
+
+The binary's directory must be writable (rerun with `sudo` if bgraph was installed into a system directory). On Windows
+the old binary is renamed to `bgraph.exe.old`, because a running executable cannot be overwritten; the next `update`
+removes it. A binary managed by a package manager is better updated through that package manager.
 
 ## `version`
 

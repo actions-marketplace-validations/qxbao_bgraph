@@ -3,11 +3,37 @@ package bgraph
 import (
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
 )
+
+func TestShellLineRunsEachCommandFromRepositoryRoot(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash is required for the POSIX shell test")
+	}
+	root := t.TempDir()
+	dir := "nested project's files"
+	if err := os.Mkdir(filepath.Join(root, dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	lines := []string{"set -e"}
+	for _, project := range []string{dir, dir, "."} {
+		lines = append(lines, ShellLine(Command{Project: project, Argv: []string{
+			"bash", "-c", `printf '%s\n' "${PWD##*/}"`,
+		}}))
+	}
+	cmd := exec.Command(bash, "-c", strings.Join(lines, "\n"))
+	cmd.Dir = root
+	out, err := cmd.CombinedOutput()
+	want := dir + "\n" + dir + "\n" + filepath.Base(root) + "\n"
+	if err != nil || string(out) != want {
+		t.Fatalf("script result %q (%v), want %q", out, err, want)
+	}
+}
 
 func TestCommandsAndExplain(t *testing.T) {
 	sel := Selection{Scope: TierGraph, Tests: []SelectedTest{{Unit: "src/a.test.ts", Project: ".", Runner: "vitest", Files: []string{"src/a.test.ts"}}}}

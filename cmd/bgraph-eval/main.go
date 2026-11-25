@@ -4,11 +4,12 @@
 //	bgraph-eval t1       --tasks tasks.jsonl --manifest evalkit/manifest/node.json --work DIR --out DIR [--jobs 4] [--max-per-repo 40]
 //	bgraph-eval quick    --tasks tasks.jsonl --work DIR --out DIR [--t2-dir DIR (check T2 against the cached oracle if present)] [--manifest ...] [--regressions evalkit/manifest/node-regressions.txt] [--per-repo 4] [--commits 20] [--checkout] [--serial]
 //	bgraph-eval baseline prep|score --tasks tasks.jsonl --work DIR --out DIR [--tools codegraph,graphify,gitnexus]   (0b control)
-//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python|ruby] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
+//	bgraph-eval t2       [--run-tests] [--ecosystem node|rust|python|ruby|swift|dart] [--budget 90m] [--dir DIR (default $BGRAPH_EVAL_DIR/t2)] [--manifest evalkit/manifest/t2.json] [--repos zod,hono,dayjs] [--out DIR]
 //	bgraph-eval rust-locate --tasks tasks-rust.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Rust FAIL_TO_PASS tests in the P trees)
-//	bgraph-eval jvm-locate|dotnet-locate|go-locate|php-locate --tasks tasks-<eco>.jsonl --work DIR [--out locate.json] [--examples 3]   (locate FAIL_TO_PASS tests in the P trees)
+//	bgraph-eval jvm-locate|dotnet-locate|go-locate|php-locate|swift-locate --tasks tasks-<eco>.jsonl --work DIR [--out locate.json] [--examples 3]   (locate FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval jvm-gib|jvm-provider --tasks tasks-jvm.jsonl --work DIR --out DIR   (JVM: superset check against gitflow-incremental-builder; Maven reactor and Gradle projects against bgraph units)
 //	bgraph-eval dotnet-affected|dotnet-provider --tasks tasks-dotnet.jsonl --work DIR --out DIR   (.NET: superset check against dotnet-affected; ProjectReference edges against msbuild)
+//	bgraph-eval dart-locate --tasks tasks-dart.jsonl --work DIR [--out dart-locate.json] [--examples 3]   (locate Dart FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval rb-locate --tasks tasks-ruby.jsonl --work DIR [--out rb-locate.json] [--examples 3]   (locate Ruby FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval py-locate --tasks tasks-python.jsonl --work DIR [--out locate.json] [--examples 3]   (locate Python FAIL_TO_PASS tests in the P trees)
 //	bgraph-eval cargometa --tasks tasks-rust.jsonl --work DIR [--out DIR] [--per-repo 5] [--repos a/b,c/d]   (bgraph Rust analysis vs cargo metadata)
@@ -82,9 +83,16 @@ func main() {
 			stop()
 			os.Exit(code)
 		}
-	case "rbdyn":
+	case "rbdyn", "phpdyn", "godyn":
+		cmd := cmdRubyDyn
+		if os.Args[1] == "phpdyn" {
+			cmd = cmdPHPDyn
+		}
+		if os.Args[1] == "godyn" {
+			cmd = cmdGoDyn
+		}
 		var code int
-		code, err = cmdRubyDyn(ctx, os.Args[2:])
+		code, err = cmd(ctx, os.Args[2:])
 		if err == nil && code != 0 {
 			stop()
 			os.Exit(code)
@@ -107,6 +115,14 @@ func main() {
 		err = cmdJVMLocate(ctx, os.Args[2:], "jvm")
 	case "dotnet-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "dotnet")
+	case "swift-provider":
+		err = cmdSwiftProvider(ctx, os.Args[2:])
+	case "cpp-provider":
+		err = cmdCPPProvider(ctx, os.Args[2:])
+	case "cpp-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "cpp")
+	case "swift-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "swift")
 	case "go-provider":
 		err = cmdGoProvider(ctx, os.Args[2:])
 	case "go-locate":
@@ -115,6 +131,8 @@ func main() {
 		err = cmdJVMLocate(ctx, os.Args[2:], "ruby")
 	case "php-locate":
 		err = cmdJVMLocate(ctx, os.Args[2:], "php")
+	case "dart-locate":
+		err = cmdJVMLocate(ctx, os.Args[2:], "dart")
 	case "lockdiff":
 		err = cmdLockdiff(ctx, os.Args[2:])
 	case "manifest":
@@ -169,7 +187,7 @@ func cmdT1(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "max total tasks (0 = no limit)")
 	resume := fs.Bool("resume", false, "skip tasks already in t1.jsonl")
 	checkout := fs.Bool("checkout", false, "build P/C via git worktree (legacy path) instead of a temporary index; a git apply --cached failure also falls back to this path")
-	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
+	eco := fs.String("ecosystem", "", "node (default) | rust | python | dotnet | jvm | go | php | ruby | swift | cpp | dart; rust uses the Cargo-unit oracle, python the test-file oracle; each defaults --manifest to evalkit/manifest/<eco>.json")
 	rulesDir := fs.String("rules-dir", "", "inject DIR/<owner>__<name>.toml as bgraph.toml into P and C of that repo's tasks (python [[dynamic]] declarations)")
 	fs.Parse(args)
 	if *eco == "rust" && *manPath == "evalkit/manifest/node.json" {
@@ -190,8 +208,17 @@ func cmdT1(ctx context.Context, args []string) error {
 	if *eco == "ruby" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/ruby.json"
 	}
+	if *eco == "cpp" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/cpp.json"
+	}
+	if *eco == "swift" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/swift.json"
+	}
 	if *eco == "php" && *manPath == "evalkit/manifest/node.json" {
 		*manPath = "evalkit/manifest/php.json"
+	}
+	if *eco == "dart" && *manPath == "evalkit/manifest/node.json" {
+		*manPath = "evalkit/manifest/dart.json"
 	}
 	if *tasksPath == "" || *work == "" || *out == "" {
 		return fmt.Errorf("--tasks, --work, --out are required")
@@ -257,6 +284,11 @@ func cmdT1(ctx context.Context, args []string) error {
 	}
 	if *eco == "php" {
 		if werr := evalkit.WritePHPReport(*out, rs); werr != nil {
+			return werr
+		}
+	}
+	if *eco == "dart" {
+		if werr := evalkit.WriteDartReport(*out, rs); werr != nil {
 			return werr
 		}
 	}
@@ -383,13 +415,13 @@ func cmdManifest(args []string) error {
 	fs.Var(&replay, "replay", "replay repos (comma-separated)")
 	maxPer := fs.Int("max-per-repo", 40, "")
 	out := fs.String("out", "evalkit/manifest/node.json", "")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift | cpp | dart")
 	fs.Parse(args)
-	if *eco == "php" {
+	if *eco == "php" || *eco == "swift" || *eco == "cpp" || *eco == "dart" {
 		outSet := false
 		fs.Visit(func(f *flag.Flag) { outSet = outSet || f.Name == "out" })
 		if !outSet {
-			*out = "evalkit/manifest/php.json"
+			*out = "evalkit/manifest/" + *eco + ".json"
 		}
 	}
 	tasks, err := evalkit.LoadTasks(*tasksPath)
@@ -441,6 +473,32 @@ func cmdManifest(args []string) error {
 		man = evalkit.BuildJVMDotnetManifest(*eco, t1, *metaPath, *maxPer)
 	} else if *eco == "ruby" {
 		man = evalkit.BuildRubyManifest(t1, *metaPath, *maxPer)
+	} else if *eco == "cpp" {
+		ds = []evalkit.DatasetInfo{
+			{Name: "SWE-bench/SWE-bench_Multilingual", Notes: "test split; CMake/CTest repositories"},
+			{Name: "ByteDance-Seed/Multi-SWE-bench", Notes: "selected CMake/CTest repositories and zstd; recorded f2p or patch-linked n2p"},
+			{Name: "SWE-bench-c/SWE-bench-c", Notes: "test split; zstd has both CMake/CTest and Meson projects"},
+		}
+		for i := range ds {
+			ds[i].URL = "https://huggingface.co/datasets/" + ds[i].Name
+			ds[i].Revision = metaString(*metaPath, "cpp_datasets", ds[i].Name)
+		}
+		for _, r := range t1 {
+			r.Kind = "library"
+			if strings.EqualFold(r.Name, "catchorg/Catch2") {
+				r.Kind = "framework"
+			}
+		}
+		man = evalkit.BuildCountManifest("cpp", t1, ds, *maxPer)
+	} else if *eco == "dart" {
+		man = evalkit.BuildDartManifest(t1, *metaPath, *maxPer)
+	} else if *eco == "swift" {
+		ds = []evalkit.DatasetInfo{{Name: "nebius/Longtail-SWE", URL: "https://huggingface.co/datasets/nebius/Longtail-SWE", Notes: "hard and easy splits, Swift rows with recorded FAIL_TO_PASS results"}}
+		ds[0].Revision = metaString(*metaPath, "swift_datasets", ds[0].Name)
+		for _, r := range t1 {
+			r.Kind = evalkit.SwiftRepoKind(r.Name)
+		}
+		man = evalkit.BuildCountManifest("swift", t1, ds, *maxPer)
 	} else if *eco == "php" {
 		ds = []evalkit.DatasetInfo{{Name: "EmInReLab/bugsPHP", URL: "https://github.com/EmInReLab/bugsPHP", Notes: "BugsPHP metadata and recorded PHPUnit outcomes, with gold and test overlays reconstructed from upstream Git objects"}}
 		ds[0].Revision = metaString(*metaPath, "php_datasets", ds[0].Name)
@@ -550,10 +608,10 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	rebase := fs.Bool("rebaseline", false, "re-run the 3-run baseline")
 	rebuild := fs.Bool("rebuild", false, "re-run every mutant, even those already in the oracle")
 	reconf := fs.Bool("reconfirm", false, "re-confirm unconfirmed killed mutants by re-running only the red files (2 runs)")
-	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby (rust/python/jvm/dotnet/go/php/ruby default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
-	budget := fs.Duration("budget", 0, "rust/python: stop starting new mutants after this long (0 = no limit)")
+	eco := fs.String("ecosystem", "node", "node | rust | python | jvm | dotnet | go | php | ruby | swift | cpp | dart (non-Node default --dir <$BGRAPH_EVAL_DIR>/t2/<eco> and --manifest evalkit/manifest/t2-<eco>.json)")
+	budget := fs.Duration("budget", 0, "rust/python/swift/cpp/dart: stop starting new mutants after this long (0 = no limit)")
 	fs.Parse(args)
-	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "php" || *eco == "ruby" {
+	if *eco == "rust" || *eco == "python" || *eco == "jvm" || *eco == "dotnet" || *eco == "go" || *eco == "php" || *eco == "ruby" || *eco == "swift" || *eco == "cpp" || *eco == "dart" {
 		dirSet, manSet := false, false
 		fs.Visit(func(f *flag.Flag) {
 			dirSet = dirSet || f.Name == "dir"
@@ -568,8 +626,8 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 	} else if *eco != "node" {
 		return 2, fmt.Errorf("unknown --ecosystem %q", *eco)
 	}
-	if *reconf && *eco == "php" {
-		return 2, fmt.Errorf("PHP mutants are confirmed during --run-tests")
+	if *reconf && (*eco == "php" || *eco == "swift" || *eco == "cpp" || *eco == "dart") {
+		return 2, fmt.Errorf("%s mutants are confirmed during --run-tests", *eco)
 	}
 	if *out == "" {
 		*out = filepath.Join(*dir, "out")
@@ -606,6 +664,43 @@ func cmdT2(ctx context.Context, args []string) (int, error) {
 			return 2, err
 		}
 		fmt.Println(md)
+	}
+	if *eco == "swift" {
+		if len(qr.Repos) == 0 {
+			return 2, fmt.Errorf("no Swift repos selected")
+		}
+		for _, repo := range qr.Repos {
+			if repo.Error != "" || repo.Errors > 0 || repo.Killed+repo.Survived == 0 {
+				return 2, fmt.Errorf("incomplete Swift T2 evaluation for %s (details in %s)", repo.Repo.Name, *out)
+			}
+		}
+	}
+	if *eco == "cpp" {
+		if len(qr.Repos) == 0 {
+			return 2, fmt.Errorf("no C/C++ repos selected")
+		}
+		for _, repo := range qr.Repos {
+			if repo.Error != "" || repo.Errors > 0 || repo.Killed+repo.Survived == 0 {
+				return 2, fmt.Errorf("incomplete C/C++ T2 evaluation for %s (details in %s)", repo.Repo.Name, *out)
+			}
+		}
+	}
+	if *eco == "dart" {
+		// provider cross-check: the suites `dart test` loaded in the baseline against bgraph's units at R
+		units := evalkit.DartUnitsCheck(ctx, evalkit.T2Config{Dir: *dir, Manifest: man, Repos: sel})
+		md, err := evalkit.WriteDartUnits(*out, units)
+		if err != nil {
+			return 2, err
+		}
+		fmt.Println(md)
+		for _, repo := range qr.Repos {
+			if repo.Error != "" || repo.Killed+repo.Survived == 0 {
+				return 2, fmt.Errorf("incomplete Dart T2 evaluation for %s (details in %s)", repo.Repo.Name, *out)
+			}
+		}
+		if !evalkit.DartUnitsOK(units) {
+			return 1, fmt.Errorf("dart provider cross-check found missing or unexplained units (%s)", filepath.Join(*out, "dart-units.md"))
+		}
 	}
 	if qr.Violations > 0 {
 		return 1, nil

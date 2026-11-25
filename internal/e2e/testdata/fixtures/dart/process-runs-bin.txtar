@@ -1,0 +1,29 @@
+A test that launches a process depends on the package's bin/ (and what the executables import).
+-- base/pubspec.yaml --
+name: app
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/bin/tool.dart --
+import 'package:app/cli.dart';
+void main(List<String> a) => run(a);
+-- base/lib/cli.dart --
+void run(List<String> a) {}
+-- base/lib/plain.dart --
+int plain() => 1;
+-- base/test/cli_test.dart --
+import 'package:test/test.dart';
+import 'dart:io';
+void main() => test('c', () => Process.run(Platform.executable, [script]));
+final script = Platform.environment['SCRIPT']!;
+-- base/test/plain_test.dart --
+import 'package:test/test.dart';
+import 'package:app/plain.dart';
+void main() => test('p', () => plain());
+-- head/lib/cli.dart --
+void run(List<String> a) { print(a); }
+-- want --
+scope graph
+select test/cli_test.dart
+noselect test/plain_test.dart

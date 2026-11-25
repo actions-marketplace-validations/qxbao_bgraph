@@ -1,0 +1,33 @@
+pubspec_overrides.yaml (written by melos bootstrap) changes the package's resolution.
+-- base/a/pubspec.yaml --
+name: a
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/a/pubspec_overrides.yaml --
+dependency_overrides:
+  b:
+    path: ../b
+-- base/a/test/a_test.dart --
+import 'package:test/test.dart';
+void main() => test('a', () {});
+-- base/b/pubspec.yaml --
+name: b
+environment:
+  sdk: ^3.5.0
+dev_dependencies:
+  test: ^1.25.0
+-- base/b/test/b_test.dart --
+import 'package:test/test.dart';
+void main() => test('b', () {});
+-- head/a/pubspec_overrides.yaml --
+dependency_overrides:
+  b:
+    path: ../b
+  c: ^1.0.0
+-- want --
+scope module
+widen manifest_changed
+select a/test/a_test.dart
+noselect b/test/b_test.dart
